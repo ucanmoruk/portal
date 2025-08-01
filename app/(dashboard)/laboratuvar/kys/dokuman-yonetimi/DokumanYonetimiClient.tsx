@@ -850,7 +850,16 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       const form = new FormData();
       form.append("file", file);
       const response = await fetch("/api/kys/dokumanlar/import", { method: "POST", body: form });
-      const result = await response.json();
+      const responseText = await response.text();
+      let result: { html?: string; warnings?: string[]; error?: string } = {};
+      if (responseText) {
+        try {
+          result = JSON.parse(responseText);
+        } catch {
+          const detail = responseText.replace(/\s+/g, " ").trim().slice(0, 300);
+          throw new Error(`Sunucu geçerli bir yanıt vermedi (HTTP ${response.status})${detail ? `: ${detail}` : "."}`);
+        }
+      }
       if (!response.ok) throw new Error(result.error || "Dosya içe aktarılamadı.");
       if (!ensureEditing() || !editorRef.current) return;
       editorRef.current.innerHTML = result.html || "<p><br></p>";

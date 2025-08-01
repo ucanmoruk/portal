@@ -7,9 +7,15 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const user = await getPortalUser();
-  if (!user) return NextResponse.json({ error: "Oturum bulunamadı." }, { status: 401 });
-  if (!dokumanYetkileri(user).duzenle) return NextResponse.json({ error: "Doküman düzenleme yetkiniz yok." }, { status: 403 });
+  try {
+    const user = await getPortalUser();
+    if (!user) return NextResponse.json({ error: "Oturum bulunamadı." }, { status: 401 });
+    if (!dokumanYetkileri(user).duzenle) return NextResponse.json({ error: "Doküman düzenleme yetkiniz yok." }, { status: 403 });
+  } catch (error) {
+    console.error("[KYS doküman içe aktarma yetkisi]", error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Yetki kontrolü yapılamadı." }, { status: 500 });
+  }
+
   try {
     const form = await request.formData();
     const file = form.get("file");
@@ -18,6 +24,7 @@ export async function POST(request: Request) {
     const result = await importKysDocument(file.name, Buffer.from(await file.arrayBuffer()));
     return NextResponse.json(result);
   } catch (error) {
+    console.error("[KYS doküman içe aktarma]", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "Dosya içe aktarılamadı." }, { status: 400 });
   }
 }
