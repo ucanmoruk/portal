@@ -1,0 +1,354 @@
+/* Yeni Numune — çoklu numune / evrak odaklı giriş */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 1100px;
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 0.8rem;
+  color: var(--color-text-tertiary);
+  margin-top: 3px;
+}
+
+.backLink {
+  font-size: 0.8125rem;
+  color: var(--color-accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+.backLink:hover { text-decoration: underline; }
+
+/* ── Evrak kartı ── */
+.evrakCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.evrakCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid transparent;
+  border-radius: var(--radius-md);
+  transition: background 0.12s;
+}
+.evrakCardHead:hover { background: var(--color-surface-2); }
+.evrakCardHead.open { border-bottom-color: var(--color-border-light); border-radius: var(--radius-md) var(--radius-md) 0 0; }
+
+.evrakCardTitle {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.evrakSummary {
+  font-size: 0.775rem;
+  color: var(--color-text-secondary);
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.evrakSummaryItem { display: flex; align-items: center; gap: 4px; }
+.evrakSummaryLabel { color: var(--color-text-tertiary); }
+
+.evrakBody {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.evrakGrid {
+  display: grid;
+  grid-template-columns: 148px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 72px;
+  gap: 10px 14px;
+  align-items: end;
+}
+
+.evrakGrid2 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 10px 14px;
+  align-items: end;
+}
+
+/* ── Numune listesi header ── */
+.numuneListHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.numuneListTitle {
+  font-size: 0.845rem;
+  font-weight: 650;
+  color: var(--color-text-primary);
+}
+
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.addBtn:hover { opacity: 0.88; }
+.addBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Numune kartı ── */
+.numuneCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  overflow: visible;
+}
+
+.numuneCardHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-md);
+  transition: background 0.12s;
+}
+.numuneCardHead:hover { background: var(--color-surface-2); }
+.numuneCardHead.open { border-radius: var(--radius-md) var(--radius-md) 0 0; border-bottom: 1px solid var(--color-border-light); }
+
+.numuneRaporNo {
+  font-size: 0.845rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+  min-width: 110px;
+  flex-shrink: 0;
+}
+.numuneRaporNoEmpty {
+  font-size: 0.845rem;
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  font-style: italic;
+  min-width: 110px;
+  flex-shrink: 0;
+}
+
+.numuneAd {
+  flex: 1;
+  font-size: 0.845rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.numuneGrupTur {
+  font-size: 0.775rem;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.numuneBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.savedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #34c75918;
+  color: #248a3d;
+  flex-shrink: 0;
+}
+
+.numuneCardBody {
+  padding: 14px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Numune kart içi: temel bilgiler grid */
+.numuneInfoGrid {
+  display: grid;
+  grid-template-columns: minmax(0,1.5fr) minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr);
+  gap: 10px 14px;
+  align-items: end;
+}
+
+.numuneInfoGrid2 {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,1.3fr) minmax(0,1.3fr) minmax(0,1fr) minmax(0,150px) minmax(0,150px);
+  gap: 10px 14px;
+  align-items: end;
+}
+
+.numuneCardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.deleteCardBtn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-danger, #ff3b30);
+  font-size: 0.78rem;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.deleteCardBtn:hover { background: #ff3b3010; }
+
+.saveCardBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.saveCardBtn:hover { opacity: 0.88; }
+.saveCardBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cardErr {
+  padding: 8px 12px;
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+  font-size: 0.8rem;
+  border-radius: var(--radius-sm);
+}
+
+/* Hizmetler mini bölümü */
+.hizmetSection {
+  border-top: 1px solid var(--color-border-light);
+  padding-top: 12px;
+}
+
+.hizmetSectionTitle {
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+/* formGroup (lokal — yansıtmak için import yerine inline) */
+.fg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fg label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.fg input, .fg select, .fg textarea {
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8375rem;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  width: 100%;
+  box-sizing: border-box;
+}
+.fg input:focus, .fg select:focus { outline: 2px solid var(--color-accent); outline-offset: -1px; }
+
+/* Evrak dolu satır özeti */
+.evrakSavedRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.evrakTag {
+  padding: 3px 10px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-light);
+  border-radius: 20px;
+  font-size: 0.775rem;
+  color: var(--color-text-secondary);
+}
+.evrakTagStrong {
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+@media (max-width: 900px) {
+  .evrakGrid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .evrakGrid2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .numuneInfoGrid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .numuneInfoGrid2 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+}
+
+@media (max-width: 600px) {
+  .evrakGrid, .evrakGrid2, .numuneInfoGrid, .numuneInfoGrid2 { grid-template-columns: 1fr; }
+}

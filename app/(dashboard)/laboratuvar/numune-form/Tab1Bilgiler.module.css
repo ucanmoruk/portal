@@ -1,0 +1,207 @@
+/* Tab1 — bölüm kartları ve sıkı alan düzeni */
+
+.root {
+  padding: 16px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  overflow: visible;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.cardHead {
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-surface-2);
+}
+
+.cardTitle {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.cardHint {
+  font-size: 0.72rem;
+  color: var(--color-text-tertiary);
+  margin: 5px 0 0;
+  line-height: 1.4;
+  max-width: 52rem;
+}
+
+.cardBody {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Kayıt: satır1 Tarih+Grup+Tür+EvrakNo+RaporNo+Rev; satır2 TeklifNo+TalepNo+Karar+Dil */
+.gridKayitRow1 {
+  display: grid;
+  grid-template-columns: minmax(0, 148px) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 72px);
+  gap: 12px 14px;
+  align-items: end;
+}
+
+.gridKayitRow2 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 14px;
+  align-items: end;
+}
+
+.gridTwo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+  align-items: end;
+}
+
+/* Numune tanımı tek satır: Barkod + Nominal + Teste + Seri + ÜretimTarihi + SKT */
+.gridNumuneRow {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, 1.4fr)
+    minmax(0, 1.4fr)
+    minmax(0, 1fr)
+    minmax(0, 190px)
+    minmax(0, 190px);
+  gap: 12px 14px;
+  align-items: end;
+}
+
+.notlarArea {
+  width: 100%;
+  max-width: min(100%, 52rem);
+}
+
+.notlarTextarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 4.5rem;
+  padding: 10px 12px;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+
+/* Tarih: içerik kadar yer kaplasın */
+.dateWrap {
+  max-width: 150px;
+  width: 100%;
+}
+
+.dateWrap :global(input[type="date"]) {
+  width: 100%;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.revWrap {
+  max-width: 100px;
+  width: 100%;
+}
+
+.revWrap :global(input) {
+  width: 100%;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Miktar satırı: birim sütunu sabit */
+.qtyRow {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.qtyRow :global(input[type="number"]) {
+  flex: 1;
+  min-width: 0;
+}
+
+.qtyRow :global(select) {
+  width: 76px;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+}
+
+.hedefInput :global(input) {
+  max-width: min(100%, 260px);
+}
+
+.readonlyField :global(input) {
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+
+.fotoRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 12px;
+}
+
+.fotoActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fotoPreview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-light);
+}
+
+.fotoPreview img {
+  width: 88px;
+  height: 88px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+@media (max-width: 900px) {
+  .gridKayitRow1 {
+    grid-template-columns: minmax(0, 148px) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 72px);
+  }
+  .gridNumuneRow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .gridKayitRow1,
+  .gridKayitRow2,
+  .gridTwo,
+  .gridNumuneRow {
+    grid-template-columns: 1fr;
+  }
+
+  .dateWrap,
+  .revWrap {
+    max-width: none;
+  }
+}

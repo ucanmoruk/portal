@@ -9,11 +9,25 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@types/nodemailer": "^7.0.11",
+    "basic-ftp": "^5.2.0",
+    "bcryptjs": "^3.0.3",
+    "chart.js": "^4.5.1",
+    "docx": "^9.6.1",
+    "docxtemplater": "^3.68.3",
+    "mssql": "^12.2.1",
     "next": "16.2.1",
+    "next-auth": "^4.24.13",
+    "nodemailer": "^7.0.13",
+    "pizzip": "^3.2.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "19.2.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/mssql": "^9.1.11",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

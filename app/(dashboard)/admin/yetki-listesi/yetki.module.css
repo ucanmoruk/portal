@@ -1,0 +1,98 @@
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #0071e3;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.avatarSm {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #1d1d1f;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ── Menü ağacı ── */
+.menuTree {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.menuGroup {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.menuParent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--color-surface-2);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.menuParent:hover { background: var(--color-surface-3); }
+
+.menuParent input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.menuParentLabel {
+  font-size: 0.845rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.menuChildren {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.menuChild {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 34px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  transition: background 0.12s;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.menuChild:last-child { border-bottom: none; }
+.menuChild:hover { background: var(--color-surface-2); }
+
+.menuChild input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}

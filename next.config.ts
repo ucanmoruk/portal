@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: ["nodemailer", "mssql", "jszip"],
+
 };
 
 export default nextConfig;
