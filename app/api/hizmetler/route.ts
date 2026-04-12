@@ -67,6 +67,12 @@ export async function GET(request: NextRequest) {
         ID, Kod, Ad, AdEn, Method, MethodEn, Matriks,
         Akreditasyon, Sure, NumGereklilik, NumDipnot, NumDipnotEn,
         Fiyat, ParaBirimi, Durumu,
+        ISNULL([Limit], '') AS [Limit],
+        ISNULL(Birim, '') AS Birim,
+        ISNULL(LOQ, '') AS LOQ,
+        ISNULL(LimitEn, '') AS LimitEn,
+        ISNULL(BirimEn, '') AS BirimEn,
+        ISNULL(LOQEn, '') AS LOQEn,
         ${optCols}
       FROM StokAnalizListesi
       ${where}
@@ -99,6 +105,7 @@ export async function POST(request: Request) {
       Kod, Ad, AdEn, Method, MethodEn, Matriks,
       Akreditasyon, Sure, NumGereklilik, NumDipnot, NumDipnotEn,
       Fiyat, ParaBirimi, RaporFormati, YetkiliID,
+      Limit, Birim, LOQ, LimitEn, BirimEn, LOQEn,
     } = body;
 
     if (!Kod?.trim()) return Response.json({ error: "Kod zorunludur." }, { status: 400 });
@@ -123,7 +130,13 @@ export async function POST(request: Request) {
       .input("NumDipnotEn",   NumDipnotEn   || null)
       .input("Fiyat",         Fiyat         ? parseFloat(Fiyat) : null)
       .input("ParaBirimi",    ParaBirimi    || "₺")
-      .input("Durumu",        "Aktif");
+      .input("Durumu",        "Aktif")
+      .input("Limit",         Limit         || null)
+      .input("Birim",         Birim         || null)
+      .input("LOQ",           LOQ           || null)
+      .input("LimitEn",       LimitEn       || null)
+      .input("BirimEn",       BirimEn       || null)
+      .input("LOQEn",         LOQEn         || null);
 
     const extraCols: string[] = [];
     const extraVals: string[] = [];
@@ -145,11 +158,13 @@ export async function POST(request: Request) {
     const result = await req.query(`
       INSERT INTO StokAnalizListesi
         (Kod, Ad, AdEn, Method, MethodEn, Matriks, Akreditasyon,
-         Sure, NumGereklilik, NumDipnot, NumDipnotEn, Fiyat, ParaBirimi, Durumu${colsPart})
+         Sure, NumGereklilik, NumDipnot, NumDipnotEn, Fiyat, ParaBirimi, Durumu,
+         [Limit], Birim, LOQ, LimitEn, BirimEn, LOQEn${colsPart})
       OUTPUT INSERTED.ID
       VALUES
         (@Kod, @Ad, @AdEn, @Method, @MethodEn, @Matriks, @Akreditasyon,
-         @Sure, @NumGereklilik, @NumDipnot, @NumDipnotEn, @Fiyat, @ParaBirimi, @Durumu${valsPart})
+         @Sure, @NumGereklilik, @NumDipnot, @NumDipnotEn, @Fiyat, @ParaBirimi, @Durumu,
+         @Limit, @Birim, @LOQ, @LimitEn, @BirimEn, @LOQEn${valsPart})
     `);
 
     return Response.json({ id: result.recordset[0].ID }, { status: 201 });

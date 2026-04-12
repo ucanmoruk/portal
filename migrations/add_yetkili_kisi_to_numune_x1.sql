@@ -1,0 +1,4 @@
+-- BU MIGRATION ARTIK KULLANILMIYOR
+-- Yetkili Kişi, NumuneX1'e ayrı kolon olarak eklenmez.
+-- Bunun yerine StokAnalizListesi.YetkiliID → RootKullanici join'i yapılır.
+-- (bkz. app/api/sonuc-giris/route.ts)

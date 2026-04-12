@@ -21,6 +21,12 @@ interface Hizmet {
   Durumu: string;
   RaporFormati: string;        // comma-separated: "Genel,Stabilite"
   YetkiliID: number | null;
+  Limit?: string;              // NEW: Test limit range (e.g., "0-100")
+  Birim?: string;              // NEW: Unit (e.g., "ppm", "mg/L")
+  LOQ?: string;                // NEW: Limit of Quantification
+  LimitEn?: string;            // NEW: English limit
+  BirimEn?: string;            // NEW: English unit
+  LOQEn?: string;              // NEW: English LOQ
 }
 
 interface Kullanici { ID: number; Ad: string; }
@@ -33,6 +39,7 @@ const EMPTY: Partial<Hizmet> = {
   NumGereklilik: "", NumDipnot: "", NumDipnotEn: "",
   Fiyat: undefined, ParaBirimi: "₺", Durumu: "Aktif",
   RaporFormati: "", YetkiliID: null,
+  Limit: "", Birim: "", LOQ: "", LimitEn: "", BirimEn: "", LOQEn: "",
 };
 
 export default function HizmetTable() {
@@ -51,6 +58,7 @@ export default function HizmetTable() {
   const [isNew, setIsNew]           = useState(false);
   const [saving, setSaving]         = useState(false);
   const [formError, setFormError]   = useState("");
+  const [modalTab, setModalTab]     = useState(0);  // 0: Genel, 1: Teknik
 
   const [kullanicilar, setKullanicilar] = useState<Kullanici[]>([]);
 
@@ -125,9 +133,9 @@ export default function HizmetTable() {
     }
   };
 
-  const openNew  = () => { setIsNew(true);  setFormError(""); setEditRow({ ...EMPTY }); };
-  const openEdit = (row: Hizmet) => { setIsNew(false); setFormError(""); setEditRow({ ...row }); };
-  const closeEdit = () => setEditRow(null);
+  const openNew  = () => { setIsNew(true);  setFormError(""); setEditRow({ ...EMPTY }); setModalTab(0); };
+  const openEdit = (row: Hizmet) => { setIsNew(false); setFormError(""); setEditRow({ ...row }); setModalTab(0); };
+  const closeEdit = () => { setEditRow(null); setModalTab(0); };
 
   // ── Pagination helpers ──
   const goTo = (p: number) => { if (p >= 1 && p <= totalPages) setPage(p); };
@@ -202,7 +210,6 @@ export default function HizmetTable() {
                 <th>Kod</th>
                 <th>Ad</th>
                 <th>Metot</th>
-                <th>Matriks</th>
                 <th>Süre (gün)</th>
                 <th>Numune Gereklilik</th>
                 <th>Liste Fiyatı</th>
@@ -213,14 +220,14 @@ export default function HizmetTable() {
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 9 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <td key={j}><span className={styles.skeleton} /></td>
                     ))}
                   </tr>
                 ))
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9}>
+                  <td colSpan={8}>
                     <div className={styles.empty}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="36" height="36">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -238,7 +245,6 @@ export default function HizmetTable() {
                   <td className={styles.tdMono}>{row.Kod}</td>
                   <td className={styles.tdName}>{row.Ad}</td>
                   <td className={styles.tdSecondary}>{row.Method}</td>
-                  <td className={styles.tdSecondary}>{row.Matriks}</td>
                   <td className={styles.tdMono}>{row.Sure ?? ""}</td>
                   <td className={styles.tdSecondary}>{row.NumGereklilik}</td>
                   <td className={styles.tdMono}>{fiyatLabel(row)}</td>
@@ -340,7 +346,50 @@ export default function HizmetTable() {
         <div className={styles.modalOverlay} onClick={closeEdit}>
           <div className={styles.modal} style={{ maxWidth: 680 }} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h2>{isNew ? "Yeni Hizmet" : `Düzenle — ${editRow.Kod}`}</h2>
+              <div>
+                <h2>{isNew ? "Yeni Hizmet" : `Düzenle — ${editRow.Kod}`}</h2>
+                {/* Tab buttons */}
+                <div style={{ display: "flex", gap: "4px", marginTop: "8px", borderBottom: "1px solid var(--color-border)", paddingBottom: 0 }}>
+                  <button
+                    onClick={() => setModalTab(0)}
+                    style={{
+                      padding: "8px 12px",
+                      outline: "none",
+                      borderTop: "none",
+                      borderRight: "none",
+                      borderLeft: "none",
+                      borderBottom: modalTab === 0 ? "2px solid var(--color-accent)" : "2px solid transparent",
+                      color: modalTab === 0 ? "var(--color-accent)" : "var(--color-text-secondary)",
+                      fontSize: "0.85rem",
+                      fontWeight: modalTab === 0 ? 500 : 400,
+                      cursor: "pointer",
+                      background: "none",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    Genel Bilgiler
+                  </button>
+                  <button
+                    onClick={() => setModalTab(1)}
+                    style={{
+                      padding: "8px 12px",
+                      outline: "none",
+                      borderTop: "none",
+                      borderRight: "none",
+                      borderLeft: "none",
+                      borderBottom: modalTab === 1 ? "2px solid var(--color-accent)" : "2px solid transparent",
+                      color: modalTab === 1 ? "var(--color-accent)" : "var(--color-text-secondary)",
+                      fontSize: "0.85rem",
+                      fontWeight: modalTab === 1 ? 500 : 400,
+                      cursor: "pointer",
+                      background: "none",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    Teknik Bilgiler
+                  </button>
+                </div>
+              </div>
               <button className={styles.modalClose} onClick={closeEdit}>
                 <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                   <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
@@ -349,6 +398,10 @@ export default function HizmetTable() {
             </div>
             <div className={styles.modalBody}>
               {formError && <div className={styles.formError}>{formError}</div>}
+
+              {/* ── TAB 0: Genel Bilgiler ── */}
+              {modalTab === 0 && (
+                <>
 
               {/* Satır 1: Kod + Akreditasyon + Matriks */}
               <div className={styles.formGrid3} style={{ marginBottom: 14 }}>
@@ -431,7 +484,50 @@ export default function HizmetTable() {
                 <textarea rows={2} value={editRow.NumDipnotEn || ""} onChange={e => setEditRow(p => ({ ...p!, NumDipnotEn: e.target.value }))} />
               </div>
 
-              {/* Satır 7: Rapor Formatı (çoktan seçmeli) */}
+                </>
+              )}
+
+              {/* ── TAB 1: Teknik Bilgiler ── */}
+              {modalTab === 1 && (
+                <>
+
+              {/* Limit (TR + EN) */}
+              <div className={styles.formGrid} style={{ marginBottom: 14 }}>
+                <div className={styles.formGroup}>
+                  <label>Limit (TR)</label>
+                  <input value={editRow.Limit || ""} onChange={e => setEditRow(p => ({ ...p!, Limit: e.target.value }))} placeholder="ör: 0-100" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Limit (EN)</label>
+                  <input value={editRow.LimitEn || ""} onChange={e => setEditRow(p => ({ ...p!, LimitEn: e.target.value }))} placeholder="e.g. 0-100" />
+                </div>
+              </div>
+
+              {/* Birim (TR + EN) */}
+              <div className={styles.formGrid} style={{ marginBottom: 14 }}>
+                <div className={styles.formGroup}>
+                  <label>Birim (TR)</label>
+                  <input value={editRow.Birim || ""} onChange={e => setEditRow(p => ({ ...p!, Birim: e.target.value }))} placeholder="ör: ppm" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Birim (EN)</label>
+                  <input value={editRow.BirimEn || ""} onChange={e => setEditRow(p => ({ ...p!, BirimEn: e.target.value }))} placeholder="e.g. ppm" />
+                </div>
+              </div>
+
+              {/* LOQ (TR + EN) */}
+              <div className={styles.formGrid} style={{ marginBottom: 14 }}>
+                <div className={styles.formGroup}>
+                  <label>LOQ (TR)</label>
+                  <input value={editRow.LOQ || ""} onChange={e => setEditRow(p => ({ ...p!, LOQ: e.target.value }))} placeholder="ör: 1" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>LOQ (EN)</label>
+                  <input value={editRow.LOQEn || ""} onChange={e => setEditRow(p => ({ ...p!, LOQEn: e.target.value }))} placeholder="e.g. 1" />
+                </div>
+              </div>
+
+              {/* Satır 3: Rapor Formatı (çoktan seçmeli) */}
               <div className={styles.formGroup} style={{ marginBottom: 14 }}>
                 <label>Rapor Formatı</label>
                 <div style={{ display: "flex", gap: 16, flexWrap: "wrap", paddingTop: 4 }}>
@@ -452,7 +548,7 @@ export default function HizmetTable() {
                 </div>
               </div>
 
-              {/* Satır 8: Yetkili Kişi */}
+              {/* Satır 4: Yetkili Kişi */}
               <div className={styles.formGroup} style={{ marginBottom: 14 }}>
                 <label>Yetkili Kişi</label>
                 <select
@@ -464,7 +560,7 @@ export default function HizmetTable() {
                 </select>
               </div>
 
-              {/* Durum — sadece düzenlemede göster */}
+              {/* Satır 5: Durum — sadece düzenlemede göster */}
               {!isNew && (
                 <div className={styles.formGroup}>
                   <label>Durum</label>
@@ -473,6 +569,9 @@ export default function HizmetTable() {
                     <option value="Pasif">Pasif</option>
                   </select>
                 </div>
+              )}
+
+                </>
               )}
             </div>
             <div className={styles.modalFooter}>

@@ -53,7 +53,11 @@ export async function GET(
       pool.request().input("id", nkrId).query(`
         SELECT x1.ID, x1.AnalizID, x1.Termin, x1.x3ID,
                s.Kod, s.Ad, s.Method AS Metot, s.Sure,
-               p.ListeAdi AS PaketAd
+               p.ListeAdi AS PaketAd, x1.Limit, x1.Birim,
+               ISNULL(x1.LimitEn, '') AS LimitEn,
+               ISNULL(x1.BirimEn, '') AS BirimEn,
+               ISNULL(x1.LOQ, '') AS LOQ,
+               ISNULL(x1.LOQEn, '') AS LOQEn
         FROM NumuneX1 x1
         LEFT JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
         LEFT JOIN NumuneX3 p          ON p.ID = x1.x3ID
@@ -207,15 +211,19 @@ export async function PUT(
       `);
     }
 
-    // ── 3. NumuneX1 — sil + yeniden ekle ─────────────────────────
+    // ── 3. NumuneX1 — sil + toplu ekle ─────────────────────────
     await pool.request().input("id", nkrId).query("DELETE FROM NumuneX1 WHERE RaporID = @id");
-    for (const h of hizmetler) {
-      await pool.request()
-        .input("RaporID",  nkrId)
-        .input("AnalizID", h.AnalizID)
-        .input("Termin",   h.Termin || null)
-        .input("x3ID",     h.x3ID   || null)
-        .query("INSERT INTO NumuneX1 (RaporID, AnalizID, Termin, x3ID) VALUES (@RaporID, @AnalizID, @Termin, @x3ID)");
+    
+    if (hizmetler.length > 0) {
+      // Bulk INSERT - tek sorguda tüm hizmetleri ekle
+      const values = hizmetler.map((h: any) =>
+        `(${nkrId}, ${h.AnalizID}, ${h.Termin ? `'${h.Termin}'` : 'NULL'}, ${h.x3ID ? h.x3ID : 'NULL'}, ${h.Limit ? `'${h.Limit.replace(/'/g, "''")}'` : 'NULL'}, ${h.Birim ? `'${h.Birim.replace(/'/g, "''")}'` : 'NULL'}, ${h.LimitEn ? `'${h.LimitEn.replace(/'/g, "''")}'` : 'NULL'}, ${h.BirimEn ? `'${h.BirimEn.replace(/'/g, "''")}'` : 'NULL'}, ${h.LOQ ? `'${h.LOQ.replace(/'/g, "''")}'` : 'NULL'}, ${h.LOQEn ? `'${h.LOQEn.replace(/'/g, "''")}'` : 'NULL'})`
+      ).join(', ');
+
+      await pool.request().query(`
+        INSERT INTO NumuneX1 (RaporID, AnalizID, Termin, x3ID, Limit, Birim, LimitEn, BirimEn, LOQ, LOQEn)
+        VALUES ${values}
+      `);
     }
 
     // ── 4. NKR_Formul — sil + yeniden ekle ───────────────────────
@@ -235,11 +243,29 @@ export async function PUT(
 
     // ── 5. NKR_Log ───────────────────────────────────────────────
     if (doLog) {
+      // Detaylı açıklama oluştur
+      let aciklama = `Rapor No: ${nkr.RaporNo} — Revizyon: ${nkr.Revno || 0}`;
+      
+      if (hizmetler.length > 0) {
+        const hizmetSayisi = hizmetler.length;
+        aciklama += `\n• ${hizmetSayisi} hizmet güncellendi`;
+        
+        // Paket hizmetleri varsa belirt
+        const paketHizmetler = hizmetler.filter((h: any) => h.x3ID);
+        if (paketHizmetler.length > 0) {
+          aciklama += ` (${paketHizmetler.length} tanesi paketten)`;
+        }
+      }
+      
+      if (formul.length > 0) {
+        aciklama += `\n• ${formul.length} formül maddesi güncellendi`;
+      }
+      
       await pool.request()
         .input("NKRID",       nkrId)
         .input("KullaniciID", userId ? parseInt(userId) : null)
         .input("Eylem",       "Güncellendi")
-        .input("Aciklama",    `Rapor No: ${nkr.RaporNo} — Revizyon: ${nkr.Revno || 0}`)
+        .input("Aciklama",    aciklama)
         .query("INSERT INTO NKR_Log (NKRID, KullaniciID, Eylem, Aciklama) VALUES (@NKRID, @KullaniciID, @Eylem, @Aciklama)");
     }
 

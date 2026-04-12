@@ -20,6 +20,10 @@ interface Item {
   AltAnalizID: number;
   LimitDeger: string | null;
   LimitBirimi: string | null;
+  LimitDegerEn?: string | null;      // NEW: English limit
+  LimitBirimiEn?: string | null;     // NEW: English unit
+  LOQ?: string | null;               // NEW: Limit of Quantification
+  LOQEn?: string | null;             // NEW: English LOQ
   Notlar: string | null;
   Kod: string;
   Ad: string;
@@ -226,12 +230,29 @@ export default function HizmetPaketleri() {
     });
   };
 
-  const saveLimit = async (form: { limitDeger: string; limitBirimi: string; notlar: string }) => {
+  const saveLimit = async (form: {
+    limitDeger: string;
+    limitBirimi: string;
+    limitDegerEn?: string;
+    limitBirimiEn?: string;
+    loq?: string;
+    loqEn?: string;
+    notlar: string;
+  }) => {
     if (!aktifListe || !limitModal) return;
     try {
       const res = await fetch(`/api/lab/paketler/${aktifListe.ID}/items`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: limitModal.ID, ...form }),
+        body: JSON.stringify({
+          itemId: limitModal.ID,
+          limitDeger: form.limitDeger,
+          limitBirimi: form.limitBirimi,
+          limitDegerEn: form.limitDegerEn || null,
+          limitBirimiEn: form.limitBirimiEn || null,
+          loq: form.loq || null,
+          loqEn: form.loqEn || null,
+          notlar: form.notlar,
+        }),
       });
       if (!res.ok) { const j = await res.json(); throw new Error(j.error); }
       toast("Limit güncellendi.", "success");
@@ -687,11 +708,23 @@ function LimitModal({
   item, onSave, onClose,
 }: {
   item:    Item;
-  onSave:  (form: { limitDeger: string; limitBirimi: string; notlar: string }) => Promise<void>;
+  onSave:  (form: {
+    limitDeger: string;
+    limitBirimi: string;
+    limitDegerEn?: string;
+    limitBirimiEn?: string;
+    loq?: string;
+    loqEn?: string;
+    notlar: string;
+  }) => Promise<void>;
   onClose: () => void;
 }) {
   const [limitDeger,  setLimitDeger]  = useState(item.LimitDeger  || "");
   const [limitBirimi, setLimitBirimi] = useState(item.LimitBirimi || "");
+  const [limitDegerEn, setLimitDegerEn] = useState(item.LimitDegerEn || "");
+  const [limitBirimiEn, setLimitBirimiEn] = useState(item.LimitBirimiEn || "");
+  const [loq, setLoq] = useState(item.LOQ || "");
+  const [loqEn, setLoqEn] = useState(item.LOQEn || "");
   const [notlar,      setNotlar]      = useState(item.Notlar      || "");
   const [saving,      setSaving]      = useState(false);
 
@@ -717,14 +750,43 @@ function LimitModal({
           <button style={s.close} onClick={onClose}>✕</button>
         </div>
         <div style={s.body}>
-          <div>
-            <label style={s.label}>Limit Değer</label>
-            <input style={s.input} value={limitDeger} onChange={e => setLimitDeger(e.target.value)} placeholder="Örn: 0.5" autoFocus />
+          {/* Limit Değer (TR + EN) */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={s.label}>Limit Değer (TR)</label>
+              <input style={s.input} value={limitDeger} onChange={e => setLimitDeger(e.target.value)} placeholder="ör: 0.5" autoFocus />
+            </div>
+            <div>
+              <label style={s.label}>Limit Değer (EN)</label>
+              <input style={s.input} value={limitDegerEn} onChange={e => setLimitDegerEn(e.target.value)} placeholder="e.g. 0.5" />
+            </div>
           </div>
-          <div>
-            <label style={s.label}>Limit Birimi</label>
-            <input style={s.input} value={limitBirimi} onChange={e => setLimitBirimi(e.target.value)} placeholder="Örn: mg/kg" />
+
+          {/* Limit Birimi (TR + EN) */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={s.label}>Limit Birimi (TR)</label>
+              <input style={s.input} value={limitBirimi} onChange={e => setLimitBirimi(e.target.value)} placeholder="ör: mg/kg" />
+            </div>
+            <div>
+              <label style={s.label}>Limit Birimi (EN)</label>
+              <input style={s.input} value={limitBirimiEn} onChange={e => setLimitBirimiEn(e.target.value)} placeholder="e.g. mg/kg" />
+            </div>
           </div>
+
+          {/* LOQ (TR + EN) 
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={s.label}>LOQ (TR)</label>
+              <input style={s.input} value={loq} onChange={e => setLoq(e.target.value)} placeholder="ör: 0.1" />
+            </div>
+            <div>
+              <label style={s.label}>LOQ (EN)</label>
+              <input style={s.input} value={loqEn} onChange={e => setLoqEn(e.target.value)} placeholder="e.g. 0.1" />
+            </div>
+          </div>  */}
+
+          {/* Notlar */}
           <div>
             <label style={s.label}>Notlar</label>
             <textarea
@@ -742,7 +804,15 @@ function LimitModal({
             disabled={saving}
             onClick={async () => {
               setSaving(true);
-              await onSave({ limitDeger, limitBirimi, notlar });
+              await onSave({
+                limitDeger,
+                limitBirimi,
+                limitDegerEn,
+                limitBirimiEn,
+                loq,
+                loqEn,
+                notlar,
+              });
               setSaving(false);
             }}
           >

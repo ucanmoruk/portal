@@ -38,7 +38,9 @@ export async function GET(
       .query(`
         SELECT
           x4.ID, x4.ListeID, x4.AltAnalizID,
-          x4.LimitDeger, x4.LimitBirimi, x4.Notlar,
+          x4.LimitDeger, x4.LimitBirimi, ISNULL(x4.LimitDegerEn, '') AS LimitDegerEn,
+          ISNULL(x4.LimitBirimiEn, '') AS LimitBirimiEn, ISNULL(x4.LOQ, '') AS LOQ,
+          ISNULL(x4.LOQEn, '') AS LOQEn, x4.Notlar,
           s.Kod, s.Ad, s.Method, s.Matriks,
           s.Akreditasyon, s.Sure, s.Fiyat, s.ParaBirimi
         FROM NumuneX4 x4
@@ -139,22 +141,31 @@ export async function PATCH(
 ) {
   const { id } = await params;
   try {
-    const body        = await request.json();
-    const itemId      = parseInt(body.itemId);
-    const limitDeger  = (body.limitDeger  || "").trim() || null;
-    const limitBirimi = (body.limitBirimi || "").trim() || null;
-    const notlar      = (body.notlar      || "").trim() || null;
+    const body          = await request.json();
+    const itemId        = parseInt(body.itemId);
+    const limitDeger    = (body.limitDeger    || "").trim() || null;
+    const limitBirimi   = (body.limitBirimi   || "").trim() || null;
+    const limitDegerEn  = (body.limitDegerEn  || "").trim() || null;
+    const limitBirimiEn = (body.limitBirimiEn || "").trim() || null;
+    const loq           = (body.loq           || "").trim() || null;
+    const loqEn         = (body.loqEn         || "").trim() || null;
+    const notlar        = (body.notlar        || "").trim() || null;
 
     const pool = await poolPromise;
     await pool.request()
-      .input("itemId",      itemId)
-      .input("listeId",     parseInt(id))
-      .input("limitDeger",  limitDeger)
-      .input("limitBirimi", limitBirimi)
-      .input("notlar",      notlar)
+      .input("itemId",        itemId)
+      .input("listeId",       parseInt(id))
+      .input("limitDeger",    limitDeger)
+      .input("limitBirimi",   limitBirimi)
+      .input("limitDegerEn",  limitDegerEn)
+      .input("limitBirimiEn", limitBirimiEn)
+      .input("loq",           loq)
+      .input("loqEn",         loqEn)
+      .input("notlar",        notlar)
       .query(`
         UPDATE NumuneX4
-        SET LimitDeger=@limitDeger, LimitBirimi=@limitBirimi, Notlar=@notlar
+        SET LimitDeger=@limitDeger, LimitBirimi=@limitBirimi, LimitDegerEn=@limitDegerEn,
+            LimitBirimiEn=@limitBirimiEn, LOQ=@loq, LOQEn=@loqEn, Notlar=@notlar
         WHERE ID=@itemId AND ListeID=@listeId
       `);
 

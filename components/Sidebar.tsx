@@ -67,17 +67,37 @@ const navGroups: NavGroup[] = [
       </svg>
     ),
     items: [
-      { label: "Numune Kabul",     href: "/laboratuvar/numune-takip",    menuKey: "laboratuvar.numune-takip"    },
-      { label: "Hizmet Listesi", href: "/laboratuvar/hizmet-listesi",  menuKey: "laboratuvar.hizmet-listesi"  },
-      { label: "Hizmet Paketleri", href: "/laboratuvar/hizmet-paketleri", menuKey: "laboratuvar.hizmet-paketleri" },
+      { label: "Numune Kabul",      href: "/laboratuvar/numune-takip",    menuKey: "laboratuvar.numune-takip"    },
+      { label: "Hizmet Listesi",    href: "/laboratuvar/hizmet-listesi",  menuKey: "laboratuvar.hizmet-listesi"  },
+      { label: "Hizmet Paketleri",  href: "/laboratuvar/hizmet-paketleri", menuKey: "laboratuvar.hizmet-paketleri" },
+      { label: "Sonuç Girişi",      href: "/laboratuvar/sonuc-giris",     menuKey: "laboratuvar.sonuc-giris"     },
+      { label: "Rapor Takip",       href: "/laboratuvar/rapor-takip",     menuKey: "laboratuvar.rapor-takip"     },
+    ],
+  },
+  {
+    id: "spektrotek",
+    menuKey: "laboratuvar.spektrotek",
+    label: "Spektrotek",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+        <path d="M10 1a6 6 0 0 0-3.815 10.641 1 1 0 0 1 .315.728V13a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-.631a1 1 0 0 1 .315-.728A6 6 0 0 0 10 1ZM8.5 15a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1h-3Zm.5 2.5a1 1 0 0 0 1 1 1 1 0 0 0 1-1H9Z" />
+      </svg>
+    ),
+    items: [
+      { label: "Müşteriler",   href: "/laboratuvar/spektrotek/musteriler", menuKey: "spektrotek.musteriler" },
+      { label: "Ürünler",      href: "/laboratuvar/spektrotek/urunler",    menuKey: "spektrotek.urunler"    },
+      { label: "Teklifler",    href: "/laboratuvar/spektrotek/teklifler",  menuKey: "spektrotek.teklifler"  },
+      { label: "Faturalar",    href: "/laboratuvar/spektrotek/faturalar",  menuKey: "spektrotek.faturalar"  },
+      { label: "Satın Alma",   href: "/laboratuvar/spektrotek/satin-alma", menuKey: "spektrotek.satin-alma" },
+      { label: "Servis",       href: "/laboratuvar/spektrotek/servis",     menuKey: "spektrotek.servis"     },
+      { label: "Talepler",     href: "/laboratuvar/spektrotek/talepler",   menuKey: "spektrotek.talepler"   },
     ],
   },
 ];
 
 /** Laboratuvar grubundan sonra — üst düzey (tek satır) menü */
 const topLevelAfterLaboratuvar: NavItem[] = [
-  { label: "KYS", href: "/laboratuvar/kys", menuKey: "laboratuvar.kys" },
-  { label: "Spektrotek", href: "/laboratuvar/spektrotek", menuKey: "laboratuvar.spektrotek" },
+  { label: "KYS",           href: "/laboratuvar/kys",          menuKey: "laboratuvar.kys"          },
   { label: "Root Kozmetik", href: "/laboratuvar/root-kozmetik", menuKey: "laboratuvar.root-kozmetik" },
 ];
 
@@ -86,6 +106,7 @@ function groupIdForPath(path: string): string | null {
   if (path.startsWith("/admin")) return "admin";
   if (path.startsWith("/ugd/formul-kontrol")) return "ugd";
   if (path.startsWith("/laboratuvar/numune-form")) return "laboratuvar";
+  if (path.startsWith("/laboratuvar/spektrotek")) return "spektrotek";
   for (const g of navGroups) {
     if (g.items.some(item => path === item.href || path.startsWith(`${item.href}/`))) return g.id;
   }

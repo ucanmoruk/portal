@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +40,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code yerel ayarları (IDE'ye özel, kişisel)
+.claude/settings.local.json
+.claude/launch.json
+
+# Lab-CRM ayrı proje — kendi repo'sunda yönetilmeli
+app/(dashboard)/laboratuvar/lab-crm/
+
+# DB çıktıları ve geçici dosyalar
+**/db-output*.txt
+**/*.txt
+**/Untitled-*
+
+# Geliştirici scriptleri (üretimde gereksiz)
+**/inspect_db*.js
+**/verify-auth.js
+gen_onboarding.js

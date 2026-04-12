@@ -595,3 +595,23 @@
   animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.pageEllipsis {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  color: var(--color-text-tertiary);
+  font-size: 0.845rem;
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  background: #ff2d5514;
+  color: #c1001a;
+  border: 1px solid #ff2d5530;
+  border-radius: var(--radius-md);
+  font-size: 0.845rem;
+}

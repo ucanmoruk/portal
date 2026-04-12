@@ -30,6 +30,12 @@ interface HizmetOpt {
   Metot?: string;
   Sure?: number | null;
   Matriks?: string;
+  Limit?: string;
+  Birim?: string;
+  LOQ?: string;
+  LimitEn?: string;
+  BirimEn?: string;
+  LOQEn?: string;
 }
 
 interface PaketItem {
@@ -140,6 +146,9 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
   const [paketler, setPaketler] = useState<PaketOpt[]>([]);
   const [paketLoading, setPaketLoading] = useState(false);
   const [paketExpanded, setPaketExpanded] = useState<number | null>(null);
+  const [paketDetaylari, setPaketDetaylari] = useState<Record<number, any[]>>({});
+  const [loadingDetayId, setLoadingDetayId] = useState<number | null>(null);
+  const [selectedPaketItems, setSelectedPaketItems] = useState<Record<string, boolean>>({});
   const [loadingPaketId, setLoadingPaketId] = useState<number | null>(null);
   const hizmetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -181,36 +190,56 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
 
   const addHizmet = (h: HizmetOpt) => {
     if (rows.some(x => x.AnalizID === h.ID && !x.x3ID)) return;
-    const metot = h.Metot ?? "";
-    const termin = addDays(tarih, h.Sure ?? 0);
-    onChange([
+    const sure = h.Sure == null ? null : Number(h.Sure);
+    const next = [
       ...rows,
       {
         key: newKey(),
         AnalizID: h.ID,
-        Termin: termin,
+        Termin: sure != null ? addDays(tarih, sure) : addDays(tarih, 0),
         x3ID: null,
         Kod: h.Kod,
         Ad: h.Ad,
-        Metot: metot,
-        Sure: h.Sure ?? null,
+        Metot: h.Metot || "",
+        Sure: Number.isFinite(sure) ? sure : null,
+        Limit: h.Limit,
+        Birim: h.Birim,
+        LimitEn: h.LimitEn,
+        BirimEn: h.BirimEn,
+        LOQ: h.LOQ,
+        LOQEn: h.LOQEn,
       },
-    ]);
+    ];
+    onChange(next);
   };
 
-  const addPaketHizmetler = async (x3id: number) => {
+  const addPaketHizmetler = async (x3id: number, onlySelected: boolean = false) => {
     setLoadingPaketId(x3id);
     try {
       const r = await fetch(`/api/numune-form/paket-items?x3id=${x3id}`);
       const raw = r.ok ? await r.json() : [];
       const items = Array.isArray(raw) ? raw : [];
       const next = [...rows];
-      for (const it of items as Record<string, unknown>[]) {
+      
+      const itemsToAdd = onlySelected 
+        ? items.filter((item, idx) => selectedPaketItems[`${x3id}-${idx}`])
+        : items;
+      
+      for (const it of itemsToAdd) {
         const aid = pickAnalizId(it);
         if (!aid) continue;
         if (next.some(x => x.AnalizID === aid && x.x3ID === x3id)) continue;
         const sureRaw = it.Sure ?? it.sure;
         const sure = sureRaw == null ? null : Number(sureRaw);
+
+        // Limit, Birim, LOQ ve EN versiyonlarını ayır
+        const limitDeger = it.LimitDeger ? String(it.LimitDeger) : undefined;
+        const limitBirim = it.LimitBirimi || undefined;
+        const limitDegerEn = it.LimitDegerEn ? String(it.LimitDegerEn) : undefined;
+        const limitBirimEn = it.LimitBirimiEn || undefined;
+        const loq = it.LOQ ? String(it.LOQ) : undefined;
+        const loqEn = it.LOQEn ? String(it.LOQEn) : undefined;
+
         next.push({
           key: newKey(),
           AnalizID: aid,
@@ -220,13 +249,97 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
           Ad: pickStr(it, "Ad", "ad"),
           Metot: pickStr(it, "Metot", "metot"),
           Sure: Number.isFinite(sure as number) ? (sure as number) : null,
+          Limit: limitDeger,
+          Birim: limitBirim,
+          LimitEn: limitDegerEn,
+          BirimEn: limitBirimEn,
+          LOQ: loq,
+          LOQEn: loqEn,
         });
       }
       onChange(next);
+      if (onlySelected) {
+        setSelectedPaketItems({});
+      }
     } finally {
       setLoadingPaketId(null);
     }
   };
+
+  const addSinglePaketItem = async (x3id: number, item: any) => {
+    const aid = pickAnalizId(item);
+    if (!aid) return;
+
+    const next = [...rows];
+    if (next.some(x => x.AnalizID === aid && x.x3ID === x3id)) return;
+
+    const sureRaw = item.Sure ?? item.sure;
+    const sure = sureRaw == null ? null : Number(sureRaw);
+
+    // Limit, Birim, LOQ ve EN versiyonlarını ayır
+    const limitDeger = item.LimitDeger ? String(item.LimitDeger) : undefined;
+    const limitBirim = item.LimitBirimi || undefined;
+    const limitDegerEn = item.LimitDegerEn ? String(item.LimitDegerEn) : undefined;
+    const limitBirimEn = item.LimitBirimiEn || undefined;
+    const loq = item.LOQ ? String(item.LOQ) : undefined;
+    const loqEn = item.LOQEn ? String(item.LOQEn) : undefined;
+
+    next.push({
+      key: newKey(),
+      AnalizID: aid,
+      Termin: addDays(tarih, Number.isFinite(sure as number) ? (sure as number) : 0),
+      x3ID: x3id,
+      Kod: pickStr(item, "Kod", "kod"),
+      Ad: pickStr(item, "Ad", "ad"),
+      Metot: pickStr(item, "Metot", "metot"),
+      Sure: Number.isFinite(sure as number) ? (sure as number) : null,
+      Limit: limitDeger,
+      Birim: limitBirim,
+      LimitEn: limitDegerEn,
+      BirimEn: limitBirimEn,
+      LOQ: loq,
+      LOQEn: loqEn,
+    });
+
+    onChange(next);
+  };
+
+  const togglePaketItemSelection = (x3id: number, idx: number) => {
+    const key = `${x3id}-${idx}`;
+    setSelectedPaketItems(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const selectAllPaketItems = (x3id: number, select: boolean) => {
+    const items = paketDetaylari[x3id] || [];
+    const newSelections: Record<string, boolean> = {};
+    items.forEach((_, idx) => {
+      newSelections[`${x3id}-${idx}`] = select;
+    });
+    setSelectedPaketItems(prev => ({ ...prev, ...newSelections }));
+  };
+
+  const fetchPaketDetaylari = async (x3id: number) => {
+    if (paketDetaylari[x3id]) return; // Zaten yüklenmişse tekrar çekme
+    
+    setLoadingDetayId(x3id);
+    try {
+      const r = await fetch(`/api/numune-form/paket-items?x3id=${x3id}`);
+      const raw = r.ok ? await r.json() : [];
+      const items = Array.isArray(raw) ? raw : [];
+      setPaketDetaylari(prev => ({ ...prev, [x3id]: items }));
+    } finally {
+      setLoadingDetayId(null);
+    }
+  };
+
+  const setLimit = (key: string, limit: string) =>
+    onChange(rows.map(r => (r.key === key ? { ...r, Limit: limit } : r)));
+
+  const setBirim = (key: string, birim: string) =>
+    onChange(rows.map(r => (r.key === key ? { ...r, Birim: birim } : r)));
+
+  const setLOQ = (key: string, loq: string) =>
+    onChange(rows.map(r => (r.key === key ? { ...r, LOQ: loq } : r)));
 
   const remove = (key: string) => onChange(rows.filter(r => r.key !== key));
 
@@ -276,7 +389,7 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
                     <th style={thStyle}>Hizmet adı</th>
                     <th style={thStyle}>Metot</th>
                     <th style={{ ...thStyle, width: 60 }}>Süre (g)</th>
-                    <th style={thStyle}>Numune gereklilik</th>
+                    <th style={thStyle}>Matriks</th>
                     <th style={{ ...thStyle, width: 60 }} />
                   </tr>
                 </thead>
@@ -314,7 +427,13 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
                 <div key={p.ID} style={{ borderBottom: "1px solid var(--color-border)", marginBottom: 4 }}>
                   <div
                     style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 4px", cursor: "pointer" }}
-                    onClick={() => setPaketExpanded(prev => (prev === p.ID ? null : p.ID))}
+                    onClick={() => {
+  const newExpanded = paketExpanded === p.ID ? null : p.ID;
+  setPaketExpanded(newExpanded);
+  if (newExpanded && !paketDetaylari[p.ID]) {
+    void fetchPaketDetaylari(p.ID);
+  }
+}}
                   >
                     <div>
                       <span style={{ fontWeight: 600, fontSize: 13 }}>{p.ListeAdi}</span>
@@ -330,36 +449,95 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
                         disabled={loadingPaketId === p.ID}
                         onMouseDown={e => {
                           e.stopPropagation();
-                          void addPaketHizmetler(p.ID);
+                          const hasSelected = Object.keys(selectedPaketItems).some(key => 
+                            key.startsWith(`${p.ID}-`) && selectedPaketItems[key]
+                          );
+                          void addPaketHizmetler(p.ID, hasSelected);
                         }}
                       >
-                        {loadingPaketId === p.ID ? "…" : "Tümünü Ekle"}
+                        {loadingPaketId === p.ID ? "…" : (Object.keys(selectedPaketItems).some(key => 
+                          key.startsWith(`${p.ID}-`) && selectedPaketItems[key]
+                        ) ? "Seçilileri Ekle" : "Tümünü Ekle")}
                       </button>
                       <span style={{ color: "var(--color-text-tertiary)", fontSize: 12 }}>{paketExpanded === p.ID ? "▲" : "▼"}</span>
                     </div>
                   </div>
-                  {paketExpanded === p.ID && p.items.length > 0 && (
+                  {paketExpanded === p.ID && (
                     <div style={{ paddingLeft: 16, paddingBottom: 8 }}>
-                      {p.items.map((item, idx) => (
-                        <div
-                          key={idx}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            fontSize: 12,
-                            padding: "3px 0",
-                            color: "var(--color-text-secondary)",
-                          }}
-                        >
-                          <span>
-                            • {item.HizmetAdi}{" "}
-                            {item.Kod ? <span style={{ color: "var(--color-text-tertiary)" }}>({item.Kod})</span> : null}
-                          </span>
-                          <span style={{ marginLeft: 16, flexShrink: 0 }}>
-                            {item.Fiyat != null ? `${fmt(item.Fiyat)} ${item.ParaBirimi || "TRY"}` : "—"}
-                          </span>
-                        </div>
-                      ))}
+                      {loadingDetayId === p.ID ? (
+                        <p style={{ fontSize: 12, color: "var(--color-text-secondary)", padding: "8px" }}>Yükleniyor...</p>
+                      ) : (
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ borderBottom: "1px solid var(--color-border-light)" }}>
+                              <th style={{ textAlign: "center", padding: "4px 8px", color: "var(--color-text-secondary)", fontWeight: 600 }}>
+                                <input
+                                  type="checkbox"
+                                  checked={(paketDetaylari[p.ID] || []).every((_, idx) => selectedPaketItems[`${p.ID}-${idx}`])}
+                                  onChange={(e) => selectAllPaketItems(p.ID, e.target.checked)}
+                                  style={{ cursor: "pointer" }}
+                                />
+                              </th>
+                              <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--color-text-secondary)", fontWeight: 600 }}>Kod</th>
+                              <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--color-text-secondary)", fontWeight: 600 }}>Hizmet Adı</th>
+                              <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--color-text-secondary)", fontWeight: 600 }}>Metot</th>
+                              <th style={{ textAlign: "center", padding: "4px 8px", color: "var(--color-text-secondary)", fontWeight: 600 }}>Süre</th>
+                              <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--color-text-secondary)", fontWeight: 600 }}>Limit</th>
+                              <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--color-text-secondary)", fontWeight: 600 }}>Birim</th>
+                              <th style={{ textAlign: "center", padding: "4px 8px", color: "var(--color-text-secondary)", fontWeight: 600 }}>İşlem</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(paketDetaylari[p.ID] || []).map((item, idx) => (
+                              <tr key={idx} style={{ borderBottom: idx < (paketDetaylari[p.ID]?.length || 0) - 1 ? "1px solid var(--color-border-light)" : "none" }}>
+                                <td style={{ padding: "4px 8px", textAlign: "center" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedPaketItems[`${p.ID}-${idx}`] || false}
+                                    onChange={() => togglePaketItemSelection(p.ID, idx)}
+                                    style={{ cursor: "pointer" }}
+                                  />
+                                </td>
+                                <td style={{ padding: "4px 8px", color: "var(--color-text-tertiary)", fontVariantNumeric: "tabular-nums" }}>
+                                  {item.Kod || "—"}
+                                </td>
+                                <td style={{ padding: "4px 8px", fontWeight: 500 }}>
+                                  {item.Ad || "—"}
+                                </td>
+                                <td style={{ padding: "4px 8px", color: "var(--color-text-secondary)" }}>
+                                  {item.Metot || "—"}
+                                </td>
+                                <td style={{ padding: "4px 8px", textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
+                                  {item.Sure ? `${item.Sure} gün` : "—"}
+                                </td>
+                                <td style={{ padding: "4px 8px", color: "var(--color-text-secondary)" }}>
+                                  {item.LimitDeger || "—"}
+                                </td>
+                                <td style={{ padding: "4px 8px", color: "var(--color-text-secondary)" }}>
+                                  {item.LimitBirimi || "—"}
+                                </td>
+                                <td style={{ padding: "4px 8px", textAlign: "center" }}>
+                                  <button
+                                    type="button"
+                                    style={{
+                                      padding: "2px 8px",
+                                      fontSize: "11px",
+                                      background: "var(--color-accent)",
+                                      color: "white",
+                                      border: "none",
+                                      borderRadius: "4px",
+                                      cursor: "pointer"
+                                    }}
+                                    onClick={() => addSinglePaketItem(p.ID, item)}
+                                  >
+                                    Ekle
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
                     </div>
                   )}
                 </div>
@@ -385,7 +563,10 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
                 <th>Kod</th>
                 <th>Ad</th>
                 <th>Metot</th>
-                <th style={{ width: 160 }}>Termin</th>
+                <th style={{ width: 140 }}>Limit</th>
+                <th style={{ width: 100 }}>Birim</th>
+                <th style={{ width: 100 }}>LOQ</th>
+                <th style={{ width: 140 }}>Termin</th>
                 <th style={{ width: 56 }} />
               </tr>
             </thead>
@@ -395,6 +576,57 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
                   <td style={{ fontVariantNumeric: "tabular-nums" }}>{r.Kod}</td>
                   <td>{r.Ad}</td>
                   <td style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>{r.Metot}</td>
+                  <td style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
+                    <input
+                      type="text"
+                      value={r.Limit || ""}
+                      onChange={e => setLimit(r.key, e.target.value)}
+                      placeholder="Limit girin..."
+                      style={{
+                        width: "100%",
+                        padding: "4px 8px",
+                        border: "1px solid var(--color-border)",
+                        borderRadius: "4px",
+                        fontSize: "0.82rem",
+                        background: "var(--color-surface)",
+                        color: "var(--color-text-primary)"
+                      }}
+                    />
+                  </td>
+                  <td style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
+                    <input
+                      type="text"
+                      value={r.Birim || ""}
+                      onChange={e => setBirim(r.key, e.target.value)}
+                      placeholder="Birim..."
+                      style={{
+                        width: "100%",
+                        padding: "4px 8px",
+                        border: "1px solid var(--color-border)",
+                        borderRadius: "4px",
+                        fontSize: "0.82rem",
+                        background: "var(--color-surface)",
+                        color: "var(--color-text-primary)"
+                      }}
+                    />
+                  </td>
+                  <td style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
+                    <input
+                      type="text"
+                      value={r.LOQ || ""}
+                      onChange={e => setLOQ(r.key, e.target.value)}
+                      placeholder="LOQ..."
+                      style={{
+                        width: "100%",
+                        padding: "4px 8px",
+                        border: "1px solid var(--color-border)",
+                        borderRadius: "4px",
+                        fontSize: "0.82rem",
+                        background: "var(--color-surface)",
+                        color: "var(--color-text-primary)"
+                      }}
+                    />
+                  </td>
                   <td>
                     <input
                       type="date"

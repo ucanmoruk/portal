@@ -98,6 +98,8 @@ function mapHizmetler(rows: Record<string, unknown>[]): HizmetRow[] {
     Ad: d(h.Ad),
     Metot: d(h.Metot),
     Sure: h.Sure != null && h.Sure !== "" ? Number(h.Sure) : null,
+    Limit: d(h.Limit) || undefined,
+    Birim: d(h.Birim) || undefined,
   }));
 }
 
@@ -212,10 +214,12 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
       UretimTarihi: normalizePartialDate(form.UretimTarihi),
       SKT: normalizePartialDate(form.SKT),
     },
-    hizmetler: hizmetler.map(({ AnalizID, Termin, x3ID }) => ({
+    hizmetler: hizmetler.map(({ AnalizID, Termin, x3ID, Limit, Birim }) => ({
       AnalizID,
       Termin: Termin || null,
       x3ID,
+      Limit: Limit || null,
+      Birim: Birim || null,
     })),
     formul: formul.map(f => ({
       HammaddeID: f.HammaddeID,

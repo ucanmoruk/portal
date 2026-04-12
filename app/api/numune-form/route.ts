@@ -102,13 +102,16 @@ export async function POST(request: Request) {
       `);
 
     // ── 3. NumuneX1 (hizmetler) ──────────────────────────────────
-    for (const h of hizmetler) {
-      await pool.request()
-        .input("RaporID",  nkrId)
-        .input("AnalizID", h.AnalizID)
-        .input("Termin",   h.Termin   || null)
-        .input("x3ID",     h.x3ID     || null)
-        .query("INSERT INTO NumuneX1 (RaporID, AnalizID, Termin, x3ID) VALUES (@RaporID, @AnalizID, @Termin, @x3ID)");
+    if (hizmetler.length > 0) {
+      // Bulk INSERT - tek sorguda tüm hizmetleri ekle
+      const values = hizmetler.map((h: any) => 
+        `(${nkrId}, ${h.AnalizID}, ${h.Termin ? `'${h.Termin}'` : 'NULL'}, ${h.x3ID ? h.x3ID : 'NULL'}, ${h.Limit ? `'${h.Limit.replace(/'/g, "''")}'` : 'NULL'}, ${h.Birim ? `'${h.Birim.replace(/'/g, "''")}'` : 'NULL'})`
+      ).join(', ');
+      
+      await pool.request().query(`
+        INSERT INTO NumuneX1 (RaporID, AnalizID, Termin, x3ID, Limit, Birim) 
+        VALUES ${values}
+      `);
     }
 
     // ── 4. NKR_Formul ────────────────────────────────────────────
@@ -127,11 +130,29 @@ export async function POST(request: Request) {
 
     // ── 5. NKR_Log ───────────────────────────────────────────────
     if (doLog) {
+      // Detaylı açıklama oluştur
+      let aciklama = `Rapor No: ${nkr.RaporNo} — Evrak No: ${nkr.Evrak_No}`;
+      
+      if (hizmetler.length > 0) {
+        const hizmetSayisi = hizmetler.length;
+        aciklama += `\n• ${hizmetSayisi} hizmet eklendi`;
+        
+        // Paket hizmetleri varsa belirt
+        const paketHizmetler = hizmetler.filter((h: any) => h.x3ID);
+        if (paketHizmetler.length > 0) {
+          aciklama += ` (${paketHizmetler.length} tanesi paketten)`;
+        }
+      }
+      
+      if (formul.length > 0) {
+        aciklama += `\n• ${formul.length} formül maddesi eklendi`;
+      }
+      
       await pool.request()
         .input("NKRID",       nkrId)
         .input("KullaniciID", userId ? parseInt(userId) : null)
         .input("Eylem",       "Oluşturuldu")
-        .input("Aciklama",    `Rapor No: ${nkr.RaporNo} — Evrak No: ${nkr.Evrak_No}`)
+        .input("Aciklama",    aciklama)
         .query("INSERT INTO NKR_Log (NKRID, KullaniciID, Eylem, Aciklama) VALUES (@NKRID, @KullaniciID, @Eylem, @Aciklama)");
     }
 

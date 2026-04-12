@@ -37,13 +37,28 @@ export const MENU_TREE: MenuItem[] = [
     key: "laboratuvar",
     label: "Laboratuvar",
     children: [
-      { key: "laboratuvar.numune-takip",  label: "Numune Kabul",  href: "/laboratuvar/numune-takip"  },
-      { key: "laboratuvar.hizmet-listesi", label: "Hizmet Listesi", href: "/laboratuvar/hizmet-listesi" },
+      { key: "laboratuvar.numune-takip",     label: "Numune Kabul",     href: "/laboratuvar/numune-takip"     },
+      { key: "laboratuvar.rapor-takip",      label: "Rapor Takip",      href: "/laboratuvar/rapor-takip"      },
+      { key: "laboratuvar.sonuc-giris",      label: "Sonuç Girişi",     href: "/laboratuvar/sonuc-giris"      },
+      { key: "laboratuvar.hizmet-listesi",   label: "Hizmet Listesi",   href: "/laboratuvar/hizmet-listesi"   },
       { key: "laboratuvar.hizmet-paketleri", label: "Hizmet Paketleri", href: "/laboratuvar/hizmet-paketleri" },
     ],
   },
   { key: "laboratuvar.kys", label: "KYS", href: "/laboratuvar/kys" },
-  { key: "laboratuvar.spektrotek", label: "Spektrotek", href: "/laboratuvar/spektrotek" },
+  {
+    key: "spektrotek",
+    label: "Spektrotek",
+    children: [
+      { key: "spektrotek.ozet",       label: "Özet Panel",     href: "/laboratuvar/spektrotek"                },
+      { key: "spektrotek.talepler",   label: "Talepler",       href: "/laboratuvar/spektrotek/talepler"       },
+      { key: "spektrotek.teklifler",  label: "Teklifler",      href: "/laboratuvar/spektrotek/teklifler"      },
+      { key: "spektrotek.musteriler", label: "Müşteriler",     href: "/laboratuvar/spektrotek/musteriler"     },
+      { key: "spektrotek.urunler",    label: "Ürünler",        href: "/laboratuvar/spektrotek/urunler"        },
+      { key: "spektrotek.faturalar",  label: "Faturalar",      href: "/laboratuvar/spektrotek/faturalar"      },
+      { key: "spektrotek.satin-alma", label: "Satın Alma",     href: "/laboratuvar/spektrotek/satin-alma"     },
+      { key: "spektrotek.servis",     label: "Servis",         href: "/laboratuvar/spektrotek/servis"         },
+    ],
+  },
   { key: "laboratuvar.root-kozmetik", label: "Root Kozmetik", href: "/laboratuvar/root-kozmetik" },
 ];
 

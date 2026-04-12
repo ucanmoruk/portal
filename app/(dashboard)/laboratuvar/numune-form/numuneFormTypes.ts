@@ -67,6 +67,12 @@ export interface HizmetRow {
   Ad?: string;
   Metot?: string;
   Sure?: number | null;
+  Limit?: string;
+  Birim?: string;
+  LimitEn?: string;
+  BirimEn?: string;
+  LOQ?: string;
+  LOQEn?: string;
 }
 
 export interface FormulRow {

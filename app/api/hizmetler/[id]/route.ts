@@ -42,6 +42,12 @@ export async function GET(
           ID, Kod, Ad, AdEn, Method, MethodEn, Matriks,
           Akreditasyon, Sure, NumGereklilik, NumDipnot, NumDipnotEn,
           Fiyat, ParaBirimi, Durumu,
+          ISNULL([Limit], '') AS [Limit],
+          ISNULL(Birim, '') AS Birim,
+          ISNULL(LOQ, '') AS LOQ,
+          ISNULL(LimitEn, '') AS LimitEn,
+          ISNULL(BirimEn, '') AS BirimEn,
+          ISNULL(LOQEn, '') AS LOQEn,
           ${optCols}
         FROM StokAnalizListesi
         WHERE ID = @id
@@ -73,6 +79,7 @@ export async function PUT(
       Kod, Ad, AdEn, Method, MethodEn, Matriks,
       Akreditasyon, Sure, NumGereklilik, NumDipnot, NumDipnotEn,
       Fiyat, ParaBirimi, Durumu, RaporFormati, YetkiliID,
+      Limit, Birim, LOQ, LimitEn, BirimEn, LOQEn,
     } = body;
 
     const pool = await poolPromise;
@@ -95,7 +102,13 @@ export async function PUT(
       .input("NumDipnotEn",   NumDipnotEn   || null)
       .input("Fiyat",         Fiyat         ? parseFloat(Fiyat) : null)
       .input("ParaBirimi",    ParaBirimi    || "₺")
-      .input("Durumu",        Durumu        || "Aktif");
+      .input("Durumu",        Durumu        || "Aktif")
+      .input("Limit",         Limit         || null)
+      .input("Birim",         Birim         || null)
+      .input("LOQ",           LOQ           || null)
+      .input("LimitEn",       LimitEn       || null)
+      .input("BirimEn",       BirimEn       || null)
+      .input("LOQEn",         LOQEn         || null);
 
     const extraSets: string[] = [];
 
@@ -126,7 +139,13 @@ export async function PUT(
         NumDipnotEn   = @NumDipnotEn,
         Fiyat         = @Fiyat,
         ParaBirimi    = @ParaBirimi,
-        Durumu        = @Durumu${extraSetStr}
+        Durumu        = @Durumu,
+        [Limit]       = @Limit,
+        Birim         = @Birim,
+        LOQ           = @LOQ,
+        LimitEn       = @LimitEn,
+        BirimEn       = @BirimEn,
+        LOQEn         = @LOQEn${extraSetStr}
       WHERE ID = @id
     `);
 

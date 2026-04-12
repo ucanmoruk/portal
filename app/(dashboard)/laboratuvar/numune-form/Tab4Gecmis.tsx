@@ -9,6 +9,7 @@ interface LogRow {
   Eylem: string;
   Aciklama: string | null;
   KullaniciID: number | null;
+  KullaniciAd: string | null;
 }
 
 interface Props {
@@ -28,14 +29,31 @@ export default function Tab4Gecmis({ recordId }: Props) {
     let cancelled = false;
     setL(true);
     setError("");
+    
+    console.log("Loading logs for recordId:", recordId); // Debug
+    
     fetch(`/api/numune-form/${recordId}/log`)
-      .then(r => r.json())
+      .then(r => {
+        console.log("Response status:", r.status); // Debug
+        return r.json();
+      })
       .then(data => {
         if (cancelled) return;
-        if (Array.isArray(data)) setRows(data);
-        else setError(data.error || "Yüklenemedi");
+        console.log("Response data:", data); // Debug
+        if (Array.isArray(data)) {
+          setRows(data);
+          console.log("Loaded rows:", data.length); // Debug
+        } else {
+          setError(data.error || "Yüklenemedi");
+          console.error("API Error:", data); // Debug
+        }
       })
-      .catch(() => { if (!cancelled) setError("Ağ hatası"); })
+      .catch(err => { 
+        if (!cancelled) {
+          console.error("Fetch error:", err); // Debug
+          setError("Ağ hatası: " + err.message);
+        }
+      })
       .finally(() => { if (!cancelled) setL(false); });
     return () => { cancelled = true; };
   }, [recordId]);
@@ -74,7 +92,7 @@ export default function Tab4Gecmis({ recordId }: Props) {
               <th style={{ width: 160 }}>Tarih</th>
               <th style={{ width: 140 }}>İşlem</th>
               <th>Açıklama</th>
-              <th style={{ width: 90 }}>Kullanıcı</th>
+              <th style={{ width: 180 }}>Kullanıcı</th>
             </tr>
           </thead>
           <tbody>
@@ -83,7 +101,7 @@ export default function Tab4Gecmis({ recordId }: Props) {
                 <td style={{ fontVariantNumeric: "tabular-nums", fontSize: "0.82rem" }}>{r.Tarih}</td>
                 <td style={{ fontWeight: 600, fontSize: "0.82rem" }}>{r.Eylem}</td>
                 <td style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem", whiteSpace: "pre-wrap" }}>{r.Aciklama || "—"}</td>
-                <td style={{ fontSize: "0.8rem", color: "var(--color-text-tertiary)" }}>{r.KullaniciID ?? "—"}</td>
+                <td style={{ fontSize: "0.8rem", color: "var(--color-text-tertiary)" }}>{r.KullaniciAd ?? "—"}</td>
               </tr>
             ))}
           </tbody>
