@@ -57,6 +57,49 @@ function fmtMOS(v: number | null): string {
   return v >= 10000 ? ">10000" : v.toFixed(1);
 }
 
+// ── Fiziksel/Kimyasal kompakt tablo (module-level) ───────────────────────────
+type FormKey = keyof ReturnType<typeof emptyForm>;
+interface PhysRow { label: string; tr: FormKey; en: FormKey }
+
+function PhysChemTable({ rows, form, onChange }: {
+  rows: PhysRow[];
+  form: ReturnType<typeof emptyForm>;
+  onChange: (field: FormKey, v: string) => void;
+}) {
+  const tdLabel: React.CSSProperties = {
+    width: 170, padding: '6px 12px', fontSize: '0.82rem', fontWeight: 600,
+    color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border-light)',
+    whiteSpace: 'nowrap', verticalAlign: 'middle',
+  };
+  const tdInput: React.CSSProperties = {
+    padding: '4px 8px', borderBottom: '1px solid var(--color-border-light)', verticalAlign: 'middle',
+  };
+  const inp: React.CSSProperties = {
+    width: '100%', padding: '5px 10px', border: '1px solid var(--color-border-light)',
+    borderRadius: 6, fontSize: '0.82rem', background: 'var(--color-bg)',
+  };
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <thead>
+        <tr style={{ background: 'var(--color-bg)' }}>
+          <th style={{ ...tdLabel, color: 'var(--color-accent)', fontSize: '0.75rem', letterSpacing: '0.04em', paddingTop: 0 }}>Özellik</th>
+          <th style={{ ...tdInput, fontWeight: 700, fontSize: '0.75rem', color: 'var(--color-accent)', letterSpacing: '0.04em', paddingTop: 0, width: '44%' }}>TR</th>
+          <th style={{ ...tdInput, fontWeight: 700, fontSize: '0.75rem', color: 'var(--color-accent)', letterSpacing: '0.04em', paddingTop: 0, width: '44%' }}>EN</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={row.label} style={{ background: i % 2 === 1 ? 'rgba(0,0,0,0.015)' : 'transparent' }}>
+            <td style={tdLabel}>{row.label}</td>
+            <td style={tdInput}><input value={String(form[row.tr])} onChange={e => onChange(row.tr, e.target.value)} style={inp} /></td>
+            <td style={tdInput}><input value={String(form[row.en])} onChange={e => onChange(row.en, e.target.value)} style={inp} /></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 // ── Module-level UI bileşenleri (focus kaymasını önler) ────────────────────────
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -174,6 +217,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(editId ?? null);
   const [globalError, setGlobalError] = useState("");
+  const [savedOk, setSavedOk] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(isEdit);
 
@@ -367,6 +411,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
       return;
     }
     setGlobalError("");
+    setSavedOk(false);
     setSaving(true);
     try {
       if (!savedId) {
@@ -376,6 +421,11 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
           body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
         });
         if (!res.ok) throw new Error((await res.json()).error || "Kayıt başarısız");
+        const data = await res.json();
+        if (data.id) setSavedId(String(data.id));
+        // Yeni kayıt → listeye git
+        router.push("/ugd/urun-listesi");
+        router.refresh();
       } else {
         const res = await fetch(`/api/urunler/${savedId}`, {
           method: "PUT",
@@ -383,9 +433,10 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
           body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
         });
         if (!res.ok) throw new Error((await res.json()).error || "Güncelleme başarısız");
+        // Güncelleme → sayfada kal, rapor indirilebilsin
+        setSavedOk(true);
+        setTimeout(() => setSavedOk(false), 4000);
       }
-      router.push("/ugd/urun-listesi");
-      router.refresh();
     } catch (err: any) {
       setGlobalError(err.message);
     } finally {
@@ -464,23 +515,40 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
       </div>
 
       {globalError && <div className={styles.formError} style={{ marginBottom: 20 }}>{globalError}</div>}
+      {savedOk && (
+        <div style={{ marginBottom: 20, padding: '12px 18px', background: '#e6f4ea', border: '1px solid #a8d5b5', borderRadius: 8, fontSize: '0.85rem', color: '#1a7340', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>✓ Kayıt güncellendi. Raporu indirmek için <strong>Yazdır / Word İndir</strong> butonunu kullanın.</span>
+          <button type="button" onClick={() => { router.push("/ugd/urun-listesi"); router.refresh(); }} style={{ background: 'none', border: '1px solid #1a7340', borderRadius: 6, padding: '4px 12px', fontSize: '0.8rem', color: '#1a7340', cursor: 'pointer', fontWeight: 600 }}>
+            Listeye Dön
+          </button>
+        </div>
+      )}
 
       {/* ── Tab 1: Genel Bilgiler ──────────────────────────────────────────── */}
       {activeTab === 'genel' && (
         <SectionCard title="Genel Bilgiler">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div className={styles.formGrid3}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* Kompakt üst satır: Rapor No · Versiyon · Tarih · Barkod · Miktar */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.7fr 1.2fr 1.2fr 1fr', gap: 12 }}>
               <div className={styles.formGroup}>
                 <label>Rapor No</label>
                 <input value={form.RaporNo} onChange={e => setForm({ ...form, RaporNo: e.target.value })} />
               </div>
               <div className={styles.formGroup}>
-                <label>Versiyon No</label>
+                <label>Versiyon</label>
                 <input value={form.Versiyon} onChange={e => setForm({ ...form, Versiyon: e.target.value })} />
               </div>
               <div className={styles.formGroup}>
                 <label>Tarih</label>
                 <input type="date" value={form.Tarih} onChange={e => setForm({ ...form, Tarih: e.target.value })} />
+              </div>
+              <div className={styles.formGroup}>
+                <label>Barkod</label>
+                <input value={form.Barkod} onChange={e => setForm({ ...form, Barkod: e.target.value })} />
+              </div>
+              <div className={styles.formGroup}>
+                <label>Miktar</label>
+                <input value={form.Miktar} onChange={e => setForm({ ...form, Miktar: e.target.value })} />
               </div>
             </div>
             <div className={styles.formGroup}>
@@ -491,16 +559,6 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
               </select>
             </div>
             <DualInput label="Ürün Adı" value={form.Urun} valueEn={form.UrunEn} onChange={upd('Urun')} onChangeEn={upd('UrunEn')} />
-            <div className={styles.formGrid}>
-              <div className={styles.formGroup}>
-                <label>Barkod</label>
-                <input value={form.Barkod} onChange={e => setForm({ ...form, Barkod: e.target.value })} />
-              </div>
-              <div className={styles.formGroup}>
-                <label>Ürün Miktarı</label>
-                <input value={form.Miktar} onChange={e => setForm({ ...form, Miktar: e.target.value })} />
-              </div>
-            </div>
             <div className={styles.formGrid}>
               <div className={styles.formGroup}>
                 <label>Kullanım Şekli</label>
@@ -630,10 +688,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
                           {/* INCI */}
                           <td>
                             {row.matched ? (
-                              <div>
-                                <a href={row.Link || "#"} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)', fontWeight: 700, textDecoration: 'none', fontSize: '0.82rem' }}>{row.INCIName}</a>
-                                <div style={{ fontSize: '0.7rem', opacity: 0.6, marginTop: 2 }}>{row.inputName}</div>
-                              </div>
+                              <a href={row.Link || "#"} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)', fontWeight: 700, textDecoration: 'none', fontSize: '0.82rem' }}>{row.INCIName}</a>
                             ) : (
                               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                                 <span style={{ color: '#d32f2f', fontSize: '0.8rem' }}>⚠</span>
@@ -712,26 +767,34 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
           </div>
 
           <SectionCard title="A.3 — Fiziksel / Kimyasal Özellikler">
-            <div className={styles.formGrid}>
-              <DualInput label="Görünüm" value={form.Gorunum} valueEn={form.GorunumEn} onChange={upd('Gorunum')} onChangeEn={upd('GorunumEn')} />
-              <DualInput label="Renk" value={form.Renk} valueEn={form.RenkEn} onChange={upd('Renk')} onChangeEn={upd('RenkEn')} />
-              <DualInput label="Koku" value={form.Koku} valueEn={form.KokuEn} onChange={upd('Koku')} onChangeEn={upd('KokuEn')} />
-              <DualInput label="pH" value={form.PH} valueEn={form.PHEn} onChange={upd('PH')} onChangeEn={upd('PHEn')} />
-              <DualInput label="Yoğunluk" value={form.Yogunluk} valueEn={form.YogunlukEn} onChange={upd('Yogunluk')} onChangeEn={upd('YogunlukEn')} />
-              <DualInput label="Viskozite" value={form.Viskozite} valueEn={form.ViskoziteEn} onChange={upd('Viskozite')} onChangeEn={upd('ViskoziteEn')} />
-              <DualInput label="Kaynama Noktası" value={form.Kaynama} valueEn={form.KaynamaEn} onChange={upd('Kaynama')} onChangeEn={upd('KaynamaEn')} />
-              <DualInput label="Erime Noktası" value={form.Erime} valueEn={form.ErimeEn} onChange={upd('Erime')} onChangeEn={upd('ErimeEn')} />
-              <DualInput label="Suda Çözünebilirlik" value={form.SudaCozunebilirlik} valueEn={form.SudaCozunebilirlikEn} onChange={upd('SudaCozunebilirlik')} onChangeEn={upd('SudaCozunebilirlikEn')} />
-              <DualInput label="Diğer Çözünebilirlik" value={form.DigerCozunebilirlik} valueEn={form.DigerCozunebilirlikEn} onChange={upd('DigerCozunebilirlik')} onChangeEn={upd('DigerCozunebilirlikEn')} />
-            </div>
+            <PhysChemTable
+              form={form}
+              onChange={(field, v) => setForm(prev => ({ ...prev, [field]: v }))}
+              rows={[
+                { label: 'Görünüm',              tr: 'Gorunum',             en: 'GorunumEn' },
+                { label: 'Renk',                 tr: 'Renk',                en: 'RenkEn' },
+                { label: 'Koku',                 tr: 'Koku',                en: 'KokuEn' },
+                { label: 'pH',                   tr: 'PH',                  en: 'PHEn' },
+                { label: 'Yoğunluk',             tr: 'Yogunluk',            en: 'YogunlukEn' },
+                { label: 'Viskozite',            tr: 'Viskozite',           en: 'ViskoziteEn' },
+                { label: 'Kaynama Noktası',      tr: 'Kaynama',             en: 'KaynamaEn' },
+                { label: 'Erime Noktası',        tr: 'Erime',               en: 'ErimeEn' },
+                { label: 'Suda Çözünebilirlik',  tr: 'SudaCozunebilirlik',  en: 'SudaCozunebilirlikEn' },
+                { label: 'Diğer Çözünebilirlik', tr: 'DigerCozunebilirlik', en: 'DigerCozunebilirlikEn' },
+              ]}
+            />
           </SectionCard>
 
           <SectionCard title="A.4 — Laboratuvar Testleri">
-            <div className={styles.formGrid}>
-              <DualInput label="Mikrobiyoloji" value={form.Mikrobiyoloji} valueEn={form.MikrobiyolojiEn} onChange={upd('Mikrobiyoloji')} onChangeEn={upd('MikrobiyolojiEn')} />
-              <DualInput label="Koruyucu Etkinlik" value={form.KoruyucuEtkinlik} valueEn={form.KoruyucuEtkinlikEn} onChange={upd('KoruyucuEtkinlik')} onChangeEn={upd('KoruyucuEtkinlikEn')} />
-              <DualInput label="Stabilite" value={form.Stabilite} valueEn={form.StabiliteEn} onChange={upd('Stabilite')} onChangeEn={upd('StabiliteEn')} />
-            </div>
+            <PhysChemTable
+              form={form}
+              onChange={(field, v) => setForm(prev => ({ ...prev, [field]: v }))}
+              rows={[
+                { label: 'Mikrobiyoloji',      tr: 'Mikrobiyoloji',      en: 'MikrobiyolojiEn' },
+                { label: 'Koruyucu Etkinlik',  tr: 'KoruyucuEtkinlik',   en: 'KoruyucuEtkinlikEn' },
+                { label: 'Stabilite',          tr: 'Stabilite',           en: 'StabiliteEn' },
+              ]}
+            />
           </SectionCard>
 
           <SectionCard title="A.5 (Etiket) — Kutu / Etiket Bilgileri">

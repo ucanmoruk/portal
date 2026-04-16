@@ -82,8 +82,18 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { form, formulResults = [], firmaAd = "" } = await request.json();
-  const f = form || {};
+  let form: any, formulResults: any[], firmaAd: string;
+  try {
+    const body = await request.json();
+    form = body.form || {};
+    formulResults = body.formulResults || [];
+    firmaAd = body.firmaAd || "";
+  } catch {
+    return Response.json({ error: "Geçersiz istek gövdesi" }, { status: 400 });
+  }
+  const f = form;
+
+  try {
 
   // ── EK-1 formulation table ─────────────────────────────────────────────────
   const EK1_COLS = [2000, 1400, 900, 1800, 1200, 700, 1638];
@@ -117,7 +127,8 @@ export async function POST(request: Request) {
     })
   );
 
-  function cell(w: number, text: string, idx: number, align: AlignmentType = AlignmentType.LEFT) {
+  type AlignVal = typeof AlignmentType[keyof typeof AlignmentType];
+  function cell(w: number, text: string, idx: number, align: AlignVal = AlignmentType.LEFT) {
     return new TableCell({
       borders: ALL_BORDERS,
       shading: idx % 2 === 0 ? undefined : { fill: "F7F9FC", type: ShadingType.CLEAR, color: "F7F9FC" },
@@ -457,10 +468,14 @@ export async function POST(request: Request) {
   const buffer = await Packer.toBuffer(doc);
   const filename = `UGDR-${(f.RaporNo || "rapor").replace(/[^a-zA-Z0-9_-]/g, "_")}.docx`;
 
-  return new Response(buffer, {
+  return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
+  } catch (err: any) {
+    console.error("[rapor-docx]", err);
+    return Response.json({ error: err?.message || "Rapor oluşturulamadı" }, { status: 500 });
+  }
 }
