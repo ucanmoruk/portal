@@ -23,32 +23,42 @@ export async function POST(request: NextRequest) {
       let normalizedAmount = String(item.amount || "0").replace(",", ".");
 
       // Matching Logic
-      // 1. rCosing fetch
+      // 1. rCosing fetch (ID dahil)
       const cosingResult = await pool.request()
         .input("name", normalizedName)
         .query(`
-          SELECT TOP 1 INCIName, Cas, EC, Functions, Regulation, Link 
-          FROM rCosing 
+          SELECT TOP 1 ID, INCIName, Cas, EC, Functions, Regulation, Link
+          FROM rCosing
           WHERE INCIName = @name OR CAS = @name
         `);
-      
+
       const cosing = cosingResult.recordset[0] || {};
 
-      // 2. rUGDYonetmelik fetch (limitler)
+      // 2. rHammadde'den NOAEL değeri (rCosing.ID = rHammadde.cID)
+      let noael: string | null = null;
+      if (cosing.ID) {
+        const hammaddeResult = await pool.request()
+          .input("cid", cosing.ID)
+          .query(`SELECT TOP 1 Noael2 FROM rHammadde WHERE cID = @cid`);
+        noael = hammaddeResult.recordset[0]?.Noael2?.toString() || null;
+      }
+
+      // 3. rUGDYonetmelik fetch (limitler)
       const yonetmelikResult = await pool.request()
         .input("name", normalizedName)
         .query(`
-          SELECT TOP 1 Maks as 'Maks', Diger as 'Diger', Etiket as 'Etiket' 
-          FROM rUGDYonetmelik 
+          SELECT TOP 1 Maks as 'Maks', Diger as 'Diger', Etiket as 'Etiket'
+          FROM rUGDYonetmelik
           WHERE INCI = @name OR INCI LIKE '%' + @name + '%'
         `);
-      
+
       const yonetmelik = yonetmelikResult.recordset[0] || {};
 
       results.push({
         inputName: item.name,
         inputAmount: normalizedAmount,
         matched: cosing.INCIName ? true : false,
+        cosingId: cosing.ID || null,
         INCIName: cosing.INCIName || null,
         Cas: cosing.Cas || null,
         Ec: cosing.EC || null,
@@ -57,7 +67,8 @@ export async function POST(request: NextRequest) {
         Link: cosing.Link || null,
         Maks: yonetmelik.Maks || null,
         Diger: yonetmelik.Diger || null,
-        Etiket: yonetmelik.Etiket || null
+        Etiket: yonetmelik.Etiket || null,
+        noael: noael,
       });
     }
 

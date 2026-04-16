@@ -8,12 +8,13 @@ import * as XLSX from "xlsx";
 // ── Interfaces ───────────────────────────────────────────────────────────────
 interface MatchedIngredient {
   inputName: string; inputAmount: string; matched: boolean;
+  cosingId?: number | null;
   INCIName: string | null; Cas: string | null; Ec: string | null;
   Functions: string | null; Regulation: string | null;
   Link?: string | null; Maks: string | null; Diger: string | null; Etiket: string | null;
   // Toksikolojik hesaplama (EK-1)
   dap: number;    // Dermal Absorption % — default 100
-  noael: string;  // mg/kg/gün — kullanıcı girer
+  noael: string;  // mg/kg/gün — DB'den gelir veya kullanıcı girer
 }
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
@@ -247,26 +248,45 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
   useEffect(() => {
     if (!editId) return;
     setLoadingEdit(true);
-    fetch(`/api/urunler/${editId}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!data) return;
-        setForm(prev => ({
-          ...prev,
-          Tarih: data.Tarih ? data.Tarih.split('T')[0] : prev.Tarih,
-          RaporNo: data.RaporNo ?? prev.RaporNo,
-          Versiyon: data.Versiyon ?? prev.Versiyon,
-          FirmaID: data.FirmaID ? String(data.FirmaID) : prev.FirmaID,
-          Barkod: data.Barkod ?? prev.Barkod,
-          Urun: data.Urun ?? prev.Urun,
-          UrunEn: data.UrunEn ?? prev.UrunEn,
-          Miktar: data.Miktar ?? prev.Miktar,
-          Tip1: data.Tip1 ?? prev.Tip1,
-          Tip2: data.Tip2 ? String(data.Tip2) : prev.Tip2,
-          Uygulama: data.Uygulama ?? prev.Uygulama,
-          Hedef: data.Hedef ?? prev.Hedef,
-          A: data.A ?? prev.A,
-        }));
+
+    // Ürün bilgileri + formül satırları paralel yükle
+    Promise.all([
+      fetch(`/api/urunler/${editId}`).then(r => r.ok ? r.json() : null),
+      fetch(`/api/urunler/formul?urunId=${editId}`).then(r => r.ok ? r.json() : []),
+    ])
+      .then(([data, formulData]) => {
+        if (data) {
+          setForm(prev => ({
+            ...prev,
+            Tarih: data.Tarih ? data.Tarih.split('T')[0] : prev.Tarih,
+            RaporNo: data.RaporNo ?? prev.RaporNo,
+            Versiyon: data.Versiyon ?? prev.Versiyon,
+            FirmaID: data.FirmaID ? String(data.FirmaID) : prev.FirmaID,
+            Barkod: data.Barkod ?? prev.Barkod,
+            Urun: data.Urun ?? prev.Urun,
+            UrunEn: data.UrunEn ?? prev.UrunEn,
+            Miktar: data.Miktar ?? prev.Miktar,
+            Tip1: data.Tip1 ?? prev.Tip1,
+            Tip2: data.Tip2 ? String(data.Tip2) : prev.Tip2,
+            Uygulama: data.Uygulama ?? prev.Uygulama,
+            Hedef: data.Hedef ?? prev.Hedef,
+            A: data.A ?? prev.A,
+          }));
+        }
+        // Kayıtlı formül satırlarını yükle
+        if (Array.isArray(formulData) && formulData.length > 0) {
+          setFormulResults(formulData.map((r: any) => withCalcDefaults({
+            inputName: r.INCIName || "",
+            inputAmount: String(r.Miktar || "0"),
+            matched: true,
+            cosingId: r.HammaddeID || null,
+            INCIName: r.INCIName || null,
+            Cas: null, Ec: null, Functions: null, Regulation: null,
+            Maks: null, Diger: null, Etiket: null,
+            dap: r.DaP ?? 100,
+            noael: r.Noael != null ? String(r.Noael) : '',
+          })));
+        }
       })
       .catch(() => {})
       .finally(() => setLoadingEdit(false));
@@ -323,9 +343,30 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
       });
       if (!res.ok) throw new Error("Kontrol işlemi başarısız");
       const data = await res.json();
-      setFormulResults(data.map(withCalcDefaults));
+      // noael: sunucudan gelen değeri string'e çevir, yoksa ""
+      const mapped = data.map((r: any) => withCalcDefaults({
+        ...r,
+        noael: r.noael != null ? String(r.noael) : '',
+      }));
+      setFormulResults(mapped);
+
+      // Eğer kayıtlı ürün varsa formülü DB'ye kaydet
+      if (savedId) {
+        saveFormulToDB(savedId, mapped);
+      }
     } catch (e: any) { setFormulError(e.message); }
     finally { setFormulLoading(false); }
+  };
+
+  // ── Formülü DB'ye kaydet ─────────────────────────────────────────────────
+  const saveFormulToDB = async (urunId: string, rows: MatchedIngredient[]) => {
+    try {
+      await fetch("/api/urunler/formul", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urunId: Number(urunId), rows }),
+      });
+    } catch { /* sessiz hata — formül kaydı arka planda */ }
   };
 
   const handleFormulPaste = () => {
@@ -433,6 +474,10 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
           body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
         });
         if (!res.ok) throw new Error((await res.json()).error || "Güncelleme başarısız");
+        // Formül satırlarını da kaydet
+        if (formulResults.length > 0) {
+          await saveFormulToDB(savedId, formulResults);
+        }
         // Güncelleme → sayfada kal, rapor indirilebilsin
         setSavedOk(true);
         setTimeout(() => setSavedOk(false), 4000);
@@ -454,7 +499,10 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ form, formulResults, firmaAd }),
       });
-      if (!res.ok) throw new Error("Rapor oluşturulamadı");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Rapor oluşturulamadı (HTTP ${res.status})`);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

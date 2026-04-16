@@ -1,9 +1,11 @@
+export const runtime = "nodejs";
+
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   AlignmentType, WidthType, BorderStyle, ShadingType, HeadingLevel,
-  Header, Footer, PageNumber, PageBreak, VerticalAlign,
+  Header, PageNumber, PageBreak, VerticalAlign,
 } from "docx";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
