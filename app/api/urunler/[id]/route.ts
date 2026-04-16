@@ -3,6 +3,33 @@ import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
 
 // ----------------------------------------------------------------
+// GET /api/urunler/[id] (Ürün Detay)
+// ----------------------------------------------------------------
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getServerSession(authOptions);
+  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("id", id)
+      .query(`
+        SELECT l.ID, l.Tarih, l.RaporNo, l.Versiyon, l.FirmaID,
+               l.Barkod, l.Urun, l.UrunEn, l.Miktar, l.Tip1, l.Tip2,
+               l.Uygulama, l.Hedef, l.A, l.RaporDurum
+        FROM rUGDListe l
+        WHERE l.ID = @id AND l.Durum = 'Aktif'
+      `);
+
+    if (!result.recordset[0]) return Response.json({ error: "Kayıt bulunamadı" }, { status: 404 });
+    return Response.json(result.recordset[0]);
+  } catch (e: any) {
+    return Response.json({ error: e.message }, { status: 500 });
+  }
+}
+
+// ----------------------------------------------------------------
 // PUT /api/urunler/[id] (Ürün Güncelle)
 // ----------------------------------------------------------------
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {

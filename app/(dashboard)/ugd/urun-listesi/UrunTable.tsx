@@ -113,23 +113,7 @@ export default function UrunTable() {
   };
 
   const openEdit = (row: Urun) => {
-    setForm({
-      Tarih: row.Tarih ? row.Tarih.split('T')[0] : "",
-      RaporNo: row.RaporNo || "",
-      Versiyon: row.Versiyon || "1",
-      FirmaID: row.FirmaID || "",
-      Barkod: row.Barkod || "",
-      Urun: row.Urun || "",
-      Miktar: row.Miktar || "",
-      Tip1: row.Tip1 || "",
-      Tip2: row.Tip2 || "",
-      A: row.ADegeri || "",
-      RaporDurum: row.DurumLabel || "Tamamlandı"
-    });
-    setEditId(row.ID);
-    setFormError("");
-    setModalMode("edit");
-    setModalOpen(true);
+    router.push(`/ugd/urun-listesi/${row.ID}/duzenle`);
   };
 
   const handleDelete = async (id: number) => {
