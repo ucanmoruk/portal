@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
+import { getAllSettings } from "@/lib/settings";
 import { type NextRequest } from "next/server";
 import nodemailer from "nodemailer";
 
@@ -203,24 +204,17 @@ export async function POST(
     .input("id", parseInt(id))
     .query(`SELECT * FROM RootKozTeklifKalem WHERE TeklifID = @id ORDER BY Sira`);
 
-  // SMTP ayarları
-  const smtpRes = await pool.request().query(`
-    SELECT TOP 1 * FROM PortalAyar WHERE AyarKey IN
-      ('smtp_host','smtp_port','smtp_user','smtp_pass','smtp_from','smtp_secure')
-  `).catch(() => ({ recordset: [] }));
-
-  const ayarlar: Record<string, string> = {};
-  for (const r of smtpRes.recordset) ayarlar[r.AyarKey] = r.AyarValue;
-
-  const smtpHost = ayarlar.smtp_host  || process.env.SMTP_HOST || "";
-  const smtpPort = parseInt(ayarlar.smtp_port || process.env.SMTP_PORT || "587");
-  const smtpUser = ayarlar.smtp_user  || process.env.SMTP_USER || "";
-  const smtpPass = ayarlar.smtp_pass  || process.env.SMTP_PASS || "";
-  const smtpFrom = ayarlar.smtp_from  || process.env.SMTP_FROM || smtpUser;
-  const secure   = (ayarlar.smtp_secure || process.env.SMTP_SECURE || "false") === "true";
+  // SMTP ayarları — lib/settings üzerinden (PortalAyarlar tablosu)
+  const cfg      = await getAllSettings();
+  const smtpHost = cfg.MAIL_HOST   || process.env.MAIL_HOST   || "";
+  const smtpPort = parseInt(cfg.MAIL_PORT || process.env.MAIL_PORT || "587");
+  const smtpUser = cfg.MAIL_USER   || process.env.MAIL_USER   || "";
+  const smtpPass = cfg.MAIL_PASS   || process.env.MAIL_PASS   || "";
+  const smtpFrom = cfg.MAIL_FROM   || process.env.MAIL_FROM   || smtpUser;
+  const secure   = (cfg.MAIL_SECURE || process.env.MAIL_SECURE || "false") === "true";
 
   if (!smtpHost || !smtpUser || !smtpPass)
-    return Response.json({ error: "SMTP ayarları eksik. Admin > Ayarlar bölümünden yapılandırın." }, { status: 500 });
+    return Response.json({ error: "Mail ayarları eksik. Admin > Ayarlar bölümünden MAIL_HOST, MAIL_USER, MAIL_PASS değerlerini kaydedin." }, { status: 500 });
 
   const transporter = nodemailer.createTransport({
     host: smtpHost, port: smtpPort, secure,

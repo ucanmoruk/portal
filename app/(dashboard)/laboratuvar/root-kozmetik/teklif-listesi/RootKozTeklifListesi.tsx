@@ -187,18 +187,13 @@ function calcToplam(kalemler: Kalem[], genelIskonto: string, kdvOran: string): n
   return ara * (1 - isk / 100) * (1 + kdv / 100);
 }
 
-const DURUM_LABELS: Record<string, string> = {
-  Taslak:      "Taslak",
-  Gönderildi:  "Gönderildi",
-  Onaylandı:   "Onaylandı",
-  Reddedildi:  "Reddedildi",
+const DURUM_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  Taslak:     { label: "Taslak",     color: "#6e6e73", bg: "#f5f5f7"  },
+  Gönderildi: { label: "Gönderildi", color: "#0071e3", bg: "#e8f0fe"  },
+  Onaylandı:  { label: "Onaylandı",  color: "#1a7f4b", bg: "#e6f6ee"  },
+  Reddedildi: { label: "Reddedildi", color: "#c0392b", bg: "#fdecea"  },
 };
-const DURUM_COLORS: Record<string, string> = {
-  Taslak:      "#86868b",
-  Gönderildi:  "#0071e3",
-  Onaylandı:   "#30d158",
-  Reddedildi:  "#ff3b30",
-};
+const DURUM_KEYS = Object.keys(DURUM_LABELS);
 const WIZARD_STEPS = [
   "Müşteri & Proje",
   "Formülasyon",
@@ -461,6 +456,37 @@ export default function RootKozTeklifListesi() {
   const removeKalem = (key: string) => {
     setForm(f => ({ ...f, kalemler: f.kalemler.filter(k => k._key !== key) }));
   };
+
+  // ── Copy teklif ───────────────────────────────────────────────
+  const [copying, setCopying] = useState<number | null>(null);
+
+  const handleCopy = async (id: number) => {
+    setCopying(id);
+    try {
+      const r = await fetch(`/api/root-koz-teklif/${id}/copy`, { method: "POST" });
+      if (!r.ok) throw new Error("Kopyalama hatası");
+      fetchData(search, page, limit);
+    } catch {
+      // silent
+    } finally {
+      setCopying(null);
+    }
+  };
+
+  // ── Pagination helper ─────────────────────────────────────────
+  function pageNumbers(): (number | "…")[] {
+    const pages: (number | "…")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (page > 3) pages.push("…");
+      for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i);
+      if (page < totalPages - 2) pages.push("…");
+      pages.push(totalPages);
+    }
+    return pages;
+  }
 
   // ── Wizard step content ────────────────────────────────────
   const renderWizardStep = () => {
@@ -811,113 +837,152 @@ export default function RootKozTeklifListesi() {
   // ──────────────────────────────────────────────────────────────
   return (
     <div className={styles.page}>
-      {/* ── Başlık + Ara + Ekle ── */}
-      <div className={styles.pageHeader}>
-        <h1 className={styles.pageTitle}>Root Kozmetik — Teklif Listesi</h1>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <input
-            className={styles.searchInput}
-            placeholder="Müşteri, marka, teklif no..."
-            value={search}
-            onChange={e => handleSearch(e.target.value)}
-          />
+      <h1 className={styles.pageTitle}>Root Kozmetik — Teklif Listesi</h1>
+
+      {/* ── Toolbar ── */}
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarLeft}>
+          <div className={styles.searchBox}>
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="9" cy="9" r="7" /><path d="M16 16l-3-3" />
+            </svg>
+            <input
+              className={styles.searchInput}
+              placeholder="Müşteri, marka, teklif no..."
+              value={search}
+              onChange={e => handleSearch(e.target.value)}
+            />
+            {search && <button className={styles.searchClear} onClick={() => handleSearch("")}>✕</button>}
+          </div>
+          <span className={styles.totalCount}>{total} kayıt</span>
+        </div>
+        <div className={styles.toolbarRight}>
+          <select className={styles.pageSizeSelect} value={limit}
+            onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
+            {[10, 20, 50].map(n => <option key={n} value={n}>{n} / sayfa</option>)}
+          </select>
           <button className={styles.addBtn} onClick={openAdd}>+ Yeni Teklif</button>
         </div>
       </div>
 
       {/* ── Tablo ── */}
-      <div className={styles.tableWrapper}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Teklif No</th>
-              <th>Tarih</th>
-              <th>Müşteri</th>
-              <th>Marka</th>
-              <th>Hizmet</th>
-              <th>Toplam</th>
-              <th>Durum</th>
-              <th>İşlem</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#86868b" }}>Yükleniyor…</td></tr>
-            )}
-            {!loading && data.length === 0 && (
-              <tr><td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#86868b" }}>Kayıt bulunamadı.</td></tr>
-            )}
-            {!loading && data.map(row => (
-              <tr key={row.ID}>
-                <td style={{ fontWeight: 600 }}>{row.TeklifNo}</td>
-                <td>{fmtDate(row.Tarih)}</td>
-                <td>{row.MusteriAdi || "—"}</td>
-                <td>{row.MarkaAdi || "—"}</td>
-                <td>
-                  <span style={{ background: "#e8f4fd", color: "#0071e3", borderRadius: 20, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>
-                    {row.DahilKalemSayisi} hizmet
-                  </span>
-                </td>
-                <td style={{ fontWeight: 600 }}>{fmtTL(row.ToplamTutar)}</td>
-                <td style={{ position: "relative" }}>
-                  <button
-                    onClick={() => setDurumMenuId(durumMenuId === row.ID ? null : row.ID)}
-                    style={{ background: DURUM_COLORS[row.Durum] + "22", color: DURUM_COLORS[row.Durum], border: "none", borderRadius: 20, padding: "3px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                    {DURUM_LABELS[row.Durum] || row.Durum}
-                  </button>
-                  {durumMenuId === row.ID && (
-                    <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, background: "#fff", border: "1px solid #e5e5ea", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.12)", minWidth: 160, overflow: "hidden" }}>
-                      {Object.entries(DURUM_LABELS).map(([k, v]) => (
-                        <button key={k} onClick={() => changeDurum(row.ID, k)}
-                          style={{ display: "block", width: "100%", padding: "9px 14px", textAlign: "left", background: "none", border: "none", fontSize: 13, cursor: "pointer", color: DURUM_COLORS[k] || "#1d1d1f" }}>
-                          {v}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </td>
-                <td>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {/* Düzenle */}
-                    <button title="Düzenle" onClick={() => openEdit(row.ID)}
-                      style={iconBtn}><EditIcon /></button>
-                    {/* Mail */}
-                    <button title="Mail gönder" onClick={() => openMail(row)}
-                      style={iconBtn}><MailIcon /></button>
-                    {/* Yazdır */}
-                    <button title="Yazdır / PDF" onClick={() => window.open(`/api/root-koz-teklif/${row.ID}/export`, "_blank")}
-                      style={iconBtn}><PrintIcon /></button>
-                    {/* Sil */}
-                    <button title="Sil" onClick={() => setDeleteTarget(row.ID)}
-                      style={{ ...iconBtn, color: "#ff3b30" }}><TrashIcon /></button>
-                  </div>
-                </td>
+      <div className={styles.tableCard}>
+        <div className={styles.tableWrapper}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th style={{ width: 150 }}>Teklif No</th>
+                <th style={{ width: 90 }}>Tarih</th>
+                <th>Müşteri</th>
+                <th>Marka</th>
+                <th style={{ width: 80, textAlign: "center" }}>Hizmet</th>
+                <th style={{ width: 130, textAlign: "right" }}>Toplam</th>
+                <th style={{ width: 120, textAlign: "center" }}>Durum</th>
+                <th style={{ width: 160 }}></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {loading
+                ? Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i}>{Array.from({ length: 8 }).map((_, j) => (
+                      <td key={j}><div className={styles.skeleton} style={{ height: 14 }} /></td>
+                    ))}</tr>
+                  ))
+                : data.length === 0
+                  ? <tr><td colSpan={8} className={styles.empty}>
+                      {search ? "Arama sonucu bulunamadı." : "Henüz teklif oluşturulmamış."}
+                    </td></tr>
+                  : data.map(row => {
+                      const durumCfg = DURUM_LABELS[row.Durum] ?? DURUM_LABELS.Taslak;
+                      return (
+                        <tr key={row.ID}>
+                          <td style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{row.TeklifNo}</td>
+                          <td style={{ color: "#515154" }}>{fmtDate(row.Tarih)}</td>
+                          <td>{row.MusteriAdi || "—"}</td>
+                          <td>{row.MarkaAdi || "—"}</td>
+                          <td style={{ textAlign: "center" }}>
+                            <span style={{ background: "#e8f4fd", color: "#0071e3", borderRadius: 20, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>
+                              {row.DahilKalemSayisi}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
+                            {fmtTL(row.ToplamTutar)}
+                          </td>
+                          {/* Durum — tıklanabilir */}
+                          <td style={{ textAlign: "center", position: "relative" }}>
+                            <button
+                              onClick={() => setDurumMenuId(durumMenuId === row.ID ? null : row.ID)}
+                              style={{
+                                background: durumCfg.bg, color: durumCfg.color,
+                                border: "none", borderRadius: 20, padding: "3px 12px",
+                                fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                              }}>
+                              {durumCfg.label} ▾
+                            </button>
+                            {durumMenuId === row.ID && (
+                              <div style={{
+                                position: "absolute", top: "calc(100% + 4px)", left: "50%",
+                                transform: "translateX(-50%)", zIndex: 50,
+                                background: "#fff", border: "1px solid #e5e5ea",
+                                borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.12)",
+                                minWidth: 150, overflow: "hidden",
+                              }}>
+                                {DURUM_KEYS.map(k => {
+                                  const cfg = DURUM_LABELS[k];
+                                  return (
+                                    <button key={k} onMouseDown={() => changeDurum(row.ID, k)}
+                                      style={{
+                                        display: "block", width: "100%", padding: "9px 14px",
+                                        textAlign: "left", background: "none", border: "none",
+                                        fontSize: 13, cursor: "pointer",
+                                        color: k === row.Durum ? cfg.color : "#1d1d1f",
+                                        fontWeight: k === row.Durum ? 700 : 400,
+                                      }}>
+                                      {cfg.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </td>
+                          {/* Aksiyonlar */}
+                          <td>
+                            <div style={{ display: "flex", gap: 3, justifyContent: "flex-end" }}>
+                              <button className={styles.editBtn} title="Düzenle" onClick={() => openEdit(row.ID)}>✏️</button>
+                              <button className={styles.editBtn} title="Kopyala"
+                                onClick={() => handleCopy(row.ID)}
+                                disabled={copying === row.ID}
+                                style={{ opacity: copying === row.ID ? 0.5 : 1 }}>📋</button>
+                              <button className={styles.editBtn} title="Mail gönder" onClick={() => openMail(row)}>✉️</button>
+                              <button className={styles.editBtn} title="Yazdır / PDF"
+                                onClick={() => window.open(`/api/root-koz-teklif/${row.ID}/export`, "_blank")}>🖨️</button>
+                              <button className={styles.deleteBtn} title="Sil" onClick={() => setDeleteTarget(row.ID)}>🗑</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+              }
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* ── Sayfalama ── */}
-      <div className={styles.pagination}>
-        <span style={{ fontSize: 13, color: "#515154" }}>Toplam {total} kayıt</span>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <button className={styles.pageBtn} disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹</button>
-          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-            const n = page <= 3 ? i + 1 : page - 2 + i;
-            if (n < 1 || n > totalPages) return null;
-            return (
-              <button key={n} className={`${styles.pageBtn} ${n === page ? styles.pageBtnActive : ""}`}
-                onClick={() => setPage(n)}>{n}</button>
-            );
-          })}
-          <button className={styles.pageBtn} disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>›</button>
+      {totalPages > 1 && (
+        <div className={styles.pagination}>
+          <button className={styles.pageBtn} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>‹</button>
+          {pageNumbers().map((n, i) =>
+            n === "…"
+              ? <span key={`d${i}`} className={styles.pageDots}>…</span>
+              : <button key={n}
+                  className={`${styles.pageBtn} ${page === n ? styles.pageBtnActive : ""}`}
+                  onClick={() => setPage(n as number)}>{n}</button>
+          )}
+          <button className={styles.pageBtn} onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>›</button>
+          <span className={styles.pageInfo}>{page} / {totalPages}</span>
         </div>
-        <select value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}
-          style={{ fontSize: 13, border: "1px solid #e5e5ea", borderRadius: 8, padding: "4px 8px" }}>
-          {[10, 20, 50].map(n => <option key={n} value={n}>{n} / sayfa</option>)}
-        </select>
-      </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────
           WIZARD MODAL
@@ -1103,13 +1168,3 @@ const thStyle: React.CSSProperties = {
 const tdStyle: React.CSSProperties = {
   padding: "7px 12px", fontSize: 12, borderBottom: "1px solid #f2f2f7", verticalAlign: "middle",
 };
-const iconBtn: React.CSSProperties = {
-  background: "none", border: "1px solid #e5e5ea", borderRadius: 7, width: 30, height: 30,
-  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#515154",
-};
-
-// ── Icons ────────────────────────────────────────────────────
-function EditIcon()  { return <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path d="M5.433 13.917l1.262-3.155A4 4 0 0 1 7.58 9.42l6.92-6.918a2.121 2.121 0 0 1 3 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 0 1-.65-.65Z"/></svg>; }
-function MailIcon()  { return <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path d="M3 4a2 2 0 0 0-2 2v1.161l8.441 4.221a1.25 1.25 0 0 0 1.118 0L19 7.162V6a2 2 0 0 0-2-2H3Z"/><path d="m19 8.839-7.77 3.885a2.75 2.75 0 0 1-2.46 0L1 8.839V14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.839Z"/></svg>; }
-function PrintIcon() { return <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fillRule="evenodd" d="M5 2.75C5 1.784 5.784 1 6.75 1h6.5c.966 0 1.75.784 1.75 1.75v3.552c.377.046.752.097 1.126.153A2.212 2.212 0 0 1 18 8.653v4.097A2.25 2.25 0 0 1 15.75 15h-.241l.305 1.984A1.75 1.75 0 0 1 14.084 19H5.915a1.75 1.75 0 0 1-1.73-2.016L4.49 15H4.25A2.25 2.25 0 0 1 2 12.75V8.653c0-1.082.775-2.034 1.874-2.198.374-.056.75-.107 1.126-.153V2.75Zm4.5 12.5h1a.75.75 0 0 0 0-1.5h-1a.75.75 0 0 0 0 1.5ZM6.75 2.5a.25.25 0 0 0-.25.25v3.45c.875-.06 1.757-.09 2.645-.09h1.71c.888 0 1.77.03 2.645.09V2.75a.25.25 0 0 0-.25-.25h-6.5ZM4.25 13.5h.614l-.42 2.737a.25.25 0 0 0 .247.263h10.618a.25.25 0 0 0 .247-.263l-.42-2.737h.614a.75.75 0 0 0 .75-.75V8.653a.712.712 0 0 0-.602-.706 49.157 49.157 0 0 0-11.414 0 .712.712 0 0 0-.604.706v4.097a.75.75 0 0 0 .75.75Z" clipRule="evenodd"/></svg>; }
-function TrashIcon() { return <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 5.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd"/></svg>; }
