@@ -32,6 +32,7 @@ interface Kalem {
   iskonto: string;
   dahil: boolean;
   notlar: string;
+  isCustom?: boolean; // kullanıcı tarafından manuel eklenen satır
 }
 
 interface TeklifForm {
@@ -85,6 +86,8 @@ const DEFAULT_BOLUMLER: { bolum: string; label: string; kalemler: Omit<Kalem, "_
       { hizmetAdi: "Güvenlik değerlendirmesi raporu",            sure: "2–3 hafta" },
       { hizmetAdi: "INCI listesi & etiket mevzuat kontrolü",     sure: "3–5 gün" },
       { hizmetAdi: "Responsible Person (RP) atama",              sure: "Sürekli" },
+      { hizmetAdi: "ÜTS Firma Kayıt İşlemi",                    sure: "1–2 hafta" },
+      { hizmetAdi: "Mesul Müdür Atama",                          sure: "1–2 hafta" },
       { hizmetAdi: "AB CPNP bildirimi",                          sure: "—" },
       { hizmetAdi: "GCC / Körfez ülkeleri mevzuat uyumu",        sure: "—" },
       { hizmetAdi: "Free Sale Certificate",                      sure: "—" },
@@ -146,6 +149,7 @@ function makeDefaultKalemler(): Kalem[] {
       iskonto:    "0",
       dahil:      false,
       notlar:     "",
+      isCustom:   false,
     }))
   );
 }
@@ -287,19 +291,24 @@ export default function RootKozTeklifListesi() {
   const openEdit = async (id: number) => {
     const r = await fetch(`/api/root-koz-teklif/${id}`);
     const j = await r.json();
-    const kalemler: Kalem[] = (j.kalemler || []).map((k: any, i: number) => ({
-      _key:       String(i),
-      bolum:      k.Bolum      || "",
-      hizmetAdi:  k.HizmetAdi  || "",
-      sure:       k.Sure       || "",
-      miktar:     String(k.Miktar     ?? "1"),
-      birimFiyat: String(k.BirimFiyat ?? ""),
-      paraBirimi: k.ParaBirimi || "TRY",
-      iskonto:    String(k.Iskonto    ?? "0"),
-      dahil:      !!k.Dahil,
-      notlar:     k.Notlar || "",
-    }));
-    // Merge with defaults (add any missing default rows that aren't in DB)
+    const defaultKeySet = new Set(makeDefaultKalemler().map(k => k.bolum + "||" + k.hizmetAdi));
+    const kalemler: Kalem[] = (j.kalemler || []).map((k: any, i: number) => {
+      const compositeKey = `${k.Bolum || ""}||${k.HizmetAdi || ""}`;
+      return {
+        _key:       String(i),
+        bolum:      k.Bolum      || "",
+        hizmetAdi:  k.HizmetAdi  || "",
+        sure:       k.Sure       || "",
+        miktar:     String(k.Miktar     ?? "1"),
+        birimFiyat: String(k.BirimFiyat ?? ""),
+        paraBirimi: k.ParaBirimi || "TRY",
+        iskonto:    String(k.Iskonto    ?? "0"),
+        dahil:      !!k.Dahil,
+        notlar:     k.Notlar || "",
+        isCustom:   !defaultKeySet.has(compositeKey),
+      };
+    });
+    // Merge with defaults (yeni eklenen default satırları DB'de yoksa ekle)
     const existingKeys = new Set(kalemler.map(k => k.bolum + "||" + k.hizmetAdi));
     const defaults = makeDefaultKalemler();
     const merged = [
@@ -352,7 +361,11 @@ export default function RootKozTeklifListesi() {
       const url    = modalMode === "edit" ? `/api/root-koz-teklif/${editId}` : "/api/root-koz-teklif";
       const method = modalMode === "edit" ? "PUT" : "POST";
       const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      if (!r.ok) throw new Error((await r.json()).error || "Kayıt hatası");
+      if (!r.ok) {
+        let errMsg = "Kayıt hatası";
+        try { const j = await r.json(); errMsg = j.error || errMsg; } catch { /* boş yanıt */ }
+        throw new Error(errMsg);
+      }
       setModalOpen(false);
       fetchData(search, page, limit);
     } catch (e: any) {
@@ -432,6 +445,23 @@ export default function RootKozTeklifListesi() {
     }));
   };
 
+  const addCustomKalem = (bolum: string) => {
+    const newKey = `custom_${Date.now()}`;
+    setForm(f => ({
+      ...f,
+      kalemler: [...f.kalemler, {
+        _key: newKey, bolum,
+        hizmetAdi: "", sure: "",
+        miktar: "1", birimFiyat: "", paraBirimi: "TRY",
+        iskonto: "0", dahil: true, notlar: "", isCustom: true,
+      }],
+    }));
+  };
+
+  const removeKalem = (key: string) => {
+    setForm(f => ({ ...f, kalemler: f.kalemler.filter(k => k._key !== key) }));
+  };
+
   // ── Wizard step content ────────────────────────────────────
   const renderWizardStep = () => {
     // Step 0: Müşteri & Proje
@@ -508,37 +538,51 @@ export default function RootKozTeklifListesi() {
                   <th style={{ ...thStyle, width: 36 }}></th>
                   <th style={{ ...thStyle, textAlign: "left" }}>Hizmet</th>
                   <th style={{ ...thStyle, width: 110 }}>Süre</th>
-                  <th style={{ ...thStyle, width: 80 }}>Miktar</th>
-                  <th style={{ ...thStyle, width: 130 }}>Birim Fiyat</th>
-                  <th style={{ ...thStyle, width: 70 }}>Para B.</th>
-                  <th style={{ ...thStyle, width: 70 }}>İskonto%</th>
+                  <th style={{ ...thStyle, width: 72 }}>Miktar</th>
+                  <th style={{ ...thStyle, width: 120 }}>Birim Fiyat</th>
+                  <th style={{ ...thStyle, width: 64 }}>Para B.</th>
+                  <th style={{ ...thStyle, width: 64 }}>İsk.%</th>
+                  <th style={{ ...thStyle, width: 32 }}></th>
                 </tr>
               </thead>
               <tbody>
                 {kalemler.map(k => (
-                  <tr key={k._key} style={{ background: k.dahil ? "#fff" : "#fafafa", opacity: k.dahil ? 1 : 0.55 }}>
+                  <tr key={k._key} style={{ background: k.dahil ? "#fff" : "#fafafa", opacity: k.dahil ? 1 : 0.6 }}>
                     <td style={{ ...tdStyle, textAlign: "center" }}>
                       <input type="checkbox" checked={k.dahil}
                         onChange={e => updateKalem(k._key, "dahil", e.target.checked)}
                         style={{ width: 14, height: 14, cursor: "pointer" }} />
                     </td>
                     <td style={{ ...tdStyle }}>
-                      <span style={{ fontWeight: k.dahil ? 500 : 400 }}>{k.hizmetAdi}</span>
-                      {k.notlar && <div style={{ fontSize: 11, color: "#86868b" }}>{k.notlar}</div>}
+                      {k.isCustom ? (
+                        <input style={{ ...cellInputStyle, width: "100%", minWidth: 160 }}
+                          value={k.hizmetAdi} placeholder="Hizmet adı girin..."
+                          onChange={e => updateKalem(k._key, "hizmetAdi", e.target.value)} />
+                      ) : (
+                        <span style={{ fontWeight: k.dahil ? 500 : 400 }}>{k.hizmetAdi}</span>
+                      )}
                     </td>
-                    <td style={{ ...tdStyle, textAlign: "center", color: "#515154" }}>{k.sure}</td>
+                    <td style={{ ...tdStyle, textAlign: "center" }}>
+                      {k.isCustom ? (
+                        <input style={{ ...cellInputStyle, width: 90 }}
+                          value={k.sure} placeholder="Süre..."
+                          onChange={e => updateKalem(k._key, "sure", e.target.value)} />
+                      ) : (
+                        <span style={{ color: "#515154" }}>{k.sure}</span>
+                      )}
+                    </td>
                     <td style={{ ...tdStyle }}>
                       <input style={{ ...cellInputStyle, width: 60 }} type="number" min="0" step="0.01"
                         value={k.miktar} disabled={!k.dahil}
                         onChange={e => updateKalem(k._key, "miktar", e.target.value)} />
                     </td>
                     <td style={{ ...tdStyle }}>
-                      <input style={{ ...cellInputStyle, width: 110 }} type="number" min="0" step="0.01"
+                      <input style={{ ...cellInputStyle, width: 108 }} type="number" min="0" step="0.01"
                         value={k.birimFiyat} disabled={!k.dahil} placeholder="0.00"
                         onChange={e => updateKalem(k._key, "birimFiyat", e.target.value)} />
                     </td>
                     <td style={{ ...tdStyle }}>
-                      <select style={{ ...cellInputStyle, width: 60, paddingLeft: 4 }}
+                      <select style={{ ...cellInputStyle, width: 58, paddingLeft: 4 }}
                         value={k.paraBirimi} disabled={!k.dahil}
                         onChange={e => updateKalem(k._key, "paraBirimi", e.target.value)}>
                         <option>TRY</option>
@@ -547,18 +591,33 @@ export default function RootKozTeklifListesi() {
                       </select>
                     </td>
                     <td style={{ ...tdStyle }}>
-                      <input style={{ ...cellInputStyle, width: 60 }} type="number" min="0" max="100" step="0.1"
+                      <input style={{ ...cellInputStyle, width: 56 }} type="number" min="0" max="100" step="0.1"
                         value={k.iskonto} disabled={!k.dahil}
                         onChange={e => updateKalem(k._key, "iskonto", e.target.value)} />
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "center" }}>
+                      {k.isCustom && (
+                        <button onClick={() => removeKalem(k._key)} title="Satırı sil"
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "#ff3b30", fontSize: 16, lineHeight: 1, padding: 2 }}>
+                          ×
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p style={{ fontSize: 11, color: "#86868b", marginTop: 8 }}>
-            İşaretli hizmetler teklife dahil edilir. Fiyat boş bırakılabilir (daha sonra düzenlenir).
-          </p>
+          {/* Manuel kalem ekleme */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10 }}>
+            <button onClick={() => addCustomKalem(bolumDef.bolum)}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "1px dashed #0071e3", borderRadius: 8, padding: "5px 14px", fontSize: 12, color: "#0071e3", cursor: "pointer", fontWeight: 500 }}>
+              <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Manuel kalem ekle
+            </button>
+            <span style={{ fontSize: 11, color: "#86868b" }}>
+              İşaretli hizmetler teklife dahil edilir · Fiyat sonra da girilebilir
+            </span>
+          </div>
         </div>
       );
     }
