@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     } = body;
 
     const pool = await poolPromise;
-    await pool.request()
+    const result = await pool.request()
       .input("Tarih", Tarih || null)
       .input("RaporNo", RaporNo || null)
       .input("Versiyon", Versiyon || null)
@@ -98,16 +98,18 @@ export async function POST(request: Request) {
       .input("BirimID", "1005")
       .query(`
         INSERT INTO rUGDListe (
-          Tarih, RaporNo, Versiyon, FirmaID, Barkod, Urun, UrunEn, Miktar, 
+          Tarih, RaporNo, Versiyon, FirmaID, Barkod, Urun, UrunEn, Miktar,
           Tip1, Tip2, Uygulama, Hedef, A, RaporDurum, Durum, BirimID
         )
+        OUTPUT INSERTED.ID
         VALUES (
-          @Tarih, @RaporNo, @Versiyon, @FirmaID, @Barkod, @Urun, @UrunEn, @Miktar, 
+          @Tarih, @RaporNo, @Versiyon, @FirmaID, @Barkod, @Urun, @UrunEn, @Miktar,
           @Tip1, @Tip2, @Uygulama, @Hedef, @A, @RaporDurum, @Durum, @BirimID
         )
       `);
 
-    return Response.json({ message: "Başarıyla eklendi" });
+    const newId = result.recordset[0]?.ID ?? null;
+    return Response.json({ message: "Başarıyla eklendi", id: newId });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

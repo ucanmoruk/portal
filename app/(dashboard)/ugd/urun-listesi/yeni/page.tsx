@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import styles from '@/app/styles/table.module.css';
 import * as XLSX from "xlsx";
 
+// ── Interfaces ───────────────────────────────────────────────────────────────
 interface MatchedIngredient {
   inputName: string; inputAmount: string; matched: boolean;
   INCIName: string | null; Cas: string | null; Ec: string | null;
@@ -12,15 +13,14 @@ interface MatchedIngredient {
   Link?: string | null; Maks: string | null; Diger: string | null; Etiket: string | null;
 }
 
+// ── Tabs (3 sekmeli yapı) ─────────────────────────────────────────────────────
 const TABS = [
-  { id: 'genel',    label: '1 · Genel Bilgiler' },
-  { id: 'formul',   label: '2 · Ürün Formülü' },
-  { id: 'detaylar', label: '3 · Ürün Detayları' },
-  { id: 'etiket',   label: '4 · Kutu / Etiket' },
-  { id: 'rapor',    label: '5 · Rapor' },
+  { id: 'genel',  label: '1 · Genel Bilgiler' },
+  { id: 'formul', label: '2 · Ürün Formülü' },
+  { id: 'rapor',  label: '3 · Rapor' },
 ];
 
-// ── Rapor sekmesi için default metinler (rapordan alındı) ────────────────────
+// ── Rapor sekmesi varsayılan metinler ─────────────────────────────────────────
 const DEFAULTS = {
   NormalKullanim: "Tüm vücut cildine uygulanır. Yetişkinler tarafından kullanım içindir.",
   MaruziyetAciklama: "Ürün tipi: Durulanmayan\nUygulama yeri: Tüm vücut\nUygulanan ürünün deriye temas ettiği alan: 200 cm²\nUygulanan ürünün miktarı: 20,630 g\nTemas süresi ve uygulama sıklığı: 1/gün\nMaruziyet yolu: Dermal emilim\nA değeri için (toplam günlük maruziyet) (yetişkin vücut ağırlığı: 60 kg) SCCS Notes Of Guidance 12th Revision (SCCS/1647/22) baz alınmıştır.",
@@ -36,11 +36,72 @@ const DEFAULTS = {
   SorumluKanit: "Balıkesir Üniversitesi Fen Fakültesi // Kimya — Bkz. Ek – Güvenlilik Değerlendiricisinin Niteliği",
 };
 
+// ── Bileşenler (component dışında tanımlanmalı — focus kaynamazlığı için) ─────
+
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className={styles.tableCard} style={{ padding: 24, marginBottom: 20 }}>
+      <div style={{ marginBottom: 20, paddingBottom: 10, borderBottom: '1px solid var(--color-border-light)', color: 'var(--color-accent)', fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ width: 4, height: 16, background: 'var(--color-accent)', borderRadius: 2 }} />
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function DualInput({ label, value, valueEn, onChange, onChangeEn, rows = 1 }: {
+  label: string; value: string; valueEn: string;
+  onChange: (v: string) => void; onChangeEn: (v: string) => void; rows?: number;
+}) {
+  return (
+    <div className={styles.formGroup}>
+      <label style={{ fontWeight: 600, fontSize: '0.85rem', display: 'block', marginBottom: 6 }}>{label}</label>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 4, letterSpacing: '0.04em' }}>TR</div>
+          {rows > 1
+            ? <textarea rows={rows} value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%' }} />
+            : <input type="text" value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%' }} />
+          }
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 4, letterSpacing: '0.04em' }}>EN</div>
+          {rows > 1
+            ? <textarea rows={rows} value={valueEn} onChange={e => onChangeEn(e.target.value)} style={{ width: '100%' }} />
+            : <input type="text" value={valueEn} onChange={e => onChangeEn(e.target.value)} style={{ width: '100%' }} />
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RaporField({ label, value, onChange, rows = 4, hint }: {
+  label: string; value: string; onChange: (v: string) => void; rows?: number; hint?: string;
+}) {
+  return (
+    <div className={styles.formGroup} style={{ marginBottom: 20 }}>
+      <label style={{ fontWeight: 600, marginBottom: 6, display: 'block', fontSize: '0.85rem', color: 'var(--color-accent)' }}>
+        {label}
+      </label>
+      {hint && <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>{hint}</p>}
+      <textarea
+        rows={rows}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.85rem', lineHeight: 1.6, padding: '10px 14px', borderRadius: 8, border: '1px solid var(--color-border-light)', background: 'var(--color-bg)', resize: 'vertical' }}
+      />
+    </div>
+  );
+}
+
+// ── Ana Sayfa ─────────────────────────────────────────────────────────────────
 export default function YeniUrunPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('genel');
-  const [savingTab, setSavingTab] = useState<string | null>(null);
-  const [savedTabs, setSavedTabs] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [savedId, setSavedId] = useState<string | null>(null);
   const [globalError, setGlobalError] = useState("");
   const [printLoading, setPrintLoading] = useState(false);
 
@@ -51,31 +112,36 @@ export default function YeniUrunPage() {
   const [formulError, setFormulError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Lookup
-  const [lookups, setLookups] = useState<{ firmalar: any[]; tipler: any[] }>({ firmalar: [], tipler: [] });
+  // Lookup verileri
+  const [lookups, setLookups] = useState<{ firmalar: any[]; tipler: any[]; nextRaporNo?: number }>({ firmalar: [], tipler: [] });
 
-  // Ana form — rapor alanları default metinlerle başlatılır
+  // Ana form
   const [form, setForm] = useState({
     Tarih: new Date().toISOString().split('T')[0],
     RaporNo: "", Versiyon: "1", FirmaID: "",
     Urun: "", UrunEn: "", Barkod: "", Miktar: "",
     Tip1: "Durulanmayan", Tip2: "", Uygulama: "",
-    Hedef: "Yetişkinler", A: "", RaporDurum: "Tamamlandı",
-    // Tab 3
-    Gorunum: "", GorunumEn: "", Renk: "", RenkEn: "",
-    Koku: "", KokuEn: "", PH: "", PHEn: "",
-    Yogunluk: "", YogunlukEn: "", Viskozite: "", ViskoziteEn: "",
-    Kaynama: "", KaynamaEn: "", Erime: "", ErimeEn: "",
-    SudaCozunebilirlik: "", SudaCozunebilirlikEn: "",
-    DigerCozunebilirlik: "", DigerCozunebilirlikEn: "",
-    Mikrobiyoloji: "", MikrobiyolojiEn: "",
-    KoruyucuEtkinlik: "", KoruyucuEtkinlikEn: "",
-    Stabilite: "", StabiliteEn: "",
-    // Tab 4
+    Hedef: "Yetişkinler", A: "",
+    // Fiziksel / Kimyasal (default: N/A)
+    Gorunum: "N/A", GorunumEn: "N/A",
+    Renk: "N/A", RenkEn: "N/A",
+    Koku: "N/A", KokuEn: "N/A",
+    PH: "N/A", PHEn: "N/A",
+    Yogunluk: "N/A", YogunlukEn: "N/A",
+    Viskozite: "N/A", ViskoziteEn: "N/A",
+    Kaynama: "N/A", KaynamaEn: "N/A",
+    Erime: "N/A", ErimeEn: "N/A",
+    SudaCozunebilirlik: "N/A", SudaCozunebilirlikEn: "N/A",
+    DigerCozunebilirlik: "N/A", DigerCozunebilirlikEn: "N/A",
+    // Laboratuvar testleri (default: N/A)
+    Mikrobiyoloji: "N/A", MikrobiyolojiEn: "N/A",
+    KoruyucuEtkinlik: "N/A", KoruyucuEtkinlikEn: "N/A",
+    Stabilite: "N/A", StabiliteEn: "N/A",
+    // Kutu / Etiket
     Kullanim: "", KullanimEn: "",
     Ozellikler: "", OzelliklerEn: "",
     Uyarilar: "", UyarilarEn: "",
-    // Tab 5 — default metinler ile başlatılır
+    // Rapor metin alanları
     NormalKullanim: DEFAULTS.NormalKullanim,
     MaruziyetAciklama: DEFAULTS.MaruziyetAciklama,
     BilesenlereMaruziyet: DEFAULTS.BilesenlereMaruziyet,
@@ -93,9 +159,20 @@ export default function YeniUrunPage() {
   useEffect(() => {
     fetch("/api/urunler/lookup")
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) setLookups(data); })
+      .then(data => {
+        if (data) {
+          setLookups(data);
+          // RaporNo henüz boşsa otomatik doldur
+          if (data.nextRaporNo) {
+            setForm(prev => prev.RaporNo ? prev : { ...prev, RaporNo: String(data.nextRaporNo) });
+          }
+        }
+      })
       .catch(() => {});
   }, []);
+
+  const upd = (field: keyof typeof form) => (v: string) =>
+    setForm(prev => ({ ...prev, [field]: v }));
 
   const handleTipChange = (tipId: string) => {
     const tip = lookups.tipler.find(t => t.ID.toString() === tipId);
@@ -105,33 +182,53 @@ export default function YeniUrunPage() {
     }));
   };
 
-  // ── Per-tab save ──────────────────────────────────────────────────────────
-  const handleTabSave = async (tabId: string) => {
-    if (tabId === 'genel' && (!form.Urun || !form.FirmaID)) {
-      setGlobalError("Ürün adı ve firma seçimi zorunludur.");
-      return;
-    }
-    setGlobalError("");
-    setSavingTab(tabId);
-    try {
-      const res = await fetch("/api/urunler", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, FormulaJSON: JSON.stringify(formulResults) }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "İşlem başarısız");
+  // ── Sonraki buton — kayıt yap + ilerle ───────────────────────────────────
+  const handleNext = async () => {
+    const tabIndex = TABS.findIndex(t => t.id === activeTab);
+    if (tabIndex === TABS.length - 1) return;
+
+    if (activeTab === 'genel') {
+      if (!form.Urun || !form.FirmaID) {
+        setGlobalError("Ürün adı ve firma seçimi zorunludur.");
+        return;
       }
-      setSavedTabs(prev => new Set([...prev, tabId]));
-    } catch (err: any) {
-      setGlobalError(err.message);
-    } finally {
-      setSavingTab(null);
+      setGlobalError("");
+      setSaving(true);
+      try {
+        if (!savedId) {
+          const res = await fetch("/api/urunler", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              Tarih: form.Tarih, RaporNo: form.RaporNo, Versiyon: form.Versiyon,
+              FirmaID: form.FirmaID, Barkod: form.Barkod, Urun: form.Urun,
+              UrunEn: form.UrunEn, Miktar: form.Miktar, Tip1: form.Tip1,
+              Tip2: form.Tip2, Uygulama: form.Uygulama, Hedef: form.Hedef,
+              A: form.A, RaporDurum: "Tamamlandı",
+            }),
+          });
+          if (!res.ok) throw new Error((await res.json()).error || "Kayıt başarısız");
+          const data = await res.json();
+          if (data.id) setSavedId(String(data.id));
+        } else {
+          await fetch(`/api/urunler/${savedId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
+          });
+        }
+      } catch (err: any) {
+        setGlobalError(err.message);
+        setSaving(false);
+        return;
+      }
+      setSaving(false);
     }
+
+    setActiveTab(TABS[tabIndex + 1].id);
   };
 
-  // ── Final save (tüm form) ─────────────────────────────────────────────────
+  // ── Son kayıt (Rapor sekmesinden) ─────────────────────────────────────────
   const handleFinalSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.Urun || !form.FirmaID) {
@@ -139,14 +236,33 @@ export default function YeniUrunPage() {
       setActiveTab('genel');
       return;
     }
-    await handleTabSave('final');
-    if (!globalError) {
+    setGlobalError("");
+    setSaving(true);
+    try {
+      if (!savedId) {
+        const res = await fetch("/api/urunler", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Kayıt başarısız");
+      } else {
+        await fetch(`/api/urunler/${savedId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
+        });
+      }
       router.push("/ugd/urun-listesi");
       router.refresh();
+    } catch (err: any) {
+      setGlobalError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
-  // ── Print / Download DOCX ─────────────────────────────────────────────────
+  // ── Word İndir ────────────────────────────────────────────────────────────
   const handlePrint = async () => {
     setPrintLoading(true);
     try {
@@ -227,77 +343,6 @@ export default function YeniUrunPage() {
     } catch {}
   };
 
-  // ── UI helpers ────────────────────────────────────────────────────────────
-  const SectionCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <div className={styles.tableCard} style={{ padding: 24, marginBottom: 20 }}>
-      <div style={{ marginBottom: 20, paddingBottom: 10, borderBottom: '1px solid var(--color-border-light)', color: 'var(--color-accent)', fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 4, height: 16, background: 'var(--color-accent)', borderRadius: 2 }} />
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-
-  const LangInput = ({ label, field, fieldEn, rows = 1 }: { label: string; field: string; fieldEn: string; rows?: number }) => {
-    const [lang, setLang] = useState<'TR' | 'EN'>('TR');
-    const isTr = lang === 'TR';
-    const value = (form as any)[isTr ? field : fieldEn];
-    return (
-      <div className={styles.formGroup}>
-        <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>{label} {isTr ? "(TR)" : "(EN)"}</span>
-          <button type="button" onClick={() => setLang(isTr ? 'EN' : 'TR')} style={{ background: 'rgba(0,113,227,0.08)', border: 'none', borderRadius: 4, padding: '2px 8px', fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-accent)', cursor: 'pointer' }}>
-            {isTr ? "🇹🇷 TR" : "🇬🇧 EN"}
-          </button>
-        </label>
-        <div style={{ position: 'relative' }}>
-          {rows > 1 ? (
-            <textarea rows={rows} value={value} onChange={e => setForm(prev => ({ ...prev, [isTr ? field : fieldEn]: e.target.value }))} style={{ width: '100%', paddingRight: 40 }} />
-          ) : (
-            <input value={value} onChange={e => setForm(prev => ({ ...prev, [isTr ? field : fieldEn]: e.target.value }))} style={{ width: '100%', paddingRight: 40 }} />
-          )}
-          <div style={{ position: 'absolute', right: 12, top: rows > 1 ? 12 : '50%', transform: rows > 1 ? 'none' : 'translateY(-50%)', pointerEvents: 'none', opacity: 0.4, fontSize: '0.7rem', fontWeight: 700 }}>
-            {isTr ? "TR" : "EN"}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Rapor sekmesi — sadece TR textbox (EN yok, rapor TR)
-  const RaporField = ({ label, field, rows = 4, hint }: { label: string; field: string; rows?: number; hint?: string }) => (
-    <div className={styles.formGroup} style={{ marginBottom: 20 }}>
-      <label style={{ fontWeight: 600, marginBottom: 6, display: 'block', fontSize: '0.85rem', color: 'var(--color-accent)' }}>
-        {label}
-      </label>
-      {hint && <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>{hint}</p>}
-      <textarea
-        rows={rows}
-        value={(form as any)[field]}
-        onChange={e => setForm(prev => ({ ...prev, [field]: e.target.value }))}
-        style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.85rem', lineHeight: 1.6, padding: '10px 14px', borderRadius: 8, border: '1px solid var(--color-border-light)', background: 'var(--color-bg)', resize: 'vertical' }}
-      />
-    </div>
-  );
-
-  // ── Tab save bar ──────────────────────────────────────────────────────────
-  const TabSaveBar = ({ tabId }: { tabId: string }) => (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8, marginBottom: 16 }}>
-      {savedTabs.has(tabId) && (
-        <span style={{ fontSize: '0.8rem', color: '#1a7340', alignSelf: 'center' }}>✓ Kaydedildi</span>
-      )}
-      <button
-        type="button"
-        onClick={() => handleTabSave(tabId)}
-        disabled={savingTab === tabId}
-        className={styles.saveBtn}
-        style={{ minWidth: 160, background: 'var(--color-accent)', opacity: savingTab === tabId ? 0.6 : 1 }}
-      >
-        {savingTab === tabId ? "Kaydediliyor..." : "Bu Sekmeyi Kaydet"}
-      </button>
-    </div>
-  );
-
   const tabIndex = TABS.findIndex(t => t.id === activeTab);
 
   return (
@@ -325,18 +370,15 @@ export default function YeniUrunPage() {
       </div>
 
       {/* Tab çubuğu */}
-      <div style={{ display: 'flex', gap: 2, marginBottom: 28, background: 'var(--color-bg)', padding: 4, borderRadius: 12, border: '1px solid var(--color-border-light)', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 2, marginBottom: 28, background: 'var(--color-bg)', padding: 4, borderRadius: 12, border: '1px solid var(--color-border-light)' }}>
         {TABS.map(tab => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            style={{ flex: 1, minWidth: 140, padding: '10px 16px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: activeTab === tab.id ? 700 : 500, fontSize: '0.83rem', background: activeTab === tab.id ? 'var(--color-accent)' : 'transparent', color: activeTab === tab.id ? '#fff' : 'var(--color-text-secondary)', transition: 'all 0.15s', whiteSpace: 'nowrap', position: 'relative' }}
+            style={{ flex: 1, padding: '10px 16px', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: activeTab === tab.id ? 700 : 500, fontSize: '0.83rem', background: activeTab === tab.id ? 'var(--color-accent)' : 'transparent', color: activeTab === tab.id ? '#fff' : 'var(--color-text-secondary)', transition: 'all 0.15s', whiteSpace: 'nowrap' }}
           >
             {tab.label}
-            {savedTabs.has(tab.id) && (
-              <span style={{ position: 'absolute', top: 4, right: 6, fontSize: '0.55rem', color: activeTab === tab.id ? 'rgba(255,255,255,0.7)' : '#1a7340' }}>✓</span>
-            )}
           </button>
         ))}
       </div>
@@ -345,67 +387,85 @@ export default function YeniUrunPage() {
 
       <form onSubmit={handleFinalSave}>
 
-        {/* ── Tab 1: Genel Bilgiler ─────────────────────────────────────── */}
+        {/* ── Tab 1: Genel Bilgiler ─────────────────────────────────────────── */}
         {activeTab === 'genel' && (
-          <>
-            <TabSaveBar tabId="genel" />
-            <SectionCard title="Genel Bilgiler">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                <div className={styles.formGrid3}>
-                  <div className={styles.formGroup}><label>Rapor No</label><input value={form.RaporNo} onChange={e => setForm({ ...form, RaporNo: e.target.value })} /></div>
-                  <div className={styles.formGroup}><label>Versiyon No</label><input value={form.Versiyon} onChange={e => setForm({ ...form, Versiyon: e.target.value })} /></div>
-                  <div className={styles.formGroup}><label>Tarih</label><input type="date" value={form.Tarih} onChange={e => setForm({ ...form, Tarih: e.target.value })} /></div>
+          <SectionCard title="Genel Bilgiler">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div className={styles.formGrid3}>
+                <div className={styles.formGroup}>
+                  <label>Rapor No</label>
+                  <input value={form.RaporNo} onChange={e => setForm({ ...form, RaporNo: e.target.value })} />
                 </div>
                 <div className={styles.formGroup}>
-                  <label>Firma Adı</label>
-                  <select value={form.FirmaID} onChange={e => setForm({ ...form, FirmaID: e.target.value })} required>
-                    <option value="">Firma Seçin</option>
-                    {lookups.firmalar.map(f => <option key={f.ID} value={f.ID}>{f.Ad}</option>)}
+                  <label>Versiyon No</label>
+                  <input value={form.Versiyon} onChange={e => setForm({ ...form, Versiyon: e.target.value })} />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Tarih</label>
+                  <input type="date" value={form.Tarih} onChange={e => setForm({ ...form, Tarih: e.target.value })} />
+                </div>
+              </div>
+              <div className={styles.formGroup}>
+                <label>Firma Adı</label>
+                <select value={form.FirmaID} onChange={e => setForm({ ...form, FirmaID: e.target.value })} required>
+                  <option value="">Firma Seçin</option>
+                  {lookups.firmalar.map(f => <option key={f.ID} value={f.ID}>{f.Ad}</option>)}
+                </select>
+              </div>
+              <DualInput
+                label="Ürün Adı"
+                value={form.Urun}
+                valueEn={form.UrunEn}
+                onChange={upd('Urun')}
+                onChangeEn={upd('UrunEn')}
+              />
+              <div className={styles.formGrid}>
+                <div className={styles.formGroup}>
+                  <label>Barkod</label>
+                  <input value={form.Barkod} onChange={e => setForm({ ...form, Barkod: e.target.value })} />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Ürün Miktarı</label>
+                  <input value={form.Miktar} onChange={e => setForm({ ...form, Miktar: e.target.value })} />
+                </div>
+              </div>
+              <div className={styles.formGrid}>
+                <div className={styles.formGroup}>
+                  <label>Kullanım Şekli</label>
+                  <select value={form.Tip1} onChange={e => setForm({ ...form, Tip1: e.target.value })}>
+                    <option value="Durulanan">Durulanan</option>
+                    <option value="Durulanmayan">Durulanmayan</option>
                   </select>
                 </div>
-                <LangInput label="Ürün Adı" field="Urun" fieldEn="UrunEn" />
-                <div className={styles.formGrid}>
-                  <div className={styles.formGroup}><label>Barkod</label><input value={form.Barkod} onChange={e => setForm({ ...form, Barkod: e.target.value })} /></div>
-                  <div className={styles.formGroup}><label>Ürün Miktarı</label><input value={form.Miktar} onChange={e => setForm({ ...form, Miktar: e.target.value })} /></div>
-                </div>
-                <div className={styles.formGrid}>
-                  <div className={styles.formGroup}>
-                    <label>Kullanım Şekli</label>
-                    <select value={form.Tip1} onChange={e => setForm({ ...form, Tip1: e.target.value })}>
-                      <option value="Durulanan">Durulanan</option>
-                      <option value="Durulanmayan">Durulanmayan</option>
-                    </select>
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label>Ürün Tipi (rUGDTip)</label>
-                    <select value={form.Tip2} onChange={e => handleTipChange(e.target.value)}>
-                      <option value="">Tip Seçin</option>
-                      {lookups.tipler.map(t => <option key={t.ID} value={t.ID}>{t.UrunTipi}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className={styles.formGrid3}>
-                  <div className={styles.formGroup}><label>Hedef Grup</label><input value={form.Hedef} onChange={e => setForm({ ...form, Hedef: e.target.value })} /></div>
-                  <div className={styles.formGroup}><label>Uygulama Alanı</label><input value={form.Uygulama} onChange={e => setForm({ ...form, Uygulama: e.target.value })} /></div>
-                  <div className={styles.formGroup}><label>A Değeri</label><input value={form.A} onChange={e => setForm({ ...form, A: e.target.value })} /></div>
-                </div>
                 <div className={styles.formGroup}>
-                  <label>Rapor Durumu</label>
-                  <select value={form.RaporDurum} onChange={e => setForm({ ...form, RaporDurum: e.target.value })}>
-                    <option value="Tamamlandı">Tamamlandı</option>
-                    <option value="Taslak">Taslak</option>
-                    <option value="İncelemede">İncelemede</option>
+                  <label>Ürün Tipi (rUGDTip)</label>
+                  <select value={form.Tip2} onChange={e => handleTipChange(e.target.value)}>
+                    <option value="">Tip Seçin</option>
+                    {lookups.tipler.map(t => <option key={t.ID} value={t.ID}>{t.UrunTipi}</option>)}
                   </select>
                 </div>
               </div>
-            </SectionCard>
-          </>
+              <div className={styles.formGrid3}>
+                <div className={styles.formGroup}>
+                  <label>Hedef Grup</label>
+                  <input value={form.Hedef} onChange={e => setForm({ ...form, Hedef: e.target.value })} />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Uygulama Alanı</label>
+                  <input value={form.Uygulama} onChange={e => setForm({ ...form, Uygulama: e.target.value })} />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>A Değeri</label>
+                  <input value={form.A} onChange={e => setForm({ ...form, A: e.target.value })} />
+                </div>
+              </div>
+            </div>
+          </SectionCard>
         )}
 
-        {/* ── Tab 2: Ürün Formülü ──────────────────────────────────────── */}
+        {/* ── Tab 2: Ürün Formülü ────────────────────────────────────────────── */}
         {activeTab === 'formul' && (
           <>
-            <TabSaveBar tabId="formul" />
             <div className={styles.tableCard} style={{ padding: 24, marginBottom: 24 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>Formül Girişi</h3>
@@ -492,97 +552,97 @@ export default function YeniUrunPage() {
           </>
         )}
 
-        {/* ── Tab 3: Ürün Detayları ─────────────────────────────────────── */}
-        {activeTab === 'detaylar' && (
-          <>
-            <TabSaveBar tabId="detaylar" />
-            <SectionCard title="Fiziksel / Kimyasal Özellikler">
-              <div className={styles.formGrid}>
-                <LangInput label="Görünüm" field="Gorunum" fieldEn="GorunumEn" />
-                <LangInput label="Renk" field="Renk" fieldEn="RenkEn" />
-                <LangInput label="Koku" field="Koku" fieldEn="KokuEn" />
-                <LangInput label="pH" field="PH" fieldEn="PHEn" />
-                <LangInput label="Yoğunluk" field="Yogunluk" fieldEn="YogunlukEn" />
-                <LangInput label="Viskozite" field="Viskozite" fieldEn="ViskoziteEn" />
-                <LangInput label="Kaynama Noktası" field="Kaynama" fieldEn="KaynamaEn" />
-                <LangInput label="Erime Noktası" field="Erime" fieldEn="ErimeEn" />
-                <LangInput label="Suda Çözünebilirlik" field="SudaCozunebilirlik" fieldEn="SudaCozunebilirlikEn" />
-                <LangInput label="Diğer Çözünebilirlik" field="DigerCozunebilirlik" fieldEn="DigerCozunebilirlikEn" />
-              </div>
-            </SectionCard>
-            <SectionCard title="Laboratuvar Testleri">
-              <div className={styles.formGrid}>
-                <LangInput label="Mikrobiyoloji" field="Mikrobiyoloji" fieldEn="MikrobiyolojiEn" />
-                <LangInput label="Koruyucu Etkinlik" field="KoruyucuEtkinlik" fieldEn="KoruyucuEtkinlikEn" />
-                <LangInput label="Stabilite" field="Stabilite" fieldEn="StabiliteEn" />
-              </div>
-            </SectionCard>
-          </>
-        )}
-
-        {/* ── Tab 4: Kutu / Etiket ─────────────────────────────────────── */}
-        {activeTab === 'etiket' && (
-          <>
-            <TabSaveBar tabId="etiket" />
-            <SectionCard title="Kutu / Etiket Bilgileri">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <LangInput label="Kullanım" field="Kullanim" fieldEn="KullanimEn" rows={3} />
-                <LangInput label="Özellikler" field="Ozellikler" fieldEn="OzelliklerEn" rows={3} />
-                <LangInput label="Uyarılar" field="Uyarilar" fieldEn="UyarilarEn" rows={3} />
-              </div>
-            </SectionCard>
-          </>
-        )}
-
-        {/* ── Tab 5: Rapor ──────────────────────────────────────────────── */}
+        {/* ── Tab 3: Rapor (Fiziksel + Lab + Etiket + A.5–B.4) ─────────────── */}
         {activeTab === 'rapor' && (
           <>
-            <TabSaveBar tabId="rapor" />
-
-            <div style={{ marginBottom: 12, padding: '10px 16px', background: '#f0f7ff', borderRadius: 8, fontSize: '0.8rem', color: '#1F4788', border: '1px solid #c8e0ff' }}>
-              Metinler rapordan varsayılan olarak yüklenmiştir. Ürüne özel bilgileri düzenleyip sekmeyi kaydedin, ardından <strong>Yazdır / Word İndir</strong> butonuyla raporu indirin.
+            <div style={{ marginBottom: 16, padding: '10px 16px', background: '#f0f7ff', borderRadius: 8, fontSize: '0.8rem', color: '#1F4788', border: '1px solid #c8e0ff' }}>
+              Tüm alanları düzenleyip <strong>ÜRÜNÜ KAYDET</strong> butonuna tıklayın, ardından <strong>Yazdır / Word İndir</strong> ile raporu alın.
             </div>
 
-            <SectionCard title="A.5 — Normal ve Makul Kullanım">
-              <RaporField label="Normal Kullanım Tanımı" field="NormalKullanim" rows={3} />
+            {/* Fiziksel / Kimyasal Özellikler */}
+            <SectionCard title="A.3 — Fiziksel / Kimyasal Özellikler">
+              <div className={styles.formGrid}>
+                <DualInput label="Görünüm" value={form.Gorunum} valueEn={form.GorunumEn} onChange={upd('Gorunum')} onChangeEn={upd('GorunumEn')} />
+                <DualInput label="Renk" value={form.Renk} valueEn={form.RenkEn} onChange={upd('Renk')} onChangeEn={upd('RenkEn')} />
+                <DualInput label="Koku" value={form.Koku} valueEn={form.KokuEn} onChange={upd('Koku')} onChangeEn={upd('KokuEn')} />
+                <DualInput label="pH" value={form.PH} valueEn={form.PHEn} onChange={upd('PH')} onChangeEn={upd('PHEn')} />
+                <DualInput label="Yoğunluk" value={form.Yogunluk} valueEn={form.YogunlukEn} onChange={upd('Yogunluk')} onChangeEn={upd('YogunlukEn')} />
+                <DualInput label="Viskozite" value={form.Viskozite} valueEn={form.ViskoziteEn} onChange={upd('Viskozite')} onChangeEn={upd('ViskoziteEn')} />
+                <DualInput label="Kaynama Noktası" value={form.Kaynama} valueEn={form.KaynamaEn} onChange={upd('Kaynama')} onChangeEn={upd('KaynamaEn')} />
+                <DualInput label="Erime Noktası" value={form.Erime} valueEn={form.ErimeEn} onChange={upd('Erime')} onChangeEn={upd('ErimeEn')} />
+                <DualInput label="Suda Çözünebilirlik" value={form.SudaCozunebilirlik} valueEn={form.SudaCozunebilirlikEn} onChange={upd('SudaCozunebilirlik')} onChangeEn={upd('SudaCozunebilirlikEn')} />
+                <DualInput label="Diğer Çözünebilirlik" value={form.DigerCozunebilirlik} valueEn={form.DigerCozunebilirlikEn} onChange={upd('DigerCozunebilirlik')} onChangeEn={upd('DigerCozunebilirlikEn')} />
+              </div>
             </SectionCard>
 
+            {/* Laboratuvar Testleri */}
+            <SectionCard title="A.4 — Laboratuvar Testleri">
+              <div className={styles.formGrid}>
+                <DualInput label="Mikrobiyoloji" value={form.Mikrobiyoloji} valueEn={form.MikrobiyolojiEn} onChange={upd('Mikrobiyoloji')} onChangeEn={upd('MikrobiyolojiEn')} />
+                <DualInput label="Koruyucu Etkinlik" value={form.KoruyucuEtkinlik} valueEn={form.KoruyucuEtkinlikEn} onChange={upd('KoruyucuEtkinlik')} onChangeEn={upd('KoruyucuEtkinlikEn')} />
+                <DualInput label="Stabilite" value={form.Stabilite} valueEn={form.StabiliteEn} onChange={upd('Stabilite')} onChangeEn={upd('StabiliteEn')} />
+              </div>
+            </SectionCard>
+
+            {/* Kutu / Etiket Bilgileri */}
+            <SectionCard title="A.5 (Etiket) — Kutu / Etiket Bilgileri">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <DualInput label="Kullanım" value={form.Kullanim} valueEn={form.KullanimEn} onChange={upd('Kullanim')} onChangeEn={upd('KullanimEn')} rows={3} />
+                <DualInput label="Özellikler" value={form.Ozellikler} valueEn={form.OzelliklerEn} onChange={upd('Ozellikler')} onChangeEn={upd('OzelliklerEn')} rows={3} />
+                <DualInput label="Uyarılar" value={form.Uyarilar} valueEn={form.UyarilarEn} onChange={upd('Uyarilar')} onChangeEn={upd('UyarilarEn')} rows={3} />
+              </div>
+            </SectionCard>
+
+            {/* A.5 — Normal Kullanım */}
+            <SectionCard title="A.5 — Normal ve Makul Kullanım">
+              <RaporField label="Normal Kullanım Tanımı" value={form.NormalKullanim} onChange={upd('NormalKullanim')} rows={3} />
+            </SectionCard>
+
+            {/* A.6 */}
             <SectionCard title="A.6 — Kozmetik Ürüne Maruziyet">
-              <RaporField label="Maruziyet Değerlendirmesi" field="MaruziyetAciklama" rows={6}
+              <RaporField label="Maruziyet Değerlendirmesi" value={form.MaruziyetAciklama} onChange={upd('MaruziyetAciklama')} rows={6}
                 hint="A değeri, uygulama alanı (cm²), uygulama miktarı (g), sıklık ve maruziyet yolu bilgilerini içerir." />
             </SectionCard>
 
+            {/* A.7 */}
             <SectionCard title="A.7 — Bileşenlere Maruziyet Değerlendirmesi">
-              <RaporField label="SED Hesaplama Açıklaması" field="BilesenlereMaruziyet" rows={7} />
+              <RaporField label="SED Hesaplama Açıklaması" value={form.BilesenlereMaruziyet} onChange={upd('BilesenlereMaruziyet')} rows={7} />
             </SectionCard>
 
+            {/* A.8 */}
             <SectionCard title="A.8 — Toksikolojik Profil">
-              <RaporField label="Toksikolojik Profil Özeti" field="ToksikolojikProfil" rows={8}
+              <RaporField label="Toksikolojik Profil Özeti" value={form.ToksikolojikProfil} onChange={upd('ToksikolojikProfil')} rows={8}
                 hint="MoS = NO(A)EL / SED ≥ 100 hesaplama metodolojisini açıklayan metin." />
             </SectionCard>
 
+            {/* A.9 */}
             <SectionCard title="A.9 — İstenmeyen Etkiler">
-              <RaporField label="İstenmeyen Etkiler ve Ciddi İstenmeyen Etkiler" field="IstenmedEtkiler" rows={4} />
+              <RaporField label="İstenmeyen Etkiler ve Ciddi İstenmeyen Etkiler" value={form.IstenmedEtkiler} onChange={upd('IstenmedEtkiler')} rows={4} />
             </SectionCard>
 
+            {/* A.10 */}
             <SectionCard title="A.10 — Kozmetik Ürün Bilgisi">
-              <RaporField label="Ürün Bilgisi" field="UrunBilgisi" rows={5} />
+              <RaporField label="Ürün Bilgisi" value={form.UrunBilgisi} onChange={upd('UrunBilgisi')} rows={5} />
             </SectionCard>
 
+            {/* B.1 */}
             <SectionCard title="B.1 — Değerlendirme Sonucu">
-              <RaporField label="Değerlendirme Sonucu" field="DegerlendirmeSonucu" rows={10}
+              <RaporField label="Değerlendirme Sonucu" value={form.DegerlendirmeSonucu} onChange={upd('DegerlendirmeSonucu')} rows={10}
                 hint="Mevzuata uygunluk, güvenlilik teyidi ve ürünün kullanım uygunluğunu açıklayan ana sonuç metni." />
             </SectionCard>
 
+            {/* B.2 */}
             <SectionCard title="B.2 — Etiket Uyarıları ve Kullanım Talimatları">
-              <RaporField label="Etiket Uyarıları (B.2)" field="EtiketUyarilariB2" rows={4} />
+              <RaporField label="Etiket Uyarıları (B.2)" value={form.EtiketUyarilariB2} onChange={upd('EtiketUyarilariB2')} rows={4} />
             </SectionCard>
 
+            {/* B.3 */}
             <SectionCard title="B.3 — Gerekçelendirme">
-              <RaporField label="Gerekçelendirme" field="Gerekce" rows={10}
+              <RaporField label="Gerekçelendirme" value={form.Gerekce} onChange={upd('Gerekce')} rows={10}
                 hint="Değerlendirilen her kriter için ayrı ayrı gerekçe yazın." />
             </SectionCard>
 
+            {/* B.4 */}
             <SectionCard title="B.4 — Güvenlilik Değerlendirme Sorumlusu">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className={styles.formGroup}>
@@ -602,20 +662,32 @@ export default function YeniUrunPage() {
           </>
         )}
 
-        {/* ── Alt navigasyon ────────────────────────────────────────────── */}
+        {/* ── Alt navigasyon ────────────────────────────────────────────────── */}
         <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'space-between', borderTop: '1px solid var(--color-border-light)', paddingTop: 24 }}>
-          <button type="button" className={styles.cancelBtn} onClick={() => setActiveTab(TABS[Math.max(0, tabIndex - 1)].id)} disabled={tabIndex === 0} style={{ opacity: tabIndex === 0 ? 0.35 : 1 }}>
+          <button
+            type="button"
+            className={styles.cancelBtn}
+            onClick={() => setActiveTab(TABS[Math.max(0, tabIndex - 1)].id)}
+            disabled={tabIndex === 0}
+            style={{ opacity: tabIndex === 0 ? 0.35 : 1 }}
+          >
             ← Önceki
           </button>
           <div style={{ display: 'flex', gap: 12 }}>
             <button type="button" className={styles.cancelBtn} onClick={() => router.back()}>İptal</button>
             {tabIndex < TABS.length - 1 ? (
-              <button type="button" className={styles.saveBtn} onClick={() => setActiveTab(TABS[tabIndex + 1].id)}>
-                Sonraki →
+              <button
+                type="button"
+                className={styles.saveBtn}
+                onClick={handleNext}
+                disabled={saving}
+                style={{ minWidth: 140, opacity: saving ? 0.6 : 1 }}
+              >
+                {saving ? "Kaydediliyor..." : "Sonraki →"}
               </button>
             ) : (
-              <button type="submit" className={styles.saveBtn} style={{ minWidth: 200 }}>
-                ÜRÜNÜ KAYDET
+              <button type="submit" className={styles.saveBtn} disabled={saving} style={{ minWidth: 200, opacity: saving ? 0.6 : 1 }}>
+                {saving ? "Kaydediliyor..." : "ÜRÜNÜ KAYDET"}
               </button>
             )}
           </div>

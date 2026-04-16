@@ -17,9 +17,14 @@ export async function GET(request: Request) {
     const tiplerResult = await pool.request()
       .query("SELECT ID, UrunTipi, UygulamaBolgesi, ADegeri FROM rUGDTip ORDER BY UrunTipi");
 
+    // Sonraki RaporNo (max + 1)
+    const raporNoResult = await pool.request()
+      .query("SELECT ISNULL(MAX(TRY_CAST(RaporNo AS INT)), 0) + 1 AS nextRaporNo FROM rUGDListe WHERE BirimID = '1005' AND Durum = 'Aktif'");
+
     return Response.json({
       firmalar: firmalarResult.recordset,
-      tipler: tiplerResult.recordset
+      tipler: tiplerResult.recordset,
+      nextRaporNo: raporNoResult.recordset[0].nextRaporNo ?? 1,
     });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
