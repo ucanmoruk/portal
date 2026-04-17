@@ -58,10 +58,12 @@ export async function GET(request: NextRequest) {
     const result = await pool.request()
       .input("urunId", urunId)
       .query(`
-        SELECT UrunID, HammaddeID, INCIName, Miktar, DaP, Noael
-        FROM rUGDFormul
-        WHERE UrunID = @urunId
-        ORDER BY ID
+        SELECT f.UrunID, f.HammaddeID, f.INCIName, f.Miktar, f.DaP, f.Noael,
+               c.Cas, c.EC, c.Functions, c.Regulation, c.Link
+        FROM rUGDFormul f
+        LEFT JOIN rCosing c ON c.ID = f.HammaddeID
+        WHERE f.UrunID = @urunId
+        ORDER BY f.ID
       `);
 
     return Response.json(result.recordset);
