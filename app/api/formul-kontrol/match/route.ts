@@ -35,12 +35,17 @@ export async function POST(request: NextRequest) {
       const cosing = cosingResult.recordset[0] || {};
 
       // 2. rHammadde'den NOAEL değeri (rCosing.ID = rHammadde.cID)
+      // Tablo yoksa veya hata varsa sessizce devam et
       let noael: string | null = null;
       if (cosing.ID) {
-        const hammaddeResult = await pool.request()
-          .input("cid", cosing.ID)
-          .query(`SELECT TOP 1 Noael2 FROM rHammadde WHERE cID = @cid`);
-        noael = hammaddeResult.recordset[0]?.Noael2?.toString() || null;
+        try {
+          const hammaddeResult = await pool.request()
+            .input("cid", cosing.ID)
+            .query(`SELECT TOP 1 Noael2 FROM rHammadde WHERE cID = @cid`);
+          noael = hammaddeResult.recordset[0]?.Noael2?.toString() || null;
+        } catch {
+          // rHammadde tablosu yoksa veya Noael2 kolonu eksikse devam et
+        }
       }
 
       // 3. rUGDYonetmelik fetch (limitler)

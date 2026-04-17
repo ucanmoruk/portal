@@ -14,8 +14,10 @@ const FONT = "Calibri";
 const PAGE_W = 9638; // usable width DXA (A4 – 2 × 2 cm margin)
 const ACCENT = "1F4788";
 
-function val(v: string | undefined | null, fallback = "—"): string {
-  return v && v.trim() ? v.trim() : fallback;
+function val(v: unknown, fallback = "—"): string {
+  if (v === null || v === undefined) return fallback;
+  const s = String(v).trim();
+  return s ? s : fallback;
 }
 
 function body(text: string): Paragraph {

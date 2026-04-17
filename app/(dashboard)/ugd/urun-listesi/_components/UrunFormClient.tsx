@@ -352,7 +352,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
 
       // Eğer kayıtlı ürün varsa formülü DB'ye kaydet
       if (savedId) {
-        saveFormulToDB(savedId, mapped);
+        await saveFormulToDB(savedId, mapped);
       }
     } catch (e: any) { setFormulError(e.message); }
     finally { setFormulLoading(false); }
@@ -361,12 +361,18 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
   // ── Formülü DB'ye kaydet ─────────────────────────────────────────────────
   const saveFormulToDB = async (urunId: string, rows: MatchedIngredient[]) => {
     try {
-      await fetch("/api/urunler/formul", {
+      const res = await fetch("/api/urunler/formul", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ urunId: Number(urunId), rows }),
       });
-    } catch { /* sessiz hata — formül kaydı arka planda */ }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setFormulError(`Formül kaydedilemedi: ${err.error || `HTTP ${res.status}`}`);
+      }
+    } catch (e: any) {
+      setFormulError(`Formül kaydedilemedi: ${e.message}`);
+    }
   };
 
   const handleFormulPaste = () => {
