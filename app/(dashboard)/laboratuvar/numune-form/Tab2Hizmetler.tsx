@@ -338,9 +338,6 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
   const setBirim = (key: string, birim: string) =>
     onChange(rows.map(r => (r.key === key ? { ...r, Birim: birim } : r)));
 
-  const setLOQ = (key: string, loq: string) =>
-    onChange(rows.map(r => (r.key === key ? { ...r, LOQ: loq } : r)));
-
   const remove = (key: string) => onChange(rows.filter(r => r.key !== key));
 
   const setTermin = (key: string, termin: string) =>
@@ -565,7 +562,6 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
                 <th>Metot</th>
                 <th style={{ width: 140 }}>Limit</th>
                 <th style={{ width: 100 }}>Birim</th>
-                <th style={{ width: 100 }}>LOQ</th>
                 <th style={{ width: 140 }}>Termin</th>
                 <th style={{ width: 56 }} />
               </tr>
@@ -599,23 +595,6 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
                       value={r.Birim || ""}
                       onChange={e => setBirim(r.key, e.target.value)}
                       placeholder="Birim..."
-                      style={{
-                        width: "100%",
-                        padding: "4px 8px",
-                        border: "1px solid var(--color-border)",
-                        borderRadius: "4px",
-                        fontSize: "0.82rem",
-                        background: "var(--color-surface)",
-                        color: "var(--color-text-primary)"
-                      }}
-                    />
-                  </td>
-                  <td style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
-                    <input
-                      type="text"
-                      value={r.LOQ || ""}
-                      onChange={e => setLOQ(r.key, e.target.value)}
-                      placeholder="LOQ..."
                       style={{
                         width: "100%",
                         padding: "4px 8px",

@@ -59,8 +59,8 @@ interface RevizyonState {
 // ── Sabitler ─────────────────────────────────────────────────────────────────
 
 // Kod | Hizmet+Metot | Sonuç | Birim | Limit | Değerl. | Termin | Durum
-const HIZMET_GRID = "50px 1fr 108px 72px 92px 108px 64px 100px";
-const HIZMET_MIN_W = 900;
+const HIZMET_GRID = "50px minmax(140px,1fr) 108px 78px 96px 132px 84px 112px";
+const HIZMET_MIN_W = 920;
 const HIZMET_HEADERS = ["Kod", "Hizmet Adı", "Sonuç", "Birim", "Limit", "Değerlendirme", "Termin", "Durum"];
 const DURUM_OPTIONS: DurumFilter[] = ["Tümü", "Devam", "Tamamlandı"];
 
@@ -95,25 +95,26 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
   );
 }
 
-// Birleşik TR + EN input
+// Birleşik TR + EN input (EN her zaman görünür)
 function InputPair({
-  valTr, valEn, disabled, showEn,
+  valTr, valEn, disabled,
   onChangeTr, onChangeEn,
   phTr = "değer", phEn = "value",
 }: {
   valTr: string; valEn: string;
-  disabled: boolean; showEn: boolean;
+  disabled: boolean;
   onChangeTr: (v: string) => void;
   onChangeEn: (v: string) => void;
   phTr?: string; phEn?: string;
 }) {
   const base: React.CSSProperties = {
-    width: "100%", padding: "4px 7px",
+    width: "100%", padding: "5px 8px",
     border: "1px solid var(--color-border)",
     borderRadius: 6, fontFamily: "inherit",
     background: disabled ? "var(--color-surface)" : "var(--color-bg)",
     color: disabled ? "var(--color-text-secondary)" : "var(--color-text-primary)",
     outline: "none", cursor: disabled ? "default" : "text",
+    transition: "border-color 0.15s",
   };
   return (
     <div style={{ paddingRight: 4 }}>
@@ -121,25 +122,30 @@ function InputPair({
         type="text" value={valTr} disabled={disabled}
         onChange={e => onChangeTr(e.target.value)}
         placeholder={disabled ? "" : phTr}
-        style={{ ...base, fontSize: "0.8rem" }}
+        style={{ ...base, fontSize: "0.81rem" }}
         onFocus={e => { if (!disabled) e.currentTarget.style.borderColor = "var(--color-accent)"; }}
         onBlur={e  => { e.currentTarget.style.borderColor = "var(--color-border)"; }}
       />
-      {showEn && (
+      <div style={{ position: "relative", marginTop: 3 }}>
+        <span style={{
+          position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)",
+          fontSize: "0.6rem", fontWeight: 700, color: "#0071e3",
+          letterSpacing: "0.03em", pointerEvents: "none", userSelect: "none",
+        }}>EN</span>
         <input
           type="text" value={valEn} disabled={disabled}
           onChange={e => onChangeEn(e.target.value)}
           placeholder={disabled ? "" : phEn}
           style={{
-            ...base, fontSize: "0.73rem", marginTop: 3,
+            ...base, fontSize: "0.74rem", paddingLeft: 26,
             color: disabled ? "var(--color-text-tertiary)" : "#005bb5",
             borderColor: "#0071e340",
             background: disabled ? "var(--color-surface)" : "#f0f6ff",
           }}
-          onFocus={e => { if (!disabled) e.currentTarget.style.borderColor = "var(--color-accent)"; }}
+          onFocus={e => { if (!disabled) e.currentTarget.style.borderColor = "#0071e3"; }}
           onBlur={e  => { e.currentTarget.style.borderColor = "#0071e340"; }}
         />
-      )}
+      </div>
     </div>
   );
 }
@@ -161,7 +167,6 @@ export default function SonucGirisTable() {
 
   const [editMap, setEditMap]                 = useState<Record<number, LocalEdit>>({});
   const [collapsedNkrIds, setCollapsedNkrIds] = useState<Set<number>>(new Set());
-  const [showEnNkrIds, setShowEnNkrIds]       = useState<Set<number>>(new Set());
   const [revizyon, setRevizyon]               = useState<RevizyonState | null>(null);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -247,17 +252,10 @@ export default function SonucGirisTable() {
     }, 280);
   };
 
-  // ── Accordion & EN ────────────────────────────────────────────────────────
+  // ── Accordion ─────────────────────────────────────────────────────────────
 
   const toggleGroup = (nkrId: number) =>
     setCollapsedNkrIds(prev => {
-      const s = new Set(prev);
-      s.has(nkrId) ? s.delete(nkrId) : s.add(nkrId);
-      return s;
-    });
-
-  const toggleEn = (nkrId: number) =>
-    setShowEnNkrIds(prev => {
       const s = new Set(prev);
       s.has(nkrId) ? s.delete(nkrId) : s.add(nkrId);
       return s;
@@ -323,6 +321,15 @@ export default function SonucGirisTable() {
       setEditMap(prev => ({ ...prev, [x1Id]: { ...prev[x1Id], saving: false, saveError: e.message } }));
     }
   };
+
+  const handleSaveAll = async () => {
+    const dirtyIds = Object.entries(editMap)
+      .filter(([, v]) => v.dirty && !v.saving && v.durum !== "Tamamlandı")
+      .map(([k]) => Number(k));
+    await Promise.all(dirtyIds.map(id => handleSave(id)));
+  };
+
+  const dirtyCount = Object.values(editMap).filter(v => v.dirty && v.durum !== "Tamamlandı").length;
 
   // ── Revizyon ──────────────────────────────────────────────────────────────
 
@@ -392,6 +399,24 @@ export default function SonucGirisTable() {
               {allCollapsed ? "Tümünü Aç" : "Tümünü Kapat"}
             </button>
           )}
+          {dirtyCount > 0 && (
+            <button
+              onClick={handleSaveAll}
+              style={{
+                padding: "5px 14px", borderRadius: 7,
+                border: "none", background: "var(--color-accent)", color: "#fff",
+                fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
+                fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5,
+                boxShadow: "0 1px 4px rgba(0,113,227,0.25)",
+              }}
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+                <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+                <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+              </svg>
+              Hepsini Kaydet ({dirtyCount})
+            </button>
+          )}
         </div>
         <div className={styles.toolbarRight}>
           <select
@@ -457,7 +482,6 @@ export default function SonucGirisTable() {
         {/* ── Numune grupları ── */}
         {!loading && groups.map(group => {
           const isCollapsed = collapsedNkrIds.has(group.NkrID);
-          const showEn      = showEnNkrIds.has(group.NkrID);
           const tamamlanan  = group.hizmetler.filter(
             h => (editMap[h.X1ID]?.durum ?? (h.Durum === "Tamamlandı" ? "Tamamlandı" : "Devam")) === "Tamamlandı"
           ).length;
@@ -529,229 +553,259 @@ export default function SonucGirisTable() {
                   {getMinTermin(group.hizmetler)}
                 </div>
 
-                {/* EN toggle */}
-                <button
-                  onClick={e => { e.stopPropagation(); toggleEn(group.NkrID); }}
-                  title={showEn ? "İngilizce alanları gizle" : "İngilizce alanları göster"}
-                  style={{
-                    padding: "2px 8px", borderRadius: 5, flexShrink: 0,
-                    border: showEn ? "1px solid var(--color-accent)" : "1px solid var(--color-border)",
-                    background: showEn ? "var(--color-accent)" : "transparent",
-                    color: showEn ? "#fff" : "var(--color-text-tertiary)",
-                    fontSize: "0.69rem", fontWeight: 700,
-                    cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em",
-                  }}
-                >
-                  EN
-                </button>
+                {/* EN badge — her zaman görünür */}
+                <span style={{
+                  padding: "2px 8px", borderRadius: 6, flexShrink: 0,
+                  border: "1px solid #0071e340", background: "#f0f6ff",
+                  color: "#0071e3", fontSize: "0.68rem", fontWeight: 700,
+                  letterSpacing: "0.04em",
+                }}>EN</span>
               </div>
 
               {/* ── Hizmet satırları ── */}
               {!isCollapsed && (
-                <div style={{ overflowX: "auto" }}>
-                  {/* Sütun başlıkları */}
-                  <div style={{
-                    display: "grid", gridTemplateColumns: HIZMET_GRID,
-                    alignItems: "center", padding: "5px 16px",
-                    minWidth: HIZMET_MIN_W,
-                    background: "rgba(0,0,0,0.015)",
-                    borderBottom: "1px solid var(--color-border-light)",
+                <div style={{
+                  background: "var(--color-surface-2)",
+                  borderTop: `1px solid ${borderColor}`,
+                  padding: "0 0 12px",
+                  overflowX: "auto",
+                }}>
+                  <table style={{
+                    width: "100%", borderCollapse: "collapse",
+                    fontSize: "0.82rem", tableLayout: "fixed", minWidth: 860,
                   }}>
-                    {HIZMET_HEADERS.map(h => (
-                      <div key={h} style={{
-                        fontSize: "0.63rem", fontWeight: 700, textTransform: "uppercase",
-                        letterSpacing: "0.07em", color: "var(--color-text-tertiary)",
-                      }}>{h}</div>
-                    ))}
-                  </div>
+                    <colgroup>
+                      <col style={{ width: 48 }} />
+                      <col style={{ width: 72 }} />
+                      <col />
+                      <col style={{ width: 148 }} />
+                      <col style={{ width: 88 }} />
+                      <col style={{ width: 96 }} />
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 80 }} />
+                      <col style={{ width: 110 }} />
+                    </colgroup>
+                    <thead>
+                      <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
+                        <th />
+                        {["Kod", "Hizmet Adı", "Sonuç", "Birim", "Limit", "Değerlendirme", "Termin", "Durum"].map(h => (
+                          <th key={h} style={{
+                            padding: "6px 10px", textAlign: "left",
+                            fontSize: "0.67rem", fontWeight: 700,
+                            textTransform: "uppercase", letterSpacing: "0.07em",
+                            color: "var(--color-text-secondary)", whiteSpace: "nowrap",
+                          }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.hizmetler.map((row, ri) => {
+                        const edit = editMap[row.X1ID] ?? {
+                          sonuc: row.Sonuc ?? "", sonucEn: row.SonucEn ?? "",
+                          birim: row.Birim ?? "", birimEn: row.BirimEn ?? "",
+                          limit: row.LimitDeger ?? "", limitEn: row.LimitEn ?? "",
+                          degerlendirme: row.Degerlendirme ?? "",
+                          durum: (row.Durum === "Tamamlandı" ? "Tamamlandı" : "Devam") as "Devam" | "Tamamlandı",
+                          dirty: false, saving: false, saveError: "",
+                        };
+                        const isAkr      = row.Akreditasyon?.toLowerCase().includes("var");
+                        const isTamam    = edit.durum === "Tamamlandı";
+                        const isDisabled = isTamam || edit.saving;
+                        const isLast     = ri === group.hizmetler.length - 1;
 
-                  {/* Satırlar */}
-                  {group.hizmetler.map((row, ri) => {
-                    const edit = editMap[row.X1ID] ?? {
-                      sonuc: row.Sonuc ?? "", sonucEn: row.SonucEn ?? "",
-                      birim: row.Birim ?? "", birimEn: row.BirimEn ?? "",
-                      limit: row.LimitDeger ?? "", limitEn: row.LimitEn ?? "",
-                      degerlendirme: row.Degerlendirme ?? "",
-                      durum: (row.Durum === "Tamamlandı" ? "Tamamlandı" : "Devam") as "Devam" | "Tamamlandı",
-                      dirty: false, saving: false, saveError: "",
-                    };
-                    const isAkr     = row.Akreditasyon?.toLowerCase().includes("var");
-                    const isTamam   = edit.durum === "Tamamlandı";
-                    const isDisabled = isTamam || edit.saving;
-                    const isLast    = ri === group.hizmetler.length - 1;
+                        const degEn = edit.degerlendirme === "Uygun"       ? "Pass"
+                                    : edit.degerlendirme === "Uygun Değil" ? "Fail"
+                                    : edit.degerlendirme === "D.Y."        ? "N/A"
+                                    : null;
 
-                    return (
-                      <div
-                        key={row.X1ID}
-                        style={{
-                          display: "grid", gridTemplateColumns: HIZMET_GRID,
-                          alignItems: "center", padding: "8px 16px",
-                          minWidth: HIZMET_MIN_W,
-                          borderBottom: isLast ? "none" : "1px solid var(--color-border-light)",
-                          background: isTamam
-                            ? "rgba(52,199,89,0.025)"
-                            : edit.dirty ? "rgba(0,113,227,0.02)" : undefined,
-                        }}
-                      >
-                        {/* Kod */}
-                        <div style={{ fontSize: "0.74rem", color: "var(--color-text-tertiary)", fontVariantNumeric: "tabular-nums" }}>
-                          {row.Kod || "—"}
-                        </div>
-
-                        {/* ★ + Hizmet + Metot + Yetkili */}
-                        <div style={{ paddingRight: 8, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            {isAkr && (
-                              <span title="Akredite analiz" style={{
-                                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                                width: 14, height: 14, borderRadius: "50%",
-                                background: "#ff9f0a22", color: "#b06400",
-                                fontSize: "0.6rem", fontWeight: 800, flexShrink: 0,
-                              }}>★</span>
-                            )}
-                            <span style={{
-                              fontSize: "0.82rem", fontWeight: 500, color: "var(--color-text-primary)",
-                              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                            }}>{row.HizmetAd || "—"}</span>
-                          </div>
-                          {row.Metot && (
-                            <div style={{
-                              fontSize: "0.71rem", color: "var(--color-text-secondary)",
-                              marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                            }}>{row.Metot}</div>
-                          )}
-                          {row.YetkiliAd && (
-                            <div style={{ fontSize: "0.67rem", color: "var(--color-text-tertiary)", marginTop: 1 }}>
-                              {row.YetkiliAd}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Sonuç TR / EN */}
-                        <InputPair
-                          valTr={edit.sonuc} valEn={edit.sonucEn}
-                          disabled={isDisabled} showEn={showEn}
-                          onChangeTr={v => setField(row.X1ID, "sonuc", v)}
-                          onChangeEn={v => setField(row.X1ID, "sonucEn", v)}
-                          phTr="sonuç" phEn="result"
-                        />
-
-                        {/* Birim TR / EN */}
-                        <InputPair
-                          valTr={edit.birim} valEn={edit.birimEn}
-                          disabled={isDisabled} showEn={showEn}
-                          onChangeTr={v => setField(row.X1ID, "birim", v)}
-                          onChangeEn={v => setField(row.X1ID, "birimEn", v)}
-                          phTr="birim" phEn="unit"
-                        />
-
-                        {/* Limit TR / EN */}
-                        <InputPair
-                          valTr={edit.limit} valEn={edit.limitEn}
-                          disabled={isDisabled} showEn={showEn}
-                          onChangeTr={v => setField(row.X1ID, "limit", v)}
-                          onChangeEn={v => setField(row.X1ID, "limitEn", v)}
-                          phTr="limit" phEn="limit"
-                        />
-
-                        {/* Değerlendirme */}
-                        <div>
-                          <select
-                            value={edit.degerlendirme}
-                            disabled={isDisabled}
-                            onChange={e => setField(row.X1ID, "degerlendirme", e.target.value)}
+                        return (
+                          <tr
+                            key={row.X1ID}
                             style={{
-                              width: "100%", padding: "4px 4px",
-                              border: "1px solid var(--color-border)",
-                              borderRadius: 6, fontSize: "0.78rem",
-                              background: isDisabled
-                                ? "var(--color-surface)"
-                                : edit.degerlendirme === "Uygun"
-                                  ? "#34c75914"
-                                  : edit.degerlendirme === "Uygun Değil"
-                                    ? "#ff2d5514"
-                                    : "var(--color-bg)",
-                              color: edit.degerlendirme === "Uygun"
-                                ? "#248a3d"
-                                : edit.degerlendirme === "Uygun Değil"
-                                  ? "#c1001a"
-                                  : "var(--color-text-secondary)",
-                              fontWeight: edit.degerlendirme ? 600 : 400,
-                              outline: "none",
-                              cursor: isDisabled ? "default" : "pointer",
-                              fontFamily: "inherit",
+                              borderBottom: isLast ? "none" : "1px solid var(--color-border-light)",
+                              background: isTamam
+                                ? "rgba(52,199,89,0.025)"
+                                : edit.dirty ? "rgba(0,113,227,0.02)" : undefined,
                             }}
                           >
-                            <option value="">—</option>
-                            <option value="Uygun">Uygun</option>
-                            <option value="Uygun Değil">Uygun Değil</option>
-                            <option value="N/A">N/A</option>
-                          </select>
-                          {showEn && (
-                            <div style={{ marginTop: 3, fontSize: "0.67rem", color: "var(--color-text-tertiary)", paddingLeft: 2 }}>
-                              {edit.degerlendirme === "Uygun" ? "Conforming"
-                                : edit.degerlendirme === "Uygun Değil" ? "Non-Conforming"
-                                : edit.degerlendirme === "N/A" ? "N/A" : "—"}
-                            </div>
-                          )}
-                        </div>
+                            <td />
 
-                        {/* Termin */}
-                        <div style={{ fontSize: "0.75rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
-                          {formatTarih(row.Termin)}
-                        </div>
+                            {/* Kod */}
+                            <td style={{ padding: "8px 10px", color: "var(--color-text-tertiary)", fontVariantNumeric: "tabular-nums" }}>
+                              {row.Kod || "—"}
+                            </td>
 
-                        {/* Durum / Kaydet */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          {edit.saving && <span className={styles.loader} />}
+                            {/* Hizmet Adı + Metot + Yetkili */}
+                            <td style={{ padding: "8px 10px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                {isAkr && (
+                                  <span title="Akredite analiz" style={{
+                                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                    width: 14, height: 14, borderRadius: "50%",
+                                    background: "#ff9f0a22", color: "#b06400",
+                                    fontSize: "0.6rem", fontWeight: 800, flexShrink: 0,
+                                  }}>★</span>
+                                )}
+                                <span style={{
+                                  fontSize: "0.82rem", fontWeight: 500, color: "var(--color-text-primary)",
+                                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                                }}>{row.HizmetAd || "—"}</span>
+                              </div>
+                              {row.Metot && (
+                                <div style={{ fontSize: "0.71rem", color: "var(--color-text-secondary)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  {row.Metot}
+                                </div>
+                              )}
+                              {row.YetkiliAd && (
+                                <div style={{ fontSize: "0.67rem", color: "var(--color-text-tertiary)", marginTop: 1 }}>
+                                  {row.YetkiliAd}
+                                </div>
+                              )}
+                            </td>
 
-                          {!edit.saving && edit.dirty && (
-                            <button
-                              onClick={() => handleSave(row.X1ID)}
-                              title={edit.saveError || undefined}
-                              style={{
-                                padding: "4px 10px", borderRadius: 6,
-                                border: edit.saveError ? "1px solid #c1001a" : "none",
-                                background: edit.saveError ? "#fff0f0" : "var(--color-accent)",
-                                color: edit.saveError ? "#c1001a" : "#fff",
-                                fontSize: "0.75rem", fontWeight: 600,
-                                cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-                              }}
-                            >
-                              {edit.saveError ? "⚠ Tekrar" : "Kaydet"}
-                            </button>
-                          )}
+                            {/* Sonuç TR / EN */}
+                            <td style={{ padding: "6px 8px" }}>
+                              <InputPair
+                                valTr={edit.sonuc} valEn={edit.sonucEn}
+                                disabled={isDisabled}
+                                onChangeTr={v => setField(row.X1ID, "sonuc", v)}
+                                onChangeEn={v => setField(row.X1ID, "sonucEn", v)}
+                                phTr="sonuç" phEn="result"
+                              />
+                            </td>
 
-                          {!edit.saving && !edit.dirty && isTamam && (
-                            <button
-                              onClick={() => openRevizyon(row, group.NkrID)}
-                              title="Revizyon başlatmak için tıklayın"
-                              style={{
-                                padding: "3px 8px", borderRadius: 20,
-                                border: "1px solid #34c75960",
-                                background: "#34c75914", color: "#248a3d",
-                                fontSize: "0.72rem", fontWeight: 600,
-                                cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-                              }}
-                            >
-                              ✓ Tamam
-                            </button>
-                          )}
+                            {/* Birim TR / EN */}
+                            <td style={{ padding: "6px 8px" }}>
+                              <InputPair
+                                valTr={edit.birim} valEn={edit.birimEn}
+                                disabled={isDisabled}
+                                onChangeTr={v => setField(row.X1ID, "birim", v)}
+                                onChangeEn={v => setField(row.X1ID, "birimEn", v)}
+                                phTr="birim" phEn="unit"
+                              />
+                            </td>
 
-                          {!edit.saving && !edit.dirty && !isTamam && (
-                            <span style={{
-                              padding: "3px 8px", borderRadius: 20,
-                              border: "1px solid var(--color-border)",
-                              color: "var(--color-text-tertiary)",
-                              fontSize: "0.72rem", whiteSpace: "nowrap",
-                            }}>
-                              Devam
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                            {/* Limit TR / EN */}
+                            <td style={{ padding: "6px 8px" }}>
+                              <InputPair
+                                valTr={edit.limit} valEn={edit.limitEn}
+                                disabled={isDisabled}
+                                onChangeTr={v => setField(row.X1ID, "limit", v)}
+                                onChangeEn={v => setField(row.X1ID, "limitEn", v)}
+                                phTr="limit" phEn="limit"
+                              />
+                            </td>
+
+                            {/* Değerlendirme */}
+                            <td style={{ padding: "6px 8px" }}>
+                              <select
+                                value={edit.degerlendirme}
+                                disabled={isDisabled}
+                                onChange={e => setField(row.X1ID, "degerlendirme", e.target.value)}
+                                style={{
+                                  width: "100%", padding: "4px 6px",
+                                  border: "1px solid var(--color-border)",
+                                  borderRadius: 6, fontSize: "0.78rem",
+                                  background: isDisabled
+                                    ? "var(--color-surface)"
+                                    : edit.degerlendirme === "Uygun"       ? "#34c75914"
+                                    : edit.degerlendirme === "Uygun Değil" ? "#ff2d5514"
+                                    : "var(--color-bg)",
+                                  color: edit.degerlendirme === "Uygun"       ? "#248a3d"
+                                       : edit.degerlendirme === "Uygun Değil" ? "#c1001a"
+                                       : "var(--color-text-secondary)",
+                                  fontWeight: edit.degerlendirme ? 600 : 400,
+                                  outline: "none",
+                                  cursor: isDisabled ? "default" : "pointer",
+                                  fontFamily: "inherit",
+                                }}
+                              >
+                                <option value="">—</option>
+                                <option value="Uygun">Uygun</option>
+                                <option value="Uygun Değil">Uygun Değil</option>
+                                <option value="D.Y.">D.Y.</option>
+                              </select>
+                              {degEn && (
+                                <div style={{ marginTop: 3, fontSize: "0.67rem", color: "#0071e3", paddingLeft: 2 }}>
+                                  {degEn}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Termin */}
+                            <td style={{ padding: "8px 10px", fontSize: "0.75rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums", textAlign: "center" }}>
+                              {formatTarih(row.Termin)}
+                            </td>
+
+                            {/* Durum / Kaydet */}
+                            <td style={{ padding: "6px 8px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                {edit.saving && <span className={styles.loader} />}
+
+                                {!edit.saving && edit.dirty && (
+                                  <button
+                                    onClick={() => handleSave(row.X1ID)}
+                                    title={edit.saveError || "Kaydet ve Tamamlandı olarak işaretle"}
+                                    style={{
+                                      padding: "5px 11px", borderRadius: 7,
+                                      border: edit.saveError ? "1.5px solid #c1001a" : "none",
+                                      background: edit.saveError ? "#fff0f0" : "var(--color-accent)",
+                                      color: edit.saveError ? "#c1001a" : "#fff",
+                                      fontSize: "0.76rem", fontWeight: 700,
+                                      cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                                      boxShadow: edit.saveError ? "none" : "0 1px 3px rgba(0,113,227,0.3)",
+                                      display: "flex", alignItems: "center", gap: 4,
+                                    }}
+                                  >
+                                    {edit.saveError ? <>⚠ Tekrar</> : (
+                                      <>
+                                        <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
+                                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+                                        </svg>
+                                        Kaydet
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+
+                                {!edit.saving && !edit.dirty && isTamam && (
+                                  <button
+                                    onClick={() => openRevizyon(row, group.NkrID)}
+                                    title="Revizyon başlatmak için tıklayın"
+                                    style={{
+                                      padding: "4px 10px", borderRadius: 20,
+                                      border: "1.5px solid #34c75970",
+                                      background: "#34c75914", color: "#248a3d",
+                                      fontSize: "0.72rem", fontWeight: 700,
+                                      cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                                      display: "flex", alignItems: "center", gap: 3,
+                                    }}
+                                  >
+                                    <svg viewBox="0 0 20 20" fill="currentColor" width="11" height="11">
+                                      <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+                                    </svg>
+                                    Tamam
+                                  </button>
+                                )}
+
+                                {!edit.saving && !edit.dirty && !isTamam && (
+                                  <span style={{
+                                    padding: "4px 10px", borderRadius: 20,
+                                    border: "1px solid var(--color-border)",
+                                    color: "var(--color-text-tertiary)",
+                                    fontSize: "0.72rem", whiteSpace: "nowrap",
+                                    background: "var(--color-surface)",
+                                  }}>
+                                    Devam
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>

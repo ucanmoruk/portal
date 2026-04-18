@@ -18,16 +18,20 @@ export async function GET(request: NextRequest) {
       .input("x3id", parseInt(x3id))
       .query(`
         SELECT
-          x4.ID           AS X4ID,
-          x4.AltAnalizID  AS AnalizID,
+          x4.ID                                             AS X4ID,
+          x4.AltAnalizID                                    AS AnalizID,
           s.Kod,
           s.Ad,
           s.AdEn,
-          s.Method        AS Metot,
+          s.Method                                          AS Metot,
           s.Sure,
           x4.LimitDeger,
           x4.LimitBirimi,
-          x4.Notlar
+          x4.Notlar,
+          ISNULL(x4.LimitDegerEn,  '')                      AS LimitDegerEn,
+          ISNULL(x4.LimitBirimiEn, '')                      AS LimitBirimiEn,
+          ISNULL(NULLIF(x4.LOQ,   ''), ISNULL(s.LOQ,   '')) AS LOQ,
+          ISNULL(NULLIF(x4.LOQEn, ''), ISNULL(s.LOQEn, '')) AS LOQEn
         FROM NumuneX4 x4
         LEFT JOIN StokAnalizListesi s ON s.ID = x4.AltAnalizID
         WHERE x4.ListeID = @x3id

@@ -42,6 +42,12 @@ interface AvailableHizmet {
   Method: string;
   Matriks: string;
   Akreditasyon: string;
+  Limit?: string;
+  Birim?: string;
+  LOQ?: string;
+  LimitEn?: string;
+  BirimEn?: string;
+  LOQEn?: string;
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -200,7 +206,15 @@ export default function HizmetPaketleri() {
     try {
       const res  = await fetch(`/api/lab/paketler/${aktifListe.ID}/items`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hizmetId: hizmet.ID }),
+        body: JSON.stringify({
+          hizmetId:      hizmet.ID,
+          limitDeger:    hizmet.Limit    || null,
+          limitBirimi:   hizmet.Birim    || null,
+          limitDegerEn:  hizmet.LimitEn  || null,
+          limitBirimiEn: hizmet.BirimEn  || null,
+          loq:           hizmet.LOQ      || null,
+          loqEn:         hizmet.LOQEn    || null,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
@@ -774,7 +788,7 @@ function LimitModal({
             </div>
           </div>
 
-          {/* LOQ (TR + EN) 
+          {/* LOQ (TR + EN) */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
               <label style={s.label}>LOQ (TR)</label>
@@ -784,7 +798,7 @@ function LimitModal({
               <label style={s.label}>LOQ (EN)</label>
               <input style={s.input} value={loqEn} onChange={e => setLoqEn(e.target.value)} placeholder="e.g. 0.1" />
             </div>
-          </div>  */}
+          </div>
 
           {/* Notlar */}
           <div>

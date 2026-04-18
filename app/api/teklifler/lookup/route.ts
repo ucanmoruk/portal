@@ -38,10 +38,16 @@ export async function GET(request: NextRequest) {
         .input("q", `%${q}%`)
         .query(`
           SELECT TOP 100 ID, Kod, Ad, Fiyat, ParaBirimi,
-                 ISNULL(Method,'')      AS Metot,
+                 ISNULL(Method,'')       AS Metot,
                  ISNULL(Akreditasyon,'') AS Akreditasyon,
-                 ISNULL(Matriks,'')     AS Matriks,
-                 Sure
+                 ISNULL(Matriks,'')      AS Matriks,
+                 Sure,
+                 ISNULL([Limit],'')      AS [Limit],
+                 ISNULL(Birim,'')        AS Birim,
+                 ISNULL(LOQ,'')          AS LOQ,
+                 ISNULL(LimitEn,'')      AS LimitEn,
+                 ISNULL(BirimEn,'')      AS BirimEn,
+                 ISNULL(LOQEn,'')        AS LOQEn
           FROM StokAnalizListesi
           WHERE Durumu = 'Aktif'
           ${q ? "AND (Ad LIKE @q OR Kod LIKE @q)" : ""}

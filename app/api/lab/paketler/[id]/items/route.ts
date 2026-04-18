@@ -68,11 +68,15 @@ export async function POST(
 ) {
   const { id } = await params;
   try {
-    const body        = await request.json();
-    const hizmetId    = parseInt(body.hizmetId);
-    const limitDeger  = (body.limitDeger  || "").trim() || null;
-    const limitBirimi = (body.limitBirimi || "").trim() || null;
-    const notlar      = (body.notlar      || "").trim() || null;
+    const body          = await request.json();
+    const hizmetId      = parseInt(body.hizmetId);
+    const limitDeger    = (body.limitDeger    || "").trim() || null;
+    const limitBirimi   = (body.limitBirimi   || "").trim() || null;
+    const limitDegerEn  = (body.limitDegerEn  || "").trim() || null;
+    const limitBirimiEn = (body.limitBirimiEn || "").trim() || null;
+    const loq           = (body.loq           || "").trim() || null;
+    const loqEn         = (body.loqEn         || "").trim() || null;
+    const notlar        = (body.notlar        || "").trim() || null;
 
     if (!hizmetId) {
       return NextResponse.json({ error: "HizmetID zorunludur." }, { status: 400 });
@@ -91,15 +95,21 @@ export async function POST(
     }
 
     const result = await pool.request()
-      .input("listeId",     parseInt(id))
-      .input("hizmetId",    hizmetId)
-      .input("limitDeger",  limitDeger)
-      .input("limitBirimi", limitBirimi)
-      .input("notlar",      notlar)
+      .input("listeId",      parseInt(id))
+      .input("hizmetId",     hizmetId)
+      .input("limitDeger",   limitDeger)
+      .input("limitBirimi",  limitBirimi)
+      .input("limitDegerEn", limitDegerEn)
+      .input("limitBirimiEn",limitBirimiEn)
+      .input("loq",          loq)
+      .input("loqEn",        loqEn)
+      .input("notlar",       notlar)
       .query(`
-        INSERT INTO NumuneX4 (ListeID, AltAnalizID, LimitDeger, LimitBirimi, Notlar)
+        INSERT INTO NumuneX4
+          (ListeID, AltAnalizID, LimitDeger, LimitBirimi, LimitDegerEn, LimitBirimiEn, LOQ, LOQEn, Notlar)
         OUTPUT INSERTED.ID
-        VALUES (@listeId, @hizmetId, @limitDeger, @limitBirimi, @notlar)
+        VALUES
+          (@listeId, @hizmetId, @limitDeger, @limitBirimi, @limitDegerEn, @limitBirimiEn, @loq, @loqEn, @notlar)
       `);
 
     return NextResponse.json({ id: result.recordset[0].ID }, { status: 201 });

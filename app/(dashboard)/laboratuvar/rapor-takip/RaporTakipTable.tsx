@@ -26,14 +26,18 @@ interface HizmetDetay {
   Akreditasyon: string | null;
   Metot: string | null;
   Birim: string | null;
+  BirimEn: string;
   LimitDeger: string | null;
+  LimitEn: string;
   Sonuc: string | null;
+  SonucEn: string;
   Degerlendirme: string | null;
   Termin: string | null;
 }
 
 interface LocalEdit {
   sonuc: string;
+  sonucEn: string;
   degerlendirme: string;
 }
 
@@ -225,6 +229,7 @@ export default function RaporTakipTable() {
         data.forEach(h => {
           initial[h.X1ID] = {
             sonuc:         h.Sonuc         ?? "",
+            sonucEn:       h.SonucEn       ?? "",
             degerlendirme: h.Degerlendirme ?? "",
           };
         });
@@ -252,6 +257,7 @@ export default function RaporTakipTable() {
     const updates = Object.entries(edits).map(([x1Id, vals]) => ({
       x1Id: Number(x1Id),
       sonuc: vals.sonuc,
+      sonucEn: vals.sonucEn,
       degerlendirme: vals.degerlendirme,
     }));
 
@@ -272,6 +278,7 @@ export default function RaporTakipTable() {
         const updated = current.map(h => ({
           ...h,
           Sonuc:         edits[h.X1ID]?.sonuc         ?? h.Sonuc,
+          SonucEn:       edits[h.X1ID]?.sonucEn       ?? h.SonucEn,
           Degerlendirme: edits[h.X1ID]?.degerlendirme ?? h.Degerlendirme,
         }));
         return { ...prev, [key]: updated };
@@ -674,14 +681,14 @@ export default function RaporTakipTable() {
                       }}>
                         <colgroup>
                           <col style={{ width: 48 }} />
-                          <col style={{ width: 90 }} />
+                          <col style={{ width: 80 }} />
                           <col />
-                          <col style={{ width: 140 }} />
-                          <col style={{ width: 90 }} />
+                          <col style={{ width: 130 }} />
+                          <col style={{ width: 88 }} />
                           <col style={{ width: 130 }} />
                           <col style={{ width: 110 }} />
-                          <col style={{ width: 100 }} />
-                          <col style={{ width: 100 }} />
+                          <col style={{ width: 108 }} />
+                          <col style={{ width: 88 }} />
                         </colgroup>
                         <thead>
                           <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
@@ -698,7 +705,15 @@ export default function RaporTakipTable() {
                         </thead>
                         <tbody>
                           {hizmetler.map((h, hi) => {
-                            const edit = edits[h.X1ID] ?? { sonuc: h.Sonuc ?? "", degerlendirme: h.Degerlendirme ?? "" };
+                            const edit = edits[h.X1ID] ?? { sonuc: h.Sonuc ?? "", sonucEn: h.SonucEn ?? "", degerlendirme: h.Degerlendirme ?? "" };
+                            const inputBase: React.CSSProperties = {
+                              width: "100%", padding: "4px 7px",
+                              border: "1px solid var(--color-border)",
+                              borderRadius: 6, fontSize: "0.8rem",
+                              background: "var(--color-bg)",
+                              color: "var(--color-text-primary)",
+                              outline: "none",
+                            };
                             return (
                               <tr
                                 key={h.X1ID}
@@ -721,31 +736,53 @@ export default function RaporTakipTable() {
                                     {h.Metot ?? "—"}
                                   </div>
                                 </td>
-                                <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)" }}>
-                                  {h.Birim ?? "—"}
+                                {/* Birim + EN */}
+                                <td style={{ padding: "8px 10px" }}>
+                                  <div style={{ color: "var(--color-text-secondary)" }}>{h.Birim ?? "—"}</div>
+                                  {h.BirimEn && (
+                                    <div style={{ fontSize: "0.72rem", color: "#0071e3", marginTop: 2 }}>{h.BirimEn}</div>
+                                  )}
                                 </td>
-                                {/* Sonuç — düzenlenebilir */}
+                                {/* Sonuç — düzenlenebilir, TR + EN */}
                                 <td style={{ padding: "6px 8px" }}>
                                   <input
                                     type="text"
                                     value={edit.sonuc}
                                     onChange={e => setFieldValue(key, h.X1ID, "sonuc", e.target.value)}
-                                    placeholder="değer girin"
-                                    style={{
-                                      width: "100%", padding: "4px 7px",
-                                      border: "1px solid var(--color-border)",
-                                      borderRadius: 6, fontSize: "0.8rem",
-                                      background: "var(--color-bg)",
-                                      color: "var(--color-text-primary)",
-                                      outline: "none",
-                                    }}
+                                    placeholder="değer"
+                                    style={inputBase}
                                     onFocus={e => (e.currentTarget.style.borderColor = "var(--color-accent)")}
                                     onBlur={e  => (e.currentTarget.style.borderColor = "var(--color-border)")}
                                   />
+                                  <div style={{ position: "relative", marginTop: 3 }}>
+                                    <span style={{
+                                      position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)",
+                                      fontSize: "0.58rem", fontWeight: 700, color: "#0071e3",
+                                      pointerEvents: "none", userSelect: "none",
+                                    }}>EN</span>
+                                    <input
+                                      type="text"
+                                      value={edit.sonucEn}
+                                      onChange={e => setFieldValue(key, h.X1ID, "sonucEn", e.target.value)}
+                                      placeholder="result"
+                                      style={{
+                                        ...inputBase, fontSize: "0.74rem", paddingLeft: 24,
+                                        color: "#005bb5", borderColor: "#0071e340",
+                                        background: "#f0f6ff",
+                                      }}
+                                      onFocus={e => (e.currentTarget.style.borderColor = "#0071e3")}
+                                      onBlur={e  => (e.currentTarget.style.borderColor = "#0071e340")}
+                                    />
+                                  </div>
                                 </td>
-                                {/* Limit */}
-                                <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
-                                  {h.LimitDeger ?? "—"}
+                                {/* Limit + EN */}
+                                <td style={{ padding: "8px 10px" }}>
+                                  <div style={{ color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
+                                    {h.LimitDeger ?? "—"}
+                                  </div>
+                                  {h.LimitEn && (
+                                    <div style={{ fontSize: "0.72rem", color: "#0071e3", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{h.LimitEn}</div>
+                                  )}
                                 </td>
                                 {/* Değerlendirme — düzenlenebilir */}
                                 <td style={{ padding: "6px 8px" }}>

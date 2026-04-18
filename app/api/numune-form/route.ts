@@ -4,6 +4,32 @@ import poolPromise from "@/lib/db";
 import { nkrUgdTipFkColumn } from "@/lib/nkrUgdTipColumn";
 import { hasNkrFormulTable, hasNkrLogTable, nkrHasColumn } from "@/lib/numuneFormTables";
 
+// Limit ve LOQ değerine göre Sonuç ve SonucEn otomatik hesapla
+function computeSonucAuto(
+  limit: string | null | undefined,
+  loq:   string | null | undefined,
+): { sonuc: string | null; sonucEn: string | null } {
+  if (!limit) return { sonuc: null, sonucEn: null };
+  const t = String(limit).trim();
+  if (t === "Bulunmamalı") return { sonuc: "Tespit Edilmedi", sonucEn: "Not Detected" };
+  if (t !== "" && !isNaN(Number(t))) {
+    const loqVal = loq ? String(loq).trim() : "";
+    const sonuc  = loqVal ? `< ${loqVal}` : "";
+    return { sonuc, sonucEn: sonuc };
+  }
+  return { sonuc: null, sonucEn: null };
+}
+
+// Değerlendirme Türkçe → İngilizce çeviri
+function computeDegerlendirmeEn(degerlendirme: string | null): string | null {
+  if (!degerlendirme) return null;
+  const t = degerlendirme.trim();
+  if (t === "Uygun")       return "Pass";
+  if (t === "Uygun Değil") return "Fail";
+  if (t === "D.Y.")        return "N/A";
+  return t;
+}
+
 // ----------------------------------------------------------------
 // POST /api/numune-form
 // Body: { nkr, detay, hizmetler[], formul[] }
@@ -103,15 +129,86 @@ export async function POST(request: Request) {
 
     // ── 3. NumuneX1 (hizmetler) ──────────────────────────────────
     if (hizmetler.length > 0) {
-      // Bulk INSERT - tek sorguda tüm hizmetleri ekle
-      const values = hizmetler.map((h: any) => 
-        `(${nkrId}, ${h.AnalizID}, ${h.Termin ? `'${h.Termin}'` : 'NULL'}, ${h.x3ID ? h.x3ID : 'NULL'}, ${h.Limit ? `'${h.Limit.replace(/'/g, "''")}'` : 'NULL'}, ${h.Birim ? `'${h.Birim.replace(/'/g, "''")}'` : 'NULL'})`
-      ).join(', ');
-      
-      await pool.request().query(`
-        INSERT INTO NumuneX1 (RaporID, AnalizID, Termin, x3ID, Limit, Birim) 
-        VALUES ${values}
+      // Opsiyonel kolon kontrolü
+      const x1ColRes = await pool.request().query(`
+        SELECT name FROM sys.columns
+        WHERE object_id = OBJECT_ID('NumuneX1')
+          AND name IN ('Sonuc', 'SonucEn', 'Degerlendirme', 'DegerlendirmeEn', 'Durum', 'HizmetDurum')
       `);
+      const x1Cols = new Set<string>(x1ColRes.recordset.map((r: any) => r.name));
+
+      const q = (v: string | undefined | null) =>
+        v ? `'${String(v).replace(/'/g, "''")}'` : "NULL";
+
+      // StokAnalizListesi'nden LimitEn / BirimEn / LOQ / LOQEn çek (tüm hizmetler)
+      const analizIds = [...new Set(hizmetler.map((h: any) => Number(h.AnalizID)))];
+      const stalRes = await pool.request().query(`
+        SELECT ID,
+          ISNULL(LimitEn, '') AS LimitEn, ISNULL(BirimEn, '') AS BirimEn,
+          ISNULL(LOQ,     '') AS LOQ,     ISNULL(LOQEn,   '') AS LOQEn
+        FROM StokAnalizListesi WHERE ID IN (${analizIds.join(",")})
+      `);
+      const stalMap = new Map<number, { LimitEn: string; BirimEn: string; LOQ: string; LOQEn: string }>();
+      for (const r of stalRes.recordset) {
+        stalMap.set(r.ID, { LimitEn: r.LimitEn, BirimEn: r.BirimEn, LOQ: r.LOQ, LOQEn: r.LOQEn });
+      }
+
+      // NumuneX4'ten paket hizmetler için LimitDegerEn / LimitBirimiEn çek
+      const paketHizmetler = hizmetler.filter((h: any) => h.x3ID);
+      const paketMap = new Map<string, { LimitEn: string; BirimEn: string }>();
+      if (paketHizmetler.length > 0) {
+        const paketCond = paketHizmetler.map((h: any) =>
+          `(ListeID=${Number(h.x3ID)} AND AltAnalizID=${Number(h.AnalizID)})`
+        ).join(" OR ");
+        const x4Res = await pool.request().query(`
+          SELECT ListeID, AltAnalizID,
+            ISNULL(LimitDegerEn,  '') AS LimitEn,
+            ISNULL(LimitBirimiEn, '') AS BirimEn
+          FROM NumuneX4 WHERE ${paketCond}
+        `);
+        for (const r of x4Res.recordset) {
+          paketMap.set(`${r.ListeID}_${r.AltAnalizID}`, { LimitEn: r.LimitEn, BirimEn: r.BirimEn });
+        }
+      }
+
+      const extraCols: string[] = [];
+      if (x1Cols.has("Sonuc"))            extraCols.push("Sonuc");
+      if (x1Cols.has("SonucEn"))          extraCols.push("SonucEn");
+      if (x1Cols.has("Degerlendirme"))    extraCols.push("Degerlendirme");
+      if (x1Cols.has("DegerlendirmeEn"))  extraCols.push("DegerlendirmeEn");
+      if (x1Cols.has("Durum"))            extraCols.push("Durum");
+      if (x1Cols.has("HizmetDurum"))      extraCols.push("HizmetDurum");
+
+      const values = hizmetler.map((h: any) => {
+        const stal = stalMap.get(Number(h.AnalizID)) ?? { LimitEn: "", BirimEn: "", LOQ: "", LOQEn: "" };
+        let limitEn: string;
+        let birimEn: string;
+        if (h.x3ID) {
+          const px = paketMap.get(`${h.x3ID}_${h.AnalizID}`) ?? { LimitEn: "", BirimEn: "" };
+          limitEn = px.LimitEn;
+          birimEn = px.BirimEn;
+        } else {
+          limitEn = stal.LimitEn;
+          birimEn = stal.BirimEn;
+        }
+        const loq   = stal.LOQ;
+        const loqEn = stal.LOQEn;
+        const auto  = computeSonucAuto(h.Limit, loq);
+
+        const extraVals = [
+          ...(x1Cols.has("Sonuc")            ? [q(auto.sonuc)]                      : []),
+          ...(x1Cols.has("SonucEn")          ? [q(auto.sonucEn)]                    : []),
+          ...(x1Cols.has("Degerlendirme")    ? ["'Uygun'"]                           : []),
+          ...(x1Cols.has("DegerlendirmeEn")  ? [q(computeDegerlendirmeEn("Uygun"))] : []),
+          ...(x1Cols.has("Durum")            ? ["'Aktif'"]                           : []),
+          ...(x1Cols.has("HizmetDurum")      ? ["'YeniAnaliz'"]                      : []),
+        ];
+        const base = `${nkrId}, ${h.AnalizID}, ${h.Termin ? `'${h.Termin}'` : "NULL"}, ${h.x3ID ?? "NULL"}, ${q(h.Limit)}, ${q(h.Birim)}, ${q(limitEn)}, ${q(birimEn)}, ${q(loq)}, ${q(loqEn)}`;
+        return `(${base}${extraVals.length > 0 ? ", " + extraVals.join(", ") : ""})`;
+      }).join(", ");
+
+      const colList = `RaporID, AnalizID, Termin, x3ID, Limit, Birim, LimitEn, BirimEn, LOQ, LOQEn${extraCols.length > 0 ? ", " + extraCols.join(", ") : ""}`;
+      await pool.request().query(`INSERT INTO NumuneX1 (${colList}) VALUES ${values}`);
     }
 
     // ── 4. NKR_Formul ────────────────────────────────────────────
