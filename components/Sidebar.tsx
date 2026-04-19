@@ -80,7 +80,7 @@ const navGroups: NavGroup[] = [
     label: "Spektrotek",
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
-        <path d="M10 1a6 6 0 0 0-3.815 10.641 1 1 0 0 1 .315.728V13a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-.631a1 1 0 0 1 .315-.728A6 6 0 0 0 10 1ZM8.5 15a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1h-3Zm.5 2.5a1 1 0 0 0 1 1 1 1 0 0 0 1-1H9Z" />
+        <path fillRule="evenodd" d="M6.75 2a.75.75 0 0 0 0 1.5H7v4.379l-3.68 6.133A2.625 2.625 0 0 0 5.57 18h8.86a2.625 2.625 0 0 0 2.25-3.988L13 7.879V3.5h.25a.75.75 0 0 0 0-1.5h-6.5Zm1.75 6.087V3.5h3v4.587c0 .136.037.27.107.386L13.123 11H6.877l1.516-2.527a.75.75 0 0 0 .107-.386ZM5.43 14.784 6.8 12.5h6.4l1.37 2.284A1.125 1.125 0 0 1 13.605 16.5h-7.21a1.125 1.125 0 0 1-.965-1.716Z" clipRule="evenodd" />
       </svg>
     ),
     items: [
@@ -177,14 +177,6 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
             <path fillRule="evenodd" d="M9.293 2.293a1 1 0 0 1 1.414 0l7 7A1 1 0 0 1 17 11h-1v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6H3a1 1 0 0 1-.707-1.707l7-7Z" clipRule="evenodd" />
           </svg>
           <span>Dashboard</span>
-        </Link>
-
-        {/* Geliştirme Planı — her zaman görünür */}
-        <Link href="/plan" className={`${styles.navLink} ${pathname === "/plan" ? styles.navLinkActive : ""}`}>
-          <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
-            <path fillRule="evenodd" d="M4.5 2A2.5 2.5 0 0 0 2 4.5v11A2.5 2.5 0 0 0 4.5 18h11a2.5 2.5 0 0 0 2.5-2.5V7.621a2.5 2.5 0 0 0-.732-1.768l-2.621-2.621A2.5 2.5 0 0 0 12.379 2H4.5Zm10.06 4.5-2.56-2.56a1 1 0 0 0-.5-.25v2.81h2.81a1 1 0 0 0-.25-.5ZM13.5 10a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 13.5 10Zm-3.75 2a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5a.75.75 0 0 1 .75-.75Zm-3.75-.5a.75.75 0 0 1 .75.75v2a.75.75 0 0 1-1.5 0v-2a.75.75 0 0 1 .75-.75Z" clipRule="evenodd" />
-          </svg>
-          <span>Geliştirme Planı</span>
         </Link>
 
         {/* Gruplar — yetki filtrelidir */}
