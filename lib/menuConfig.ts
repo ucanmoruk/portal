@@ -49,9 +49,10 @@ export const MENU_TREE: MenuItem[] = [
     key: "spektrotek",
     label: "Spektrotek",
     children: [
-      { key: "spektrotek.ozet",       label: "Özet Panel",     href: "/laboratuvar/spektrotek"                },
+      { key: "spektrotek.ozet",       label: "Dashboard",      href: "/laboratuvar/spektrotek"                },
       { key: "spektrotek.talepler",   label: "Talepler",       href: "/laboratuvar/spektrotek/talepler"       },
       { key: "spektrotek.teklifler",  label: "Teklifler",      href: "/laboratuvar/spektrotek/teklifler"      },
+      { key: "spektrotek.teklif-detaylari", label: "Teklif Detayları", href: "/laboratuvar/spektrotek/teklif-detaylari" },
       { key: "spektrotek.musteriler", label: "Müşteriler",     href: "/laboratuvar/spektrotek/musteriler"     },
       { key: "spektrotek.urunler",    label: "Ürünler",        href: "/laboratuvar/spektrotek/urunler"        },
       { key: "spektrotek.faturalar",  label: "Faturalar",      href: "/laboratuvar/spektrotek/faturalar"      },

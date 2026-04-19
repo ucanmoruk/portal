@@ -1,12 +1,13 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Edit, Eye, Banknote } from 'lucide-react';
 import {
-  getRequest, updateRequest, getUsers, getRequestNotes,
+  addRequestNote, getRequest, updateRequest, getUsers, getRequestNotes,
 } from '@/lib/spektrotek/requestActions';
 import { createQuoteFromRequest, getLatestQuoteIdByRequest } from '@/lib/spektrotek/quoteActions';
+import type { RequestNote } from '@/lib/spektrotek/requestActions';
 import type { SktRequest } from '@/lib/spektrotek/types';
 import styles from '../../spektrotek.module.css';
 
@@ -28,7 +29,7 @@ export default function TalepDetay({ params }: { params: Promise<{ id: string }>
   const router = useRouter();
 
   const [request, setRequest]   = useState<SktRequest | null>(null);
-  const [notes, setNotes]       = useState<any[]>([]);
+  const [notes, setNotes]       = useState<RequestNote[]>([]);
   const [users, setUsers]       = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading]   = useState(true);
   const [latestQuoteId, setLatestQuoteId] = useState<string | null>(null);
@@ -39,9 +40,8 @@ export default function TalepDetay({ params }: { params: Promise<{ id: string }>
   const [newNote, setNewNote]     = useState('');
   const [addingNote, setAddingNote] = useState(false);
 
-  useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function load() {
+  const load = useCallback(async () => {
+    await Promise.resolve();
     setLoading(true);
     const [req, usrs, qId] = await Promise.all([
       getRequest(id),
@@ -57,7 +57,9 @@ export default function TalepDetay({ params }: { params: Promise<{ id: string }>
     setUsers(usrs);
     setLatestQuoteId(qId);
     setLoading(false);
-  }
+  }, [id]);
+
+  useEffect(() => { void (async () => { await load(); })(); }, [load]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -71,13 +73,17 @@ export default function TalepDetay({ params }: { params: Promise<{ id: string }>
 
   async function handleAddNote(e: React.FormEvent) {
     e.preventDefault();
-    if (!newNote.trim() || addingNote) return;
+    const note = newNote.trim();
+    if (!request || !note || addingNote) return;
     setAddingNote(true);
-    await updateRequest(id, { status: request?.status });
-    // Write note manually via updateRequest won't work — use direct inline note insert via a lightweight fetch
-    // For now, we append to local state only (no dedicated addNote server action)
-    setNotes(prev => [{ id: Date.now().toString(), note: newNote, date: new Date(), userName: 'Ben' }, ...prev]);
-    setNewNote('');
+    const res = await addRequestNote(request.dbId || id, note);
+    if (res.success) {
+      setNewNote('');
+      const nextNotes = await getRequestNotes(request.dbId || id);
+      setNotes(nextNotes);
+    } else {
+      alert(res.error || 'Not kaydedilemedi.');
+    }
     setAddingNote(false);
   }
 

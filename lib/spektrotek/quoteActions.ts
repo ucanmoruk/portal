@@ -14,6 +14,78 @@ export type QuoteFilter = {
   limit: number;
 };
 
+export type QuoteDetailFilter = {
+  search?: string;
+  page: number;
+  limit: number;
+};
+
+export type QuoteDetailListItem = {
+  id: string;
+  quoteId: string;
+  quoteNo: number | null;
+  rev: number | null;
+  date: Date;
+  customerName: string;
+  productName: string;
+  productCode?: string;
+  quantity: number;
+  unitPrice: number;
+  currency: string | null;
+};
+
+type QuoteRow = {
+  ID: number;
+  TeklifNo: number | null;
+  Rev: number | null;
+  TalepID: number | null;
+  GercekTalepNo?: string | number | null;
+  Tarih: Date;
+  FirmaID: number | null;
+  YetkiliID?: number | null;
+  Toplam?: number | null;
+  GenelDurum?: string | null;
+  ParaBirimi?: string | null;
+  TeklifNot?: string | null;
+  Iskonto?: number | null;
+  FirmaAdres?: string | null;
+  FirmaAdi?: string | null;
+  FirmaEmail?: string | null;
+  YetkiliAdi?: string | null;
+};
+
+type QuoteItemRow = {
+  ID: number;
+  TeklifID: number;
+  StokID: number;
+  StokDurumu?: string | null;
+  Miktar: number;
+  Birim: string;
+  Fiyat: number;
+  KDV: number;
+  Tutar: number;
+  KDVTutar: number;
+  GTutar: number;
+  StokKodu?: string | null;
+  StokAdi?: string | null;
+  Marka?: string | null;
+};
+
+type QuoteDetailRow = {
+  ID: number;
+  TeklifID: number;
+  TeklifNo: number | null;
+  Rev: number | null;
+  Tarih: Date;
+  FirmaAdi?: string | null;
+  StokAdi?: string | null;
+  StokKodu?: string | null;
+  StokDurumu?: string | null;
+  Miktar?: number | null;
+  Fiyat?: number | null;
+  ParaBirimi?: string | null;
+};
+
 export async function getQuotes(filter: QuoteFilter = { page: 1, limit: 15 }) {
   try {
     const pool = await poolPromise;
@@ -56,23 +128,23 @@ export async function getQuotes(filter: QuoteFilter = { page: 1, limit: 15 }) {
       `),
     ]);
 
-    const quotes: SktQuote[] = data.recordset.map((r: any) => ({
+    const quotes: SktQuote[] = (data.recordset as QuoteRow[]).map((r) => ({
       id: r.ID.toString(),
       quoteNo: r.TeklifNo,
       rev: r.Rev,
       requestId: r.TalepID,
-      requestDisplayNo: r.GercekTalepNo,
+      requestDisplayNo: r.GercekTalepNo ?? undefined,
       date: r.Tarih,
       customerId: r.FirmaID,
       customerName: r.FirmaAdi || '-',
       customerAddress: r.FirmaAdres || '',
       salesPersonId: r.YetkiliID,
       salesPersonName: r.YetkiliAdi || '-',
-      amount: r.Toplam,
+      amount: r.Toplam ?? null,
       status: r.GenelDurum || 'Yeni Teklif',
-      currency: r.ParaBirimi,
-      notes: r.TeklifNot,
-      discount: r.Iskonto,
+      currency: r.ParaBirimi ?? null,
+      notes: r.TeklifNot ?? undefined,
+      discount: r.Iskonto ?? null,
     }));
 
     return { quotes, totalCount: count.recordset[0].total as number };
@@ -97,16 +169,16 @@ export async function getQuote(id: string): Promise<SktQuote | null> {
       WHERE Q.ID = @id
     `);
     if (!result.recordset.length) return null;
-    const r = result.recordset[0];
+    const r = result.recordset[0] as QuoteRow;
     return {
       id: r.ID.toString(), quoteNo: r.TeklifNo, rev: r.Rev,
-      requestId: r.TalepID, requestDisplayNo: r.GercekTalepNo,
+      requestId: r.TalepID, requestDisplayNo: r.GercekTalepNo ?? undefined,
       date: r.Tarih, customerId: r.FirmaID,
       customerName: r.FirmaAdi || '-', customerAddress: r.FirmaAdres || '',
       customerEmail: r.FirmaEmail || '',
       salesPersonId: r.YetkiliID, salesPersonName: r.YetkiliAdi || '-',
-      amount: r.Toplam, status: r.GenelDurum || 'Yeni Teklif',
-      currency: r.ParaBirimi, notes: r.TeklifNot, discount: r.Iskonto,
+      amount: r.Toplam ?? null, status: r.GenelDurum || 'Yeni Teklif',
+      currency: r.ParaBirimi ?? null, notes: r.TeklifNot ?? undefined, discount: r.Iskonto ?? null,
     };
   } catch (e) {
     console.error('getQuote error:', e);
@@ -125,16 +197,85 @@ export async function getQuoteItems(quoteId: string): Promise<SktQuoteItem[]> {
       LEFT JOIN SStokListe S WITH (NOLOCK) ON D.StokID = S.ID
       WHERE D.TeklifID = @quoteId
     `);
-    return result.recordset.map((r: any) => ({
+    return (result.recordset as QuoteItemRow[]).map((r) => ({
       id: r.ID.toString(), quoteId: r.TeklifID.toString(),
-      productId: r.StokID, productCode: r.StokKodu, productName: r.StokAdi,
+      productId: r.StokID, productCode: r.StokKodu ?? undefined, productName: r.StokAdi ?? undefined,
       description: r.StokDurumu || r.StokAdi || '',
-      brand: r.Marka, quantity: r.Miktar, unit: r.Birim,
+      brand: r.Marka ?? undefined, quantity: r.Miktar, unit: r.Birim,
       price: r.Fiyat, vatRate: r.KDV, amount: r.Tutar,
       vatAmount: r.KDVTutar, totalAmount: r.GTutar,
     }));
   } catch {
     return [];
+  }
+}
+
+export async function getQuoteDetails(filter: QuoteDetailFilter = { page: 1, limit: 15 }) {
+  try {
+    const pool = await poolPromise;
+    let where = "Q.Durum = 'Aktif'";
+
+    const req = pool.request();
+    const countReq = pool.request();
+
+    if (filter.search) {
+      req.input('search', `%${filter.search}%`);
+      countReq.input('search', `%${filter.search}%`);
+      where += ` AND (
+        CAST(Q.TeklifNo AS NVARCHAR) LIKE @search
+        OR C.Ad LIKE @search
+        OR S.Ad LIKE @search
+        OR S.Kod LIKE @search
+        OR D.StokDurumu LIKE @search
+      )`;
+    }
+
+    const offset = (filter.page - 1) * filter.limit;
+    req.input('offset', offset).input('limit', filter.limit);
+
+    const [data, count] = await Promise.all([
+      req.query(`
+        SELECT
+          D.ID, D.TeklifID, Q.TeklifNo, Q.Rev, Q.Tarih, Q.ParaBirimi,
+          C.Ad as FirmaAdi,
+          S.Ad as StokAdi, S.Kod as StokKodu,
+          D.StokDurumu, D.Miktar, D.Fiyat
+        FROM STeklifDetay D WITH (NOLOCK)
+        INNER JOIN STeklifListe Q WITH (NOLOCK) ON D.TeklifID = Q.ID
+        LEFT JOIN RootTedarikci C WITH (NOLOCK) ON Q.FirmaID = C.ID
+        LEFT JOIN SStokListe S WITH (NOLOCK) ON D.StokID = S.ID
+        WHERE ${where}
+        ORDER BY Q.Tarih DESC, Q.ID DESC, D.ID ASC
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      `),
+      countReq.query(`
+        SELECT COUNT(*) as total
+        FROM STeklifDetay D WITH (NOLOCK)
+        INNER JOIN STeklifListe Q WITH (NOLOCK) ON D.TeklifID = Q.ID
+        LEFT JOIN RootTedarikci C WITH (NOLOCK) ON Q.FirmaID = C.ID
+        LEFT JOIN SStokListe S WITH (NOLOCK) ON D.StokID = S.ID
+        WHERE ${where}
+      `),
+    ]);
+
+    const details: QuoteDetailListItem[] = (data.recordset as QuoteDetailRow[]).map((r) => ({
+      id: r.ID.toString(),
+      quoteId: r.TeklifID.toString(),
+      quoteNo: r.TeklifNo,
+      rev: r.Rev,
+      date: r.Tarih,
+      customerName: r.FirmaAdi || '-',
+      productName: r.StokAdi || r.StokDurumu || '-',
+      productCode: r.StokKodu ?? undefined,
+      quantity: r.Miktar ?? 0,
+      unitPrice: r.Fiyat ?? 0,
+      currency: r.ParaBirimi ?? null,
+    }));
+
+    return { details, totalCount: count.recordset[0].total as number };
+  } catch (e) {
+    console.error('getQuoteDetails error:', e);
+    return { details: [], totalCount: 0 };
   }
 }
 

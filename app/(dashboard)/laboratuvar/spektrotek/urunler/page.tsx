@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Search, Plus, Edit, Trash2 } from 'lucide-react';
 import { getProducts, addProduct, updateProduct, deleteProduct, getProductMetadata } from '@/lib/spektrotek/productActions';
 import type { SktProduct } from '@/lib/spektrotek/types';
@@ -32,15 +32,16 @@ export default function SpektrotekUrunler() {
     getProductMetadata().then(m => { setCategories(m.categories); setBrands(m.brands); });
   }, []);
 
-  useEffect(() => { load(); }, [debouncedSearch, categoryFilter, brandFilter, page]);
-
-  async function load() {
+  const load = useCallback(async () => {
+    await Promise.resolve();
     setLoading(true);
     const res = await getProducts({ page, limit, search: debouncedSearch, category: categoryFilter || undefined, brand: brandFilter || undefined });
     setProducts(res.products);
     setTotal(res.totalCount);
     setLoading(false);
-  }
+  }, [brandFilter, categoryFilter, debouncedSearch, page]);
+
+  useEffect(() => { void (async () => { await load(); })(); }, [load]);
 
   function openCreate() {
     setEditingId(null);

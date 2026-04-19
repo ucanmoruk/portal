@@ -10,6 +10,21 @@ export type CustomerFilter = {
   limit: number;
 };
 
+type CustomerRow = {
+  ID: number;
+  Ad?: string | null;
+  Tur2?: string | null;
+  Yetkili?: string | null;
+  Telefon?: string | null;
+  Email?: string | null;
+  Web?: string | null;
+  Adres?: string | null;
+  VergiDairesi?: string | null;
+  VergiNo?: string | null;
+  Notlar?: string | null;
+  Durum?: string | null;
+};
+
 export async function getCustomers(filter: CustomerFilter = { page: 1, limit: 15, status: 'Active' }) {
   try {
     const pool = await poolPromise;
@@ -52,7 +67,7 @@ export async function getCustomers(filter: CustomerFilter = { page: 1, limit: 15
       countReq.query(`SELECT COUNT(*) as total FROM RootTedarikci WITH (NOLOCK) WHERE ${where}`),
     ]);
 
-    const customers: SktCustomer[] = data.recordset.map((r: any) => ({
+    const customers: SktCustomer[] = (data.recordset as CustomerRow[]).map((r) => ({
       id: r.ID.toString(),
       name: r.Ad || 'İsimsiz',
       type: r.Tur2 || 'Tedarikçi',

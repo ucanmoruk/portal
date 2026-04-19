@@ -5,6 +5,8 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { SktInvoice } from '@/lib/spektrotek/types';
 import styles from '../spektrotek.module.css';
 
+const INVOICE_STATUSES: SktInvoice['status'][] = ['Ödendi', 'Bekliyor', 'Gecikmiş'];
+
 const MOCK: SktInvoice[] = [
   { id: '1', customerId: '', quoteId: '', amount: 12500, currency: 'USD', dateIssued: '2025-01-10', dueDate: '2025-02-10', status: 'Ödendi' },
   { id: '2', customerId: '', quoteId: '', amount: 8200, currency: 'EUR', dateIssued: '2025-02-15', dueDate: '2025-03-15', status: 'Bekliyor' },
@@ -113,8 +115,8 @@ export default function SpektrotekFaturalar() {
               </div>
               <div className={`${styles.formGroup} ${styles.fullSpan}`}>
                 <label className={styles.formLabel}>Durum</label>
-                <select className={styles.formSelect} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))}>
-                  <option>Ödendi</option><option>Bekliyor</option><option>Gecikmiş</option>
+                <select className={styles.formSelect} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as SktInvoice['status'] }))}>
+                  {INVOICE_STATUSES.map(status => <option key={status}>{status}</option>)}
                 </select>
               </div>
               <div className={styles.formActions}>

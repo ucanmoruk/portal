@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Edit, Copy, Printer } from 'lucide-react';
 import { getQuotes, updateQuoteStatus, createRevision } from '@/lib/spektrotek/quoteActions';
@@ -36,16 +36,16 @@ export default function SpektrotekTeklifler() {
     return () => clearTimeout(t);
   }, [search]);
 
-  useEffect(() => { setPage(1); }, [statusFilter]);
-  useEffect(() => { load(); }, [page, debouncedSearch, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function load() {
+  const load = useCallback(async () => {
+    await Promise.resolve();
     setLoading(true);
     const data = await getQuotes({ page, limit, search: debouncedSearch, status: statusFilter || undefined });
     setQuotes(data.quotes);
     setTotal(data.totalCount);
     setLoading(false);
-  }
+  }, [debouncedSearch, page, statusFilter]);
+
+  useEffect(() => { void (async () => { await load(); })(); }, [load]);
 
   async function handleStatusChange(id: string, newStatus: string) {
     setQuotes(prev => prev.map(q => q.id === id ? { ...q, status: newStatus } : q));

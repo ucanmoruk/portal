@@ -1,10 +1,10 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Save, Printer, Copy, Plus, Trash2, Search } from 'lucide-react';
 import {
-  getQuote, getQuoteItems, saveQuote, createRevision, updateQuoteStatus,
+  getQuote, getQuoteItems, saveQuote, createRevision,
 } from '@/lib/spektrotek/quoteActions';
 import { getProducts } from '@/lib/spektrotek/productActions';
 import { getExchangeRates } from '@/lib/spektrotek/exchangeRates';
@@ -12,12 +12,17 @@ import type { SktQuote, SktQuoteItem, SktProduct } from '@/lib/spektrotek/types'
 import styles from '../../spektrotek.module.css';
 
 interface ExtendedItem extends SktQuoteItem { note?: string }
+type ItemValue = ExtendedItem[keyof ExtendedItem];
 
 export default function TeklifDetay({ params }: { params: Promise<{ id: string }> }) {
   const { id: quoteId } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
   const isPrint = searchParams.get('print') === 'true';
+  const returnTo = searchParams.get('returnTo');
+  const backHref = returnTo?.startsWith('/laboratuvar/spektrotek/teklif-detaylari')
+    ? returnTo
+    : '/laboratuvar/spektrotek/teklifler';
 
   const [quote, setQuote]   = useState<SktQuote | null>(null);
   const [items, setItems]   = useState<ExtendedItem[]>([]);
@@ -36,9 +41,8 @@ export default function TeklifDetay({ params }: { params: Promise<{ id: string }
   // discount
   const [discountAmt, setDiscountAmt] = useState(0);
 
-  useEffect(() => { loadData(); }, [quoteId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
+    await Promise.resolve();
     setLoading(true);
     const [q, i] = await Promise.all([getQuote(quoteId), getQuoteItems(quoteId)]);
     setQuote(q);
@@ -50,7 +54,9 @@ export default function TeklifDetay({ params }: { params: Promise<{ id: string }
     if (q?.discount) setDiscountAmt(q.discount);
     getExchangeRates().then(setRates).catch(() => {});
     setLoading(false);
-  }
+  }, [quoteId]);
+
+  useEffect(() => { void (async () => { await loadData(); })(); }, [loadData]);
 
   async function openProductModal() {
     setProdModalOpen(true);
@@ -62,8 +68,7 @@ export default function TeklifDetay({ params }: { params: Promise<{ id: string }
   }
 
   function addProduct(p: SktProduct) {
-    const item: ExtendedItem = {
-      id: 'tmp-' + Date.now(),
+    const itemBase: Omit<ExtendedItem, 'id'> = {
       quoteId,
       productId: parseInt(p.id),
       productCode: p.code,
@@ -79,11 +84,11 @@ export default function TeklifDetay({ params }: { params: Promise<{ id: string }
       totalAmount: p.sellPrice * (1 + (p.vat ?? 20) / 100),
       note: '',
     };
-    setItems(prev => [...prev, item]);
+    setItems(prev => [...prev, { ...itemBase, id: `tmp-${prev.length + 1}` }]);
     setProdModalOpen(false);
   }
 
-  function changeItem(idx: number, field: keyof ExtendedItem, val: any) {
+  function changeItem(idx: number, field: keyof ExtendedItem, val: ItemValue) {
     const next = [...items];
     const it = { ...next[idx], [field]: val };
     if (['quantity', 'price', 'vatRate'].includes(field as string)) {
@@ -137,77 +142,174 @@ export default function TeklifDetay({ params }: { params: Promise<{ id: string }
 
   // ── Print view ────────────────────────────────────────────────────────────
   if (isPrint) {
+    const quoteDate = quote.date ? new Date(quote.date) : new Date();
+    const validUntil = new Date(quoteDate);
+    validUntil.setDate(validUntil.getDate() + 30);
+    const terms = quote.notes?.trim() || '1. Ödeme yöntemimiz siparişte peşindir.\n2. Fatura tutarı, fatura tarihindeki TCMB döviz satış kurundan hesaplanır.\n3. Teslim süresi stok durumuna göre ayrıca teyit edilir.';
+
     return (
-      <div style={{ width: '210mm', minHeight: '297mm', margin: '0 auto', background: 'white', fontFamily: 'system-ui,sans-serif', fontSize: 11, color: '#2C3E50', padding: '40px 50px', boxSizing: 'border-box' }}>
-        <style>{`@media print { .no-print { display: none !important; } }`}</style>
-        <div style={{ height: 8, background: '#2C3E50', margin: '-40px -50px 32px' }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 32 }}>
-          <div>
-            <div style={{ fontSize: 10, color: '#64748b', lineHeight: 1.6 }}>Spektrotek Lab. Cihazları Paz. Pr. ve Dan. A.Ş.<br />Atatürk Mah. Hadımköy Yolu Cad. No 10/7, Esenyurt / İstanbul<br />info@spektrotek.com</div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Fiyat Teklifi</div>
-            <div style={{ fontSize: 10, lineHeight: 1.8 }}>
-              <div><b>Tarih:</b> {new Date(quote.date).toLocaleDateString('tr-TR')}</div>
-              <div><b>Teklif No:</b> #{quote.quoteNo}/{quote.rev ?? 0}</div>
-              <div><b>Sunan:</b> {quote.salesPersonName}</div>
-              <div><b>Geçerlilik:</b> 30 Gün</div>
+      <div style={{ minHeight: '100vh', background: '#eef2f7', padding: '24px 0', boxSizing: 'border-box' }}>
+        <style>{`
+          @page { size: A4; margin: 12mm; }
+          @media print {
+            html, body { background: #fff !important; }
+            .no-print { display: none !important; }
+            .print-shell { width: auto !important; min-height: auto !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
+            .print-bg { background: #fff !important; padding: 0 !important; }
+            thead { display: table-header-group; }
+            tr, .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+          }
+        `}</style>
+        <div className="print-bg" style={{ width: '210mm', minHeight: '297mm', margin: '0 auto', background: 'white', color: '#172033', fontFamily: 'Arial, Helvetica, sans-serif', fontSize: 11, lineHeight: 1.45, boxShadow: '0 18px 60px rgba(15, 23, 42, 0.16)', boxSizing: 'border-box' }}>
+          <div className="print-shell" style={{ minHeight: '297mm', padding: '18mm 16mm 14mm', boxSizing: 'border-box', borderTop: '8px solid #12324a' }}>
+            <header style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 24, alignItems: 'start', marginBottom: 24 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 6, background: '#12324a', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 17, fontWeight: 800, letterSpacing: 0 }}>
+                    ST
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#12324a', letterSpacing: 0 }}>Spektrotek</div>
+                    <div style={{ fontSize: 10, color: '#64748b' }}>Laboratuvar Cihazları ve Teknik Çözümler</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.65 }}>
+                  Spektrotek Lab. Cihazları Paz. Pr. ve Dan. A.Ş.<br />
+                  Atatürk Mah. Hadımköy Yolu Cad. No 10/7, Esenyurt / İstanbul<br />
+                  info@spektrotek.com
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: '#12324a', marginBottom: 10 }}>Fiyat Teklifi</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+                  <tbody>
+                    {[
+                      ['Teklif No', `#${quote.quoteNo}/${quote.rev ?? 0}`],
+                      ['Tarih', quoteDate.toLocaleDateString('tr-TR')],
+                      ['Geçerlilik', validUntil.toLocaleDateString('tr-TR')],
+                      ['Sunan', quote.salesPersonName || '-'],
+                    ].map(([label, value]) => (
+                      <tr key={label}>
+                        <td style={{ padding: '3px 0', color: '#64748b' }}>{label}</td>
+                        <td style={{ padding: '3px 0', fontWeight: 700, color: '#172033' }}>{value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </header>
+
+            <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 22 }}>
+              <div className="avoid-break" style={{ border: '1px solid #d8e0ea', borderRadius: 6, padding: 12, minHeight: 88 }}>
+                <div style={{ color: '#64748b', fontSize: 9, textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Müşteri</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#12324a', marginBottom: 4 }}>{quote.customerName || '-'}</div>
+                <div style={{ color: '#475569', whiteSpace: 'pre-wrap' }}>{quote.customerAddress || '-'}</div>
+                {quote.customerEmail && <div style={{ color: '#475569', marginTop: 4 }}>{quote.customerEmail}</div>}
+              </div>
+
+              <div className="avoid-break" style={{ border: '1px solid #d8e0ea', borderRadius: 6, padding: 12, minHeight: 88 }}>
+                <div style={{ color: '#64748b', fontSize: 9, textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>Teklif Özeti</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px' }}>
+                  <span style={{ color: '#64748b' }}>Para Birimi</span><b>{cur}</b>
+                  <span style={{ color: '#64748b' }}>Durum</span><b>{quote.status || '-'}</b>
+                  <span style={{ color: '#64748b' }}>Talep No</span><b>{quote.requestDisplayNo ? `#${quote.requestDisplayNo}` : '-'}</b>
+                  <span style={{ color: '#64748b' }}>Kalem Sayısı</span><b>{items.length}</b>
+                </div>
+              </div>
+            </section>
+
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18, fontSize: 10 }}>
+              <thead>
+                <tr style={{ background: '#12324a', color: 'white' }}>
+                  {[
+                    ['No', 'left'],
+                    ['Kod', 'left'],
+                    ['Açıklama', 'left'],
+                    ['Miktar', 'center'],
+                    ['B. Fiyat', 'right'],
+                    ['KDV', 'right'],
+                    ['Toplam', 'right'],
+                  ].map(([label, align]) => (
+                    <th key={label} style={{ padding: '8px 8px', textAlign: align as React.CSSProperties['textAlign'], fontWeight: 800, borderRight: '1px solid rgba(255,255,255,0.18)' }}>{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, i) => (
+                  <tr key={it.id || i} className="avoid-break" style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '8px', color: '#64748b', verticalAlign: 'top' }}>{i + 1}</td>
+                    <td style={{ padding: '8px', fontFamily: 'monospace', color: '#475569', verticalAlign: 'top' }}>{it.productCode || '-'}</td>
+                    <td style={{ padding: '8px', verticalAlign: 'top' }}>
+                      <div style={{ fontWeight: 700, color: '#172033' }}>{it.productName || it.description || '-'}</div>
+                      {it.description && it.description !== it.productName && <div style={{ color: '#475569', marginTop: 2 }}>{it.description}</div>}
+                      {it.note && <div style={{ color: '#b45309', fontSize: 9, marginTop: 4 }}>Not: {it.note}</div>}
+                    </td>
+                    <td style={{ padding: '8px', textAlign: 'center', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{it.quantity} {it.unit}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{fmt(it.price)} {cur}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>%{it.vatRate ?? 0}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', verticalAlign: 'top', fontWeight: 800, whiteSpace: 'nowrap' }}>{fmt(it.totalAmount || it.amount)} {cur}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <section className="avoid-break" style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 18, alignItems: 'start', marginBottom: 22 }}>
+              <div style={{ border: '1px solid #d8e0ea', borderRadius: 6, padding: 12 }}>
+                <div style={{ color: '#12324a', fontWeight: 800, marginBottom: 6 }}>Teklif Şartları</div>
+                <div style={{ color: '#475569', whiteSpace: 'pre-wrap', fontSize: 10 }}>{terms}</div>
+                {rates && cur !== 'TRY' && (
+                  <div style={{ marginTop: 10, color: '#64748b', fontSize: 9 }}>
+                    Bilgi amaçlı kur: USD {rates.USD.toFixed(4)} TL · EUR {rates.EUR.toFixed(4)} TL · GBP {rates.GBP.toFixed(4)} TL
+                  </div>
+                )}
+              </div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '6px 8px', color: '#64748b', textAlign: 'right' }}>Ara Toplam</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700 }}>{fmt(subTotal)} {cur}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '6px 8px', color: '#64748b', textAlign: 'right' }}>KDV</td>
+                    <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700 }}>{fmt(totalVat)} {cur}</td>
+                  </tr>
+                  {discountAmt > 0 && (
+                    <tr>
+                      <td style={{ padding: '6px 8px', color: '#b91c1c', textAlign: 'right' }}>İskonto</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', color: '#b91c1c', fontWeight: 700 }}>-{fmt(discountAmt)} {cur}</td>
+                    </tr>
+                  )}
+                  <tr style={{ borderTop: '2px solid #12324a' }}>
+                    <td style={{ padding: '10px 8px', fontWeight: 800, textAlign: 'right', color: '#12324a' }}>Genel Toplam</td>
+                    <td style={{ padding: '10px 8px', fontWeight: 900, textAlign: 'right', fontSize: 15, color: '#12324a' }}>{fmt(grandTotal)} {cur}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <footer className="avoid-break" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginTop: 24, paddingTop: 18, borderTop: '1px solid #d8e0ea' }}>
+              <div style={{ color: '#64748b', fontSize: 9 }}>
+                Bu teklif, belirtilen geçerlilik tarihi sonuna kadar geçerlidir. Sipariş onayı sonrasında teslim ve ödeme koşulları nihai olarak teyit edilir.
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ height: 34 }} />
+                <div style={{ display: 'inline-block', minWidth: 180, borderTop: '1px solid #94a3b8', paddingTop: 6, color: '#12324a', fontWeight: 800 }}>
+                  {quote.salesPersonName || 'Yetkili'}
+                </div>
+              </div>
+            </footer>
+
+            <div className="no-print" style={{ position: 'fixed', bottom: 24, right: 24, display: 'flex', gap: 8 }}>
+              <button onClick={() => window.close()} style={{ padding: '10px 16px', background: '#fff', color: '#172033', border: '1px solid #cbd5e1', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                Kapat
+              </button>
+              <button onClick={() => window.print()} style={{ padding: '10px 20px', background: '#0f6fbf', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 800 }}>
+                Yazdır / PDF
+              </button>
             </div>
           </div>
-        </div>
-        <div style={{ borderTop: '2px solid #e2e8f0', paddingTop: 12, marginBottom: 24 }}>
-          <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Sayın</div>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>{quote.customerName}</div>
-          <div style={{ fontSize: 10, color: '#64748b' }}>{quote.customerAddress}</div>
-        </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 24 }}>
-          <thead>
-            <tr style={{ background: '#2C3E50', color: 'white' }}>
-              {['No','Kod','Açıklama','Miktar','B.Fiyat','Toplam'].map(h => (
-                <th key={h} style={{ padding: '8px 10px', textAlign: h === 'Toplam' || h === 'B.Fiyat' ? 'right' : 'left', fontWeight: 700 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((it, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={{ padding: '8px 10px' }}>{i + 1}</td>
-                <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontSize: 10, color: '#64748b' }}>{it.productCode || '—'}</td>
-                <td style={{ padding: '8px 10px' }}>
-                  <div style={{ fontWeight: 600 }}>{it.productName}</div>
-                  {it.description && it.description !== it.productName && <div>{it.description}</div>}
-                  {it.note && <div style={{ color: '#d76527', fontStyle: 'italic', fontSize: 10 }}>Not: {it.note}</div>}
-                </td>
-                <td style={{ padding: '8px 10px', textAlign: 'center' }}>{it.quantity} {it.unit}</td>
-                <td style={{ padding: '8px 10px', textAlign: 'right' }}>{fmt(it.price)} {cur}</td>
-                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{fmt(it.amount)} {cur}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <table style={{ width: 280, fontSize: 11, borderCollapse: 'collapse' }}>
-            <tbody>
-              <tr><td style={{ padding: '4px 8px', color: '#64748b', textAlign: 'right' }}>Ara Toplam:</td><td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600 }}>{fmt(subTotal)} {cur}</td></tr>
-              {discountAmt > 0 && <tr><td style={{ padding: '4px 8px', color: '#ef4444', textAlign: 'right' }}>İskonto:</td><td style={{ padding: '4px 8px', textAlign: 'right', color: '#ef4444' }}>-{fmt(discountAmt)} {cur}</td></tr>}
-              <tr><td style={{ padding: '4px 8px', color: '#64748b', textAlign: 'right' }}>KDV:</td><td style={{ padding: '4px 8px', textAlign: 'right', color: '#64748b' }}>{fmt(totalVat)} {cur}</td></tr>
-              <tr style={{ borderTop: '2px solid #2C3E50' }}>
-                <td style={{ padding: '8px', fontWeight: 700, textAlign: 'right', fontSize: 12 }}>Genel Toplam:</td>
-                <td style={{ padding: '8px', fontWeight: 800, textAlign: 'right', fontSize: 14 }}>{fmt(grandTotal)} {cur}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        {quote.notes && (
-          <div style={{ marginTop: 24, fontSize: 10, color: '#64748b', borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
-            <b style={{ color: '#2C3E50', display: 'block', marginBottom: 4 }}>TEKLİF ŞARTLARI</b>
-            <div style={{ whiteSpace: 'pre-wrap' }}>{quote.notes}</div>
-          </div>
-        )}
-        <div className="no-print" style={{ position: 'fixed', bottom: 24, right: 24 }}>
-          <button onClick={() => window.print()} style={{ padding: '10px 20px', background: '#0071e3', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
-            Yazdır / PDF
-          </button>
         </div>
       </div>
     );
@@ -219,7 +321,7 @@ export default function TeklifDetay({ params }: { params: Promise<{ id: string }
       {/* Header */}
       <div className={styles.pageHeader}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button className={styles.btn} onClick={() => router.push('/laboratuvar/spektrotek/teklifler')}>
+          <button className={styles.btn} onClick={() => router.push(backHref)}>
             <ArrowLeft size={14} />
           </button>
           <div>

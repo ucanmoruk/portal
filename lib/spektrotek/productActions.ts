@@ -11,6 +11,24 @@ export type ProductFilter = {
   limit: number;
 };
 
+type ProductRow = {
+  ID: number;
+  Ad?: string | null;
+  Kategori?: string | null;
+  Kod?: string | null;
+  Marka?: string | null;
+  Stok?: number | null;
+  Birim?: string | null;
+  Satis?: number | null;
+  ParaBirimi?: string | null;
+  KDV?: number | null;
+};
+
+type ProductMetadataRecordsets = [
+  { Kategori?: string | null }[],
+  { Marka?: string | null }[],
+];
+
 export async function getProducts(filter: ProductFilter = { page: 1, limit: 15 }) {
   try {
     const pool = await poolPromise;
@@ -45,7 +63,7 @@ export async function getProducts(filter: ProductFilter = { page: 1, limit: 15 }
       countReq.query(`SELECT COUNT(*) as total FROM SStokListe WITH (NOLOCK) WHERE ${where}`),
     ]);
 
-    const products: SktProduct[] = data.recordset.map((r: any) => ({
+    const products: SktProduct[] = (data.recordset as ProductRow[]).map((r) => ({
       id: r.ID.toString(),
       name: r.Ad || 'İsimsiz',
       category: r.Kategori || '',
@@ -55,7 +73,7 @@ export async function getProducts(filter: ProductFilter = { page: 1, limit: 15 }
       unit: r.Birim || 'Adet',
       sellPrice: r.Satis || 0,
       currency: r.ParaBirimi || 'USD',
-      vat: r.KDV,
+      vat: r.KDV ?? null,
     }));
 
     return { products, totalCount: count.recordset[0].total as number };
@@ -129,8 +147,9 @@ export async function getProductMetadata() {
       SELECT DISTINCT Kategori FROM SStokListe WITH (NOLOCK) WHERE Durum='Aktif' ORDER BY Kategori;
       SELECT DISTINCT Marka FROM SStokListe WITH (NOLOCK) WHERE Durum='Aktif' ORDER BY Marka;
     `);
-    const categories = (result.recordsets as any)[0].map((r: any) => r.Kategori).filter(Boolean);
-    const brands = (result.recordsets as any)[1].map((r: any) => r.Marka).filter(Boolean);
+    const [categoryRows, brandRows] = result.recordsets as unknown as ProductMetadataRecordsets;
+    const categories = categoryRows.map((r) => r.Kategori).filter((v): v is string => Boolean(v));
+    const brands = brandRows.map((r) => r.Marka).filter((v): v is string => Boolean(v));
     return { categories, brands };
   } catch (e) {
     console.error('getProductMetadata error:', e);

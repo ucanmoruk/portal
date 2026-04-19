@@ -14,6 +14,46 @@ export type RequestFilter = {
   limit: number;
 };
 
+type RequestRow = {
+  id: string | number;
+  dbId?: number | null;
+  priority?: string | null;
+  dateCreated?: Date | string | null;
+  contactType?: string | null;
+  customerId?: number | null;
+  customerName?: string | null;
+  category?: string | null;
+  distributor?: string | null;
+  subject?: string | null;
+  description?: string | null;
+  assigneeId?: number | null;
+  assigneeName?: string | null;
+  assigneeSurname?: string | null;
+  status?: string | null;
+};
+
+type UserRow = {
+  ID: number;
+  Ad?: string | null;
+  Soyad?: string | null;
+};
+
+export type RequestNote = {
+  id?: string;
+  note: string;
+  date: Date | string;
+  userId?: string;
+  userName: string;
+};
+
+type RequestNoteRow = {
+  ID?: number | null;
+  note?: string | null;
+  date?: Date | string | null;
+  userId?: number | null;
+  userName?: string | null;
+};
+
 export async function getRequests(filter: RequestFilter = { page: 1, limit: 15 }) {
   try {
     const pool = await poolPromise;
@@ -69,7 +109,7 @@ export async function getRequests(filter: RequestFilter = { page: 1, limit: 15 }
       `),
     ]);
 
-    const requests: SktRequest[] = data.recordset.map((r: any) => ({
+    const requests: SktRequest[] = (data.recordset as RequestRow[]).map((r) => ({
       id: r.id,
       dbId: r.dbId?.toString(),
       priority: r.priority || 'Orta',
@@ -140,7 +180,7 @@ export async function getUsers() {
     const result = await pool.request().query(`
       SELECT ID, Ad, Soyad FROM RootKullanici WITH (NOLOCK) WHERE Durum='Aktif' ORDER BY Ad ASC
     `);
-    return result.recordset.map((r: any) => ({ id: r.ID.toString(), name: `${r.Ad} ${r.Soyad}` }));
+    return (result.recordset as UserRow[]).map((r) => ({ id: r.ID.toString(), name: `${r.Ad || ''} ${r.Soyad || ''}`.trim() }));
   } catch {
     return [];
   }
@@ -220,7 +260,7 @@ export async function updateRequest(id: string, data: Partial<SktRequest>) {
   }
 }
 
-export async function getRequestNotes(requestId: string) {
+export async function getRequestNotes(requestId: string): Promise<RequestNote[]> {
   try {
     const pool = await poolPromise;
     const result = await pool.request()
@@ -232,14 +272,37 @@ export async function getRequestNotes(requestId: string) {
         LEFT JOIN RootKullanici U WITH (NOLOCK) ON N.YetkiliID = U.ID
         WHERE N.TalepID = @requestId ORDER BY N.Tarih DESC
       `);
-    return result.recordset.map((r: any) => ({
+    return (result.recordset as RequestNoteRow[]).map((r) => ({
       id: r.ID?.toString(),
       note: r.note || '',
-      date: r.date,
+      date: r.date || '',
       userId: r.userId?.toString(),
       userName: r.userName || 'Bilinmiyor',
     }));
   } catch {
     return [];
+  }
+}
+
+export async function addRequestNote(requestId: string, note: string) {
+  const trimmedNote = note.trim();
+  if (!trimmedNote) return { success: false, error: 'Not boş olamaz.' };
+
+  try {
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.userId ? parseInt(session.user.userId, 10) : 1;
+    const pool = await poolPromise;
+
+    await pool.request()
+      .input('TalepID', requestId)
+      .input('YetkiliID', userId)
+      .input('Tarih', new Date())
+      .input('Notlar', trimmedNote)
+      .query(`INSERT INTO STalepNot (TalepID, YetkiliID, Tarih, Notlar) VALUES (@TalepID, @YetkiliID, @Tarih, @Notlar)`);
+
+    return { success: true };
+  } catch (e) {
+    console.error('addRequestNote error:', e);
+    return { success: false, error: 'Not kaydedilemedi.' };
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Search, Plus, Edit, Trash2, Download, Filter } from 'lucide-react';
 import {
   getCustomers, addCustomer, updateCustomer, deleteCustomer,
@@ -27,15 +27,16 @@ export default function SpektrotekMusteriler() {
     return () => clearTimeout(t);
   }, [search]);
 
-  useEffect(() => { load(); }, [debouncedSearch, showPassive, page]);
-
-  async function load() {
+  const load = useCallback(async () => {
+    await Promise.resolve();
     setLoading(true);
     const res = await getCustomers({ page, limit, search: debouncedSearch, status: showPassive ? 'Passive' : 'Active' });
     setCustomers(res.customers);
     setTotal(res.totalCount);
     setLoading(false);
-  }
+  }, [debouncedSearch, page, showPassive]);
+
+  useEffect(() => { void (async () => { await load(); })(); }, [load]);
 
   function openCreate() {
     setEditingId(null);

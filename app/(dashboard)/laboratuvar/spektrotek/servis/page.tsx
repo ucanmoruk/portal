@@ -5,6 +5,9 @@ import { Plus, Edit, Trash2 } from 'lucide-react';
 import type { SktTicket } from '@/lib/spektrotek/types';
 import styles from '../spektrotek.module.css';
 
+const TICKET_PRIORITIES: SktTicket['priority'][] = ['Düşük', 'Orta', 'Yüksek', 'Kritik'];
+const TICKET_STATUSES: SktTicket['status'][] = ['Açık', 'İşlemde', 'Parça Bekliyor', 'Kapalı'];
+
 const MOCK: SktTicket[] = [
   { id: '1', customerId: '', productId: '', status: 'İşlemde', priority: 'Yüksek', subject: 'HPLC cihazı arızası', dateCreated: '2025-03-10' },
   { id: '2', customerId: '', productId: '', status: 'Açık', priority: 'Orta', subject: 'Pompa bakım talebi', dateCreated: '2025-03-15' },
@@ -88,7 +91,7 @@ export default function SpektrotekServis() {
                         ...(STATUS_STYLE[t.status] || {}),
                       }}
                     >
-                      {(['Açık','İşlemde','Parça Bekliyor','Kapalı'] as SktTicket['status'][]).map(s => <option key={s}>{s}</option>)}
+                      {TICKET_STATUSES.map(s => <option key={s}>{s}</option>)}
                     </select>
                   </td>
                   <td>
@@ -119,8 +122,8 @@ export default function SpektrotekServis() {
               </div>
               <div className={styles.formGroup}>
                 <label className={styles.formLabel}>Öncelik</label>
-                <select className={styles.formSelect} value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value as any }))}>
-                  <option>Düşük</option><option>Orta</option><option>Yüksek</option><option>Kritik</option>
+                <select className={styles.formSelect} value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value as SktTicket['priority'] }))}>
+                  {TICKET_PRIORITIES.map(priority => <option key={priority}>{priority}</option>)}
                 </select>
               </div>
               <div className={`${styles.formGroup} ${styles.fullSpan}`}>
@@ -129,8 +132,8 @@ export default function SpektrotekServis() {
               </div>
               <div className={`${styles.formGroup} ${styles.fullSpan}`}>
                 <label className={styles.formLabel}>Durum</label>
-                <select className={styles.formSelect} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))}>
-                  <option>Açık</option><option>İşlemde</option><option>Parça Bekliyor</option><option>Kapalı</option>
+                <select className={styles.formSelect} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as SktTicket['status'] }))}>
+                  {TICKET_STATUSES.map(status => <option key={status}>{status}</option>)}
                 </select>
               </div>
               <div className={styles.formActions}>

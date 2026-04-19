@@ -15,6 +15,40 @@ export interface DashboardStats {
   rates?: { USD: number; EUR: number; GBP: number };
 }
 
+type ApprovedValueRow = {
+  ParaBirimi?: string | null;
+  TotalAmount?: number | null;
+  Count?: number | null;
+};
+
+type MonthlyRow = {
+  MonthNum: number;
+  RequestCount: number;
+};
+
+type ActivityRow = {
+  id: string | number;
+  type?: string | null;
+  subject?: string | null;
+  date: Date;
+  status?: string | null;
+  customerName?: string | null;
+  creatorName?: string | null;
+};
+
+type ProductStatsRow = {
+  name: string;
+  count: number;
+  totalValue: number;
+};
+
+type HighPriceRow = {
+  customerName?: string | null;
+  total: number;
+  currency: string;
+  quoteNo: number;
+};
+
 export async function getDashboardStats(year: number): Promise<DashboardStats> {
   try {
     const pool = await poolPromise;
@@ -75,7 +109,7 @@ export async function getDashboardStats(year: number): Promise<DashboardStats> {
 
     let totalValueTRY = 0;
     let approvedCount = 0;
-    for (const row of totalValueResult.recordset as any[]) {
+    for (const row of totalValueResult.recordset as ApprovedValueRow[]) {
       const currency = (row.ParaBirimi || 'TRY').toUpperCase();
       const rate = RATES[currency] || 1;
       totalValueTRY += (row.TotalAmount || 0) * rate;
@@ -84,7 +118,7 @@ export async function getDashboardStats(year: number): Promise<DashboardStats> {
 
     const months = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
     const monthlyData = months.map((m, i) => {
-      const found = (monthlyResult.recordset as any[]).find(r => r.MonthNum === i + 1);
+      const found = (monthlyResult.recordset as MonthlyRow[]).find(r => r.MonthNum === i + 1);
       return { month: m, count: found ? found.RequestCount : 0 };
     });
 
@@ -93,12 +127,12 @@ export async function getDashboardStats(year: number): Promise<DashboardStats> {
       quoteSentCount:        countResult.recordset[0].QuotesSent    || 0,
       approvedQuotesCount:   approvedCount,
       totalApprovedValueTRY: totalValueTRY,
-      recentActivity: (activityResult.recordset as any[]).map(r => ({
+      recentActivity: (activityResult.recordset as ActivityRow[]).map(r => ({
         id: r.id.toString(), type: r.type || 'Talep', subject: r.subject || '(Konu Yok)',
-        date: r.date, user: r.creatorName || 'Sistem', status: r.status, customerName: r.customerName || 'Bilinmiyor',
+        date: r.date, user: r.creatorName || 'Sistem', status: r.status || '', customerName: r.customerName || 'Bilinmiyor',
       })),
-      topProducts: (productResult.recordset as any[]).map(r => ({ name: r.name, count: r.count, totalValue: r.totalValue })),
-      highestPricedSales: (highPriceResult.recordset as any[]).map(r => ({
+      topProducts: (productResult.recordset as ProductStatsRow[]).map(r => ({ name: r.name, count: r.count, totalValue: r.totalValue })),
+      highestPricedSales: (highPriceResult.recordset as HighPriceRow[]).map(r => ({
         customerName: r.customerName || 'Bilinmiyor', total: r.total, currency: r.currency, quoteNo: r.quoteNo,
       })),
       monthlyRequestCounts: monthlyData,

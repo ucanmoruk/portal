@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Plus, Edit, Eye, Banknote } from 'lucide-react';
 import {
@@ -55,6 +55,11 @@ const defaultCustomer = (): Partial<SktCustomer> => ({
   address: '', web: '', taxOffice: '', taxNumber: '', authorizedPerson: '', notes: '',
 });
 
+type CustomerMutationResult = {
+  success: boolean;
+  customerId?: string;
+};
+
 export default function SpektrotekTalepler() {
   const router = useRouter();
 
@@ -87,10 +92,8 @@ export default function SpektrotekTalepler() {
     return () => clearTimeout(t);
   }, [search]);
 
-  useEffect(() => { setPage(1); }, [statusFilter, priorityFilter, yearFilter]);
-  useEffect(() => { load(); }, [page, debouncedSearch, statusFilter, priorityFilter, yearFilter]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function load() {
+  const load = useCallback(async () => {
+    await Promise.resolve();
     setLoading(true);
     const [reqData, custRes, userData] = await Promise.all([
       getRequests({
@@ -107,7 +110,9 @@ export default function SpektrotekTalepler() {
     if (custRes) setCustomers(custRes.customers);
     if (userData) setUsers(userData);
     setLoading(false);
-  }
+  }, [customers.length, debouncedSearch, page, priorityFilter, users.length, yearFilter, statusFilter]);
+
+  useEffect(() => { void (async () => { await load(); })(); }, [load]);
 
   const totalPages = Math.ceil(total / limit);
 
@@ -167,7 +172,7 @@ export default function SpektrotekTalepler() {
     if (!newCust.name) { alert('Firma adı zorunludur.'); return; }
     const res = await addCustomer(newCust);
     if (res.success) {
-      const cid = (res as any).customerId as string | undefined;
+      const cid = (res as CustomerMutationResult).customerId;
       const created = { ...newCust, id: cid || '' } as SktCustomer;
       setCustomers(prev => [...prev, created]);
       if (cid) setForm(f => ({ ...f, customerId: cid }));

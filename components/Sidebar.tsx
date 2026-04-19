@@ -76,7 +76,7 @@ const navGroups: NavGroup[] = [
   },
   {
     id: "spektrotek",
-    menuKey: "laboratuvar.spektrotek",
+    menuKey: "spektrotek",
     label: "Spektrotek",
     icon: (
       <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
@@ -84,13 +84,15 @@ const navGroups: NavGroup[] = [
       </svg>
     ),
     items: [
+      { label: "Dashboard",   href: "/laboratuvar/spektrotek",           menuKey: "spektrotek.ozet"      },
+      { label: "Talepler",     href: "/laboratuvar/spektrotek/talepler",  menuKey: "spektrotek.talepler"  },
+      { label: "Teklifler",    href: "/laboratuvar/spektrotek/teklifler", menuKey: "spektrotek.teklifler" },
+      { label: "Teklif Detayları", href: "/laboratuvar/spektrotek/teklif-detaylari", menuKey: "spektrotek.teklif-detaylari" },
       { label: "Müşteriler",   href: "/laboratuvar/spektrotek/musteriler", menuKey: "spektrotek.musteriler" },
       { label: "Ürünler",      href: "/laboratuvar/spektrotek/urunler",    menuKey: "spektrotek.urunler"    },
-      { label: "Teklifler",    href: "/laboratuvar/spektrotek/teklifler",  menuKey: "spektrotek.teklifler"  },
       { label: "Faturalar",    href: "/laboratuvar/spektrotek/faturalar",  menuKey: "spektrotek.faturalar"  },
       { label: "Satın Alma",   href: "/laboratuvar/spektrotek/satin-alma", menuKey: "spektrotek.satin-alma" },
       { label: "Servis",       href: "/laboratuvar/spektrotek/servis",     menuKey: "spektrotek.servis"     },
-      { label: "Talepler",     href: "/laboratuvar/spektrotek/talepler",   menuKey: "spektrotek.talepler"   },
     ],
   },
   {
@@ -214,7 +216,9 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
               {isOpen && visibleItems.length > 0 && (
                 <div className={styles.navGroupItems}>
                   {visibleItems.map(item => {
-                    const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                    const isActive = item.href === "/laboratuvar/spektrotek"
+                      ? pathname === item.href
+                      : pathname === item.href || pathname.startsWith(item.href + "/");
                     return (
                       <Link key={item.href} href={item.href}
                         className={`${styles.navSubLink} ${isActive ? styles.navSubLinkActive : ""}`}
