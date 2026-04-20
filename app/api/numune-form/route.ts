@@ -140,34 +140,37 @@ export async function POST(request: Request) {
       const q = (v: string | undefined | null) =>
         v ? `'${String(v).replace(/'/g, "''")}'` : "NULL";
 
-      // StokAnalizListesi'nden LimitEn / BirimEn / LOQ / LOQEn çek (tüm hizmetler)
+      // StokAnalizListesi'nden Limit/Birim (TR) + LimitEn/BirimEn/LOQ/LOQEn çek
       const analizIds = [...new Set(hizmetler.map((h: any) => Number(h.AnalizID)))];
       const stalRes = await pool.request().query(`
         SELECT ID,
-          ISNULL(LimitEn, '') AS LimitEn, ISNULL(BirimEn, '') AS BirimEn,
-          ISNULL(LOQ,     '') AS LOQ,     ISNULL(LOQEn,   '') AS LOQEn
+          ISNULL(LimitDeger, '') AS LimitDeger, ISNULL(Matriks,  '') AS Birim,
+          ISNULL(LimitEn,    '') AS LimitEn,    ISNULL(BirimEn,  '') AS BirimEn,
+          ISNULL(LOQ,        '') AS LOQ,         ISNULL(LOQEn,   '') AS LOQEn
         FROM StokAnalizListesi WHERE ID IN (${analizIds.join(",")})
       `);
-      const stalMap = new Map<number, { LimitEn: string; BirimEn: string; LOQ: string; LOQEn: string }>();
+      const stalMap = new Map<number, { LimitDeger: string; Birim: string; LimitEn: string; BirimEn: string; LOQ: string; LOQEn: string }>();
       for (const r of stalRes.recordset) {
-        stalMap.set(r.ID, { LimitEn: r.LimitEn, BirimEn: r.BirimEn, LOQ: r.LOQ, LOQEn: r.LOQEn });
+        stalMap.set(r.ID, { LimitDeger: r.LimitDeger, Birim: r.Birim, LimitEn: r.LimitEn, BirimEn: r.BirimEn, LOQ: r.LOQ, LOQEn: r.LOQEn });
       }
 
-      // NumuneX4'ten paket hizmetler için LimitDegerEn / LimitBirimiEn çek
+      // NumuneX4'ten paket hizmetler için Limit/Birim (TR+EN) çek
       const paketHizmetler = hizmetler.filter((h: any) => h.x3ID);
-      const paketMap = new Map<string, { LimitEn: string; BirimEn: string }>();
+      const paketMap = new Map<string, { LimitDeger: string; LimitBirimi: string; LimitEn: string; BirimEn: string }>();
       if (paketHizmetler.length > 0) {
         const paketCond = paketHizmetler.map((h: any) =>
           `(ListeID=${Number(h.x3ID)} AND AltAnalizID=${Number(h.AnalizID)})`
         ).join(" OR ");
         const x4Res = await pool.request().query(`
           SELECT ListeID, AltAnalizID,
+            ISNULL(LimitDeger,    '') AS LimitDeger,
+            ISNULL(LimitBirimi,   '') AS LimitBirimi,
             ISNULL(LimitDegerEn,  '') AS LimitEn,
             ISNULL(LimitBirimiEn, '') AS BirimEn
           FROM NumuneX4 WHERE ${paketCond}
         `);
         for (const r of x4Res.recordset) {
-          paketMap.set(`${r.ListeID}_${r.AltAnalizID}`, { LimitEn: r.LimitEn, BirimEn: r.BirimEn });
+          paketMap.set(`${r.ListeID}_${r.AltAnalizID}`, { LimitDeger: r.LimitDeger, LimitBirimi: r.LimitBirimi, LimitEn: r.LimitEn, BirimEn: r.BirimEn });
         }
       }
 
@@ -180,20 +183,29 @@ export async function POST(request: Request) {
       if (x1Cols.has("HizmetDurum"))      extraCols.push("HizmetDurum");
 
       const values = hizmetler.map((h: any) => {
-        const stal = stalMap.get(Number(h.AnalizID)) ?? { LimitEn: "", BirimEn: "", LOQ: "", LOQEn: "" };
+        const stal = stalMap.get(Number(h.AnalizID)) ?? { LimitDeger: "", Birim: "", LimitEn: "", BirimEn: "", LOQ: "", LOQEn: "" };
         let limitEn: string;
         let birimEn: string;
+        let dbLimitDeger: string;
+        let dbBirim: string;
         if (h.x3ID) {
-          const px = paketMap.get(`${h.x3ID}_${h.AnalizID}`) ?? { LimitEn: "", BirimEn: "" };
-          limitEn = px.LimitEn;
-          birimEn = px.BirimEn;
+          const px = paketMap.get(`${h.x3ID}_${h.AnalizID}`) ?? { LimitDeger: "", LimitBirimi: "", LimitEn: "", BirimEn: "" };
+          limitEn     = px.LimitEn;
+          birimEn     = px.BirimEn;
+          dbLimitDeger = px.LimitDeger;
+          dbBirim      = px.LimitBirimi;
         } else {
-          limitEn = stal.LimitEn;
-          birimEn = stal.BirimEn;
+          limitEn      = stal.LimitEn;
+          birimEn      = stal.BirimEn;
+          dbLimitDeger = stal.LimitDeger;
+          dbBirim      = stal.Birim;
         }
+        // Çoklu Giriş'ten gelen h.Limit/h.Birim undefined olabilir → DB değerine geri dön
+        const limitVal = h.Limit  || dbLimitDeger || null;
+        const birimVal = h.Birim  || dbBirim      || null;
         const loq   = stal.LOQ;
         const loqEn = stal.LOQEn;
-        const auto  = computeSonucAuto(h.Limit, loq);
+        const auto  = computeSonucAuto(limitVal, loq);
 
         const extraVals = [
           ...(x1Cols.has("Sonuc")            ? [q(auto.sonuc)]                      : []),
@@ -203,7 +215,7 @@ export async function POST(request: Request) {
           ...(x1Cols.has("Durum")            ? ["'Aktif'"]                           : []),
           ...(x1Cols.has("HizmetDurum")      ? ["'YeniAnaliz'"]                      : []),
         ];
-        const base = `${nkrId}, ${h.AnalizID}, ${h.Termin ? `'${h.Termin}'` : "NULL"}, ${h.x3ID ?? "NULL"}, ${q(h.Limit)}, ${q(h.Birim)}, ${q(limitEn)}, ${q(birimEn)}, ${q(loq)}, ${q(loqEn)}`;
+        const base = `${nkrId}, ${h.AnalizID}, ${h.Termin ? `'${h.Termin}'` : "NULL"}, ${h.x3ID ?? "NULL"}, ${q(limitVal)}, ${q(birimVal)}, ${q(limitEn)}, ${q(birimEn)}, ${q(loq)}, ${q(loqEn)}`;
         return `(${base}${extraVals.length > 0 ? ", " + extraVals.join(", ") : ""})`;
       }).join(", ");
 
