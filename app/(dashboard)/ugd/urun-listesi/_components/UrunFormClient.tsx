@@ -504,7 +504,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
     setPrintLoading(true);
     try {
       const firmaAd = lookups.firmalar.find(f => f.ID.toString() === form.FirmaID)?.Ad || "";
-      const res = await fetch("/api/urunler/rapor-docx", {
+      const res = await fetch("/api/urunler/rapor-sablon", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ form, formulResults, firmaAd }),
@@ -517,7 +517,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `UGDR-${form.RaporNo || "rapor"}.docx`;
+      a.download = `UGD_Rapor_${form.RaporNo || "rapor"}.docx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
