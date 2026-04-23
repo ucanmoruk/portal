@@ -16,3 +16,13 @@
   flex: 1;
   padding: 28px 32px;
 }
+
+@media (max-width: 768px) {
+  .main {
+    margin-left: 0;
+  }
+
+  .content {
+    padding: 16px;
+  }
+}

@@ -226,6 +226,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
   const [formulResults, setFormulResults] = useState<MatchedIngredient[]>([]);
   const [formulLoading, setFormulLoading] = useState(false);
   const [formulError, setFormulError] = useState("");
+  const [formulFromDB, setFormulFromDB] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [lookups, setLookups] = useState<{ firmalar: any[]; tipler: any[]; nextRaporNo?: number }>({ firmalar: [], tipler: [] });
@@ -290,6 +291,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
             dap: r.DaP ?? 100,
             noael: r.Noael != null ? String(r.Noael) : '',
           })));
+          setFormulFromDB(true);
         }
       })
       .catch(() => {})
@@ -353,6 +355,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
         noael: r.noael != null ? String(r.noael) : '',
       }));
       setFormulResults(mapped);
+      setFormulFromDB(false);
 
       // Eğer kayıtlı ürün varsa formülü DB'ye kaydet
       if (savedId) {
@@ -681,6 +684,13 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
             </div>
             {formulError && <div className={styles.formError} style={{ marginTop: 12 }}>{formulError}</div>}
           </div>
+
+          {formulFromDB && formulResults.length > 0 && (
+            <div style={{ marginBottom: 12, padding: '10px 16px', background: '#e6f4ea', border: '1px solid #a8d5b5', borderRadius: 8, fontSize: '0.82rem', color: '#1a7340', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" /></svg>
+              <span><strong>{formulResults.length} bileşen</strong> rUGDFormul tablosundan yüklendi. Hesaplamalar için A değerinin girildiğinden emin olun.</span>
+            </div>
+          )}
 
           {formulResults.length > 0 && (
             <div className={styles.tableCard}>

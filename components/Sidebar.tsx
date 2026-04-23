@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import styles from "./Sidebar.module.css";
+import { useSidebar } from "./SidebarProvider";
 
 interface NavItem {
   label: string;
@@ -135,11 +136,13 @@ function openGroupsForPath(path: string): string[] {
 
 export default function Sidebar({ allowedKeys, isAdmin }: Props) {
   const pathname = usePathname();
+  const { isOpen, close } = useSidebar();
   const [openGroups, setOpenGroups] = useState<string[]>(() => openGroupsForPath(pathname));
 
   useEffect(() => {
     setOpenGroups(openGroupsForPath(pathname));
-  }, [pathname]);
+    close(); // Sayfa değişince mobilde sidebar kapat
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // null = admin (kısıtlama yok), [] = hiçbir şey, [...] = sadece listedekiler
   const allowed = allowedKeys !== null ? new Set(allowedKeys) : null;
@@ -152,7 +155,12 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
     group.items.some(item => pathname.startsWith(item.href));
 
   return (
-    <aside className={styles.sidebar}>
+    <>
+      {/* Mobil overlay */}
+      {isOpen && (
+        <div className={styles.overlay} onClick={close} aria-hidden="true" />
+      )}
+    <aside className={`${styles.sidebar} ${isOpen ? styles.sidebarOpen : ""}`}>
       {/* Logo */}
       <div className={styles.brand}>
         <div className={styles.brandIcon}>
@@ -305,5 +313,6 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
         </>
       )}
     </aside>
+    </>
   );
 }

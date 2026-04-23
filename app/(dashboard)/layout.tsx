@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
+import { SidebarProvider } from "@/components/SidebarProvider";
 import styles from "./dashboard-layout.module.css";
 import poolPromise from "@/lib/db";
 
@@ -39,12 +40,14 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className={styles.shell}>
-      <Sidebar allowedKeys={allowedKeys} isAdmin={isAdmin} />
-      <div className={styles.main}>
-        <Header />
-        <div className={styles.content}>{children}</div>
+    <SidebarProvider>
+      <div className={styles.shell}>
+        <Sidebar allowedKeys={allowedKeys} isAdmin={isAdmin} />
+        <div className={styles.main}>
+          <Header />
+          <div className={styles.content}>{children}</div>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }

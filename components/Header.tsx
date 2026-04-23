@@ -2,14 +2,18 @@
 
 import { signOut, useSession } from "next-auth/react";
 import styles from "./Header.module.css";
+import { useSidebar } from "./SidebarProvider";
 
 export default function Header() {
   const { data: session } = useSession();
+  const { toggle } = useSidebar();
 
   return (
     <header className={styles.header}>
       <div className={styles.left}>
-        {/* Sayfa başlığı slot - her sayfa kendi <title> kullanır */}
+        <button className={styles.hamburger} onClick={toggle} aria-label="Menüyü aç/kapat">
+          <span /><span /><span />
+        </button>
       </div>
       <div className={styles.right}>
         {session?.user ? (

@@ -76,3 +76,41 @@
   color: var(--color-danger);
   border-color: rgba(255, 59, 48, 0.25);
 }
+
+/* ── Hamburger (sadece mobilde görünür) ── */
+.hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.hamburger span {
+  display: block;
+  height: 2px;
+  width: 22px;
+  background: var(--color-text-primary);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.hamburger:hover span {
+  background: var(--color-accent);
+}
+
+@media (max-width: 768px) {
+  .hamburger {
+    display: flex;
+  }
+
+  .userInfo {
+    display: none;
+  }
+}
