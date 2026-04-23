@@ -20,17 +20,22 @@ export default async function DashboardLayout({
   const userId  = (session.user as any)?.userId as string | undefined;
   const isAdmin = userId ? ADMIN_USER_IDS.has(userId) : false;
 
-  // Kullanıcının yetkili menü key'lerini DB'den çek
-  let allowedKeys: string[] = [];
-  try {
-    const pool   = await poolPromise;
-    const result = await pool.request()
-      .input("userId", userId ? parseInt(userId) : 0)
-      .query("SELECT MenuKey FROM PortalYetki WHERE KullaniciID = @userId");
-    allowedKeys = result.recordset.map((r: any) => r.MenuKey as string);
-  } catch {
-    // DB hatası → tüm menüler açık kalsın
-    allowedKeys = [];
+  // Admin → null (kısıtlama yok), diğerleri DB'den çek
+  // null  = her şeyi gör (admin)
+  // []    = hiçbir şeyi görme (DB hata veya PortalYetki'de satır yok)
+  // [...] = sadece listedekiler
+  let allowedKeys: string[] | null = isAdmin ? null : [];
+  if (!isAdmin) {
+    try {
+      const pool   = await poolPromise;
+      const result = await pool.request()
+        .input("userId", userId ? parseInt(userId) : 0)
+        .query("SELECT MenuKey FROM PortalYetki WHERE KullaniciID = @userId");
+      allowedKeys = result.recordset.map((r: any) => r.MenuKey as string);
+    } catch {
+      // DB hatası → hiçbir menü gösterme (fail-closed)
+      allowedKeys = [];
+    }
   }
 
   return (

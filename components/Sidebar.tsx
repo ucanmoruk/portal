@@ -20,7 +20,7 @@ interface NavGroup {
 }
 
 interface Props {
-  allowedKeys: string[]; // DB'den gelen yetkiler — boşsa kısıtlama yok
+  allowedKeys: string[] | null; // null = admin (her şey), [] = hiçbiri, [...] = sadece bunlar
   isAdmin: boolean;
 }
 
@@ -141,11 +141,9 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
     setOpenGroups(openGroupsForPath(pathname));
   }, [pathname]);
 
-  // allowedKeys boşsa → kısıtlama yok (henüz yetki tanımlanmamış kullanıcı)
-  const noRestriction = allowedKeys.length === 0;
-  const allowed       = new Set(allowedKeys);
-
-  const canSee = (key: string) => noRestriction || allowed.has(key);
+  // null = admin (kısıtlama yok), [] = hiçbir şey, [...] = sadece listedekiler
+  const allowed = allowedKeys !== null ? new Set(allowedKeys) : null;
+  const canSee  = (key: string) => allowed === null || allowed.has(key);
 
   const toggleGroup = (id: string) =>
     setOpenGroups(prev => (prev.length === 1 && prev[0] === id ? [] : [id]));
