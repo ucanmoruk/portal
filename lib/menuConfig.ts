@@ -46,6 +46,16 @@ export const MENU_TREE: MenuItem[] = [
   },
   { key: "laboratuvar.kys", label: "KYS", href: "/laboratuvar/kys" },
   {
+    key: "eurolab",
+    label: "Eurolab",
+    children: [
+      { key: "eurolab.metotlar",           label: "Metotlar",            href: "/laboratuvar/eurolab/metotlar" },
+      { key: "eurolab.validasyon",         label: "Validasyon",          href: "/laboratuvar/eurolab/validasyon" },
+      { key: "eurolab.olcum-belirsizligi", label: "Ölçüm Belirsizliği", href: "/laboratuvar/eurolab/olcum-belirsizligi" },
+      { key: "eurolab.raporlar",           label: "Raporlar",            href: "/laboratuvar/eurolab/raporlar" },
+    ],
+  },
+  {
     key: "spektrotek",
     label: "Spektrotek",
     children: [

@@ -109,6 +109,22 @@ const navGroups: NavGroup[] = [
       { label: "Teklif Listesi", href: "/laboratuvar/root-kozmetik/teklif-listesi", menuKey: "laboratuvar.root-kozmetik.teklif-listesi" },
     ],
   },
+  {
+    id: "eurolab",
+    menuKey: "eurolab",
+    label: "Eurolab",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+        <path fillRule="evenodd" d="M4 2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H4Zm1 2h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm2 3a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm4 0a1 1 0 1 1 2 0 1 1 0 0 1-2 0ZM7 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm-4 4a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z" clipRule="evenodd" />
+      </svg>
+    ),
+    items: [
+      { label: "Metotlar",            href: "/laboratuvar/eurolab/metotlar",            menuKey: "eurolab.metotlar" },
+      { label: "Validasyon",          href: "/laboratuvar/eurolab/validasyon",          menuKey: "eurolab.validasyon" },
+      { label: "Ölçüm Belirsizliği", href: "/laboratuvar/eurolab/olcum-belirsizligi", menuKey: "eurolab.olcum-belirsizligi" },
+      { label: "Raporlar",            href: "/laboratuvar/eurolab/raporlar" ,           menuKey: "eurolab.raporlar" },
+    ],
+  },
 ];
 
 /** Laboratuvar grubundan sonra — üst düzey (tek satır) menü */
@@ -123,6 +139,7 @@ function groupIdForPath(path: string): string | null {
   if (path.startsWith("/laboratuvar/numune-form")) return "laboratuvar";
   if (path.startsWith("/laboratuvar/spektrotek")) return "spektrotek";
   if (path.startsWith("/laboratuvar/root-kozmetik")) return "root-kozmetik";
+  if (path.startsWith("/laboratuvar/eurolab")) return "eurolab";
   for (const g of navGroups) {
     if (g.items.some(item => path === item.href || path.startsWith(`${item.href}/`))) return g.id;
   }
