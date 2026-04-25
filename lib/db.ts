@@ -222,19 +222,33 @@ const translateSubqueryTop = (sql: string) =>
 
 const translateSysColumns = (sql: string) =>
   sql.replace(
-    /SELECT\s+name\s+FROM\s+sys\.columns\s+WHERE\s+object_id\s*=\s*OBJECT_ID\(\s*'([^']+)'\s*\)\s+AND\s+name\s+IN\s*\(([^)]+)\)/gi,
-    (_, tableName, names) => `
-      SELECT column_name AS name
-      FROM information_schema.columns
-      WHERE table_schema IN ('dbo', 'cosmoroot')
-        AND table_name = '${String(tableName).replace(/'/g, "''")}'
-        AND column_name IN (${names})
-    `,
+    /SELECT\s+(name|1\s+AS\s+([A-Za-z_][A-Za-z0-9_]*))\s+FROM\s+sys\.columns\s+WHERE\s+object_id\s*=\s*OBJECT_ID\(\s*'([^']+)'\s*\)(?:\s+AND\s+name\s+(?:IN\s*\(([^)]+)\)|=\s*'([^']+)'))?/gi,
+    (_, selectExpr, oneAlias, tableName, names, singleName) => {
+      const select = /^name$/i.test(selectExpr) ? "column_name AS name" : `1 AS ${quoteIdent(oneAlias || "x")}`;
+      const filter = names
+        ? `AND column_name IN (${names})`
+        : singleName
+          ? `AND column_name = '${String(singleName).replace(/'/g, "''")}'`
+          : "";
+
+      return `
+        SELECT ${select}
+        FROM information_schema.columns
+        WHERE table_schema IN ('dbo', 'cosmoroot')
+          AND table_name = '${String(tableName).replace(/'/g, "''")}'
+          ${filter}
+      `;
+    },
   );
 
 const translateDateFunctions = (sql: string) =>
   sql
-    .replace(/CONVERT\s*\(\s*varchar\s*\(\s*10\s*\)\s*,\s*([^,()]+(?:\([^)]*\))?)\s*,\s*(?:23|120)\s*\)/gi, "TO_CHAR($1::date, 'YYYY-MM-DD')")
+    .replace(/CONVERT\s*\(\s*varchar\s*\(\s*(\d+)\s*\)\s*,\s*([^,()]+(?:\([^)]*\))?)\s*,\s*(\d+)\s*\)/gi, (_, len, expr, style) => {
+      if (style === "104") return `TO_CHAR(${expr}::date, 'DD.MM.YYYY')`;
+      if (style === "120" && Number(len) > 10) return `TO_CHAR(${expr}::timestamp, 'YYYY-MM-DD HH24:MI:SS')`;
+      if (style === "120" || style === "23") return `TO_CHAR(${expr}::date, 'YYYY-MM-DD')`;
+      return `TO_CHAR(${expr}::date, 'YYYY-MM-DD')`;
+    })
     .replace(/CONVERT\s*\(\s*date\s*,\s*([^)]+?)\s*\)/gi, "($1)::date")
     .replace(/YEAR\s*\(\s*COALESCE\s*\(([^,]+),\s*([^)]+)\)\s*\)/gi, "EXTRACT(YEAR FROM COALESCE($1, $2)::date)::int")
     .replace(/YEAR\s*\(\s*\(([^)]+)\)::date\s*\)/gi, "EXTRACT(YEAR FROM $1::date)::int")
