@@ -14,6 +14,13 @@ export interface EurolabMethod {
 }
 
 const localDataPath = path.join(process.cwd(), "data", "eurolab_methods.local.json");
+const localFallbackAllowed = process.env.NODE_ENV !== "production" && process.env.VERCEL !== "1";
+
+function assertLocalFallbackAllowed() {
+    if (!localFallbackAllowed) {
+        throw new Error("Eurolab veritabanı bağlantısı eksik. Canlı ortamda EUROLAB_POSTGRES_URL veya POSTGRES_URL tanımlanmalı; local JSON fallback yalnızca geliştirme ortamında kullanılabilir.");
+    }
+}
 
 const seedMethods: EurolabMethod[] = [
     {
@@ -59,6 +66,7 @@ const seedMethods: EurolabMethod[] = [
 ];
 
 async function ensureLocalDataFile() {
+    assertLocalFallbackAllowed();
     await fs.mkdir(path.dirname(localDataPath), { recursive: true });
     try {
         await fs.access(localDataPath);
