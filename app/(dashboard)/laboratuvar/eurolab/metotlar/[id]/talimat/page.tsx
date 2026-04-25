@@ -3,7 +3,7 @@
 import { useState, useEffect, use } from "react";
 import styles from '@/app/styles/table.module.css';
 import Link from "next/link";
-import { Save, Download, ChevronLeft, ChevronDown, ChevronRight, CheckCircle2 } from "lucide-react";
+import { Save, Download, ChevronLeft, ChevronDown, ChevronRight, CheckCircle2, Eye } from "lucide-react";
 import RichTextEditor from "@/components/RichTextEditor";
 
 interface InstructionData {
@@ -50,6 +50,7 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
     const [saving, setSaving] = useState(false);
     const [activeTab, setActiveTab] = useState(instructionTabs[0].id);
     const [expandedSections, setExpandedSections] = useState<string[]>(instructionTabs[0].sectionIds); 
+    const [previewOpen, setPreviewOpen] = useState(false);
 
     useEffect(() => {
         const loadData = async () => {
@@ -137,6 +138,15 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
         setExpandedSections(tab.sectionIds);
     };
 
+    const toggleActiveTabSections = () => {
+        const tab = instructionTabs.find(item => item.id === activeTab) || instructionTabs[0];
+        const allOpen = tab.sectionIds.every(sectionId => expandedSections.includes(sectionId));
+        setExpandedSections(allOpen
+            ? expandedSections.filter(sectionId => !tab.sectionIds.includes(sectionId))
+            : Array.from(new Set([...expandedSections, ...tab.sectionIds]))
+        );
+    };
+
     const hasContent = (sectionId: string) => {
         const val = (instruction as any)[sectionId];
         return val && val.replace(/<[^>]*>/g, '').trim().length > 0;
@@ -146,6 +156,8 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
 
     const activeInstructionTab = instructionTabs.find(tab => tab.id === activeTab) || instructionTabs[0];
     const visibleSections = sections.filter(section => activeInstructionTab.sectionIds.includes(section.id));
+    const allActiveTabSectionsOpen = activeInstructionTab.sectionIds.every(sectionId => expandedSections.includes(sectionId));
+    const compactSections = new Set(["1.0", "2.0", "8.0", "9.0"]);
 
     return (
         <div className={styles.page}>
@@ -163,6 +175,9 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
                     <p className={styles.pageSubtitle}>Analiz talimatı aşamalarını aşağıdan açıp düzenleyebilirsiniz.</p>
                 </div>
                 <div className={styles.toolbarRight}>
+                    <button onClick={() => setPreviewOpen(true)} className={styles.cancelBtn} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Eye className="h-4 w-4" /> Önizleme
+                    </button>
                     <button onClick={downloadWord} className={styles.cancelBtn} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Download className="h-4 w-4" /> Word İndir
                     </button>
@@ -237,6 +252,29 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
                 })}
             </div>
 
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    maxWidth: 980,
+                    marginTop: 4,
+                }}
+            >
+                <span style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
+                    {activeInstructionTab.label} içinde {activeInstructionTab.sectionIds.length} bölüm
+                </span>
+                <button
+                    type="button"
+                    onClick={toggleActiveTabSections}
+                    className={styles.cancelBtn}
+                    style={{ minHeight: 30, padding: "4px 12px" }}
+                >
+                    {allActiveTabSectionsOpen ? "Tümünü kapat" : "Tümünü aç"}
+                </button>
+            </div>
+
             <div className="flex flex-col gap-4 mt-2 max-w-5xl">
                 {visibleSections.map((s) => {
                     const isExpanded = expandedSections.includes(s.id);
@@ -284,6 +322,7 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
                                     <RichTextEditor 
                                         content={(instruction as any)[s.id]} 
                                         onChange={(content) => handleInstructionChange(s.id, content)} 
+                                        minHeight={compactSections.has(s.id) ? 110 : 150}
                                     />
                                 </div>
                             )}
@@ -291,6 +330,79 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
                     );
                 })}
             </div>
+
+            {previewOpen && (
+                <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && setPreviewOpen(false)}>
+                    <div className={styles.modal} style={{ maxWidth: 980 }}>
+                        <div className={styles.modalHeader}>
+                            <div>
+                                <h2>{method?.method_code} - Analiz Talimatı</h2>
+                                <p style={{ margin: "5px 0 0", color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
+                                    {method?.name}
+                                </p>
+                            </div>
+                            <button className={styles.modalClose} onClick={() => setPreviewOpen(false)} title="Kapat">
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
+                                    <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className={styles.modalBody} style={{ background: "var(--color-surface-2)", padding: 18 }}>
+                            <div style={{
+                                background: "var(--color-surface)",
+                                border: "1px solid var(--color-border-light)",
+                                borderRadius: "var(--radius-lg)",
+                                padding: "22px 26px",
+                                maxHeight: "70vh",
+                                overflow: "auto"
+                            }}>
+                                <div style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                                    gap: 10,
+                                    marginBottom: 18,
+                                    paddingBottom: 16,
+                                    borderBottom: "1px solid var(--color-border-light)",
+                                    fontSize: "0.78rem",
+                                    color: "var(--color-text-secondary)"
+                                }}>
+                                    <span><b>Kod:</b> {method?.method_code}</span>
+                                    <span><b>Metot:</b> {method?.technique || "-"}</span>
+                                    <span><b>Matriks:</b> {method?.matrix || "-"}</span>
+                                </div>
+                                {sections.map(section => {
+                                    const html = (instruction as any)[section.id]?.trim();
+                                    return (
+                                        <section key={section.id} style={{ marginBottom: 18 }}>
+                                            <h3 style={{
+                                                fontSize: "0.92rem",
+                                                fontWeight: 700,
+                                                color: "var(--color-text-primary)",
+                                                margin: "0 0 8px"
+                                            }}>
+                                                {section.title}
+                                            </h3>
+                                            {html ? (
+                                                <div
+                                                    style={{ color: "var(--color-text-secondary)", fontSize: "0.86rem", lineHeight: 1.65 }}
+                                                    dangerouslySetInnerHTML={{ __html: html }}
+                                                />
+                                            ) : (
+                                                <p style={{ color: "var(--color-text-tertiary)", fontSize: "0.82rem", margin: 0 }}>
+                                                    İçerik girilmemiş.
+                                                </p>
+                                            )}
+                                        </section>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div className={styles.modalFooter}>
+                            <button className={styles.cancelBtn} onClick={() => setPreviewOpen(false)}>Kapat</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

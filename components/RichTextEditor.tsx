@@ -18,9 +18,10 @@ import {
 interface RichTextEditorProps {
     content: string;
     onChange: (content: string) => void;
+    minHeight?: number;
 }
 
-const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
+const RichTextEditor = ({ content, onChange, minHeight = 180 }: RichTextEditorProps) => {
     const editor = useEditor({
         extensions: [
             StarterKit,
@@ -45,7 +46,8 @@ const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
         },
         editorProps: {
             attributes: {
-                class: 'custom-editor-content focus:outline-none min-h-[300px]',
+                class: 'custom-editor-content focus:outline-none',
+                style: `min-height: ${minHeight}px;`,
             },
         },
     });
@@ -135,7 +137,7 @@ const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
             </div>
 
             {/* Content Area */}
-            <div style={{ padding: '24px', background: '#fff', minHeight: '300px' }}>
+            <div style={{ padding: '14px 16px', background: '#fff', minHeight, resize: 'vertical', overflow: 'auto' }}>
                 <EditorContent editor={editor} />
             </div>
 
