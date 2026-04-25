@@ -4,17 +4,30 @@ import { createPool } from '@vercel/postgres';
  * Eurolab Modülü için Gerçek Vercel Postgres / Neon Bağlantısı
  */
 
-const pool = createPool({
-  connectionString: process.env.POSTGRES_URL,
-});
+let pool: ReturnType<typeof createPool> | undefined;
 
-export default pool;
+export const hasEurolabDatabaseConfig = () =>
+  Boolean(process.env.EUROLAB_POSTGRES_URL || process.env.POSTGRES_URL);
+
+const getPool = () => {
+  const connectionString = process.env.EUROLAB_POSTGRES_URL || process.env.POSTGRES_URL;
+
+  if (!connectionString) {
+    throw new Error("Eurolab metot veritabanı bağlantısı eksik. EUROLAB_POSTGRES_URL veya POSTGRES_URL tanımlanmalı.");
+  }
+
+  pool ??= createPool({
+    connectionString,
+  });
+
+  return pool;
+};
 
 // Kolay kullanım için query yardımcısı
-export const query = async (text: string, params?: any[]) => {
+export const query = async (text: string, params?: unknown[]) => {
   const start = Date.now();
   try {
-    const res = await pool.query(text, params);
+    const res = await getPool().query(text, params);
     const duration = Date.now() - start;
     console.log('Executed query', { text, duration, rows: res.rowCount });
     return res;

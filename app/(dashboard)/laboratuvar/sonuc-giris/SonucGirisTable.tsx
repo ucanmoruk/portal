@@ -5,7 +5,7 @@ import styles from "@/app/styles/table.module.css";
 
 // ── Tipler ──────────────────────────────────────────────────────────────────
 
-type DurumFilter = "Tümü" | "Devam" | "Tamamlandı";
+type DurumFilter = "YeniDevam" | "Tümü" | "Tamamlandı";
 
 interface HizmetRow {
   X1ID: number;
@@ -62,7 +62,11 @@ interface RevizyonState {
 const HIZMET_GRID = "50px minmax(140px,1fr) 108px 78px 96px 132px 84px 112px";
 const HIZMET_MIN_W = 920;
 const HIZMET_HEADERS = ["Kod", "Hizmet Adı", "Sonuç", "Birim", "Limit", "Değerlendirme", "Termin", "Durum"];
-const DURUM_OPTIONS: DurumFilter[] = ["Tümü", "Devam", "Tamamlandı"];
+const DURUM_OPTIONS: { value: DurumFilter; label: string }[] = [
+  { value: "YeniDevam", label: "Yeni ve Devam Ediyor" },
+  { value: "Tümü", label: "Tümü" },
+  { value: "Tamamlandı", label: "Tamamlandı" },
+];
 
 // ── Yardımcılar ──────────────────────────────────────────────────────────────
 
@@ -160,7 +164,7 @@ export default function SonucGirisTable() {
   const [totalPages, setTotalPages]   = useState(1);
   const [search, setSearch]           = useState("");
   const [year, setYear]               = useState("2026");
-  const [durumFilter, setDurumFilter] = useState<DurumFilter>("Devam");
+  const [durumFilter, setDurumFilter] = useState<DurumFilter>("YeniDevam");
   const [loading, setLoading]         = useState(true);
   const [transitioning, setTrans]     = useState(false);
   const [error, setError]             = useState("");
@@ -236,7 +240,7 @@ export default function SonucGirisTable() {
     }
   }, []);
 
-  useEffect(() => { fetchData(1, "", limit, "2026", "Devam", { clearFirst: true }); }, []);
+  useEffect(() => { fetchData(1, "", limit, "2026", "YeniDevam", { clearFirst: true }); }, []);
 
   useEffect(() => {
     if (!didMount.current) { didMount.current = true; return; }
@@ -373,7 +377,7 @@ export default function SonucGirisTable() {
             </svg>
             <input
               className={styles.searchInput}
-              placeholder="Evrak no, numune adı, hizmet…"
+              placeholder="Rapor no, evrak no, numune adı, hizmet…"
               value={search}
               onChange={e => handleSearch(e.target.value)}
             />
@@ -432,7 +436,7 @@ export default function SonucGirisTable() {
             onChange={e => { setDurumFilter(e.target.value as DurumFilter); setPage(1); }}
             style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg)", fontSize: "0.75rem", cursor: "pointer" }}
           >
-            {DURUM_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            {DURUM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
           <select
             className={styles.pageSizeSelect}
@@ -520,13 +524,13 @@ export default function SonucGirisTable() {
                   <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                 </svg>
 
-                {/* Evrak No */}
+                {/* Rapor No */}
                 <div style={{ width: 110, flexShrink: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: "0.84rem", color: "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>
-                    {group.Evrak_No || "—"}
+                    {group.RaporNo || "—"}
                   </div>
                   <div style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)", marginTop: 1, fontVariantNumeric: "tabular-nums" }}>
-                    {group.RaporNo || formatTarih(group.Tarih)}
+                    {group.Evrak_No || formatTarih(group.Tarih)}
                   </div>
                 </div>
 

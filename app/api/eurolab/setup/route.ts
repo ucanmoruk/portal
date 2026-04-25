@@ -34,6 +34,45 @@ export async function GET() {
             END $$;
         `);
 
+        await query(`
+            CREATE SEQUENCE IF NOT EXISTS eurolab_validation_code_seq START 1;
+
+            CREATE TABLE IF NOT EXISTS eurolab_validations (
+                id SERIAL PRIMARY KEY,
+                code VARCHAR(40) UNIQUE,
+                title VARCHAR(255) NOT NULL,
+                method_id INTEGER REFERENCES eurolab_methods(id) ON DELETE CASCADE,
+                study_type VARCHAR(50),
+                status VARCHAR(30) DEFAULT 'IN_PROGRESS',
+                planned_start_date DATE,
+                planned_end_date DATE,
+                study_date DATE DEFAULT CURRENT_DATE,
+                config JSONB DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        await query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eurolab_validations' AND column_name='code') THEN
+                    ALTER TABLE eurolab_validations ADD COLUMN code VARCHAR(40) UNIQUE;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eurolab_validations' AND column_name='planned_start_date') THEN
+                    ALTER TABLE eurolab_validations ADD COLUMN planned_start_date DATE;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eurolab_validations' AND column_name='planned_end_date') THEN
+                    ALTER TABLE eurolab_validations ADD COLUMN planned_end_date DATE;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eurolab_validations' AND column_name='config') THEN
+                    ALTER TABLE eurolab_validations ADD COLUMN config JSONB DEFAULT '{}'::jsonb;
+                END IF;
+            END $$;
+        `);
+
         return NextResponse.json({ message: "Eurolab veritabanı başarıyla güncellendi." });
     } catch (error: any) {
         console.error("Eurolab Setup Error:", error);

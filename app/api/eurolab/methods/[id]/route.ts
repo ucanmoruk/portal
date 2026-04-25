@@ -1,10 +1,18 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db_eurolab";
+import { hasEurolabDatabaseConfig, query } from "@/lib/db_eurolab";
+import { deactivateLocalMethod, getLocalMethod, updateLocalMethod } from "@/lib/eurolab_local_methods";
 
 // GET /api/eurolab/methods/[id]
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+
+        if (!hasEurolabDatabaseConfig()) {
+            const method = await getLocalMethod(id);
+            if (!method) return NextResponse.json({ error: "Not found" }, { status: 404 });
+            return NextResponse.json(method);
+        }
+
         const res = await query("SELECT * FROM eurolab_methods WHERE id = $1", [id]);
         if (res.rowCount === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
         return NextResponse.json(res.rows[0]);
@@ -19,6 +27,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         const { id } = await params;
         const body = await request.json();
         const { method_code, name, technique, matrix, personnel, validation_date, instruction } = body;
+
+        if (!hasEurolabDatabaseConfig()) {
+            const method = await updateLocalMethod(id, instruction !== undefined
+                ? { instruction }
+                : { method_code, name, technique, matrix, personnel, validation_date: validation_date || null });
+            if (!method) return NextResponse.json({ error: "Kayıt bulunamadı" }, { status: 404 });
+            return NextResponse.json(method);
+        }
 
         let sql = "";
         let values = [];
@@ -50,6 +66,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+
+        if (!hasEurolabDatabaseConfig()) {
+            const method = await deactivateLocalMethod(id);
+            if (!method) return NextResponse.json({ error: "Kayıt bulunamadı" }, { status: 404 });
+            return NextResponse.json({ message: "Kayıt pasifleştirildi" });
+        }
+
         const res = await query("UPDATE eurolab_methods SET status = 'Passive' WHERE id = $1 RETURNING *", [id]);
         if (res.rowCount === 0) return NextResponse.json({ error: "Kayıt bulunamadı" }, { status: 404 });
         return NextResponse.json({ message: "Kayıt pasifleştirildi" });

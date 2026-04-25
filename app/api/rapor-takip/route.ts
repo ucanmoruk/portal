@@ -3,11 +3,11 @@ import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
 
 // GET /api/rapor-takip
-// Her (NKR.ID, RaporFormati) kombinasyonu için bir satır döner.
-// Aynı rapor numarasına ait birden fazla rapor formatı varsa birden fazla satır gelir.
+// Her (NKR.ID, RaporFormati) kombinasyonu icin bir satir doner.
+// Ayni rapor numarasina ait birden fazla rapor formati varsa birden fazla satir gelir.
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
+  if (!session) return Response.json({ error: "Yetkisiz erisim" }, { status: 401 });
 
   try {
     const { searchParams } = new URL(request.url);
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
     const pool = await poolPromise;
 
-    // Sonuc kolonu var mı?
+    // Sonuc kolonu var mi?
     const sonucCheck = await pool.request().query(`
       SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_NAME = 'NumuneX1' AND COLUMN_NAME = 'Sonuc'
@@ -34,11 +34,19 @@ export async function GET(request: Request) {
       : "";
 
     const yearFilter = year
-      ? `AND YEAR(n.Tarih) = @year`
+      ? `AND MaxTermin IS NOT NULL AND YEAR(CONVERT(date, MaxTermin)) = @year`
       : "";
 
     const raporTuruFilter = raporTuru
       ? `AND s.RaporFormati = @raporTuru`
+      : "";
+
+    const raporDurumuFilter = raporDurumu === "Bekliyor"
+      ? "AND (HizmetSayisi = 0 OR SonucluSayisi = 0)"
+      : raporDurumu === "Devam Ediyor"
+      ? "AND HizmetSayisi > 0 AND SonucluSayisi > 0 AND SonucluSayisi < HizmetSayisi"
+      : raporDurumu === "Tamamland\u0131"
+      ? "AND HizmetSayisi > 0 AND SonucluSayisi >= HizmetSayisi"
       : "";
 
     const sonucCountExpr = hasSonuc
@@ -68,13 +76,11 @@ export async function GET(request: Request) {
           AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
         WHERE n.Durum = 'Aktif'
           ${searchFilter}
-          ${yearFilter}
           ${raporTuruFilter}
       ),
       WithStats AS (
         SELECT
           r.*,
-          COUNT(*) OVER() AS TotalCount,
           (SELECT COUNT(*) FROM NumuneX1 x2
              INNER JOIN StokAnalizListesi s2 ON s2.ID = x2.AnalizID
              WHERE x2.RaporID = r.NkrID AND s2.RaporFormati = r.RaporFormati) AS HizmetSayisi,
@@ -84,19 +90,22 @@ export async function GET(request: Request) {
              WHERE x3.RaporID = r.NkrID AND s3.RaporFormati = r.RaporFormati
                AND x3.Termin IS NOT NULL) AS MaxTermin
         FROM Raporlar r
+      ),
+      Filtered AS (
+        SELECT *
+        FROM WithStats
+        WHERE 1=1
+          ${yearFilter}
+          ${raporDurumuFilter}
       )
-      SELECT *
-      FROM WithStats
-      WHERE 1=1
-        ${raporDurumu ? raporDurumu === "Bekliyor"
-          ? "AND (HizmetSayisi = 0 OR SonucluSayisi = 0)"
-          : raporDurumu === "Devam Ediyor"
-          ? "AND HizmetSayisi > 0 AND SonucluSayisi > 0 AND SonucluSayisi < HizmetSayisi"
-          : raporDurumu === "Tamamlandı"
-          ? "AND HizmetSayisi > 0 AND SonucluSayisi >= HizmetSayisi"
-          : ""
-        : ""}
-      ORDER BY Tarih DESC, RaporNo DESC, RaporFormati
+      SELECT *, COUNT(*) OVER() AS TotalCount
+      FROM Filtered
+      ORDER BY
+        CASE WHEN MaxTermin IS NULL THEN 1 ELSE 0 END,
+        MaxTermin ASC,
+        Tarih DESC,
+        RaporNo DESC,
+        RaporFormati
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `;
 
@@ -117,7 +126,7 @@ export async function GET(request: Request) {
       RaporDurumu:
         HizmetSayisi === 0      ? "Bekliyor"
         : SonucluSayisi === 0   ? "Bekliyor"
-        : SonucluSayisi >= HizmetSayisi ? "Tamamlandı"
+        : SonucluSayisi >= HizmetSayisi ? "Tamamland\u0131"
         : "Devam Ediyor",
     }));
 

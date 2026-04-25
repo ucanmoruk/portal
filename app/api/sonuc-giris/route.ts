@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const limit  = Math.min(50, Math.max(5, parseInt(searchParams.get("limit") || "10")));
   const search = (searchParams.get("search") || "").trim();
   const year   = (searchParams.get("year")   || "").trim();
-  const durum  = searchParams.get("durum") || "Tümü";
+  const durum  = searchParams.get("durum") || "YeniDevam";
   const offset = (page - 1) * limit;
 
   try {
@@ -28,6 +28,15 @@ export async function GET(request: Request) {
     const hasLimitEn    = x1Cols.has("LimitEn");
     const hasBirimEn    = x1Cols.has("BirimEn");
     const hasHizmetDurum = x1Cols.has("HizmetDurum");
+    const aktifDurumlar = "'Yeni','YeniAnaliz','Devam','Devam Ediyor'";
+    const hizmetDurumPriorityExpr = hasHizmetDurum
+      ? `CASE
+          WHEN x1.HizmetDurum IN ('Yeni','YeniAnaliz') THEN 0
+          WHEN x1.HizmetDurum IS NULL OR x1.HizmetDurum IN ('Devam','Devam Ediyor') THEN 1
+          WHEN x1.HizmetDurum = 'Tamamlandı' THEN 2
+          ELSE 1
+        END`
+      : "1";
 
     // WHERE koşulları
     const whereClauses: string[] = ["n.Durum = 'Aktif'"];
@@ -49,8 +58,8 @@ export async function GET(request: Request) {
 
     if (durum === "Tamamlandı" && hasHizmetDurum) {
       whereClauses.push(`x1.HizmetDurum = 'Tamamlandı'`);
-    } else if (durum === "Devam" && hasHizmetDurum) {
-      whereClauses.push(`(x1.HizmetDurum = 'Devam' OR x1.HizmetDurum IS NULL)`);
+    } else if (durum === "YeniDevam" && hasHizmetDurum) {
+      whereClauses.push(`(x1.HizmetDurum IS NULL OR x1.HizmetDurum IN (${aktifDurumlar}))`);
     }
 
     const where = whereClauses.join(" AND ");
@@ -85,7 +94,8 @@ export async function GET(request: Request) {
           MIN(CASE
             WHEN x1.Termin IS NULL THEN CAST('9999-12-31' AS DATE)
             ELSE CAST(x1.Termin AS DATE)
-          END) AS MinTermin
+          END) AS MinTermin,
+          MIN(${hizmetDurumPriorityExpr}) AS DurumPriority
         FROM NKR n
         JOIN NumuneX1 x1 ON x1.RaporID = n.ID
         LEFT JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
@@ -93,7 +103,7 @@ export async function GET(request: Request) {
         GROUP BY n.ID
       ),
       Ranked AS (
-        SELECT NkrID, ROW_NUMBER() OVER (ORDER BY MinTermin ASC) AS rn
+        SELECT NkrID, ROW_NUMBER() OVER (ORDER BY DurumPriority ASC, MinTermin ASC, NkrID DESC) AS rn
         FROM NkrMin
       )
       SELECT NkrID FROM Ranked WHERE rn >= @rn_from AND rn <= @rn_to
@@ -138,6 +148,7 @@ export async function GET(request: Request) {
         WHERE n.ID IN (${inList}) AND ${where}
         ORDER BY
           n.ID,
+          ${hizmetDurumPriorityExpr} ASC,
           CASE WHEN x1.Termin IS NULL THEN 1 ELSE 0 END ASC,
           x1.Termin ASC,
           x1.ID

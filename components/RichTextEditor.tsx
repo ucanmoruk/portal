@@ -52,14 +52,18 @@ const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
 
     useEffect(() => {
         if (editor && content !== editor.getHTML()) {
-            editor.commands.setContent(content, false);
+            editor.commands.setContent(content, { emitUpdate: false });
         }
     }, [content, editor]);
 
     if (!editor) return null;
 
-    const isActive = (type: string, options?: any) => {
-        return editor.isActive(type, options) ? 'bg-slate-200' : 'hover:bg-slate-100';
+    const isActive = (typeOrAttrs: string | Record<string, unknown>, options?: Record<string, unknown>) => {
+        const active = typeof typeOrAttrs === 'string'
+            ? editor.isActive(typeOrAttrs, options)
+            : editor.isActive('paragraph', typeOrAttrs) || editor.isActive('heading', typeOrAttrs);
+
+        return active ? 'bg-slate-200' : 'hover:bg-slate-100';
     };
 
     return (

@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db_eurolab";
+import { hasEurolabDatabaseConfig, query } from "@/lib/db_eurolab";
+import { createLocalMethod, listLocalMethods } from "@/lib/eurolab_local_methods";
 
 // GET /api/eurolab/methods
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const search = searchParams.get("search") || "";
+
+        if (!hasEurolabDatabaseConfig()) {
+            return NextResponse.json(await listLocalMethods(search));
+        }
         
         let sql = `
             SELECT * FROM eurolab_methods 
@@ -27,6 +32,17 @@ export async function POST(request: Request) {
     try {
         const body = await request.json();
         const { method_code, name, technique, matrix, personnel, validation_date } = body;
+
+        if (!hasEurolabDatabaseConfig()) {
+            return NextResponse.json(await createLocalMethod({
+                method_code,
+                name,
+                technique,
+                matrix,
+                personnel,
+                validation_date: validation_date || null,
+            }));
+        }
 
         const sql = `
             INSERT INTO eurolab_methods (method_code, name, technique, matrix, personnel, validation_date, status)
