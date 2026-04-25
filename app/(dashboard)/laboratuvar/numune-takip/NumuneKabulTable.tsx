@@ -24,6 +24,13 @@ interface EvrakGroup {
   numuneler: NumuneItem[];
 }
 
+interface TeklifOpt {
+  ID: number;
+  TeklifNo: number | null;
+  RevNo: number;
+  MusteriAd: string;
+}
+
 // Fatura kesilmiş = yalnızca bu iki durum; diğerleri (null dahil) → Faturalandır aktif
 const isFaturali = (d: string | null) => d === "Ödendi" || d === "Bekliyor";
 
@@ -81,6 +88,10 @@ export default function NumuneKabulTable() {
 
   const [selectedIds, setSelectedIds]       = useState<Set<number>>(new Set());
   const [printMenuEvrak, setPrintMenuEvrak] = useState<string | null>(null);
+  const [invoiceGroup, setInvoiceGroup] = useState<EvrakGroup | null>(null);
+  const [invoiceTeklifId, setInvoiceTeklifId] = useState("");
+  const [invoiceOffers, setInvoiceOffers] = useState<TeklifOpt[]>([]);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
 
   const toggleSelect = (id: number) =>
     setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -193,6 +204,30 @@ export default function NumuneKabulTable() {
   const openEdit = (n: NumuneItem) => {
     window.open(`/laboratuvar/numune-form/${n.ID}`, "_blank", "noopener,noreferrer");
   };
+
+  const openInvoice = async (group: EvrakGroup) => {
+    setInvoiceGroup(group);
+    setInvoiceTeklifId("");
+    setInvoiceOffers([]);
+    setInvoiceLoading(true);
+    try {
+      const res = await fetch("/api/teklifler?page=1&limit=100");
+      const json = await res.json();
+      setInvoiceOffers(json.data || []);
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
+
+  const continueInvoice = () => {
+    if (!invoiceGroup) return;
+    const qs = new URLSearchParams({ evrakNo: invoiceGroup.evrakNo });
+    if (invoiceTeklifId) qs.set("teklifId", invoiceTeklifId);
+    router.push(`/musteriler/proforma-listesi?${qs.toString()}`);
+  };
+
+  const teklifLabel = (t: TeklifOpt) =>
+    `${t.TeklifNo ? `ROT${t.TeklifNo}${t.RevNo > 0 ? `/${t.RevNo}` : ""}` : `Teklif #${t.ID}`} - ${t.MusteriAd || "Firma yok"}`;
 
   // ── Sayfalama ────────────────────────────────────────────────
   const goTo = (p: number) => { if (p >= 1 && p <= totalPages) setPage(p); };
@@ -431,7 +466,7 @@ export default function NumuneKabulTable() {
                     disabled={isFaturali(group.odemeDurumu)}
                     title={isFaturali(group.odemeDurumu) ? "Fatura kesilmiş" : "Faturalandır"}
                     onClick={() => {
-                      // TODO: router.push(`/musteriler/proforma-listesi?evrakNo=${group.evrakNo}`)
+                      openInvoice(group);
                     }}
                     style={isFaturali(group.odemeDurumu)
                       ? { opacity: 0.25, cursor: "not-allowed" }
@@ -590,6 +625,45 @@ export default function NumuneKabulTable() {
               <button className={styles.deleteBtnPrimary} onClick={handleDelete} disabled={deleting}>
                 {deleting ? <span className={styles.loader} /> : "Pasife Al"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {invoiceGroup && (
+        <div className={styles.modalOverlay} onClick={() => setInvoiceGroup(null)}>
+          <div className={styles.modal} style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>Faturalandır / Proforma Oluştur</h2>
+              <button className={styles.modalClose} onClick={() => setInvoiceGroup(null)}>
+                <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                </svg>
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <p style={{ marginTop: 0, color: "var(--color-text-secondary)" }}>
+                Evrak No <strong>{invoiceGroup.evrakNo}</strong> için proforma hazırlanacak. İstersen mevcut bir fiyat teklifini seçebilir veya manuel fiyat girişiyle devam edebilirsin.
+              </p>
+              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600 }}>
+                Fiyat teklifi
+                <select
+                  className={styles.pageSizeSelect}
+                  value={invoiceTeklifId}
+                  onChange={e => setInvoiceTeklifId(e.target.value)}
+                  disabled={invoiceLoading}
+                  style={{ width: "100%", height: 38 }}
+                >
+                  <option value="">{invoiceLoading ? "Teklifler yükleniyor..." : "Manuel fiyat gireceğim"}</option>
+                  {invoiceOffers.map(t => (
+                    <option key={t.ID} value={t.ID}>{teklifLabel(t)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className={styles.modalFooter}>
+              <button className={styles.cancelBtn} onClick={() => setInvoiceGroup(null)}>Vazgeç</button>
+              <button className={styles.addBtn} onClick={continueInvoice}>Devam Et</button>
             </div>
           </div>
         </div>

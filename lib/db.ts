@@ -309,6 +309,7 @@ const translateSql = async (rawSql: string, inputs: Record<string, InputValue>) 
     .replace(/'Diger'/g, '"Diger"')
     .replace(/'Etiket'/g, '"Etiket"')
     .replace(/'%'\s*\+\s*(@[A-Za-z0-9_]+)\s*\+\s*'%'/g, "('%' || $1 || '%')")
+    .replace(/(@[A-Za-z0-9_]+)\s*\+\s*'%'/g, "($1 || '%')")
     .replace(/OFFSET\s+(@[A-Za-z0-9_]+|\d+)\s+ROWS\s+FETCH\s+NEXT\s+(@[A-Za-z0-9_]+|\d+)\s+ROWS\s+ONLY/gi, "OFFSET $1 LIMIT $2");
 
   sql = translateSysColumns(sql);
