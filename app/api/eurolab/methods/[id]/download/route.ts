@@ -3,6 +3,36 @@ import fs from 'fs';
 import path from 'path';
 import { createReport } from 'docx-templates';
 
+const decodeHtmlEntities = (value: string) => value
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)));
+
+const htmlToWordText = (html: unknown) => {
+    if (!html) return '';
+
+    const text = String(html)
+        .replace(/\r?\n/g, ' ')
+        .replace(/<\s*br\s*\/?>/gi, '\n')
+        .replace(/<\/\s*p\s*>/gi, '\n')
+        .replace(/<\/\s*div\s*>/gi, '\n')
+        .replace(/<\/\s*li\s*>/gi, '\n')
+        .replace(/<\s*li[^>]*>/gi, '- ')
+        .replace(/<\/\s*h[1-6]\s*>/gi, '\n')
+        .replace(/<[^>]+>/g, '');
+
+    return decodeHtmlEntities(text)
+        .split('\n')
+        .map(line => line.replace(/[ \t]+/g, ' ').trim())
+        .filter(Boolean)
+        .join('\n');
+};
+
 export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -13,45 +43,38 @@ export async function POST(
         const { instruction, method } = body;
 
         const templatePath = path.join(process.cwd(), 'sablon', 'talimat_sablon.docx');
-        
+
         if (!fs.existsSync(templatePath)) {
             return new NextResponse(JSON.stringify({ error: 'Şablon dosyası bulunamadı.' }), { status: 404 });
         }
 
         const templateBuffer = fs.readFileSync(templatePath);
-        
-        // HTML'i Word'ün (altChunk) sorunsuz okuyabilmesi için tam bir sayfa yapısına saralım
-        const wrapHtml = (html: string) => {
-            if (!html) return '';
-            const cleaned = html.replace(/&nbsp;/g, ' ').replace(/<p><\/p>/g, '');
-            return `<html><head><meta charset="UTF-8"></head><body>${cleaned}</body></html>`;
-        };
 
         const data = {
             kod: String(method?.method_code || ''),
             ad: String(method?.name || ''),
             matriks: String(method?.matrix || ''),
             test: 'SİSTEM AKTİF - TEST BAŞARILI',
-            
-            // HTML Destekli (Şablonda +++HTML s1+++ şeklinde kullanılmalı)
-            s1: wrapHtml(instruction?.["1.0"] || ''),
-            s2: wrapHtml(instruction?.["2.0"] || ''),
-            s3: wrapHtml(instruction?.["3.0"] || ''),
-            s3_1: wrapHtml(instruction?.["3.1"] || ''),
-            s3_2: wrapHtml(instruction?.["3.2"] || ''),
-            s3_3: wrapHtml(instruction?.["3.3"] || ''),
-            s3_4: wrapHtml(instruction?.["3.4"] || ''),
-            s3_5: wrapHtml(instruction?.["3.5"] || ''),
-            s4: wrapHtml(instruction?.["4.0"] || ''),
-            s5: wrapHtml(instruction?.["5.0"] || ''),
-            s6: wrapHtml(instruction?.["6.0"] || ''),
-            s7: wrapHtml(instruction?.["7.0"] || ''),
-            s8: wrapHtml(instruction?.["8.0"] || ''),
-            s9: wrapHtml(instruction?.["9.0"] || ''),
 
-            // Düz Metin (Şablonda +++t1+++ şeklinde kullanılmalı)
-            t1: String(instruction?.["1.0"] || '').replace(/<[^>]*>/g, ''),
-            t3_1: String(instruction?.["3.1"] || '').replace(/<[^>]*>/g, ''),
+            // Keep template styling by sending plain text instead of raw editor HTML.
+            s1: htmlToWordText(instruction?.["1.0"]),
+            s2: htmlToWordText(instruction?.["2.0"]),
+            s3: htmlToWordText(instruction?.["3.0"]),
+            s3_1: htmlToWordText(instruction?.["3.1"]),
+            s3_2: htmlToWordText(instruction?.["3.2"]),
+            s3_3: htmlToWordText(instruction?.["3.3"]),
+            s3_4: htmlToWordText(instruction?.["3.4"]),
+            s3_5: htmlToWordText(instruction?.["3.5"]),
+            s4: htmlToWordText(instruction?.["4.0"]),
+            s5: htmlToWordText(instruction?.["5.0"]),
+            s6: htmlToWordText(instruction?.["6.0"]),
+            s7: htmlToWordText(instruction?.["7.0"]),
+            s8: htmlToWordText(instruction?.["8.0"]),
+            s9: htmlToWordText(instruction?.["9.0"]),
+
+            // Plain text aliases for template fields.
+            t1: htmlToWordText(instruction?.["1.0"]),
+            t3_1: htmlToWordText(instruction?.["3.1"]),
         };
 
         const buffer = await createReport({
