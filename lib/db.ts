@@ -98,7 +98,7 @@ const getMetadata = async (): Promise<DbMetadata> => {
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const quoteIdent = (value: string) => `"${value.replace(/"/g, '""')}"`;
 const identPattern = (value: string) =>
-  new RegExp(`(?<!["\\p{L}\\p{N}_])${escapeRegExp(value)}(?!["\\p{L}\\p{N}_])`, "gu");
+  new RegExp(`(?<![@"\.\\p{L}\\p{N}_])${escapeRegExp(value)}(?![".\\p{L}\\p{N}_])`, "gu");
 
 const splitSqlStrings = (sql: string) => {
   const parts: { value: string; quoted: boolean }[] = [];
@@ -126,6 +126,36 @@ const splitSqlStrings = (sql: string) => {
   return parts;
 };
 
+const splitSqlStatements = (sql: string) => {
+  const statements: string[] = [];
+  let current = "";
+  let quoted = false;
+
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+    if (char === "'") {
+      current += char;
+      if (quoted && sql[i + 1] === "'") {
+        current += sql[i + 1];
+        i++;
+        continue;
+      }
+      quoted = !quoted;
+      continue;
+    }
+    if (char === ";" && !quoted) {
+      if (current.trim()) statements.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  if (current.trim()) statements.push(current.trim());
+  return statements;
+};
+
+
 const quoteKnownIdentifiers = (sql: string, metadata: DbMetadata) => {
   const parts = splitSqlStrings(sql);
 
@@ -135,12 +165,28 @@ const quoteKnownIdentifiers = (sql: string, metadata: DbMetadata) => {
     let value = part.value.replace(/\[([^\]]+)\]/g, (_, ident) => quoteIdent(ident));
 
     for (const table of metadata.tables) {
-      value = value.replace(identPattern(table.name), `${quoteIdent(table.schema)}.${quoteIdent(table.name)}`);
+      const schemaQualified = new RegExp(
+        `(?<![".\\p{L}\\p{N}_])(?:dbo|cosmoroot)\\s*\\.\\s*${escapeRegExp(table.name)}(?![".\\p{L}\\p{N}_])`,
+        "giu",
+      );
+      value = value.replace(schemaQualified, `${quoteIdent(table.schema)}.${quoteIdent(table.name)}`);
+    }
+
+    for (const table of metadata.tables) {
+      const tableReference = new RegExp(
+        `\\b(FROM|JOIN|UPDATE|INTO)\\s+${escapeRegExp(table.name)}(?![".\\p{L}\\p{N}_])`,
+        "giu",
+      );
+      value = value.replace(tableReference, (_, keyword) => `${keyword} ${quoteIdent(table.schema)}.${quoteIdent(table.name)}`);
     }
 
     for (const name of metadata.columns) {
       const pattern = identPattern(name);
       value = value.replace(pattern, quoteIdent(name));
+      value = value.replace(
+        new RegExp(`(?<=\\.)${escapeRegExp(name)}(?![".\\p{L}\\p{N}_])`, "gu"),
+        quoteIdent(name),
+      );
     }
     return value;
   }).join("");
@@ -168,12 +214,59 @@ const translateTop = (sql: string) => {
   return /\bLIMIT\b/i.test(withoutTop) ? withoutTop : `${withoutTop} LIMIT ${limit}`;
 };
 
+const translateSubqueryTop = (sql: string) =>
+  sql.replace(
+    /\(\s*SELECT\s+TOP\s+(\d+)\s+([\s\S]+?)\s+FROM\s+([\s\S]+?)\)/gi,
+    (_, limit, selectList, fromAndWhere) => `(SELECT ${selectList} FROM ${fromAndWhere} LIMIT ${limit})`,
+  );
+
+const translateSysColumns = (sql: string) =>
+  sql.replace(
+    /SELECT\s+name\s+FROM\s+sys\.columns\s+WHERE\s+object_id\s*=\s*OBJECT_ID\(\s*'([^']+)'\s*\)\s+AND\s+name\s+IN\s*\(([^)]+)\)/gi,
+    (_, tableName, names) => `
+      SELECT column_name AS name
+      FROM information_schema.columns
+      WHERE table_schema IN ('dbo', 'cosmoroot')
+        AND table_name = '${String(tableName).replace(/'/g, "''")}'
+        AND column_name IN (${names})
+    `,
+  );
+
+const translateDateFunctions = (sql: string) =>
+  sql
+    .replace(/CONVERT\s*\(\s*varchar\s*\(\s*10\s*\)\s*,\s*([^,()]+(?:\([^)]*\))?)\s*,\s*(?:23|120)\s*\)/gi, "TO_CHAR($1::date, 'YYYY-MM-DD')")
+    .replace(/CONVERT\s*\(\s*date\s*,\s*([^)]+?)\s*\)/gi, "($1)::date")
+    .replace(/YEAR\s*\(\s*\(([^)]+)\)::date\s*\)/gi, "EXTRACT(YEAR FROM $1::date)::int")
+    .replace(/YEAR\s*\(\s*([^)]+?)\s*\)/gi, "EXTRACT(YEAR FROM $1)::int");
+
+const translateStringConcat = (sql: string) =>
+  sql
+    .replace(
+      /([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*)\s*\+\s*'([^']*)'\s*\+\s*([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*)/g,
+      "COALESCE($1::text, '') || '$2' || COALESCE($3::text, '')",
+    )
+    .replace(
+      /([A-Za-z_][A-Za-z0-9_]*)\s*\+\s*'([^']*)'\s*\+\s*([A-Za-z_][A-Za-z0-9_]*)/g,
+      "COALESCE($1::text, '') || '$2' || COALESCE($3::text, '')",
+    );
+
+const extractAliases = (sql: string) => {
+  const aliases = new Set<string>();
+  const typeNames = new Set(["INT", "INTEGER", "BIGINT", "DATE", "DATETIME", "BIT", "TEXT", "NVARCHAR", "VARCHAR", "DECIMAL", "NUMERIC", "FLOAT"]);
+  for (const match of sql.matchAll(/\bAS\s+("?)([A-Za-z_][A-Za-z0-9_]*)\1/gi)) {
+    const alias = match[2];
+    if (!typeNames.has(alias.toUpperCase())) aliases.add(alias);
+  }
+  return [...aliases];
+};
+
 const translateSql = async (rawSql: string, inputs: Record<string, InputValue>) => {
   const trimmed = rawSql.trim();
+  const aliases = extractAliases(rawSql);
 
   // Legacy self-migrations are not needed after the MSSQL mirror has been created in Neon.
-  if (/^(IF\s+NOT\s+EXISTS|IF\s+COL_LENGTH|ALTER\s+TABLE|CREATE\s+TABLE)/i.test(trimmed)) {
-    return { sql: "", values: [] as InputValue[], noOp: true };
+  if (/^(IF\s+NOT\s+EXISTS|IF\s+COL_LENGTH|ALTER\s+TABLE|CREATE\s+TABLE|SELECT\s+SCOPE_IDENTITY\(\))/i.test(trimmed)) {
+    return { sql: "", values: [] as InputValue[], noOp: true, aliases };
   }
 
   let sql = rawSql
@@ -182,17 +275,22 @@ const translateSql = async (rawSql: string, inputs: Record<string, InputValue>) 
     .replace(/\bISNULL\s*\(/gi, "COALESCE(")
     .replace(/\bNVARCHAR\s*\(\s*MAX\s*\)/gi, "text")
     .replace(/\bNVARCHAR\s*\((\d+)\)/gi, "varchar($1)")
+    .replace(/\bNVARCHAR\b/gi, "text")
     .replace(/\bDATETIME\b/gi, "timestamp")
     .replace(/\bBIT\b/gi, "boolean")
+    .replace(/\s+WITH\s*\(\s*NOLOCK\s*\)/gi, "")
     .replace(/FORMAT\(([^,]+),\s*'dd\.MM\.yyyy'\)/gi, "TO_CHAR($1, 'DD.MM.YYYY')")
     .replace(/'Maks'/g, '"Maks"')
     .replace(/'Diger'/g, '"Diger"')
     .replace(/'Etiket'/g, '"Etiket"')
     .replace(/'%'\s*\+\s*(@[A-Za-z0-9_]+)\s*\+\s*'%'/g, "('%' || $1 || '%')")
-    .replace(/'%'\s*\+\s*(@[A-Za-z0-9_]+)\s*\+\s*'%'/g, "('%' || $1 || '%')")
     .replace(/OFFSET\s+(@[A-Za-z0-9_]+|\d+)\s+ROWS\s+FETCH\s+NEXT\s+(@[A-Za-z0-9_]+|\d+)\s+ROWS\s+ONLY/gi, "OFFSET $1 LIMIT $2");
 
+  sql = translateSysColumns(sql);
+  sql = translateDateFunctions(sql);
+  sql = translateStringConcat(sql);
   sql = translateTryCast(sql);
+  sql = translateSubqueryTop(sql);
   sql = translateTop(sql);
   sql = quoteKnownIdentifiers(sql, await getMetadata());
   sql = translateOutputInserted(sql);
@@ -207,7 +305,7 @@ const translateSql = async (rawSql: string, inputs: Record<string, InputValue>) 
     return `$${paramOrder.get(name)}`;
   });
 
-  return { sql, values, noOp: false };
+  return { sql, values, noOp: false, aliases };
 };
 
 class PgCompatRequest {
@@ -218,7 +316,7 @@ class PgCompatRequest {
     return this;
   }
 
-  async query(sql: string) {
+  private async executeSingle(sql: string) {
     const translated = await translateSql(sql, this.inputs);
     if (translated.noOp) return { recordset: [], rowsAffected: [0] };
 
@@ -229,6 +327,10 @@ class PgCompatRequest {
     const result = await getPgPool().query(translated.sql, translated.values);
     const recordset = result.rows.map((row) => {
       const next: Record<string, unknown> = { ...row };
+      for (const alias of translated.aliases) {
+        const lower = alias.toLowerCase();
+        if (!(alias in next) && lower in row) next[alias] = row[lower];
+      }
       for (const key of Object.keys(row)) {
         const upper = key.toUpperCase();
         if (!(upper in next)) next[upper] = row[key];
@@ -240,6 +342,23 @@ class PgCompatRequest {
       recordset,
       rowsAffected: [result.rowCount ?? 0],
     };
+  }
+
+  async query(sql: string) {
+    const statements = splitSqlStatements(sql);
+    if (statements.length > 1) {
+      const results = [];
+      for (const statement of statements) {
+        results.push(await this.executeSingle(statement));
+      }
+      return {
+        recordset: results[0]?.recordset ?? [],
+        recordsets: results.map((result) => result.recordset),
+        rowsAffected: results.flatMap((result) => result.rowsAffected),
+      };
+    }
+
+    return this.executeSingle(sql);
   }
 
   async batch(sql: string) {
