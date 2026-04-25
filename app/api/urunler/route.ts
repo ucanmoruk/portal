@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         l.A as 'ADegeri', l.RaporDurum as 'DurumLabel', l.ID 
         FROM rUGDListe l 
         LEFT JOIN RootTedarikci t ON l.FirmaID = t.ID
-        LEFT JOIN rUGDTip g ON l.Tip2 = g.ID 
+        LEFT JOIN rUGDTip g ON NULLIF(l.Tip2, '')::int = g.ID 
         ${where}
         ORDER BY l.ID DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY

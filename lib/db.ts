@@ -236,8 +236,10 @@ const translateDateFunctions = (sql: string) =>
   sql
     .replace(/CONVERT\s*\(\s*varchar\s*\(\s*10\s*\)\s*,\s*([^,()]+(?:\([^)]*\))?)\s*,\s*(?:23|120)\s*\)/gi, "TO_CHAR($1::date, 'YYYY-MM-DD')")
     .replace(/CONVERT\s*\(\s*date\s*,\s*([^)]+?)\s*\)/gi, "($1)::date")
+    .replace(/YEAR\s*\(\s*COALESCE\s*\(([^,]+),\s*([^)]+)\)\s*\)/gi, "EXTRACT(YEAR FROM COALESCE($1, $2)::date)::int")
     .replace(/YEAR\s*\(\s*\(([^)]+)\)::date\s*\)/gi, "EXTRACT(YEAR FROM $1::date)::int")
-    .replace(/YEAR\s*\(\s*([^)]+?)\s*\)/gi, "EXTRACT(YEAR FROM $1)::int");
+    .replace(/YEAR\s*\(\s*([^)]+?)\s*\)/gi, "EXTRACT(YEAR FROM $1)::int")
+    .replace(/MONTH\s*\(\s*([^)]+?)\s*\)/gi, "EXTRACT(MONTH FROM $1)::int");
 
 const translateStringConcat = (sql: string) =>
   sql
@@ -249,6 +251,13 @@ const translateStringConcat = (sql: string) =>
       /([A-Za-z_][A-Za-z0-9_]*)\s*\+\s*'([^']*)'\s*\+\s*([A-Za-z_][A-Za-z0-9_]*)/g,
       "COALESCE($1::text, '') || '$2' || COALESCE($3::text, '')",
     );
+
+const translateBitComparisons = (sql: string) =>
+  sql
+    .replace(/((?:[A-Za-z_][A-Za-z0-9_]*\.)?(?:Dahil|SilindiMi))\s*=\s*1\b/g, "$1 = TRUE")
+    .replace(/((?:[A-Za-z_][A-Za-z0-9_]*\.)?(?:Dahil|SilindiMi))\s*=\s*0\b/g, "$1 = FALSE")
+    .replace(/((?:[A-Za-z_][A-Za-z0-9_]*\.)?(?:Dahil|SilindiMi))\s*<>\s*1\b/g, "$1 <> TRUE")
+    .replace(/((?:[A-Za-z_][A-Za-z0-9_]*\.)?(?:Dahil|SilindiMi))\s*<>\s*0\b/g, "$1 <> FALSE");
 
 const extractAliases = (sql: string) => {
   const aliases = new Set<string>();
@@ -279,6 +288,8 @@ const translateSql = async (rawSql: string, inputs: Record<string, InputValue>) 
     .replace(/\bDATETIME\b/gi, "timestamp")
     .replace(/\bBIT\b/gi, "boolean")
     .replace(/\s+WITH\s*\(\s*NOLOCK\s*\)/gi, "")
+    .replace(/\s+COLLATE\s+[A-Za-z0-9_]+/gi, "")
+    .replace(/\bAS\s+'([A-Za-z_][A-Za-z0-9_]*)'/gi, (_, alias) => `AS ${quoteIdent(alias)}`)
     .replace(/FORMAT\(([^,]+),\s*'dd\.MM\.yyyy'\)/gi, "TO_CHAR($1, 'DD.MM.YYYY')")
     .replace(/'Maks'/g, '"Maks"')
     .replace(/'Diger'/g, '"Diger"')
@@ -289,6 +300,7 @@ const translateSql = async (rawSql: string, inputs: Record<string, InputValue>) 
   sql = translateSysColumns(sql);
   sql = translateDateFunctions(sql);
   sql = translateStringConcat(sql);
+  sql = translateBitComparisons(sql);
   sql = translateTryCast(sql);
   sql = translateSubqueryTop(sql);
   sql = translateTop(sql);
