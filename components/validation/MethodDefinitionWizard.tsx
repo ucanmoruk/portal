@@ -48,6 +48,12 @@ interface Person {
     role: string;
 }
 
+interface PersonnelOption {
+    id: number;
+    name: string;
+    role: string;
+}
+
 interface Component {
     id: string;
     name: string;
@@ -96,7 +102,10 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
     const [newDevice, setNewDevice] = useState({ code: "", name: "", serialNo: "" });
 
     const [personnel, setPersonnel] = useState<Person[]>([]);
-    const [newPerson, setNewPerson] = useState({ name: "", role: "" });
+    const [newPerson, setNewPerson] = useState({ userId: "", name: "", role: "" });
+    const [personnelOptions, setPersonnelOptions] = useState<PersonnelOption[]>([]);
+    const [personnelLoading, setPersonnelLoading] = useState(false);
+    const [personnelError, setPersonnelError] = useState("");
 
     const [components, setComponents] = useState<Component[]>([]);
     const [newComponent, setNewComponent] = useState({ name: "", casNo: "", limit: "" });
@@ -137,6 +146,34 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
             alive = false;
         };
     }, [selectedMethodId]);
+
+    useEffect(() => {
+        let alive = true;
+
+        async function loadPersonnel() {
+            setPersonnelLoading(true);
+            setPersonnelError("");
+            try {
+                const res = await fetch("/api/eurolab/personnel", { credentials: "same-origin" });
+                const contentType = res.headers.get("content-type") || "";
+                if (!contentType.includes("application/json")) {
+                    throw new Error("Personel listesi için oturum veya bağlantı yanıtı alınamadı.");
+                }
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.error || "Personel listesi alınamadı.");
+                if (alive) setPersonnelOptions(json);
+            } catch (error: any) {
+                if (alive) setPersonnelError(error.message);
+            } finally {
+                if (alive) setPersonnelLoading(false);
+            }
+        }
+
+        loadPersonnel();
+        return () => {
+            alive = false;
+        };
+    }, []);
 
     useEffect(() => {
         if (!selectedMethod) return;
@@ -231,9 +268,22 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
 
     const addPerson = () => {
         if (newPerson.name && newPerson.role) {
-            setPersonnel([...personnel, { ...newPerson, id: crypto.randomUUID() }]);
-            setNewPerson({ name: "", role: "" });
+            setPersonnel([...personnel, {
+                id: crypto.randomUUID(),
+                name: newPerson.name,
+                role: newPerson.role,
+            }]);
+            setNewPerson({ userId: "", name: "", role: "" });
         }
+    };
+
+    const selectPerson = (userId: string) => {
+        const selected = personnelOptions.find(option => String(option.id) === userId);
+        setNewPerson({
+            userId,
+            name: selected?.name || "",
+            role: selected?.role || "",
+        });
     };
 
     const removePerson = (id: string) => setPersonnel(personnel.filter(p => p.id !== id));
@@ -599,8 +649,20 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                         <div className={styles.section}>
                             <div className={styles.entryBox}>
                                 <div className={styles.field}>
-                                    <Label className={styles.label}>Ad Soyad</Label>
-                                    <input className={styles.input} placeholder="Örn: Dr. Ayşe Yılmaz" value={newPerson.name} onChange={(event) => setNewPerson({ ...newPerson, name: event.target.value })} />
+                                    <Label className={styles.label}>Yetkili personel</Label>
+                                    <select
+                                        className={styles.input}
+                                        value={newPerson.userId}
+                                        onChange={(event) => selectPerson(event.target.value)}
+                                        disabled={personnelLoading}
+                                    >
+                                        <option value="">{personnelLoading ? "Personel listesi yükleniyor..." : "Kullanıcı seçin"}</option>
+                                        {personnelOptions.map(person => (
+                                            <option key={person.id} value={person.id}>
+                                                {person.name}{person.role ? ` (${person.role})` : ""}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className={styles.field}>
                                     <Label className={styles.label}>Görevi / Unvanı</Label>
@@ -608,6 +670,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                 </div>
                                 <Button onClick={addPerson} className={styles.primaryButton}><UserPlus size={16} /> Ekle</Button>
                             </div>
+                            {personnelError && <div className={styles.errorText}>{personnelError}</div>}
 
                             <div className={styles.tableShell}>
                                 <Table>

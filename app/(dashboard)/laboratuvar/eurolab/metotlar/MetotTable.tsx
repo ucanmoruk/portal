@@ -33,14 +33,11 @@ const INSTRUCTION_SECTIONS = [
     { id: "9.0", title: "9.0 Revizyon" }
 ];
 
-const PERSONNEL_OPTIONS = [
-    "Ahmet Yılmaz",
-    "Ayşe Demir",
-    "Mehmet Kaya",
-    "Canan Çelik",
-    "Burak Yıldız",
-    "Elif Akın"
-];
+interface PersonnelOption {
+    id: number;
+    name: string;
+    role: string;
+}
 
 const emptyForm = {
     method_code: "",
@@ -71,6 +68,8 @@ export default function MetotTable() {
     const [previewTarget, setPreviewTarget] = useState<Method | null>(null);
     const [previewLoading, setPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState("");
+    const [personnelOptions, setPersonnelOptions] = useState<PersonnelOption[]>([]);
+    const [personnelLoading, setPersonnelLoading] = useState(false);
 
     const fetchData = useCallback(async (s: string) => {
         setLoading(true);
@@ -96,6 +95,29 @@ export default function MetotTable() {
     useEffect(() => {
         fetchData(search);
     }, [fetchData, search]);
+
+    useEffect(() => {
+        let alive = true;
+
+        async function loadPersonnel() {
+            setPersonnelLoading(true);
+            try {
+                const res = await fetch("/api/eurolab/personnel", { credentials: "same-origin" });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.error || "Personel listesi alınamadı.");
+                if (alive) setPersonnelOptions(json);
+            } catch {
+                if (alive) setPersonnelOptions([]);
+            } finally {
+                if (alive) setPersonnelLoading(false);
+            }
+        }
+
+        loadPersonnel();
+        return () => {
+            alive = false;
+        };
+    }, []);
 
     const openAdd = () => {
         setForm(emptyForm);
@@ -353,7 +375,11 @@ export default function MetotTable() {
                                 <div className={`${styles.formGroup} ${styles.colSpan2}`}>
                                     <label>Yetkili Personel (Çoklu Seçim)</label>
                                     <div className="flex flex-wrap gap-3 mt-1 p-3 border rounded-lg bg-slate-50">
-                                        {PERSONNEL_OPTIONS.map(p => (
+                                        {personnelLoading && <span className="text-sm text-slate-500">Personel listesi yükleniyor...</span>}
+                                        {!personnelLoading && personnelOptions.length === 0 && <span className="text-sm text-slate-500">Aktif kullanıcı bulunamadı.</span>}
+                                        {personnelOptions.map(person => {
+                                            const p = person.name;
+                                            return (
                                             <label key={p} className="flex items-center gap-2 cursor-pointer text-sm">
                                                 <input 
                                                     type="checkbox" 
@@ -361,9 +387,9 @@ export default function MetotTable() {
                                                     onChange={() => togglePersonnel(p)}
                                                     className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                                 />
-                                                {p}
+                                                <span>{p}{person.role ? ` (${person.role})` : ""}</span>
                                             </label>
-                                        ))}
+                                        )})}
                                     </div>
                                 </div>
                             </div>

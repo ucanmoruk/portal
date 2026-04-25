@@ -16,6 +16,9 @@ export const MENU_TREE: MenuItem[] = [
       { key: "ugd.cosing",        label: "Cosing",         href: "/ugd/cosing"         },
       { key: "ugd.yonetmelik",    label: "Yönetmelik",     href: "/ugd/yonetmelik"     },
       { key: "ugd.firma-listesi", label: "Firma Listesi",  href: "/ugd/firma-listesi"  },
+      { key: "ugd.musteri-listesi", label: "Müşteri Listesi", href: "/ugd/musteri-listesi" },
+      { key: "ugd.teklif-listesi", label: "Teklif Listesi", href: "/ugd/teklif-listesi" },
+      { key: "ugd.hizmet-listesi", label: "Hizmet Listesi", href: "/ugd/hizmet-listesi" },
     ],
   },
   {

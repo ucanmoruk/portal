@@ -40,6 +40,9 @@ const navGroups: NavGroup[] = [
       { label: "Cosing",        href: "/ugd/cosing",         menuKey: "ugd.cosing"         },
       { label: "Yönetmelik",    href: "/ugd/yonetmelik",     menuKey: "ugd.yonetmelik"     },
       { label: "Firma Listesi", href: "/ugd/firma-listesi",  menuKey: "ugd.firma-listesi"  },
+      { label: "Müşteri Listesi", href: "/ugd/musteri-listesi", menuKey: "ugd.musteri-listesi" },
+      { label: "Teklif Listesi", href: "/ugd/teklif-listesi", menuKey: "ugd.teklif-listesi" },
+      { label: "Hizmet Listesi", href: "/ugd/hizmet-listesi", menuKey: "ugd.hizmet-listesi" },
     ],
   },
   {
@@ -310,6 +313,12 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
                   >
                     <span className={styles.navSubDot} />
                     Yetki Listesi
+                  </Link>
+                  <Link href="/admin/kullanici-listesi"
+                    className={`${styles.navSubLink} ${pathname.startsWith("/admin/kullanici-listesi") ? styles.navSubLinkActive : ""}`}
+                  >
+                    <span className={styles.navSubDot} />
+                    Kullanıcı Listesi
                   </Link>
                   <Link href="/admin/muhasebe"
                     className={`${styles.navSubLink} ${pathname.startsWith("/admin/muhasebe") ? styles.navSubLinkActive : ""}`}
