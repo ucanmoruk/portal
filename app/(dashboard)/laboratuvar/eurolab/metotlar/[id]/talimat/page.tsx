@@ -34,13 +34,22 @@ const sections = [
     { id: "9.0", title: "9.0 Revizyon", level: 1 }
 ];
 
+const instructionTabs = [
+    { id: "general", label: "Genel Bilgiler", sectionIds: ["1.0", "2.0"] },
+    { id: "application", label: "Uygulama", sectionIds: ["3.0", "3.1", "3.2", "3.3", "3.4", "3.5"] },
+    { id: "calculation", label: "Hesaplama", sectionIds: ["4.0"] },
+    { id: "quality", label: "Kalite Kontrol", sectionIds: ["5.0", "6.0", "7.0"] },
+    { id: "source", label: "Kaynak ve Revizyon", sectionIds: ["8.0", "9.0"] },
+];
+
 export default function AnalysisInstructionPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const [method, setMethod] = useState<any>(null);
     const [instruction, setInstruction] = useState<InstructionData>(defaultInstruction);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [expandedSections, setExpandedSections] = useState<string[]>(["1.0"]); 
+    const [activeTab, setActiveTab] = useState(instructionTabs[0].id);
+    const [expandedSections, setExpandedSections] = useState<string[]>(instructionTabs[0].sectionIds); 
 
     useEffect(() => {
         const loadData = async () => {
@@ -121,12 +130,22 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
         setInstruction(prev => ({ ...prev, [sectionId]: content }));
     };
 
+    const handleTabChange = (tabId: string) => {
+        const tab = instructionTabs.find(item => item.id === tabId);
+        if (!tab) return;
+        setActiveTab(tabId);
+        setExpandedSections(tab.sectionIds);
+    };
+
     const hasContent = (sectionId: string) => {
         const val = (instruction as any)[sectionId];
         return val && val.replace(/<[^>]*>/g, '').trim().length > 0;
     };
 
     if (loading) return <div className={styles.empty}>Yükleniyor...</div>;
+
+    const activeInstructionTab = instructionTabs.find(tab => tab.id === activeTab) || instructionTabs[0];
+    const visibleSections = sections.filter(section => activeInstructionTab.sectionIds.includes(section.id));
 
     return (
         <div className={styles.page}>
@@ -154,8 +173,72 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
                 </div>
             </div>
 
+            <div
+                style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    maxWidth: 980,
+                    marginTop: 4,
+                    padding: 6,
+                    border: "1px solid var(--color-border-light)",
+                    borderRadius: "var(--radius-full)",
+                    background: "var(--color-surface)",
+                    boxShadow: "var(--shadow-sm)",
+                }}
+            >
+                {instructionTabs.map(tab => {
+                    const selected = tab.id === activeTab;
+                    const completedCount = tab.sectionIds.filter(sectionId => hasContent(sectionId)).length;
+                    return (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => handleTabChange(tab.id)}
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 7,
+                                minHeight: 34,
+                                padding: "0 14px",
+                                border: selected ? "1px solid var(--color-accent)" : "1px solid transparent",
+                                borderRadius: "var(--radius-full)",
+                                background: selected ? "var(--color-accent)" : "transparent",
+                                color: selected ? "#fff" : "var(--color-text-secondary)",
+                                fontSize: "0.82rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                transition: "var(--transition-fast)",
+                                whiteSpace: "nowrap",
+                            }}
+                        >
+                            {tab.label}
+                            {completedCount > 0 && (
+                                <span
+                                    style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        minWidth: 20,
+                                        height: 20,
+                                        padding: "0 6px",
+                                        borderRadius: 999,
+                                        background: selected ? "rgba(255,255,255,0.2)" : "var(--color-accent-light)",
+                                        color: selected ? "#fff" : "var(--color-accent)",
+                                        fontSize: "0.72rem",
+                                    }}
+                                >
+                                    {completedCount}/{tab.sectionIds.length}
+                                </span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+
             <div className="flex flex-col gap-4 mt-2 max-w-5xl">
-                {sections.map((s) => {
+                {visibleSections.map((s) => {
                     const isExpanded = expandedSections.includes(s.id);
                     const filled = hasContent(s.id);
                     const isSub = s.level === 2;
