@@ -15,7 +15,21 @@ export async function GET(request: Request) {
 
     // Ürün Tipleri (rUGDTip)
     const tiplerResult = await pool.request()
-      .query("SELECT ID, UrunTipi, UygulamaBolgesi, ADegeri FROM rUGDTip ORDER BY UrunTipi");
+      .query(`
+        SELECT
+          ID,
+          UrunTipi,
+          UygulamaBolgesi,
+          YuzeyAlani,
+          Siklik,
+          GunlukMiktar,
+          ADegeri,
+          UrunTipiEn,
+          UygulamaBolgesiEn,
+          SiklikEn
+        FROM rUGDTip
+        ORDER BY UrunTipi
+      `);
 
     // Sonraki RaporNo (max + 1)
     const raporNoResult = await pool.request()

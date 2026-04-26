@@ -1,5 +1,6 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
 import sql from "@/lib/db";
 
 export const authOptions: NextAuthOptions = {
@@ -46,20 +47,26 @@ export const authOptions: NextAuthOptions = {
           }
 
           const whereClause = emailCol
-            ? `(${usernameCol} = @username OR ${emailCol} = @username)`
-            : `${usernameCol} = @username`;
+            ? `(LOWER(${usernameCol}) = LOWER(@username) OR LOWER(${emailCol}) = LOWER(@username))`
+            : `LOWER(${usernameCol}) = LOWER(@username)`;
 
           const result = await pool.request()
-            .input("username", credentials.username)
-            .input("password", credentials.password)
+            .input("username", credentials.username.trim())
             .query(`
               SELECT TOP 1 * FROM RootKullanici
-              WHERE ${whereClause} AND ${passwordCol} = @password
+              WHERE ${whereClause}
             `);
 
           const user = result.recordset[0];
 
-          if (user) {
+          const storedPassword = user?.[passwordCol] != null ? String(user[passwordCol]) : "";
+          const enteredPassword = String(credentials.password);
+          const passwordMatches =
+            storedPassword === enteredPassword ||
+            storedPassword === enteredPassword.trim() ||
+            (storedPassword.startsWith("$2") && await bcrypt.compare(enteredPassword, storedPassword));
+
+          if (user && passwordMatches) {
             // İsim oluşturma
             let displayName = user[usernameCol];
             if (nameCol) {

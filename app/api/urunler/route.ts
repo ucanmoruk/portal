@@ -3,6 +3,58 @@ import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
 import { type NextRequest } from "next/server";
 
+const RAPOR_TEXT_FIELDS = [
+  "NormalKullanim",
+  "MaruziyetAciklama",
+  "BilesenlereMaruziyet",
+  "ToksikolojikProfil",
+  "IstenmedEtkiler",
+  "UrunBilgisi",
+  "DegerlendirmeSonucu",
+  "EtiketUyarilariB2",
+  "Gerekce",
+  "SorumluAd",
+  "SorumluAdres",
+  "SorumluKanit",
+  "Kullanim",
+  "Ozellikler",
+  "Uyarilar",
+  "Mikrobiyoloji",
+  "MikrobiyolojiDurum",
+  "MikrobiyolojiGorsel",
+  "KoruyucuEtkinlik",
+  "KoruyucuEtkinlikDurum",
+  "KoruyucuEtkinlikGorsel",
+  "Stabilite",
+  "StabiliteDurum",
+  "StabiliteRafOmruAy",
+  "StabiliteAcilisAy",
+  "StabiliteGorsel",
+  "EtiketGorsel",
+];
+
+async function saveRaporTexts(pool: any, urunId: number, body: any) {
+  await pool.request()
+    .input("UrunID", urunId)
+    .query(`DELETE FROM rUGDRaporMetinleri WHERE UrunID = @UrunID`);
+
+  for (const field of RAPOR_TEXT_FIELDS) {
+    const tr = body[field] ?? "";
+    const en = body[`${field}En`] ?? "";
+    for (const [dil, metin] of [["tr", tr], ["en", en]] as const) {
+      await pool.request()
+        .input("UrunID", urunId)
+        .input("Alan", field)
+        .input("Dil", dil)
+        .input("Metin", metin)
+        .query(`
+          INSERT INTO rUGDRaporMetinleri (UrunID, Alan, Dil, Metin, UpdatedAt)
+          VALUES (@UrunID, @Alan, @Dil, @Metin, GETDATE())
+        `);
+    }
+  }
+}
+
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -109,6 +161,7 @@ export async function POST(request: Request) {
       `);
 
     const newId = result.recordset[0]?.ID ?? null;
+    if (newId) await saveRaporTexts(pool, Number(newId), body);
     return Response.json({ message: "Başarıyla eklendi", id: newId });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });

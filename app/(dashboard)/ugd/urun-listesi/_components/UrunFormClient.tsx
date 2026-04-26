@@ -62,10 +62,11 @@ function fmtMOS(v: number | null): string {
 type FormKey = keyof ReturnType<typeof emptyForm>;
 interface PhysRow { label: string; tr: FormKey; en: FormKey }
 
-function PhysChemTable({ rows, form, onChange }: {
+function PhysChemTable({ rows, form, onChange, language }: {
   rows: PhysRow[];
   form: ReturnType<typeof emptyForm>;
   onChange: (field: FormKey, v: string) => void;
+  language: 'tr' | 'en';
 }) {
   const tdLabel: React.CSSProperties = {
     width: 170, padding: '6px 12px', fontSize: '0.82rem', fontWeight: 600,
@@ -84,24 +85,74 @@ function PhysChemTable({ rows, form, onChange }: {
       <thead>
         <tr style={{ background: 'var(--color-bg)' }}>
           <th style={{ ...tdLabel, color: 'var(--color-accent)', fontSize: '0.75rem', letterSpacing: '0.04em', paddingTop: 0 }}>Özellik</th>
-          <th style={{ ...tdInput, fontWeight: 700, fontSize: '0.75rem', color: 'var(--color-accent)', letterSpacing: '0.04em', paddingTop: 0, width: '44%' }}>TR</th>
-          <th style={{ ...tdInput, fontWeight: 700, fontSize: '0.75rem', color: 'var(--color-accent)', letterSpacing: '0.04em', paddingTop: 0, width: '44%' }}>EN</th>
+          <th style={{ ...tdInput, fontWeight: 700, fontSize: '0.75rem', color: 'var(--color-accent)', letterSpacing: '0.04em', paddingTop: 0 }}>{language === 'en' ? 'EN' : 'TR'}</th>
         </tr>
       </thead>
       <tbody>
-        {rows.map((row, i) => (
-          <tr key={row.label} style={{ background: i % 2 === 1 ? 'rgba(0,0,0,0.015)' : 'transparent' }}>
-            <td style={tdLabel}>{row.label}</td>
-            <td style={tdInput}><input value={String(form[row.tr])} onChange={e => onChange(row.tr, e.target.value)} style={inp} /></td>
-            <td style={tdInput}><input value={String(form[row.en])} onChange={e => onChange(row.en, e.target.value)} style={inp} /></td>
-          </tr>
-        ))}
+        {rows.map((row, i) => {
+          const field = language === 'en' ? row.en : row.tr;
+          return (
+            <tr key={row.label} style={{ background: i % 2 === 1 ? 'rgba(0,0,0,0.015)' : 'transparent' }}>
+              <td style={tdLabel}>{row.label}</td>
+              <td style={tdInput}><input value={String(form[field])} onChange={e => onChange(field, e.target.value)} style={inp} /></td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
 }
 
 // ── Module-level UI bileşenleri (focus kaymasını önler) ────────────────────────
+function PhysChemGrid({ groups, form, onChange, language }: {
+  groups: PhysRow[][];
+  form: ReturnType<typeof emptyForm>;
+  onChange: (field: FormKey, v: string) => void;
+  language: 'tr' | 'en';
+}) {
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    minWidth: 0,
+    padding: '6px 9px',
+    border: '1px solid var(--color-border-light)',
+    borderRadius: 6,
+    fontSize: '0.82rem',
+    background: 'var(--color-bg)',
+    boxSizing: 'border-box',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {groups.map((group, rowIndex) => (
+        <div
+          key={rowIndex}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${group.length}, minmax(0, 1fr))`,
+            gap: 10,
+            padding: 10,
+            borderRadius: 8,
+            border: '1px solid var(--color-border-light)',
+            background: rowIndex % 2 === 0 ? 'var(--color-surface)' : 'var(--color-bg)',
+          }}
+        >
+          {group.map(item => {
+            const field = language === 'en' ? item.en : item.tr;
+            return (
+              <label key={item.label} style={{ minWidth: 0 }}>
+                <span style={{ display: 'block', marginBottom: 5, fontSize: '0.76rem', fontWeight: 700, color: 'var(--color-text-secondary)' }}>
+                  {item.label}
+                </span>
+                <input value={String(form[field])} onChange={e => onChange(field, e.target.value)} style={inputStyle} />
+              </label>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className={styles.tableCard} style={{ padding: 24, marginBottom: 20 }}>
@@ -114,49 +165,153 @@ function SectionCard({ title, children }: { title: string; children: React.React
   );
 }
 
-function DualInput({ label, value, valueEn, onChange, onChangeEn, rows = 1 }: {
+function DualInput({ label, value, valueEn, onChange, onChangeEn, language = 'tr', rows = 1 }: {
   label: string; value: string; valueEn: string;
-  onChange: (v: string) => void; onChangeEn: (v: string) => void; rows?: number;
+  onChange: (v: string) => void; onChangeEn: (v: string) => void; language?: 'tr' | 'en'; rows?: number;
 }) {
+  const isEn = language === 'en';
   return (
     <div className={styles.formGroup}>
-      <label style={{ fontWeight: 600, fontSize: '0.85rem', display: 'block', marginBottom: 6 }}>{label}</label>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 4, letterSpacing: '0.04em' }}>TR</div>
-          {rows > 1
-            ? <textarea rows={rows} value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%' }} />
-            : <input type="text" value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%' }} />}
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: 4, letterSpacing: '0.04em' }}>EN</div>
-          {rows > 1
-            ? <textarea rows={rows} value={valueEn} onChange={e => onChangeEn(e.target.value)} style={{ width: '100%' }} />
-            : <input type="text" value={valueEn} onChange={e => onChangeEn(e.target.value)} style={{ width: '100%' }} />}
-        </div>
-      </div>
+      <label style={{ fontWeight: 600, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        {label}
+        <span style={{ fontSize: '0.68rem', fontWeight: 800, color: isEn ? '#1F4788' : '#248a3d', background: isEn ? '#eaf3ff' : '#e6f4ea', borderRadius: 999, padding: '2px 7px' }}>
+          {isEn ? 'EN' : 'TR'}
+        </span>
+      </label>
+      {rows > 1
+        ? <textarea rows={rows} value={isEn ? valueEn : value} onChange={e => (isEn ? onChangeEn(e.target.value) : onChange(e.target.value))} style={{ width: '100%' }} />
+        : <input type="text" value={isEn ? valueEn : value} onChange={e => (isEn ? onChangeEn(e.target.value) : onChange(e.target.value))} style={{ width: '100%' }} />}
     </div>
   );
 }
 
-function RaporField({ label, value, onChange, rows = 4, hint }: {
-  label: string; value: string; onChange: (v: string) => void; rows?: number; hint?: string;
+function RaporField({ label, value, valueEn, onChange, onChangeEn, language, rows = 4, hint, readOnly = false }: {
+  label: string;
+  value: string;
+  valueEn: string;
+  onChange: (v: string) => void;
+  onChangeEn: (v: string) => void;
+  language: 'tr' | 'en';
+  rows?: number;
+  hint?: string;
+  readOnly?: boolean;
 }) {
+  const isEn = language === 'en';
   return (
     <div className={styles.formGroup} style={{ marginBottom: 20 }}>
-      <label style={{ fontWeight: 600, marginBottom: 6, display: 'block', fontSize: '0.85rem', color: 'var(--color-accent)' }}>{label}</label>
+      <label style={{ fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: 'var(--color-accent)' }}>
+        {label}
+        <span style={{ fontSize: '0.68rem', fontWeight: 800, color: isEn ? '#1F4788' : '#248a3d', background: isEn ? '#eaf3ff' : '#e6f4ea', borderRadius: 999, padding: '2px 7px' }}>
+          {isEn ? 'EN' : 'TR'}
+        </span>
+      </label>
       {hint && <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', margin: '0 0 6px' }}>{hint}</p>}
       <textarea
         rows={rows}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.85rem', lineHeight: 1.6, padding: '10px 14px', borderRadius: 8, border: '1px solid var(--color-border-light)', background: 'var(--color-bg)', resize: 'vertical' }}
+        value={isEn ? valueEn : value}
+        onChange={e => (isEn ? onChangeEn(e.target.value) : onChange(e.target.value))}
+        readOnly={readOnly}
+        style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.85rem', lineHeight: 1.6, padding: '10px 14px', borderRadius: 8, border: '1px solid var(--color-border-light)', background: readOnly ? 'var(--color-surface-2)' : 'var(--color-bg)', resize: 'vertical' }}
       />
     </div>
   );
 }
 
-// ── Küçük tablo input stili ───────────────────────────────────────────────────
+function ReportLanguageSwitch({ language, onChange }: { language: 'tr' | 'en'; onChange: (v: 'tr' | 'en') => void }) {
+  const btn = (lang: 'tr' | 'en'): React.CSSProperties => ({
+    border: 'none',
+    borderRadius: 999,
+    padding: '7px 14px',
+    fontSize: '0.8rem',
+    fontWeight: 700,
+    cursor: 'pointer',
+    background: language === lang ? 'var(--color-accent)' : 'transparent',
+    color: language === lang ? '#fff' : 'var(--color-text-secondary)',
+    transition: 'var(--transition-fast)',
+  });
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+      <div style={{ display: 'inline-flex', gap: 4, padding: 4, background: 'var(--color-surface-2)', border: '1px solid var(--color-border-light)', borderRadius: 999 }}>
+        <button type="button" style={btn('tr')} onClick={() => onChange('tr')}>Türkçe</button>
+        <button type="button" style={btn('en')} onClick={() => onChange('en')}>English</button>
+      </div>
+    </div>
+  );
+}
+
+type LabStatus = 'Tamamlandı' | 'Devam Ediyor';
+
+function labSentence(kind: 'mikro' | 'challenge' | 'stabilite', status: LabStatus, shelfLife: string, pao: string) {
+  if (kind === 'mikro') {
+    return status === 'Tamamlandı'
+      ? "Son ürün için yapılan mikrobiyolojik analiz sonuçları ürün güvenlik dosyasında sunulmuştur. Sonuçlar mikrobiyolojik kalite kontrol limitlerine uygundur. Mikrobiyolojik kontaminasyon riski taşımamaktadır."
+      : "Mikrobiyolojik çalışmalar devam etmektedir.";
+  }
+  if (kind === 'challenge') {
+    return status === 'Tamamlandı'
+      ? "Son ürün için yapılan koruyucu etkinlik test sonuçları ürün güvenlik dosyasında sunulmuştur. Sonuçlar uygun olarak değerlendirilmiştir."
+      : "Koruyucu etkinlik testi çalışması devam etmektedir.";
+  }
+
+  const shelf = shelfLife || "[..]";
+  const after = pao || "[..]";
+  return status === 'Tamamlandı'
+    ? `Ürünün üretici tarafından öngörülen raf ömrü ${shelf} aydır. Ürünün açıldıktan sonraki dayanıklılık süresi etikette ${after} ay olarak belirtilmiştir. Stabilite test raporu dosya ekinde yer almaktadır.`
+    : `Ürünün üretici tarafından öngörülen raf ömrü ${shelf} aydır. Ürünün açıldıktan sonraki dayanıklılık süresi etikette ${after} ay olarak belirtilmiştir. Ürünle ilgili stabilite çalışmaları devam etmektedir.`;
+}
+
+function ImagePicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const handleFile = (file?: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onChange(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <label style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 32, padding: '6px 12px', borderRadius: 999, border: '1px solid var(--color-border)', cursor: 'pointer', color: 'var(--color-text-secondary)', background: 'var(--color-surface)' }}>
+        {label}
+        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleFile(e.target.files?.[0])} />
+      </label>
+      {value && (
+        <>
+          <img src={value} alt="Önizleme" style={{ width: 52, height: 52, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--color-border-light)' }} />
+          <button type="button" className={styles.cancelBtn} onClick={() => onChange("")}>Kaldır</button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function LabTestCard({
+  title, status, onStatus, image, onImage, children,
+}: {
+  title: string;
+  status: LabStatus;
+  onStatus: (v: LabStatus) => void;
+  image: string;
+  onImage: (v: string) => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div style={{ border: '1px solid var(--color-border-light)', borderRadius: 8, padding: 14, background: 'var(--color-surface)', minWidth: 0 }}>
+      <strong style={{ display: 'block', color: 'var(--color-text-primary)', marginBottom: 12 }}>{title}</strong>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'end', marginBottom: 12 }}>
+        <label style={{ minWidth: 0 }}>
+          <span style={{ display: 'block', marginBottom: 5, fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-text-secondary)' }}>Seçenek</span>
+          <select value={status} onChange={e => onStatus(e.target.value as LabStatus)} style={{ width: '100%', minWidth: 0, padding: '7px 10px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-bg)', boxSizing: 'border-box' }}>
+            <option value="Tamamlandı">Tamamlandı</option>
+            <option value="Devam Ediyor">Devam ediyor</option>
+          </select>
+        </label>
+        <ImagePicker label="Görsel ekle" value={image} onChange={onImage} />
+      </div>
+      {children}
+    </div>
+  );
+}
+
 const tblInput: React.CSSProperties = {
   width: '100%', padding: '3px 6px', border: '1px solid var(--color-border-light)',
   borderRadius: 4, fontSize: '0.75rem', background: 'var(--color-bg)', textAlign: 'right',
@@ -181,23 +336,44 @@ function emptyForm() {
     SudaCozunebilirlik: "N/A", SudaCozunebilirlikEn: "N/A",
     DigerCozunebilirlik: "N/A", DigerCozunebilirlikEn: "N/A",
     Mikrobiyoloji: "N/A", MikrobiyolojiEn: "N/A",
+    MikrobiyolojiDurum: "Tamamlandı",
+    MikrobiyolojiGorsel: "",
     KoruyucuEtkinlik: "N/A", KoruyucuEtkinlikEn: "N/A",
+    KoruyucuEtkinlikDurum: "Tamamlandı",
+    KoruyucuEtkinlikGorsel: "",
     Stabilite: "N/A", StabiliteEn: "N/A",
+    StabiliteDurum: "Tamamlandı",
+    StabiliteRafOmruAy: "",
+    StabiliteAcilisAy: "",
+    StabiliteGorsel: "",
     Kullanim: "", KullanimEn: "",
     Ozellikler: "", OzelliklerEn: "",
     Uyarilar: "", UyarilarEn: "",
+    EtiketGorsel: "",
     NormalKullanim: DEFAULTS.NormalKullanim,
+    NormalKullanimEn: "",
     MaruziyetAciklama: DEFAULTS.MaruziyetAciklama,
+    MaruziyetAciklamaEn: "",
     BilesenlereMaruziyet: DEFAULTS.BilesenlereMaruziyet,
+    BilesenlereMaruziyetEn: "",
     ToksikolojikProfil: DEFAULTS.ToksikolojikProfil,
+    ToksikolojikProfilEn: "",
     IstenmedEtkiler: DEFAULTS.IstenmedEtkiler,
+    IstenmedEtkilerEn: "",
     UrunBilgisi: DEFAULTS.UrunBilgisi,
+    UrunBilgisiEn: "",
     DegerlendirmeSonucu: DEFAULTS.DegerlendirmeSonucu,
+    DegerlendirmeSonucuEn: "",
     EtiketUyarilariB2: DEFAULTS.EtiketUyarilariB2,
+    EtiketUyarilariB2En: "",
     Gerekce: DEFAULTS.Gerekce,
+    GerekceEn: "",
     SorumluAd: DEFAULTS.SorumluAd,
+    SorumluAdEn: "",
     SorumluAdres: DEFAULTS.SorumluAdres,
+    SorumluAdresEn: "",
     SorumluKanit: DEFAULTS.SorumluKanit,
+    SorumluKanitEn: "",
   };
 }
 
@@ -221,6 +397,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
   const [savedOk, setSavedOk] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(isEdit);
+  const [reportLang, setReportLang] = useState<'tr' | 'en'>('tr');
 
   const [formulInput, setFormulInput] = useState("");
   const [formulResults, setFormulResults] = useState<MatchedIngredient[]>([]);
@@ -231,6 +408,58 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
 
   const [lookups, setLookups] = useState<{ firmalar: any[]; tipler: any[]; nextRaporNo?: number }>({ firmalar: [], tipler: [] });
   const [form, setForm] = useState(emptyForm());
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }, [activeTab]);
+
+  useEffect(() => {
+    const mikro = labSentence('mikro', form.MikrobiyolojiDurum as LabStatus, form.StabiliteRafOmruAy, form.StabiliteAcilisAy);
+    const challenge = labSentence('challenge', form.KoruyucuEtkinlikDurum as LabStatus, form.StabiliteRafOmruAy, form.StabiliteAcilisAy);
+    const stabilite = labSentence('stabilite', form.StabiliteDurum as LabStatus, form.StabiliteRafOmruAy, form.StabiliteAcilisAy);
+    setForm(prev => (
+      prev.Mikrobiyoloji === mikro &&
+      prev.KoruyucuEtkinlik === challenge &&
+      prev.Stabilite === stabilite
+        ? prev
+        : { ...prev, Mikrobiyoloji: mikro, KoruyucuEtkinlik: challenge, Stabilite: stabilite }
+    ));
+  }, [form.MikrobiyolojiDurum, form.KoruyucuEtkinlikDurum, form.StabiliteDurum, form.StabiliteRafOmruAy, form.StabiliteAcilisAy]);
+
+  useEffect(() => {
+    const tip = lookups.tipler.find(t => String(t.ID) === String(form.Tip2));
+    if (!tip) return;
+
+    const textTr = [
+      `Ürün tipi: ${form.Tip1 || '-'}`,
+      `Uygulama yeri: ${form.Uygulama || tip.UygulamaBolgesi || '-'}`,
+      `Uygulanan ürünün deriye temas ettiği alan: ${tip.YuzeyAlani || '-'} cm2`,
+      `Uygulanan ürünün miktarı: ${tip.GunlukMiktar || '-'}`,
+      `Temas süresi ve uygulama sıklığı: ${tip.SiklikEn || tip.Siklik || '-'}`,
+      `Maruziyet yolu: Dermal emilim`,
+      `Hedeflenen Veya Maruz Kalan Kişi / Kişiler: ${form.Hedef || '-'}`,
+      `A Değeri: ${form.A || tip.ADegeri || '-'}`,
+    ].join('\n');
+
+    const textEn = [
+      `Product type: ${tip.UrunTipiEn || form.Tip1 || '-'}`,
+      `Application area: ${tip.UygulamaBolgesiEn || form.Uygulama || tip.UygulamaBolgesi || '-'}`,
+      `Skin contact surface area: ${tip.YuzeyAlani || '-'} cm2`,
+      `Amount of product applied: ${tip.GunlukMiktar || '-'}`,
+      `Contact duration and frequency of use: ${tip.SiklikEn || tip.Siklik || '-'}`,
+      `Route of exposure: Dermal absorption`,
+      `Targeted or exposed person(s): ${form.Hedef || '-'}`,
+      `A value: ${form.A || tip.ADegeri || '-'}`,
+    ].join('\n');
+
+    setForm(prev => (
+      prev.MaruziyetAciklama === textTr && prev.MaruziyetAciklamaEn === textEn
+        ? prev
+        : { ...prev, MaruziyetAciklama: textTr, MaruziyetAciklamaEn: textEn }
+    ));
+  }, [lookups.tipler, form.Tip2, form.Tip1, form.Uygulama, form.Hedef, form.A]);
 
   // Lookup + edit veri yükleme
   useEffect(() => {
@@ -272,6 +501,39 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
             Uygulama: data.Uygulama ?? prev.Uygulama,
             Hedef: data.Hedef ?? prev.Hedef,
             A: data.A ?? prev.A,
+            MikrobiyolojiDurum: data.MikrobiyolojiDurum ?? prev.MikrobiyolojiDurum,
+            MikrobiyolojiGorsel: data.MikrobiyolojiGorsel ?? prev.MikrobiyolojiGorsel,
+            KoruyucuEtkinlikDurum: data.KoruyucuEtkinlikDurum ?? prev.KoruyucuEtkinlikDurum,
+            KoruyucuEtkinlikGorsel: data.KoruyucuEtkinlikGorsel ?? prev.KoruyucuEtkinlikGorsel,
+            StabiliteDurum: data.StabiliteDurum ?? prev.StabiliteDurum,
+            StabiliteRafOmruAy: data.StabiliteRafOmruAy ?? prev.StabiliteRafOmruAy,
+            StabiliteAcilisAy: data.StabiliteAcilisAy ?? prev.StabiliteAcilisAy,
+            StabiliteGorsel: data.StabiliteGorsel ?? prev.StabiliteGorsel,
+            EtiketGorsel: data.EtiketGorsel ?? prev.EtiketGorsel,
+            NormalKullanim: data.NormalKullanim ?? prev.NormalKullanim,
+            NormalKullanimEn: data.NormalKullanimEn ?? prev.NormalKullanimEn,
+            MaruziyetAciklama: data.MaruziyetAciklama ?? prev.MaruziyetAciklama,
+            MaruziyetAciklamaEn: data.MaruziyetAciklamaEn ?? prev.MaruziyetAciklamaEn,
+            BilesenlereMaruziyet: data.BilesenlereMaruziyet ?? prev.BilesenlereMaruziyet,
+            BilesenlereMaruziyetEn: data.BilesenlereMaruziyetEn ?? prev.BilesenlereMaruziyetEn,
+            ToksikolojikProfil: data.ToksikolojikProfil ?? prev.ToksikolojikProfil,
+            ToksikolojikProfilEn: data.ToksikolojikProfilEn ?? prev.ToksikolojikProfilEn,
+            IstenmedEtkiler: data.IstenmedEtkiler ?? prev.IstenmedEtkiler,
+            IstenmedEtkilerEn: data.IstenmedEtkilerEn ?? prev.IstenmedEtkilerEn,
+            UrunBilgisi: data.UrunBilgisi ?? prev.UrunBilgisi,
+            UrunBilgisiEn: data.UrunBilgisiEn ?? prev.UrunBilgisiEn,
+            DegerlendirmeSonucu: data.DegerlendirmeSonucu ?? prev.DegerlendirmeSonucu,
+            DegerlendirmeSonucuEn: data.DegerlendirmeSonucuEn ?? prev.DegerlendirmeSonucuEn,
+            EtiketUyarilariB2: data.EtiketUyarilariB2 ?? prev.EtiketUyarilariB2,
+            EtiketUyarilariB2En: data.EtiketUyarilariB2En ?? prev.EtiketUyarilariB2En,
+            Gerekce: data.Gerekce ?? prev.Gerekce,
+            GerekceEn: data.GerekceEn ?? prev.GerekceEn,
+            SorumluAd: data.SorumluAd ?? prev.SorumluAd,
+            SorumluAdEn: data.SorumluAdEn ?? prev.SorumluAdEn,
+            SorumluAdres: data.SorumluAdres ?? prev.SorumluAdres,
+            SorumluAdresEn: data.SorumluAdresEn ?? prev.SorumluAdresEn,
+            SorumluKanit: data.SorumluKanit ?? prev.SorumluKanit,
+            SorumluKanitEn: data.SorumluKanitEn ?? prev.SorumluKanitEn,
           }));
         }
         // Kayıtlı formül satırlarını yükle
@@ -827,97 +1089,119 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
         </>
       )}
 
-      {/* ── Tab 3: Rapor ─────────────────────────────────────────────────── */}
+      {/* ?? Tab 3: Rapor ??????????????????????????????????????????????????? */}
       {activeTab === 'rapor' && (
         <>
-          <div style={{ marginBottom: 16, padding: '10px 16px', background: '#f0f7ff', borderRadius: 8, fontSize: '0.8rem', color: '#1F4788', border: '1px solid #c8e0ff' }}>
-            Tüm alanları düzenleyip <strong>ÜRÜNÜ KAYDET</strong> butonuna tıklayın, ardından <strong>Yazdır / Word İndir</strong> ile raporu alın.
-          </div>
+          <ReportLanguageSwitch language={reportLang} onChange={setReportLang} />
 
           <SectionCard title="A.3 — Fiziksel / Kimyasal Özellikler">
-            <PhysChemTable
+            <PhysChemGrid
               form={form}
               onChange={(field, v) => setForm(prev => ({ ...prev, [field]: v }))}
-              rows={[
-                { label: 'Görünüm',              tr: 'Gorunum',             en: 'GorunumEn' },
-                { label: 'Renk',                 tr: 'Renk',                en: 'RenkEn' },
-                { label: 'Koku',                 tr: 'Koku',                en: 'KokuEn' },
-                { label: 'pH',                   tr: 'PH',                  en: 'PHEn' },
-                { label: 'Yoğunluk',             tr: 'Yogunluk',            en: 'YogunlukEn' },
-                { label: 'Viskozite',            tr: 'Viskozite',           en: 'ViskoziteEn' },
-                { label: 'Kaynama Noktası',      tr: 'Kaynama',             en: 'KaynamaEn' },
-                { label: 'Erime Noktası',        tr: 'Erime',               en: 'ErimeEn' },
-                { label: 'Suda Çözünebilirlik',  tr: 'SudaCozunebilirlik',  en: 'SudaCozunebilirlikEn' },
-                { label: 'Diğer Çözünebilirlik', tr: 'DigerCozunebilirlik', en: 'DigerCozunebilirlikEn' },
+              language={reportLang}
+              groups={[
+                [
+                  { label: 'Görünüm', tr: 'Gorunum', en: 'GorunumEn' },
+                  { label: 'Renk', tr: 'Renk', en: 'RenkEn' },
+                  { label: 'Koku', tr: 'Koku', en: 'KokuEn' },
+                ],
+                [
+                  { label: 'pH', tr: 'PH', en: 'PHEn' },
+                  { label: 'Yoğunluk', tr: 'Yogunluk', en: 'YogunlukEn' },
+                  { label: 'Viskozite', tr: 'Viskozite', en: 'ViskoziteEn' },
+                ],
+                [
+                  { label: 'Kaynama Noktası', tr: 'Kaynama', en: 'KaynamaEn' },
+                  { label: 'Erime Noktası', tr: 'Erime', en: 'ErimeEn' },
+                ],
+                [
+                  { label: 'Suda Çözünebilirlik', tr: 'SudaCozunebilirlik', en: 'SudaCozunebilirlikEn' },
+                  { label: 'Diğer Çözünebilirlik', tr: 'DigerCozunebilirlik', en: 'DigerCozunebilirlikEn' },
+                ],
               ]}
             />
           </SectionCard>
 
           <SectionCard title="A.4 — Laboratuvar Testleri">
-            <PhysChemTable
-              form={form}
-              onChange={(field, v) => setForm(prev => ({ ...prev, [field]: v }))}
-              rows={[
-                { label: 'Mikrobiyoloji',      tr: 'Mikrobiyoloji',      en: 'MikrobiyolojiEn' },
-                { label: 'Koruyucu Etkinlik',  tr: 'KoruyucuEtkinlik',   en: 'KoruyucuEtkinlikEn' },
-                { label: 'Stabilite',          tr: 'Stabilite',           en: 'StabiliteEn' },
-              ]}
-            />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+              <LabTestCard
+                title="Mikrobiyoloji"
+                status={form.MikrobiyolojiDurum as LabStatus}
+                onStatus={v => setForm(prev => ({ ...prev, MikrobiyolojiDurum: v }))}
+                image={form.MikrobiyolojiGorsel}
+                onImage={v => setForm(prev => ({ ...prev, MikrobiyolojiGorsel: v }))}
+              />
+              <LabTestCard
+                title="Challenge / Koruyucu Etkinlik"
+                status={form.KoruyucuEtkinlikDurum as LabStatus}
+                onStatus={v => setForm(prev => ({ ...prev, KoruyucuEtkinlikDurum: v }))}
+                image={form.KoruyucuEtkinlikGorsel}
+                onImage={v => setForm(prev => ({ ...prev, KoruyucuEtkinlikGorsel: v }))}
+              />
+              <LabTestCard
+                title="Stabilite"
+                status={form.StabiliteDurum as LabStatus}
+                onStatus={v => setForm(prev => ({ ...prev, StabiliteDurum: v }))}
+                image={form.StabiliteGorsel}
+                onImage={v => setForm(prev => ({ ...prev, StabiliteGorsel: v }))}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 12 }}>
+                  <label className={styles.formGroup} style={{ minWidth: 0 }}>
+                    <span>Raf ömrü (ay)</span>
+                    <input
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={form.StabiliteRafOmruAy}
+                      onChange={e => setForm(prev => ({ ...prev, StabiliteRafOmruAy: e.target.value.replace(/\D/g, '') }))}
+                      style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+                    />
+                  </label>
+                  <label className={styles.formGroup} style={{ minWidth: 0 }}>
+                    <span>Açıldıktan sonra (ay)</span>
+                    <input
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={form.StabiliteAcilisAy}
+                      onChange={e => setForm(prev => ({ ...prev, StabiliteAcilisAy: e.target.value.replace(/\D/g, '') }))}
+                      style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+                    />
+                  </label>
+                </div>
+              </LabTestCard>
+            </div>
           </SectionCard>
 
           <SectionCard title="A.5 (Etiket) — Kutu / Etiket Bilgileri">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <DualInput label="Kullanım" value={form.Kullanim} valueEn={form.KullanimEn} onChange={upd('Kullanim')} onChangeEn={upd('KullanimEn')} rows={3} />
-              <DualInput label="Özellikler" value={form.Ozellikler} valueEn={form.OzelliklerEn} onChange={upd('Ozellikler')} onChangeEn={upd('OzelliklerEn')} rows={3} />
-              <DualInput label="Uyarılar" value={form.Uyarilar} valueEn={form.UyarilarEn} onChange={upd('Uyarilar')} onChangeEn={upd('UyarilarEn')} rows={3} />
+              <DualInput label="Kullanım" value={form.Kullanim} valueEn={form.KullanimEn} onChange={upd('Kullanim')} onChangeEn={upd('KullanimEn')} language={reportLang} rows={3} />
+              <DualInput label="Uyarılar" value={form.Uyarilar} valueEn={form.UyarilarEn} onChange={upd('Uyarilar')} onChangeEn={upd('UyarilarEn')} language={reportLang} rows={3} />
+              <ImagePicker label="Etiket görseli ekle" value={form.EtiketGorsel} onChange={v => setForm(prev => ({ ...prev, EtiketGorsel: v }))} />
             </div>
           </SectionCard>
 
-          <SectionCard title="A.5 — Normal ve Makul Kullanım">
-            <RaporField label="Normal Kullanım Tanımı" value={form.NormalKullanim} onChange={upd('NormalKullanim')} rows={3} />
-          </SectionCard>
           <SectionCard title="A.6 — Kozmetik Ürüne Maruziyet">
-            <RaporField label="Maruziyet Değerlendirmesi" value={form.MaruziyetAciklama} onChange={upd('MaruziyetAciklama')} rows={6} hint="A değeri, uygulama alanı (cm²), uygulama miktarı (g), sıklık ve maruziyet yolu bilgilerini içerir." />
+            <RaporField label="Maruziyet Değerlendirmesi" value={form.MaruziyetAciklama} valueEn={form.MaruziyetAciklamaEn} onChange={upd('MaruziyetAciklama')} onChangeEn={upd('MaruziyetAciklamaEn')} language={reportLang} rows={8} readOnly hint="Bu alan 1. Genel Bilgiler bölümündeki ürün tipi, uygulama alanı, hedef grup ve rUGDTip değerlerinden otomatik oluşturulur." />
           </SectionCard>
-          <SectionCard title="A.7 — Bileşenlere Maruziyet Değerlendirmesi">
-            <RaporField label="SED Hesaplama Açıklaması" value={form.BilesenlereMaruziyet} onChange={upd('BilesenlereMaruziyet')} rows={7} />
-          </SectionCard>
-          <SectionCard title="A.8 — Toksikolojik Profil">
-            <RaporField label="Toksikolojik Profil Özeti" value={form.ToksikolojikProfil} onChange={upd('ToksikolojikProfil')} rows={8} hint="MoS = NO(A)EL / SED ≥ 100 hesaplama metodolojisini açıklayan metin." />
-          </SectionCard>
-          <SectionCard title="A.9 — İstenmeyen Etkiler">
-            <RaporField label="İstenmeyen Etkiler ve Ciddi İstenmeyen Etkiler" value={form.IstenmedEtkiler} onChange={upd('IstenmedEtkiler')} rows={4} />
-          </SectionCard>
-          <SectionCard title="A.10 — Kozmetik Ürün Bilgisi">
-            <RaporField label="Ürün Bilgisi" value={form.UrunBilgisi} onChange={upd('UrunBilgisi')} rows={5} />
-          </SectionCard>
-          <SectionCard title="B.1 — Değerlendirme Sonucu">
-            <RaporField label="Değerlendirme Sonucu" value={form.DegerlendirmeSonucu} onChange={upd('DegerlendirmeSonucu')} rows={10} hint="Mevzuata uygunluk, güvenlilik teyidi ve ürünün kullanım uygunluğunu açıklayan ana sonuç metni." />
-          </SectionCard>
-          <SectionCard title="B.2 — Etiket Uyarıları ve Kullanım Talimatları">
-            <RaporField label="Etiket Uyarıları (B.2)" value={form.EtiketUyarilariB2} onChange={upd('EtiketUyarilariB2')} rows={4} />
-          </SectionCard>
-          <SectionCard title="B.3 — Gerekçelendirme">
-            <RaporField label="Gerekçelendirme" value={form.Gerekce} onChange={upd('Gerekce')} rows={10} hint="Değerlendirilen her kriter için ayrı ayrı gerekçe yazın." />
-          </SectionCard>
+
           <SectionCard title="B.4 — Güvenlilik Değerlendirme Sorumlusu">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className={styles.formGroup}>
                 <label>Ad Soyad / Kuruluş</label>
-                <input value={form.SorumluAd} onChange={e => setForm({ ...form, SorumluAd: e.target.value })} />
+                <input value={reportLang === 'en' ? form.SorumluAdEn : form.SorumluAd} onChange={e => setForm({ ...form, [reportLang === 'en' ? 'SorumluAdEn' : 'SorumluAd']: e.target.value })} />
               </div>
               <div className={styles.formGroup}>
                 <label>Adres</label>
-                <textarea rows={3} value={form.SorumluAdres} onChange={e => setForm({ ...form, SorumluAdres: e.target.value })} style={{ width: '100%' }} />
+                <textarea rows={3} value={reportLang === 'en' ? form.SorumluAdresEn : form.SorumluAdres} onChange={e => setForm({ ...form, [reportLang === 'en' ? 'SorumluAdresEn' : 'SorumluAdres']: e.target.value })} style={{ width: '100%' }} />
               </div>
               <div className={styles.formGroup}>
                 <label>Yeterlilik Kanıtı / Belge Referansı</label>
-                <input value={form.SorumluKanit} onChange={e => setForm({ ...form, SorumluKanit: e.target.value })} />
+                <input value={reportLang === 'en' ? form.SorumluKanitEn : form.SorumluKanit} onChange={e => setForm({ ...form, [reportLang === 'en' ? 'SorumluKanitEn' : 'SorumluKanit']: e.target.value })} />
               </div>
             </div>
           </SectionCard>
         </>
       )}
+
 
       {/* ── Alt navigasyon ────────────────────────────────────────────────── */}
       <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'space-between', borderTop: '1px solid var(--color-border-light)', paddingTop: 24 }}>
