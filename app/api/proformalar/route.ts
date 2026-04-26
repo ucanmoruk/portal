@@ -163,6 +163,16 @@ export async function POST(request: Request) {
         `);
     }
 
+    const evrakNoForPayment = Number(body.evrakNo);
+    if (Number.isFinite(evrakNoForPayment) && evrakNoForPayment > 0) {
+      await pool.request()
+        .input("Evrak_No", evrakNoForPayment)
+        .query(`
+          INSERT INTO Odeme (Evrak_No, Odeme_Durumu, Tarih)
+          VALUES (@Evrak_No, 'Proforma', GETDATE())
+        `);
+    }
+
     return Response.json({ id: proformaId, proformaNo }, { status: 201 });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });

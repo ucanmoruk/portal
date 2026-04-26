@@ -223,7 +223,7 @@ export default function NumuneKabulTable() {
     if (!invoiceGroup) return;
     const qs = new URLSearchParams({ evrakNo: invoiceGroup.evrakNo });
     if (invoiceTeklifId) qs.set("teklifId", invoiceTeklifId);
-    router.push(`/musteriler/proforma-listesi?${qs.toString()}`);
+    router.push(`/musteriler/proforma-listesi/yeni?${qs.toString()}`);
   };
 
   const teklifLabel = (t: TeklifOpt) =>
