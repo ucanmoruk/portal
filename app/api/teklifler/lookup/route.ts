@@ -21,12 +21,12 @@ export async function GET(request: NextRequest) {
     // ── Müşteri listesi ───────────────────────────────────────────
     if (type === "musteriler") {
       const res = await pool.request()
-        .input("q", `%${q}%`)
+        .input("qLike", `%${q}%`)
         .query(`
           SELECT TOP 50 ID, Ad
           FROM RootTedarikci
           WHERE Durum = 'Aktif'
-          ${q ? "AND Ad LIKE @q" : ""}
+          ${q ? "AND LOWER(ISNULL(Ad,'')) LIKE LOWER(@qLike)" : ""}
           ORDER BY Ad
         `);
       return Response.json({ data: res.recordset });
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     // ── Hizmet listesi (StokAnalizListesi) ────────────────────────
     if (type === "hizmetler") {
       const res = await pool.request()
-        .input("q", `%${q}%`)
+        .input("qLike", `%${q}%`)
         .query(`
           SELECT TOP 100 ID, Kod, Ad, Fiyat, ParaBirimi,
                  ISNULL(Method,'')       AS Metot,
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
                  ISNULL(LOQEn,'')        AS LOQEn
           FROM StokAnalizListesi
           WHERE Durumu = 'Aktif'
-          ${q ? "AND (Ad LIKE @q OR Kod LIKE @q)" : ""}
+          ${q ? "AND (LOWER(ISNULL(Ad,'')) LIKE LOWER(@qLike) OR LOWER(ISNULL(Kod,'')) LIKE LOWER(@qLike))" : ""}
           ORDER BY Ad
         `);
       return Response.json({ data: res.recordset });

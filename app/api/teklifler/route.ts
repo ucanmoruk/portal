@@ -137,14 +137,15 @@ export async function GET(request: NextRequest) {
     const pool = await poolPromise;
     const searchClause = search
       ? `AND (
-           ISNULL(m.Ad,'')    LIKE N'%'+@search+'%'
-        OR ISNULL(t.Notlar,'') LIKE N'%'+@search+'%'
+           LOWER(ISNULL(m.Ad,'')) LIKE LOWER(@searchLike)
+        OR LOWER(ISNULL(t.Notlar,'')) LIKE LOWER(@searchLike)
         OR CAST(ISNULL(t.TeklifNo,0) AS NVARCHAR) LIKE N'%'+@search+'%'
         )`
       : "";
 
     const countRes = await pool.request()
       .input("search", search)
+      .input("searchLike", `%${search}%`)
       .query(`
         SELECT COUNT(*) AS total
         FROM TeklifX1 t
@@ -154,6 +155,7 @@ export async function GET(request: NextRequest) {
 
     const dataRes = await pool.request()
       .input("search", search)
+      .input("searchLike", `%${search}%`)
       .input("offset", offset)
       .input("limit",  limit)
       .query(`

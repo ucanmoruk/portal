@@ -29,13 +29,13 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       whereClauses.push(`(
-        Ad LIKE N'%' + @search + '%'
-        OR Adres LIKE N'%' + @search + '%'
-        OR VergiDairesi LIKE N'%' + @search + '%'
-        OR VergiNo LIKE N'%' + @search + '%'
-        OR Telefon LIKE N'%' + @search + '%'
-        OR Email LIKE N'%' + @search + '%'
-        OR Yetkili LIKE N'%' + @search + '%'
+        LOWER(ISNULL(Ad, '')) LIKE LOWER(@searchLike)
+        OR LOWER(ISNULL(Adres, '')) LIKE LOWER(@searchLike)
+        OR LOWER(ISNULL(VergiDairesi, '')) LIKE LOWER(@searchLike)
+        OR LOWER(ISNULL(VergiNo, '')) LIKE LOWER(@searchLike)
+        OR LOWER(ISNULL(Telefon, '')) LIKE LOWER(@searchLike)
+        OR LOWER(ISNULL(Email, '')) LIKE LOWER(@searchLike)
+        OR LOWER(ISNULL(Yetkili, '')) LIKE LOWER(@searchLike)
       )`);
     }
 
@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
 
     const req = pool.request()
       .input("search", search)
+      .input("searchLike", `%${search}%`)
       .input("kimin", kimin) // Eğer boşsa bile ekleyelim, @kimin parametresini her şekilde hazırlayalım
       .input("offset", offset)
       .input("limit", limit);
