@@ -38,6 +38,19 @@
   margin-bottom: 10px;
 }
 
+.badgeRow :global([data-slot="badge"]),
+.sectionHeader :global([data-slot="badge"]),
+.miniItem :global([data-slot="badge"]) {
+  min-height: 24px;
+  padding: 4px 10px;
+  line-height: 1.2;
+  overflow: visible;
+}
+
+.miniItem :global([data-slot="badge"]) {
+  min-width: 82px;
+}
+
 .title {
   margin: 0;
   color: var(--color-text-primary);
