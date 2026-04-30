@@ -544,8 +544,8 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                               <button className={styles.editBtn}   onClick={() => openEdit(t)}         title="Düzenle">✏️</button>
                               <button className={styles.editBtn}   onClick={() => openRevize(t)}        title="Revizyon" style={{ filter: "sepia(1) hue-rotate(180deg)" }}>🔄</button>
                               <button className={styles.editBtn}   onClick={() => openMail(t)}          title="Mail gönder">✉️</button>
-                              <button className={styles.editBtn}   onClick={() => window.open(`/teklif-print/${t.ID}?print=1`, "_blank")} title="PDF olarak kaydet">PDF</button>
-                              <button className={styles.editBtn}   onClick={() => window.open(`/api/teklifler/${t.ID}/export?format=docx`, "_blank")} title="Word indir">DOC</button>
+                              <button className={styles.editBtn}   onClick={() => window.open(`/teklif-print/${t.ID}`, "_blank")} title="Yazdır / PDF">🖨️</button>
+                              <button className={styles.editBtn}   onClick={() => window.open(`/api/teklifler/${t.ID}/export?format=docx`, "_blank")} title="Word indir">📄</button>
                               <button className={styles.deleteBtn} onClick={() => setDeleteTarget(t)}   title="Sil">🗑</button>
                             </div>
                           </td>
