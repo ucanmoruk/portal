@@ -14,13 +14,22 @@ export default function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const formUsername = String(formData.get("username") || "").trim();
+    const formPassword = String(formData.get("password") || "");
+
+    if (!formUsername || !formPassword) {
+      setError("Lütfen kullanıcı adı ve şifrenizi girin.");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
     try {
       const result = await signIn("credentials", {
-        username,
-        password,
+        username: formUsername,
+        password: formPassword,
         redirect: false,
       });
 
@@ -45,6 +54,7 @@ export default function LoginForm() {
         <div className={styles.inputWrapper}>
           <input
             id="username"
+            name="username"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -61,6 +71,7 @@ export default function LoginForm() {
         <div className={styles.inputWrapper}>
           <input
             id="password"
+            name="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -75,7 +86,7 @@ export default function LoginForm() {
       <button
         type="submit"
         className={styles.submitButton}
-        disabled={loading || !username || !password}
+        disabled={loading}
       >
         {loading ? <span className={styles.loader}></span> : "Giriş Yap →"}
       </button>
