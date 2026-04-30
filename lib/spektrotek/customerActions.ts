@@ -29,10 +29,15 @@ export async function getCustomers(filter: CustomerFilter = { page: 1, limit: 15
   try {
     const pool = await poolPromise;
 
-    let where = "Kimin = 'Spektrotek'";
+    let where = "Kimin = 'Semih'";
 
     if (filter.search) {
-      where += ` AND (Ad LIKE @search OR Yetkili LIKE @search OR Telefon LIKE @search OR Email LIKE @search)`;
+      where += ` AND (
+        LOWER(ISNULL(Ad, '')) LIKE LOWER(@search)
+        OR LOWER(ISNULL(Yetkili, '')) LIKE LOWER(@search)
+        OR LOWER(ISNULL(Telefon, '')) LIKE LOWER(@search)
+        OR LOWER(ISNULL(Email, '')) LIKE LOWER(@search)
+      )`;
     }
     if (filter.status && filter.status !== 'All') {
       const statusVal = filter.status === 'Passive' ? 'Pasif' : 'Aktif';
@@ -104,9 +109,9 @@ export async function addCustomer(data: Partial<SktCustomer>) {
       .input('VergiNo', data.taxNumber)
       .input('Notlar', data.notes)
       .query(`INSERT INTO RootTedarikci(Ad, Tur2, Yetkili, Telefon, Email, Web, Adres, VergiDairesi, VergiNo, Notlar, Kimin, Durum)
-              VALUES(@Ad, @Tur2, @Yetkili, @Telefon, @Email, @Web, @Adres, @VergiDairesi, @VergiNo, @Notlar, 'Spektrotek', 'Aktif');
+              VALUES(@Ad, @Tur2, @Yetkili, @Telefon, @Email, @Web, @Adres, @VergiDairesi, @VergiNo, @Notlar, 'Semih', 'Aktif');
               SELECT SCOPE_IDENTITY() as newId`);
-    const idResult = await pool.request().query(`SELECT TOP 1 ID FROM RootTedarikci WHERE Kimin='Spektrotek' ORDER BY ID DESC`);
+    const idResult = await pool.request().query(`SELECT TOP 1 ID FROM RootTedarikci WHERE Kimin='Semih' ORDER BY ID DESC`);
     const customerId = idResult.recordset[0]?.ID?.toString();
     return { success: true, customerId };
   } catch (e) {
@@ -135,7 +140,7 @@ export async function updateCustomer(id: string, data: Partial<SktCustomer>) {
       updates.push('Durum=@Durum');
     }
     if (updates.length > 0) {
-      await req.query(`UPDATE RootTedarikci SET ${updates.join(',')} WHERE ID=@ID`);
+      await req.query(`UPDATE RootTedarikci SET ${updates.join(',')} WHERE ID=@ID AND Kimin='Semih'`);
     }
     return { success: true };
   } catch (e) {

@@ -17,7 +17,7 @@ export default async function UgdMusteriListesiPage() {
         </div>
       </div>
 
-      <MusteriTable />
+      <MusteriTable filterKimin="Ozeco" />
     </div>
   );
 }

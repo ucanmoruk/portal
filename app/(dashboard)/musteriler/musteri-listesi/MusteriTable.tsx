@@ -37,7 +37,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 // ----------------------------------------------------------------
 // Main Component
 // ----------------------------------------------------------------
-export default function MusteriTable() {
+export default function MusteriTable({ filterKimin }: { filterKimin?: string }) {
   const [data, setData] = useState<Musteri[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -65,6 +65,7 @@ export default function MusteriTable() {
     setError("");
     try {
       const params = new URLSearchParams({ search: s, page: String(p), limit: String(l) });
+      if (filterKimin) params.set("kimin", filterKimin);
       const res = await fetch(`/api/musteriler?${params}`);
       if (!res.ok) throw new Error((await res.json()).error || "Veri alınamadı");
       const json: ApiResponse = await res.json();
@@ -76,7 +77,7 @@ export default function MusteriTable() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filterKimin]);
 
   useEffect(() => { fetchData(search, page, limit); }, [page, limit, fetchData, search]);
 
@@ -121,7 +122,7 @@ export default function MusteriTable() {
       const url = modalMode === "edit" ? `/api/musteriler/${editId}` : "/api/musteriler";
       const method = modalMode === "edit" ? "PUT" : "POST";
       const res = await fetch(url, {
-        method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+        method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, Kimin: filterKimin }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "İşlem başarısız");
       setModalOpen(false);
