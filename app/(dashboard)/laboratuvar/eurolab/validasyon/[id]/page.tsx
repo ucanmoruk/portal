@@ -28,12 +28,18 @@ interface ValidationDetail {
     study_date: string | null;
     config?: {
         description?: string;
-        parameters?: Array<{ id: string; name: string; isEnabled: boolean }>;
+        parameters?: Array<{ id: string; name: string; isEnabled: boolean; note?: string }>;
         devices?: Array<{ id: string; name: string; serialNo: string }>;
         personnel?: Array<{ id: string; name: string; role: string }>;
         components?: Array<{ id: string; name: string; casNo: string }>;
     };
 }
+
+type ParameterTab = {
+    value: string;
+    label: string;
+    parameterIds: string[];
+};
 
 const typeLabel = (type: string) => {
     if (type === "VERIFICATION") return "Verifikasyon";
@@ -51,6 +57,49 @@ const statusLabel = (status: string) => {
 const formatDate = (date: string | null) => {
     if (!date) return "—";
     return new Date(date).toLocaleDateString("tr-TR");
+};
+
+const normalizeParamId = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+const parameterTabLabel = (parameter: { id: string; name: string }) => {
+    if (parameter.id === "accuracy") return "DoÄŸruluk";
+    if (parameter.id === "precision_repeatability") return "Kesinlik";
+    if (parameter.id === "precision_reproducibility") return "Tekrar Ãœretilebilirlik";
+    if (parameter.id === "selectivity") return "SeÃ§icilik";
+    if (parameter.id === "trueness") return "GerÃ§eklik";
+    if (parameter.id === "robustness") return "SaÄŸlamlÄ±k";
+    return parameter.name;
+};
+
+const buildParameterTabs = (parameters: Array<{ id: string; name: string; isEnabled: boolean }>): ParameterTab[] => {
+    const enabled = parameters.filter(parameter => parameter.isEnabled);
+    const tabs: ParameterTab[] = [];
+    const used = new Set<string>();
+
+    const linearity = enabled.find(parameter => parameter.id === "linearity");
+    if (linearity) {
+        tabs.push({ value: "linearity", label: "DoÄŸrusallÄ±k", parameterIds: ["linearity"] });
+        used.add("linearity");
+    }
+
+    const lodLoqIds = enabled
+        .filter(parameter => parameter.id === "lod" || parameter.id === "loq")
+        .map(parameter => parameter.id);
+    if (lodLoqIds.length > 0) {
+        tabs.push({ value: "lod_loq", label: "LOD / LOQ", parameterIds: lodLoqIds });
+        lodLoqIds.forEach(parameterId => used.add(parameterId));
+    }
+
+    for (const parameter of enabled) {
+        if (used.has(parameter.id)) continue;
+        tabs.push({
+            value: normalizeParamId(parameter.id || parameter.name),
+            label: parameterTabLabel(parameter),
+            parameterIds: [parameter.id],
+        });
+    }
+
+    return tabs;
 };
 
 export default function ValidationDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -193,6 +242,55 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
     }
 
     const enabledParameters = (validation.config?.parameters || []).filter(parameter => parameter.isEnabled);
+    const parameterTabs = buildParameterTabs(validation.config?.parameters || []);
+    const defaultTab = parameterTabs[0]?.value || "protocol";
+    const parameterById = new Map((validation.config?.parameters || []).map(parameter => [parameter.id, parameter]));
+
+    const renderParameterPanel = (tab: ParameterTab) => {
+        if (tab.value === "linearity") {
+            return (
+                <div className={detailStyles.modulePanel}>
+                    <LinearityCalculationForm
+                        components={components}
+                        onReportDataChange={handleReportDataUpdate}
+                    />
+                </div>
+            );
+        }
+
+        if (tab.value === "lod_loq") {
+            return (
+                <div className={detailStyles.modulePanel}>
+                    <LodCalculationForm
+                        components={components}
+                        personnel={personnel}
+                        onReportDataChange={handleReportDataUpdate}
+                    />
+                </div>
+            );
+        }
+
+        const tabParameters = tab.parameterIds
+            .map(parameterId => parameterById.get(parameterId))
+            .filter(Boolean) as Array<{ id: string; name: string; note?: string }>;
+
+        return (
+            <div className={detailStyles.parameterPanel}>
+                <div className={detailStyles.parameterPanelHeader}>
+                    <span className={detailStyles.parameterPanelTitle}>{tab.label}</span>
+                    <span className={detailStyles.parameterPanelMeta}>Validasyon Ã§alÄ±ÅŸma alanÄ±</span>
+                </div>
+                <div className={detailStyles.parameterPanelBody}>
+                    {tabParameters.map(parameter => (
+                        <div key={parameter.id} className={detailStyles.parameterNoteCard}>
+                            <strong>{parameter.name}</strong>
+                            <p>{parameter.note || "Bu parametre iÃ§in protokolde tanÄ±mlanan Ã§alÄ±ÅŸma notlarÄ± ve sonuÃ§ giriÅŸleri burada takip edilecek."}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div className={detailStyles.detailPage}>
@@ -234,15 +332,24 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                 </div>
             </div>
 
-            <Tabs defaultValue="protocol" className={`${detailStyles.workspace} print:space-y-0`}>
+            <Tabs defaultValue={defaultTab} className={`${detailStyles.workspace} print:space-y-0`}>
                 <TabsList className={`${detailStyles.tabsBar} no-print`}>
+                    {parameterTabs.map(tab => (
+                        <TabsTrigger key={tab.value} value={tab.value} className={detailStyles.tabTrigger}>
+                            {tab.label}
+                        </TabsTrigger>
+                    ))}
                     <TabsTrigger value="protocol" className={detailStyles.tabTrigger}>Protokol</TabsTrigger>
-                    <TabsTrigger value="lod" className={detailStyles.tabTrigger}>LOD / LOQ</TabsTrigger>
-                    <TabsTrigger value="linearity" className={detailStyles.tabTrigger}>Doğrusallık</TabsTrigger>
                     <TabsTrigger value="report" className={detailStyles.tabTrigger}>
                         <FileText className="h-4 w-4 mr-2" /> Rapor Önizleme
                     </TabsTrigger>
                 </TabsList>
+
+                {parameterTabs.map(tab => (
+                    <TabsContent key={tab.value} value={tab.value} className={detailStyles.tabContent}>
+                        {renderParameterPanel(tab)}
+                    </TabsContent>
+                ))}
 
                 <TabsContent value="protocol" className={detailStyles.tabContent}>
                     <div className={detailStyles.protocolGrid}>
@@ -288,25 +395,6 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                                 )}
                             </div>
                         </div>
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="lod" className={detailStyles.tabContent}>
-                    <div className={detailStyles.modulePanel}>
-                        <LodCalculationForm
-                            components={components}
-                            personnel={personnel}
-                            onReportDataChange={handleReportDataUpdate}
-                        />
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="linearity" className={detailStyles.tabContent}>
-                    <div className={detailStyles.modulePanel}>
-                        <LinearityCalculationForm
-                            components={components}
-                            onReportDataChange={handleReportDataUpdate}
-                        />
                     </div>
                 </TabsContent>
 
