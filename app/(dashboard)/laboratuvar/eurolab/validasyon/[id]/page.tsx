@@ -62,12 +62,12 @@ const formatDate = (date: string | null) => {
 const normalizeParamId = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
 const parameterTabLabel = (parameter: { id: string; name: string }) => {
-    if (parameter.id === "accuracy") return "DoÄŸruluk";
+    if (parameter.id === "accuracy") return "Doğruluk";
     if (parameter.id === "precision_repeatability") return "Kesinlik";
-    if (parameter.id === "precision_reproducibility") return "Tekrar Ãœretilebilirlik";
-    if (parameter.id === "selectivity") return "SeÃ§icilik";
-    if (parameter.id === "trueness") return "GerÃ§eklik";
-    if (parameter.id === "robustness") return "SaÄŸlamlÄ±k";
+    if (parameter.id === "precision_reproducibility") return "Tekrar Üretilebilirlik";
+    if (parameter.id === "selectivity") return "Seçicilik";
+    if (parameter.id === "trueness") return "Gerçeklik";
+    if (parameter.id === "robustness") return "Sağlamlık";
     return parameter.name;
 };
 
@@ -78,7 +78,7 @@ const buildParameterTabs = (parameters: Array<{ id: string; name: string; isEnab
 
     const linearity = enabled.find(parameter => parameter.id === "linearity");
     if (linearity) {
-        tabs.push({ value: "linearity", label: "DoÄŸrusallÄ±k", parameterIds: ["linearity"] });
+        tabs.push({ value: "linearity", label: "Doğrusallık", parameterIds: ["linearity"] });
         used.add("linearity");
     }
 
@@ -243,7 +243,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
 
     const enabledParameters = (validation.config?.parameters || []).filter(parameter => parameter.isEnabled);
     const parameterTabs = buildParameterTabs(validation.config?.parameters || []);
-    const defaultTab = parameterTabs[0]?.value || "protocol";
+    const defaultTab = "protocol";
     const parameterById = new Map((validation.config?.parameters || []).map(parameter => [parameter.id, parameter]));
 
     const renderParameterPanel = (tab: ParameterTab) => {
@@ -278,13 +278,13 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
             <div className={detailStyles.parameterPanel}>
                 <div className={detailStyles.parameterPanelHeader}>
                     <span className={detailStyles.parameterPanelTitle}>{tab.label}</span>
-                    <span className={detailStyles.parameterPanelMeta}>Validasyon Ã§alÄ±ÅŸma alanÄ±</span>
+                    <span className={detailStyles.parameterPanelMeta}>Validasyon çalışma alanı</span>
                 </div>
                 <div className={detailStyles.parameterPanelBody}>
                     {tabParameters.map(parameter => (
                         <div key={parameter.id} className={detailStyles.parameterNoteCard}>
                             <strong>{parameter.name}</strong>
-                            <p>{parameter.note || "Bu parametre iÃ§in protokolde tanÄ±mlanan Ã§alÄ±ÅŸma notlarÄ± ve sonuÃ§ giriÅŸleri burada takip edilecek."}</p>
+                            <p>{parameter.note || "Bu parametre için protokolde tanımlanan çalışma notları ve sonuç girişleri burada takip edilecek."}</p>
                         </div>
                     ))}
                 </div>
@@ -334,12 +334,12 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
 
             <Tabs defaultValue={defaultTab} className={`${detailStyles.workspace} print:space-y-0`}>
                 <TabsList className={`${detailStyles.tabsBar} no-print`}>
+                    <TabsTrigger value="protocol" className={detailStyles.tabTrigger}>Protokol</TabsTrigger>
                     {parameterTabs.map(tab => (
                         <TabsTrigger key={tab.value} value={tab.value} className={detailStyles.tabTrigger}>
                             {tab.label}
                         </TabsTrigger>
                     ))}
-                    <TabsTrigger value="protocol" className={detailStyles.tabTrigger}>Protokol</TabsTrigger>
                     <TabsTrigger value="report" className={detailStyles.tabTrigger}>
                         <FileText className="h-4 w-4 mr-2" /> Rapor Önizleme
                     </TabsTrigger>
