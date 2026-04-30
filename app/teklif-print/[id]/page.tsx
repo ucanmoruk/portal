@@ -20,13 +20,17 @@ function fmt(n: any) {
 
 export default async function TeklifPrintPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ print?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
   const { id } = await params;
+  const sp = searchParams ? await searchParams : {};
+  const autoPrint = sp.print === "1";
 
   const pool = await poolPromise;
 
@@ -435,6 +439,7 @@ export default async function TeklifPrintPage({
         <script dangerouslySetInnerHTML={{ __html: `
           document.querySelector('.print-btn').addEventListener('click', () => window.print());
           document.querySelector('.close-btn').addEventListener('click', () => window.close());
+          ${autoPrint ? "setTimeout(() => window.print(), 450);" : ""}
         `}} />
       </body>
     </html>
