@@ -393,13 +393,13 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
         ] as const;
 
         return (
-            <div className="mt-8 space-y-7 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-                <div className="space-y-2">
+            <div className="mt-6 space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="space-y-1">
                     <h3 className="text-sm font-semibold text-slate-900">İstatistiksel Veriler</h3>
                     <p className="mt-1 text-xs text-slate-500">Regresyon hesabından üretilen ara değerler ve belirsizlik özeti.</p>
                 </div>
 
-                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <div className="overflow-x-auto rounded-md border border-slate-200">
                     <Table>
                         <TableHeader className="bg-slate-50">
                             <TableRow>
@@ -414,23 +414,23 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
                         <TableBody>
                             {result.statistics.rows.map((row, index) => (
                                 <TableRow key={`${row.x}-${row.y}-${index}`}>
-                                    <TableCell className="px-4 py-4 font-mono text-xs">{formatStat(row.x)}</TableCell>
-                                    <TableCell className="px-4 py-4 font-mono text-xs">{formatStat(row.xDelta)}</TableCell>
-                                    <TableCell className="px-4 py-4 font-mono text-xs">{formatStat(row.xDeltaSquared)}</TableCell>
-                                    <TableCell className="px-4 py-4 font-mono text-xs">{formatStat(row.y)}</TableCell>
-                                    <TableCell className="px-4 py-4 font-mono text-xs">{formatStat(row.yResidual)}</TableCell>
-                                    <TableCell className="px-4 py-4 font-mono text-xs">{formatStat(row.yMeanDeltaSquared)}</TableCell>
+                                    <TableCell className="py-3 font-mono text-xs">{formatStat(row.x)}</TableCell>
+                                    <TableCell className="py-3 font-mono text-xs">{formatStat(row.xDelta)}</TableCell>
+                                    <TableCell className="py-3 font-mono text-xs">{formatStat(row.xDeltaSquared)}</TableCell>
+                                    <TableCell className="py-3 font-mono text-xs">{formatStat(row.y)}</TableCell>
+                                    <TableCell className="py-3 font-mono text-xs">{formatStat(row.yResidual)}</TableCell>
+                                    <TableCell className="py-3 font-mono text-xs">{formatStat(row.yMeanDeltaSquared)}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
                     </Table>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {summary.map(([label, value]) => (
-                        <div key={label} className="min-h-[88px] rounded-xl border border-slate-200 bg-slate-50 px-5 py-4">
+                        <div key={label} className="min-h-[72px] rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                             <div className="text-[11px] font-medium text-slate-500">{label}</div>
-                            <div className="mt-3 break-words font-mono text-sm font-semibold leading-6 text-slate-900">{formatStat(value)}</div>
+                            <div className="mt-2 break-words font-mono text-sm font-semibold leading-5 text-slate-900">{formatStat(value)}</div>
                         </div>
                     ))}
                 </div>
@@ -440,7 +440,7 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
 
     return (
         <Card className="w-full border-slate-200 shadow-sm">
-            <CardHeader className="space-y-8 px-8 py-10">
+            <CardHeader className="space-y-6 px-6 py-7">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="space-y-2">
                         <CardTitle className="flex items-center gap-2 text-xl leading-7">
@@ -453,12 +453,12 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-                    <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-                        <div className="flex flex-wrap items-center gap-x-5 gap-y-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="flex flex-wrap items-center gap-3">
                         <Label htmlFor="replicates" className="text-sm font-medium whitespace-nowrap">Tekrar Sayısı (n):</Label>
                         <Select value={replicates.toString()} onValueChange={handleReplicateChange}>
-                            <SelectTrigger id="replicates" className="h-11 w-[96px] bg-white">
+                            <SelectTrigger id="replicates" className="h-9 w-[88px] bg-white">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -468,9 +468,9 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
                                 <SelectItem value="5">5</SelectItem>
                             </SelectContent>
                         </Select>
-                            <Label className="text-sm font-medium whitespace-nowrap">Birim:</Label>
+                            <Label className="ml-0 text-sm font-medium whitespace-nowrap sm:ml-3">Birim:</Label>
                             <Select value={settings.unit} onValueChange={(v: string) => updateSettings('unit', v)}>
-                                <SelectTrigger className="h-11 w-[190px] bg-white">
+                                <SelectTrigger className="h-9 w-[180px] bg-white">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -480,12 +480,12 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="min-w-0 flex-1 xl:max-w-[640px]">
+                        <div className="min-w-0 flex-1 xl:max-w-[560px]">
                             <Label htmlFor="linearity-notes" className="text-sm font-medium">Notlar / Açıklamalar</Label>
                             <Textarea
                                 id="linearity-notes"
                                 placeholder="Bu çalışma ile ilgili genel notlar..."
-                                className="mt-3 min-h-24 resize-y bg-white"
+                                className="mt-2 min-h-20 resize-y bg-white"
                                 value={settings.notes}
                                 onChange={(e) => updateSettings('notes', e.target.value)}
                             />
@@ -493,11 +493,11 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
                     </div>
                 </div>
             </CardHeader>
-            <CardContent className="px-8 pb-10">
+            <CardContent className="px-6 pb-7">
                 <Tabs value={activeComponent} onValueChange={setActiveComponent}>
-                    <TabsList className="mb-8 flex h-auto flex-wrap justify-start gap-2 bg-slate-100 p-2">
+                    <TabsList className="mb-4 flex h-auto flex-wrap justify-start gap-1 bg-slate-100 p-1">
                         {components.map(comp => (
-                            <TabsTrigger key={comp} value={comp} className="min-h-11 min-w-[132px] px-5 text-sm">
+                            <TabsTrigger key={comp} value={comp} className="min-h-9 min-w-[120px] px-3 text-sm">
                                 {comp}
                             </TabsTrigger>
                         ))}
@@ -508,12 +508,12 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
                         const result = results[comp];
 
                         return (
-                            <TabsContent key={comp} value={comp} className="space-y-10 pt-4">
-                                <div className="grid gap-8 2xl:grid-cols-5">
+                            <TabsContent key={comp} value={comp} className="space-y-7 pt-2">
+                                <div className="grid gap-6 xl:grid-cols-5">
 
                                     {/* Input Section (3 cols wide) */}
-                                    <div className="space-y-6 2xl:col-span-3">
-                                        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2">
+                                    <div className="space-y-4 xl:col-span-3">
+                                        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
                                             <Table>
                                                 <TableHeader className="bg-slate-50">
                                                     <TableRow>
@@ -530,23 +530,23 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
                                                             <TableRow key={`${row.id}-${rIdx}`}>
                                                                 {/* Level Cell: Render only on first replicate, simple centered text */}
                                                                 {rIdx === 0 ? (
-                                                                    <TableCell rowSpan={replicates} className="align-middle border-r border-slate-200 bg-slate-50 px-4 text-center text-xs font-medium text-slate-600">
+                                                                    <TableCell rowSpan={replicates} className="align-middle border-r border-slate-200 bg-slate-50 text-center text-xs font-medium text-slate-600">
                                                                         {row.level}
                                                                     </TableCell>
                                                                 ) : null}
 
-                                                                <TableCell className="p-3">
+                                                                <TableCell className="p-2">
                                                                     <Input
-                                                                        className="h-11 bg-white"
+                                                                        className="h-9 bg-white"
                                                                         placeholder="Conc."
                                                                         value={row.concentrations[rIdx] || ''}
                                                                         onChange={(e) => handleDataChange(comp, idx, 'concentration', e.target.value, rIdx)}
                                                                         onPaste={(e) => handlePaste(e, comp, idx, rIdx, 'concentration')}
                                                                     />
                                                                 </TableCell>
-                                                                <TableCell className="p-3">
+                                                                <TableCell className="p-2">
                                                                     <Input
-                                                                        className="h-11 bg-white"
+                                                                        className="h-9 bg-white"
                                                                         placeholder={`R${rIdx + 1}`}
                                                                         value={row.responses[rIdx] || ''}
                                                                         onChange={(e) => handleDataChange(comp, idx, 'response', e.target.value, rIdx)}
@@ -556,8 +556,8 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
 
                                                                 {/* Remove Button: Only on first replicate */}
                                                                 {rIdx === 0 ? (
-                                                                    <TableCell rowSpan={replicates} className="align-middle p-2 text-center">
-                                                                        <Button variant="ghost" size="icon" onClick={() => removeRow(comp, idx)} className="h-10 w-10 text-slate-400 hover:text-red-500">
+                                                                    <TableCell rowSpan={replicates} className="align-middle text-center p-1">
+                                                                        <Button variant="ghost" size="icon" onClick={() => removeRow(comp, idx)} className="h-9 w-9 text-slate-400 hover:text-red-500">
                                                                             <Trash2 className="h-4 w-4" />
                                                                         </Button>
                                                                     </TableCell>
@@ -569,18 +569,18 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
                                             </Table>
                                         </div>
 
-                                        <div className="flex justify-between pt-1">
-                                            <Button variant="outline" size="sm" onClick={() => addRow(comp)} className="min-h-10 border-blue-200 px-4 text-blue-600 hover:bg-blue-50">
+                                        <div className="flex justify-between">
+                                            <Button variant="outline" size="sm" onClick={() => addRow(comp)} className="text-blue-600 border-blue-200 hover:bg-blue-50">
                                                 <Plus className="h-4 w-4 mr-1" /> Seviye Ekle
                                             </Button>
                                         </div>
 
-                                        <div className="flex flex-col gap-3 pt-5 sm:flex-row">
-                                            <Button className="min-h-12 flex-1 bg-blue-600 hover:bg-blue-700" onClick={() => calculateRegression(comp)}>
+                                        <div className="flex flex-col gap-2 pt-4 sm:flex-row">
+                                            <Button className="min-h-10 flex-1 bg-blue-600 hover:bg-blue-700" onClick={() => calculateRegression(comp)}>
                                                 <Calculator className="h-4 w-4 mr-2" /> Hesapla
                                             </Button>
                                             <Button
-                                                className="min-h-12 flex-1 bg-green-600 hover:bg-green-700"
+                                                className="min-h-10 flex-1 bg-green-600 hover:bg-green-700"
                                                 disabled={!result}
                                                 onClick={() => {
                                                     const dataToSave = {
@@ -599,27 +599,27 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
                                         </div>
                                     </div>
 
-                                    <div className="flex h-fit flex-col rounded-2xl border border-slate-200 bg-slate-50 p-6 2xl:col-span-2">
+                                    <div className="flex h-fit flex-col rounded-lg border border-slate-200 bg-slate-50 p-4 xl:col-span-2">
                                         {result ? (
                                             <>
-                                                <div className="mb-7 space-y-4">
-                                                    <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                                                <div className="mb-6 space-y-3">
+                                                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
                                                         <p className="text-xs font-semibold uppercase text-slate-500">R² (Determinasyon)</p>
                                                         <p className={`text-xl font-bold ${result.rSquared > 0.99 ? 'text-green-600' : 'text-amber-600'}`}>
                                                             {result.rSquared.toFixed(4)}
                                                         </p>
                                                     </div>
-                                                    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                                                        <p className="mb-3 text-center text-xs font-semibold uppercase text-slate-500">Denklem</p>
-                                                        <p className="break-all rounded-lg bg-slate-100 px-3 py-3 text-center font-mono text-sm font-medium leading-6 text-slate-800">
+                                                    <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                                                        <p className="mb-2 text-center text-xs font-semibold uppercase text-slate-500">Denklem</p>
+                                                        <p className="break-all rounded-md bg-slate-100 px-2 py-1.5 text-center font-mono text-sm font-medium text-slate-800">
                                                             {result.equation}
                                                         </p>
                                                     </div>
                                                 </div>
 
-                                                <div className="min-h-[360px] w-full rounded-xl border border-slate-200 bg-white p-4">
-                                                    <ResponsiveContainer width="100%" height={340}>
-                                                        <ScatterChart margin={{ top: 24, right: 24, bottom: 28, left: 18 }}>
+                                                <div className="min-h-[300px] w-full rounded-lg border border-slate-200 bg-white p-2">
+                                                    <ResponsiveContainer width="100%" height={300}>
+                                                        <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }}>
                                                             <CartesianGrid strokeDasharray="3 3" />
                                                             <XAxis
                                                                 type="number"
@@ -638,7 +638,7 @@ export function LinearityCalculationForm({ components = ["Genel"], onReportDataC
                                                 </div>
                                             </>
                                         ) : (
-                                            <div className="flex h-[360px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-slate-400">
+                                            <div className="flex h-[300px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-white text-slate-400">
                                                 <Activity className="h-16 w-16 mb-4 opacity-20" />
                                                 <p className="text-center">Kalibrasyon eğrisini <br /> görmek için hesaplayın.</p>
                                             </div>
