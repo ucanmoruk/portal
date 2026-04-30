@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import styles from "./login.module.css";
 
 export default function LoginForm() {
-  const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -31,14 +29,17 @@ export default function LoginForm() {
         username: formUsername,
         password: formPassword,
         redirect: false,
+        callbackUrl: "/",
       });
 
       if (result?.error) {
         setError(result.error);
         setLoading(false);
+      } else if (result?.ok === false) {
+        setError("Giriş yapılamadı, lütfen bilgileri kontrol edin.");
+        setLoading(false);
       } else {
-        router.refresh();
-        router.push("/");
+        window.location.assign(result?.url || "/");
       }
     } catch {
       setError("Bir hata oluştu, lütfen tekrar deneyin.");
