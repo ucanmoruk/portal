@@ -27,10 +27,10 @@ export async function GET(request: NextRequest) {
     // Arama: Evrak_No, RaporNo, FirmaAd, NumuneAdi üzerinde
     const searchClause = search
       ? `AND (
-          n.Evrak_No     LIKE N'%' + @search + '%'
-          OR n.RaporNo   LIKE N'%' + @search + '%'
-          OR f.Ad        LIKE N'%' + @search + '%'
-          OR n.Numune_Adi LIKE N'%' + @search + '%'
+          LOWER(CAST(ISNULL(n.Evrak_No, '') AS NVARCHAR)) LIKE LOWER(@searchLike)
+          OR LOWER(CAST(ISNULL(n.RaporNo, '') AS NVARCHAR)) LIKE LOWER(@searchLike)
+          OR LOWER(ISNULL(f.Ad, '')) LIKE LOWER(@searchLike)
+          OR LOWER(ISNULL(n.Numune_Adi, '')) LIKE LOWER(@searchLike)
         )`
       : "";
 
@@ -46,10 +46,12 @@ export async function GET(request: NextRequest) {
     const [countResult, groupResult] = await Promise.all([
       pool.request()
         .input("search", search)
+        .input("searchLike", `%${search}%`)
         .query(`SELECT COUNT(DISTINCT n.Evrak_No) AS total ${baseJoin}`),
 
       pool.request()
         .input("search", search)
+        .input("searchLike", `%${search}%`)
         .input("offset", offset)
         .input("limit",  limit)
         .query(`
