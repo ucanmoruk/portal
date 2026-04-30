@@ -242,6 +242,7 @@ export async function POST(request: Request) {
       .input("TeklifNo",     teklifNo)
       .input("RevNo",        revNo)
       .input("MusteriID",    Number(musteriId))
+      .input("Tarih",        new Date())
       .input("Toplam",       parseFloat(toplam.toFixed(2)))
       .input("Notlar",       notlar        || null)
       .input("TeklifKonusu", teklifKonusu  || "Fiyat teklifimiz")
@@ -252,7 +253,7 @@ export async function POST(request: Request) {
       .query(`
         INSERT INTO TeklifX1 (TeklifNo, RevNo, MusteriID, Tarih, Toplam, Notlar, TeklifKonusu, TeklifVeren, KdvOran, GenelIskonto, Durum, KID)
         OUTPUT INSERTED.ID
-        VALUES (@TeklifNo, @RevNo, @MusteriID, GETDATE(), @Toplam, @Notlar, @TeklifKonusu, @TeklifVeren, @KdvOran, @GenelIskonto, 'Aktif', @KID)
+        VALUES (@TeklifNo, @RevNo, @MusteriID, @Tarih, @Toplam, @Notlar, @TeklifKonusu, @TeklifVeren, @KdvOran, @GenelIskonto, 'Aktif', @KID)
       `);
 
     const teklifId = insertRes.recordset[0].ID;
