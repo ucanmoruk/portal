@@ -27,8 +27,8 @@ export async function GET(request: NextRequest) {
     // Arama: Evrak_No, RaporNo, FirmaAd, NumuneAdi üzerinde
     const searchClause = search
       ? `AND (
-          LOWER(CAST(ISNULL(n.Evrak_No, '') AS NVARCHAR)) LIKE LOWER(@searchLike)
-          OR LOWER(CAST(ISNULL(n.RaporNo, '') AS NVARCHAR)) LIKE LOWER(@searchLike)
+          LOWER(ISNULL(CAST(n.Evrak_No AS NVARCHAR), '')) LIKE LOWER(@searchLike)
+          OR LOWER(ISNULL(CAST(n.RaporNo AS NVARCHAR), '')) LIKE LOWER(@searchLike)
           OR LOWER(ISNULL(f.Ad, '')) LIKE LOWER(@searchLike)
           OR LOWER(ISNULL(n.Numune_Adi, '')) LIKE LOWER(@searchLike)
         )`
