@@ -23,7 +23,7 @@ import {
     UserPlus,
     Users,
 } from "lucide-react";
-import { DEFAULT_PARAMETERS, MethodType, ValidationParameter } from "@/types/validation";
+import { DEFAULT_PARAMETERS, MethodType, sortValidationParameters, ValidationParameter } from "@/types/validation";
 import styles from "./MethodDefinitionWizard.module.css";
 
 interface Method {
@@ -61,11 +61,30 @@ interface Component {
     limit: string;
 }
 
-const parametersForType = (type: MethodType) => DEFAULT_PARAMETERS.map(param => ({
+const normalizeWizardParameters = (parameters: ValidationParameter[]) => {
+    const merged = parameters.reduce<ValidationParameter[]>((acc, parameter) => {
+        if (parameter.id === "loq") {
+            const lod = acc.find(item => item.id === "lod");
+            if (lod) {
+                lod.name = "LOD (Tespit Limiti) ve LOQ (Tayini Limiti)";
+                lod.isEnabled = lod.isEnabled || parameter.isEnabled;
+                lod.requiredFor = Array.from(new Set([...lod.requiredFor, ...parameter.requiredFor]));
+                return acc;
+            }
+            acc.push({ ...parameter, id: "lod", name: "LOD (Tespit Limiti) ve LOQ (Tayini Limiti)" });
+            return acc;
+        }
+        acc.push(parameter.id === "lod" ? { ...parameter, name: "LOD (Tespit Limiti) ve LOQ (Tayini Limiti)" } : parameter);
+        return acc;
+    }, []);
+    return sortValidationParameters(merged);
+};
+
+const parametersForType = (type: MethodType) => normalizeWizardParameters(DEFAULT_PARAMETERS.map(param => ({
     ...param,
     isEnabled: type === "FULL_VALIDATION" ? true : param.requiredFor.includes(type),
     note: "",
-}));
+})));
 
 const escapeHtml = (value: string | number | null | undefined) => String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -209,7 +228,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                 setPlannedStartDate(json.planned_start_date ? String(json.planned_start_date).slice(0, 10) : "");
                 setPlannedEndDate(json.planned_end_date ? String(json.planned_end_date).slice(0, 10) : "");
                 setDescription(json.config?.description || "");
-                setParameters(Array.isArray(json.config?.parameters) ? json.config.parameters : parametersForType((json.study_type || "FULL_VALIDATION") as MethodType));
+                setParameters(Array.isArray(json.config?.parameters) ? normalizeWizardParameters(json.config.parameters) : parametersForType((json.study_type || "FULL_VALIDATION") as MethodType));
                 setDevices(Array.isArray(json.config?.devices) ? json.config.devices.map((device: any) => ({
                     id: device.id || crypto.randomUUID(),
                     code: device.code || "",

@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LodCalculationForm } from "@/components/validation/modules/LodCalculationForm";
 import { LinearityCalculationForm } from "@/components/validation/modules/LinearityCalculationForm";
+import { PrecisionRepeatabilityForm } from "@/components/validation/modules/PrecisionRepeatabilityForm";
+import { PrecisionReproducibilityForm } from "@/components/validation/modules/PrecisionReproducibilityForm";
+import { TruenessStudyForm } from "@/components/validation/modules/TruenessStudyForm";
 import { ValidationReport, ReportData } from "@/components/validation/report/ValidationReport";
+import { sortValidationParameters } from "@/types/validation";
 import { FileText, Printer } from "lucide-react";
 import styles from "@/app/styles/table.module.css";
 import detailStyles from "./page.module.css";
@@ -63,8 +67,8 @@ const normalizeParamId = (value: string) => value.toLowerCase().replace(/[^a-z0-
 
 const parameterTabLabel = (parameter: { id: string; name: string }) => {
     if (parameter.id === "accuracy") return "Doğruluk";
-    if (parameter.id === "precision_repeatability") return "Kesinlik";
-    if (parameter.id === "precision_reproducibility") return "Tekrar Üretilebilirlik";
+    if (parameter.id === "precision_repeatability") return "Tekrarlanabilirlik";
+    if (parameter.id === "precision_reproducibility") return "Tekrarüretilebilirlik";
     if (parameter.id === "selectivity") return "Seçicilik";
     if (parameter.id === "trueness") return "Gerçeklik";
     if (parameter.id === "robustness") return "Sağlamlık";
@@ -72,9 +76,15 @@ const parameterTabLabel = (parameter: { id: string; name: string }) => {
 };
 
 const buildParameterTabs = (parameters: Array<{ id: string; name: string; isEnabled: boolean }>): ParameterTab[] => {
-    const enabled = parameters.filter(parameter => parameter.isEnabled);
+    const enabled = sortValidationParameters(parameters.filter(parameter => parameter.isEnabled));
     const tabs: ParameterTab[] = [];
     const used = new Set<string>();
+
+    const selectivity = enabled.find(parameter => parameter.id === "selectivity");
+    if (selectivity) {
+        tabs.push({ value: "selectivity", label: "Seçicilik", parameterIds: ["selectivity"] });
+        used.add("selectivity");
+    }
 
     const linearity = enabled.find(parameter => parameter.id === "linearity");
     if (linearity) {
@@ -171,6 +181,33 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
         };
     }, [id]);
 
+    const persistModuleData = async (payload: any) => {
+        if (!validation) return;
+
+        const currentConfig = validation.config || {};
+        const moduleData = {
+            ...((currentConfig as any).moduleData || {}),
+            [payload.type]: {
+                ...(((currentConfig as any).moduleData || {})[payload.type] || {}),
+                [payload.component]: payload.data,
+            },
+        };
+        const nextConfig = { ...currentConfig, moduleData };
+
+        setValidation(current => current ? { ...current, config: nextConfig } : current);
+
+        const res = await fetch(`/api/eurolab/validations/${validation.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ config: nextConfig }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(json.error || "Validasyon verileri kaydedilemedi.");
+        }
+    };
+
     const handleReportDataUpdate = (payload: any) => {
         setReportData(prev => {
             const newData = { ...prev };
@@ -221,6 +258,10 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
 
             return newData;
         });
+
+        persistModuleData(payload).catch((error: any) => {
+            alert(error.message || "Validasyon verileri kaydedilemedi.");
+        });
     };
 
     if (loading) {
@@ -241,10 +282,11 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
         );
     }
 
-    const enabledParameters = (validation.config?.parameters || []).filter(parameter => parameter.isEnabled);
+    const enabledParameters = sortValidationParameters((validation.config?.parameters || []).filter(parameter => parameter.isEnabled));
     const parameterTabs = buildParameterTabs(validation.config?.parameters || []);
     const defaultTab = "protocol";
     const parameterById = new Map((validation.config?.parameters || []).map(parameter => [parameter.id, parameter]));
+    const moduleData = (validation.config as any)?.moduleData || {};
 
     const renderParameterPanel = (tab: ParameterTab) => {
         if (tab.value === "linearity") {
@@ -252,6 +294,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                 <div className={detailStyles.modulePanel}>
                     <LinearityCalculationForm
                         components={components}
+                        initialData={moduleData.LINEARITY || {}}
                         onReportDataChange={handleReportDataUpdate}
                     />
                 </div>
@@ -264,6 +307,46 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                     <LodCalculationForm
                         components={components}
                         personnel={personnel}
+                        initialData={moduleData.LOD_LOQ || {}}
+                        onReportDataChange={handleReportDataUpdate}
+                    />
+                </div>
+            );
+        }
+
+        if (tab.value === "precision_repeatability") {
+            return (
+                <div className={detailStyles.modulePanel}>
+                    <PrecisionRepeatabilityForm
+                        components={components}
+                        personnel={personnel}
+                        initialData={moduleData.PRECISION_REPEATABILITY || {}}
+                        onReportDataChange={handleReportDataUpdate}
+                    />
+                </div>
+            );
+        }
+
+        if (tab.value === "precision_reproducibility") {
+            return (
+                <div className={detailStyles.modulePanel}>
+                    <PrecisionReproducibilityForm
+                        components={components}
+                        personnel={personnel}
+                        initialData={moduleData.PRECISION_REPRODUCIBILITY || {}}
+                        onReportDataChange={handleReportDataUpdate}
+                    />
+                </div>
+            );
+        }
+
+        if (tab.value === "trueness") {
+            return (
+                <div className={detailStyles.modulePanel}>
+                    <TruenessStudyForm
+                        components={components}
+                        personnel={personnel}
+                        initialData={moduleData.TRUENESS || {}}
                         onReportDataChange={handleReportDataUpdate}
                     />
                 </div>
