@@ -53,6 +53,8 @@ app/(dashboard)/laboratuvar/lab-crm/
 **/*.txt
 **/Untitled-*
 tmp/
+.tmp/
+dev*.log
 data/*.local.json
 
 # Geliştirici scriptleri (üretimde gereksiz)

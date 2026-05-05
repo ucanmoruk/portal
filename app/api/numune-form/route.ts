@@ -52,6 +52,23 @@ export async function POST(request: Request) {
 
     const pool = await poolPromise;
 
+    const existing = await pool.request()
+      .input("RaporNo", nkr.RaporNo.trim())
+      .query(`
+        SELECT TOP 1 ID
+        FROM NKR
+        WHERE RaporNo = @RaporNo
+          AND ISNULL(Durum, 'Aktif') <> 'Pasif'
+        ORDER BY ID DESC
+      `);
+
+    if (existing.recordset.length > 0) {
+      return Response.json({
+        error: `Bu rapor no ile aktif kayıt zaten var: ${nkr.RaporNo.trim()}`,
+        id: existing.recordset[0].ID,
+      }, { status: 409 });
+    }
+
     // ── Tüm yeni kolonları tek seferde kontrol et (önbelleklenir) ──
     const [
       hasRevno, hasKarar, hasDil, hasAciklama, hasTur,
@@ -262,7 +279,7 @@ export async function POST(request: Request) {
         .input("KullaniciID", userId ? parseInt(userId) : null)
         .input("Eylem",       "Oluşturuldu")
         .input("Aciklama",    aciklama)
-        .query("INSERT INTO NKR_Log (NKRID, KullaniciID, Eylem, Aciklama) VALUES (@NKRID, @KullaniciID, @Eylem, @Aciklama)");
+        .query("INSERT INTO NKR_Log (NKRID, KullaniciID, Eylem, Aciklama, Tarih) VALUES (@NKRID, @KullaniciID, @Eylem, @Aciklama, CURRENT_TIMESTAMP)");
     }
 
     return Response.json({ id: nkrId }, { status: 201 });

@@ -43,11 +43,11 @@ export async function GET(request: Request) {
 
     if (search) {
       whereClauses.push(`(
-        n.Evrak_No   LIKE N'%' + @search + '%'
-        OR n.RaporNo      LIKE N'%' + @search + '%'
-        OR n.Numune_Adi   LIKE N'%' + @search + '%'
-        OR s.Ad           LIKE N'%' + @search + '%'
-        OR s.Kod          LIKE N'%' + @search + '%'
+        LOWER(COALESCE(CAST(n.Evrak_No AS NVARCHAR), '')) LIKE LOWER(N'%' + @search + '%')
+        OR LOWER(COALESCE(CAST(n.RaporNo AS NVARCHAR), '')) LIKE LOWER(N'%' + @search + '%')
+        OR LOWER(COALESCE(n.Numune_Adi, '')) LIKE LOWER(N'%' + @search + '%')
+        OR LOWER(COALESCE(s.Ad, '')) LIKE LOWER(N'%' + @search + '%')
+        OR LOWER(COALESCE(CAST(s.Kod AS NVARCHAR), '')) LIKE LOWER(N'%' + @search + '%')
       )`);
     }
 

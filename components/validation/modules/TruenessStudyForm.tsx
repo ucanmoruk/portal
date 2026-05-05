@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { calculateGrubbs } from "../shared/grubbs";
 
 type ComponentData = Record<string, string[][]>;
 type MatrixMap = Record<string, string>;
@@ -275,6 +276,7 @@ export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analis
             : Number.NaN;
         const tTable = tCritical95(n - 1);
         const isSuitable = Number.isFinite(tTest) && Number.isFinite(tTable) ? tTest <= tTable : null;
+        const grubbs = calculateGrubbs(recoveryRatios);
         return {
             recoveryMean,
             recoveryMeanPercent: Number.isFinite(recoveryMean) ? recoveryMean * 100 : Number.NaN,
@@ -285,6 +287,7 @@ export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analis
             tTest,
             tTable,
             isSuitable,
+            grubbs,
         };
     };
 
@@ -369,6 +372,15 @@ export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analis
                                                     </div>
                                                 </div>
                                             </div>
+                                            {truenessStats?.grubbs && (
+                                                <div className="rounded-md border border-red-200 bg-red-50 text-xs font-semibold text-red-700" style={{ padding: "10px", marginBottom: "10px" }}>
+                                                    {truenessStats.grubbs.hasOutlier
+                                                        ? <>Grubbs testi aykırı değer uyarısı: {formatValue(truenessStats.grubbs.value * 100)}% geri kazanım
+                                                            (G={formatValue(truenessStats.grubbs.gCalculated)}, Gkritik={formatValue(truenessStats.grubbs.gCritical)})
+                                                        </>
+                                                        : <span className="text-green-700">Grubbs testi yapıldı. İstatistiksel aykırı değer bulunmadı.</span>}
+                                                </div>
+                                            )}
                 
            
                 <div className="mb-4 overflow-auto rounded-lg border border-slate-200">

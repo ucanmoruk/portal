@@ -54,6 +54,7 @@ export const MENU_TREE: MenuItem[] = [
     children: [
       { key: "eurolab.metotlar",           label: "Metotlar",            href: "/laboratuvar/eurolab/metotlar" },
       { key: "eurolab.validasyon",         label: "Validasyon",          href: "/laboratuvar/eurolab/validasyon" },
+      { key: "eurolab.hamveri",            label: "Hamveri",             href: "/laboratuvar/eurolab/hamveri" },
       { key: "eurolab.olcum-belirsizligi", label: "Ölçüm Belirsizliği", href: "/laboratuvar/eurolab/olcum-belirsizligi" },
       { key: "eurolab.raporlar",           label: "Raporlar",            href: "/laboratuvar/eurolab/raporlar" },
     ],

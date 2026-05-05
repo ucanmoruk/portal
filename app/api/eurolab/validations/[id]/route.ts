@@ -96,6 +96,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         if (existing.rowCount === 0) return NextResponse.json({ error: "Validasyon bulunamadı." }, { status: 404 });
 
         const current = existing.rows[0];
+        const nextConfig = Object.prototype.hasOwnProperty.call(body, "config")
+            ? { ...(current.config || {}), ...(body.config || {}) }
+            : null;
         const res = await query(`
             UPDATE eurolab_validations
             SET
@@ -119,7 +122,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             status || null,
             Object.prototype.hasOwnProperty.call(body, "planned_start_date") ? body.planned_start_date || null : current.planned_start_date,
             Object.prototype.hasOwnProperty.call(body, "planned_end_date") ? body.planned_end_date || null : current.planned_end_date,
-            Object.prototype.hasOwnProperty.call(body, "config") ? JSON.stringify(body.config || {}) : null,
+            nextConfig ? JSON.stringify(nextConfig) : null,
         ]);
 
         if (res.rowCount === 0) return NextResponse.json({ error: "Validasyon bulunamadı." }, { status: 404 });

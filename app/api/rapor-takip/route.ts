@@ -29,8 +29,12 @@ export async function GET(request: Request) {
     const hasSonuc = sonucCheck.recordset.length > 0;
 
     const searchFilter = search
-      ? `AND (n.Evrak_No LIKE @search OR n.RaporNo LIKE @search
-             OR n.Numune_Adi LIKE @search OR f.Ad LIKE @search)`
+      ? `AND (
+             LOWER(COALESCE(CAST(n.Evrak_No AS NVARCHAR), '')) LIKE LOWER(@search)
+          OR LOWER(COALESCE(CAST(n.RaporNo AS NVARCHAR), '')) LIKE LOWER(@search)
+          OR LOWER(COALESCE(n.Numune_Adi, '')) LIKE LOWER(@search)
+          OR LOWER(COALESCE(f.Ad, '')) LIKE LOWER(@search)
+        )`
       : "";
 
     const yearFilter = year

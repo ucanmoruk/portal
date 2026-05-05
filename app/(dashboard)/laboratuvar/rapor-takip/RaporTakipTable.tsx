@@ -370,6 +370,13 @@ export default function RaporTakipTable() {
     window.open(`/api/rapor-takip/yazdir?ids=${ids}`, "_blank");
   };
 
+  const openOnayaGonder = (row: RaporRow) => {
+    window.open(
+      `/api/rapor-takip/yazdir/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}&output=approval`,
+      "_blank",
+    );
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
@@ -465,17 +472,17 @@ export default function RaporTakipTable() {
         {/* Başlık satırı */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "32px 24px 80px 108px 108px 1fr 108px 100px 82px 36px 36px 36px",
+          gridTemplateColumns: "32px 24px 80px 108px 108px 1fr 108px 100px 82px 96px 36px 36px 36px",
           alignItems: "center",
           padding: "8px 16px",
           borderBottom: "1px solid var(--color-border-light)",
           background: "var(--color-surface)",
-          minWidth: 960,
+          minWidth: 1040,
         }}>
           <input type="checkbox" checked={selectedIds.size === rows.length && rows.length > 0}
             onChange={toggleSelectAll} style={{ cursor: "pointer", width: 16, height: 16 }} />
           <div />
-          {["Tarih", "Evrak No", "Rapor No", "Firma / Proje · Numune", "Rapor Türü", "Durum", "Termin", "", "", ""].map((h, i) => (
+          {["Tarih", "Evrak No", "Rapor No", "Firma / Proje · Numune", "Rapor Türü", "Durum", "Termin", "", "", "", ""].map((h, i) => (
             <div key={i} style={{
               fontSize: "0.69rem", fontWeight: 600, textTransform: "uppercase",
               letterSpacing: "0.06em", color: "var(--color-text-tertiary)",
@@ -534,14 +541,14 @@ export default function RaporTakipTable() {
                 onClick={() => toggleRow(row)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "32px 24px 80px 108px 108px 1fr 108px 100px 82px 36px 36px 36px",
+                  gridTemplateColumns: "32px 24px 80px 108px 108px 1fr 108px 100px 82px 96px 36px 36px 36px",
                   alignItems: "center",
                   padding: "12px 16px",
                   cursor: "pointer",
                   background: isOpen ? "var(--color-surface-2)" : selectedIds.has(key) ? "var(--color-accent-light)" : "transparent",
                   transition: "background 0.12s",
                   userSelect: "none",
-                  minWidth: 960,
+                  minWidth: 1040,
                 }}
               >
                 {/* Checkbox */}
@@ -602,6 +609,28 @@ export default function RaporTakipTable() {
                 {/* Termin */}
                 <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums", textAlign: "center" }}>
                   {row.MaxTermin ? `${row.MaxTermin.split("-").reverse().join(".")}` : "—"}
+                </div>
+
+                {/* Onaya Gönder */}
+                <div style={{ display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    title="Onay önizlemesini yeni sekmede aç"
+                    onClick={() => openOnayaGonder(row)}
+                    style={{
+                      border: "1px solid #0b5c8e30",
+                      borderRadius: 7,
+                      background: "#0b5c8e14",
+                      color: "#0b5c8e",
+                      fontSize: "0.68rem",
+                      fontWeight: 700,
+                      padding: "5px 8px",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Onaya Gönder
+                  </button>
                 </div>
 
                 {/* DOCX İndir */}

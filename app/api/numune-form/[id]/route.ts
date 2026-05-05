@@ -375,7 +375,7 @@ export async function PUT(
         .input("KullaniciID", userId ? parseInt(userId) : null)
         .input("Eylem",       "Güncellendi")
         .input("Aciklama",    aciklama)
-        .query("INSERT INTO NKR_Log (NKRID, KullaniciID, Eylem, Aciklama) VALUES (@NKRID, @KullaniciID, @Eylem, @Aciklama)");
+        .query("INSERT INTO NKR_Log (NKRID, KullaniciID, Eylem, Aciklama, Tarih) VALUES (@NKRID, @KullaniciID, @Eylem, @Aciklama, CURRENT_TIMESTAMP)");
     }
 
     return Response.json({ message: "Güncellendi" });

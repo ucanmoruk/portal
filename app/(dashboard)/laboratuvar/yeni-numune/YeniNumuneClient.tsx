@@ -96,13 +96,18 @@ function normalizePartialDate(v: string): string | null {
 }
 
 // ── FirmaSearch typeahead ──────────────────────────────────
-function FirmaSearch({ label, value, displayValue, onChange, placeholder }: {
+function FirmaSearch({ label, value, displayValue, onChange, placeholder, allowCreate = false }: {
   label: string; value: number | null; displayValue: string;
   onChange: (id: number | null, ad: string) => void; placeholder?: string;
+  allowCreate?: boolean;
 }) {
   const [q, setQ] = useState(displayValue);
   const [results, setRes] = useState<{ ID: number; Ad: string }[]>([]);
   const [open, setOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [newFirma, setNewFirma] = useState({ Ad: "", Yetkili: "", Telefon: "", Email: "" });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -128,17 +133,58 @@ function FirmaSearch({ label, value, displayValue, onChange, placeholder }: {
     }, 200);
   }, []);
 
+  const submitNewFirma = async () => {
+    const ad = (newFirma.Ad || q).trim();
+    if (!ad) { setCreateError("Firma adı zorunludur."); return; }
+    setCreating(true);
+    setCreateError("");
+    try {
+      const response = await fetch("/api/musteriler", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newFirma, Ad: ad, Kimin: "Root" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Firma kaydedilemedi.");
+      onChange(Number(data.id), ad);
+      setQ(ad);
+      setRes([]);
+      setOpen(false);
+      setCreateOpen(false);
+      setNewFirma({ Ad: "", Yetkili: "", Telefon: "", Email: "" });
+    } catch (error: any) {
+      setCreateError(error.message || "Firma kaydedilemedi.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className={yn.fg} ref={wrapRef} style={{ position: "relative" }}>
       <label>{label}</label>
-      <div style={{ position: "relative" }}>
+      <div className={yn.firmaSearchRow}>
         <input
+          className={yn.firmaSearchInput}
           value={q}
           placeholder={placeholder || "Yazmaya başlayın…"}
           onChange={e => { setQ(e.target.value); search(e.target.value); if (!e.target.value) onChange(null, ""); }}
           onFocus={() => { if (results.length) setOpen(true); }}
           autoComplete="off"
         />
+        {allowCreate ? (
+          <button
+            type="button"
+            title="Yeni firma ekle"
+            className={yn.quickAddBtn}
+            onClick={() => {
+              setNewFirma(current => ({ ...current, Ad: q || current.Ad }));
+              setCreateOpen(open => !open);
+              setOpen(false);
+            }}
+          >
+            +
+          </button>
+        ) : null}
         {value ? (
           <button type="button"
             onClick={() => { onChange(null, ""); setQ(""); setRes([]); }}
@@ -159,6 +205,22 @@ function FirmaSearch({ label, value, displayValue, onChange, placeholder }: {
               onMouseDown={() => { onChange(r.ID, r.Ad); setQ(r.Ad); setOpen(false); }}
             >{r.Ad}</div>
           ))}
+        </div>
+      ) : null}
+      {allowCreate && createOpen ? (
+        <div className={yn.quickCreatePanel}>
+          <div className={yn.quickCreateTitle}>Yeni firma kaydı</div>
+          <div className={yn.quickCreateGrid}>
+            <input value={newFirma.Ad} onChange={e => setNewFirma(f => ({ ...f, Ad: e.target.value }))} placeholder="Firma adı" />
+            <input value={newFirma.Yetkili} onChange={e => setNewFirma(f => ({ ...f, Yetkili: e.target.value }))} placeholder="Yetkili" />
+            <input value={newFirma.Telefon} onChange={e => setNewFirma(f => ({ ...f, Telefon: e.target.value }))} placeholder="Telefon" />
+            <input value={newFirma.Email} onChange={e => setNewFirma(f => ({ ...f, Email: e.target.value }))} placeholder="E-posta" />
+          </div>
+          {createError ? <div className={yn.quickCreateError}>{createError}</div> : null}
+          <div className={yn.quickCreateActions}>
+            <button type="button" onClick={() => setCreateOpen(false)} disabled={creating}>İptal</button>
+            <button type="button" onClick={submitNewFirma} disabled={creating}>{creating ? "Kaydediliyor..." : "Kaydet"}</button>
+          </div>
         </div>
       ) : null}
     </div>
@@ -610,7 +672,7 @@ export default function YeniNumuneClient() {
               </div>
             </div>
             <div className={yn.evrakGrid2}>
-              <FirmaSearch label="Firma" value={evrak.Firma_ID} displayValue={evrak.FirmaAd} onChange={(id, ad) => patchEvrak({ Firma_ID: id, FirmaAd: ad })} placeholder="Firma adı…" />
+              <FirmaSearch label="Firma" value={evrak.Firma_ID} displayValue={evrak.FirmaAd} onChange={(id, ad) => patchEvrak({ Firma_ID: id, FirmaAd: ad })} placeholder="Firma adı…" allowCreate />
               <FirmaSearch label="Proje" value={evrak.ProjeID} displayValue={evrak.ProjeAd} onChange={(id, ad) => patchEvrak({ ProjeID: id, ProjeAd: ad })} placeholder="Proje adı…" />
               <div className={yn.fg}>
                 <label>Karar kuralı</label>

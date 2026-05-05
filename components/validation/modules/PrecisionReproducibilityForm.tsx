@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardEvent, useState } from "react";
+import { ClipboardEvent, CSSProperties, useState } from "react";
 import { Activity, Calculator, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { calculateGrubbs } from "../shared/grubbs";
 
 type Row = {
     date: string;
@@ -28,6 +29,7 @@ type SummaryResult = {
     rsdrPoolPart: number;
     repeatabilityLimit: number;
     nMinusOne: number;
+    grubbs?: ReturnType<typeof calculateGrubbs>;
 };
 type CalculationResult = {
     analystStats: Record<string, SummaryResult>;
@@ -196,7 +198,7 @@ const addDays = (dateValue: string, days: number) => {
 };
 
 export function PrecisionReproducibilityForm({ components = ["Genel"], personnel = ["Analist 1", "Analist 2"], initialData = {}, onReportDataChange }: PrecisionReproducibilityFormProps) {
-    const analysts = (personnel.length > 0 ? personnel : ["Analist 1", "Analist 2"]).slice(0, 2);
+    const analysts = personnel.length > 0 ? [...personnel] : ["Analist 1", "Analist 2"];
     while (analysts.length < 2) analysts.push(`Analist ${analysts.length + 1}`);
 
     const [activeComponent, setActiveComponent] = useState(components[0] || "Genel");
@@ -212,7 +214,9 @@ export function PrecisionReproducibilityForm({ components = ["Genel"], personnel
     const [allData, setAllData] = useState<ComponentData>(() =>
         Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, Array.isArray(data?.rows) ? data.rows : []]))
     );
-    const [calculatedResults, setCalculatedResults] = useState<Record<string, CalculationResult | undefined>>({});
+    const [calculatedResults, setCalculatedResults] = useState<Record<string, CalculationResult | undefined>>(() =>
+        Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.result]))
+    );
 
     const getUnit = (component: string) => units[component] || "mg_kg";
     const getUnitLabel = (component: string) => UNITS.find(unit => unit.value === getUnit(component))?.label || "mg/kg (ppm)";
@@ -310,7 +314,8 @@ export function PrecisionReproducibilityForm({ components = ["Genel"], personnel
             const nMinusOne = count > 1 ? count - 1 : Number.NaN;
             const rsdrPoolPart = Number.isFinite(rsdr) && Number.isFinite(nMinusOne) ? Math.pow(rsdr, 2) * nMinusOne : Number.NaN;
             const repeatabilityLimit = Number.isFinite(stdDev) ? 2.83 * stdDev : Number.NaN;
-            return [analyst, { count, mean, variance, stdDev, rsdr, rsdrPoolPart, repeatabilityLimit, nMinusOne }];
+            const grubbs = calculateGrubbs(values);
+            return [analyst, { count, mean, variance, stdDev, rsdr, rsdrPoolPart, repeatabilityLimit, nMinusOne, grubbs }];
         }));
 
         const stats = Object.values(analystStats);
@@ -318,17 +323,13 @@ export function PrecisionReproducibilityForm({ components = ["Genel"], personnel
         const pooledNumerator = validPoolStats.reduce((sum, stat) => sum + stat.rsdrPoolPart, 0);
         const pooledDenominator = validPoolStats.reduce((sum, stat) => sum + stat.nMinusOne, 0);
         const pooledRsd = pooledDenominator > 0 ? Math.sqrt(pooledNumerator / pooledDenominator) : Number.NaN;
-        const first = stats[0];
-        const second = stats[1];
-        const firstVariance = first?.variance ?? Number.NaN;
-        const secondVariance = second?.variance ?? Number.NaN;
-        const firstDf = first?.nMinusOne ?? Number.NaN;
-        const secondDf = second?.nMinusOne ?? Number.NaN;
-        const firstIsNumerator = firstVariance >= secondVariance;
-        const numeratorVariance = firstIsNumerator ? firstVariance : secondVariance;
-        const denominatorVariance = firstIsNumerator ? secondVariance : firstVariance;
-        const numeratorDf = firstIsNumerator ? firstDf : secondDf;
-        const denominatorDf = firstIsNumerator ? secondDf : firstDf;
+        const validVarianceStats = stats.filter(stat => Number.isFinite(stat.variance) && stat.variance > 0 && Number.isFinite(stat.nMinusOne));
+        const maxVarianceStat = validVarianceStats.reduce<SummaryResult | undefined>((max, stat) => !max || stat.variance > max.variance ? stat : max, undefined);
+        const minVarianceStat = validVarianceStats.reduce<SummaryResult | undefined>((min, stat) => !min || stat.variance < min.variance ? stat : min, undefined);
+        const numeratorVariance = maxVarianceStat?.variance ?? Number.NaN;
+        const denominatorVariance = minVarianceStat?.variance ?? Number.NaN;
+        const numeratorDf = maxVarianceStat?.nMinusOne ?? Number.NaN;
+        const denominatorDf = minVarianceStat?.nMinusOne ?? Number.NaN;
         const fTest = Number.isFinite(numeratorVariance) && Number.isFinite(denominatorVariance) && denominatorVariance > 0
             ? numeratorVariance / denominatorVariance
             : Number.NaN;
@@ -365,7 +366,8 @@ export function PrecisionReproducibilityForm({ components = ["Genel"], personnel
                 notes: notes[component] || "",
                 parallelCount: getParallelCount(component),
                 analysts,
-                rows: getRows(component)
+                rows: getRows(component),
+                result: calculateSummary(component)
             }
         });
         alert(`${component} tekrar üretilebilirlik verileri rapora eklendi!`);
@@ -401,6 +403,7 @@ export function PrecisionReproducibilityForm({ components = ["Genel"], personnel
                     {components.map(component => {
                         const rows = getRows(component);
                         const result = calculatedResults[component];
+                        const dataGridWidth = 140 + (analysts.length * 120) + 42;
                         return (
                             <TabsContent key={component} value={component} className="space-y-4 pt-1">
                                 <div
@@ -455,7 +458,7 @@ export function PrecisionReproducibilityForm({ components = ["Genel"], personnel
                                     </div>
                                 </div>
 
-                                <div className="grid min-w-0 gap-5 xl:grid-cols-[500px_minmax(0,1fr)]">
+                                <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,var(--repro-data-width))_minmax(0,1fr)]" style={{ "--repro-data-width": `${dataGridWidth}px` } as CSSProperties}>
                                     <div className="min-w-0">
                                         <div className="max-h-[500px] overflow-auto rounded-lg border border-slate-200 bg-white [&_td]:border-slate-200 [&_th]:border-slate-200 [&_tr]:border-slate-200">
                                             <Table>
@@ -526,6 +529,18 @@ export function PrecisionReproducibilityForm({ components = ["Genel"], personnel
                                                     </div>
                                                 </div>
                                             </div>
+                                            {Object.values(result.analystStats || {}).some((stat: any) => stat.grubbs) && (
+                                                <div className="rounded-md border border-red-200 bg-red-50 text-xs font-semibold text-red-700" style={{ padding: "10px", marginBottom: "10px" }}>
+                                                    {Object.entries(result.analystStats || {}).some(([, stat]: [string, any]) => stat.grubbs?.hasOutlier)
+                                                        ? <>Grubbs testi aykırı değer uyarısı:
+                                                            {Object.entries(result.analystStats || {})
+                                                                .filter(([, stat]: [string, any]) => stat.grubbs?.hasOutlier)
+                                                                .map(([analyst, stat]: [string, any]) => ` ${analyst}: ${formatValue(stat.grubbs.value)} (G=${formatValue(stat.grubbs.gCalculated)}, Gkritik=${formatValue(stat.grubbs.gCritical)})`)
+                                                                .join(";")}
+                                                        </>
+                                                        : <span className="text-green-700">Grubbs testi yapıldı. İstatistiksel aykırı değer bulunmadı.</span>}
+                                                </div>
+                                            )}
                                             <Table>
                                                 <TableHeader>
                                                     <TableRow>

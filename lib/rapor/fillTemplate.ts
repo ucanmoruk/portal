@@ -23,13 +23,14 @@ import type { ReportData } from "./getReportData";
 function makeParser() {
   return (tag: string) => ({
     get(scope: Record<string, unknown>, context: { num: number }) {
+      const cleanTag = tag.trim().replace(/\s+/g, "");
       // Döngü içindeyken önce iç scope'a bak, sonra dış scope'a
       if (context.num > 0 && typeof scope === "object" && scope !== null) {
-        if (Object.prototype.hasOwnProperty.call(scope, tag)) {
-          return scope[tag];
+        if (Object.prototype.hasOwnProperty.call(scope, cleanTag)) {
+          return scope[cleanTag];
         }
       }
-      return (scope as Record<string, unknown>)[tag] ?? "";
+      return (scope as Record<string, unknown>)[cleanTag] ?? "";
     },
   });
 }

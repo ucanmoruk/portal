@@ -25,7 +25,6 @@ export const VALIDATION_PARAMETER_ORDER = [
     'precision_repeatability',
     'trueness',
     'precision_reproducibility',
-    'accuracy',
     'robustness',
 ];
 
@@ -45,6 +44,5 @@ export const DEFAULT_PARAMETERS: ValidationParameter[] = [
     { id: 'precision_repeatability', name: 'Kesinlik (Tekrarlanabilirlik)', isEnabled: false, requiredFor: ['FULL_VALIDATION', 'VERIFICATION'] },
     { id: 'trueness', name: 'Gerçeklik (Bias / Geri Kazanım)', isEnabled: false, requiredFor: ['FULL_VALIDATION', 'VERIFICATION'] },
     { id: 'precision_reproducibility', name: 'Kesinlik (Tekrarüretilebilirlik)', isEnabled: false, requiredFor: ['FULL_VALIDATION', 'VERIFICATION'] },
-    { id: 'accuracy', name: 'Doğruluk (Accuracy)', isEnabled: false, requiredFor: ['FULL_VALIDATION', 'VERIFICATION'] },
     { id: 'robustness', name: 'Sağlamlık (Robustness)', isEnabled: false, requiredFor: ['FULL_VALIDATION'] },
 ];

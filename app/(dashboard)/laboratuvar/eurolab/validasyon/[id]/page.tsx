@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LodCalculationForm } from "@/components/validation/modules/LodCalculationForm";
 import { LinearityCalculationForm } from "@/components/validation/modules/LinearityCalculationForm";
+import { MeasurementUncertaintyBudgetForm } from "@/components/validation/modules/MeasurementUncertaintyBudgetForm";
 import { PrecisionRepeatabilityForm } from "@/components/validation/modules/PrecisionRepeatabilityForm";
 import { PrecisionReproducibilityForm } from "@/components/validation/modules/PrecisionReproducibilityForm";
+import { SamplePreparationUncertaintyForm } from "@/components/validation/modules/SamplePreparationUncertaintyForm";
 import { TruenessStudyForm } from "@/components/validation/modules/TruenessStudyForm";
 import { ValidationReport, ReportData } from "@/components/validation/report/ValidationReport";
 import { sortValidationParameters } from "@/types/validation";
@@ -33,9 +35,31 @@ interface ValidationDetail {
     config?: {
         description?: string;
         parameters?: Array<{ id: string; name: string; isEnabled: boolean; note?: string }>;
-        devices?: Array<{ id: string; name: string; serialNo: string }>;
+        devices?: Array<{
+            id: string;
+            code?: string;
+            name: string;
+            serialNo: string;
+            intendedUse?: string;
+            unit?: string;
+            valueText?: string;
+            uncertaintyComponent?: string;
+            uncertaintyValue?: string | number | null;
+            distributionType?: string;
+        }>;
         personnel?: Array<{ id: string; name: string; role: string }>;
-        components?: Array<{ id: string; name: string; casNo: string }>;
+        components?: Array<{
+            id: string;
+            code?: string;
+            name: string;
+            casNo: string;
+            limit?: string;
+            unit?: string;
+            valueText?: string;
+            uncertaintyComponent?: string;
+            uncertaintyValue?: string | number | null;
+            distributionType?: string;
+        }>;
     };
 }
 
@@ -66,7 +90,6 @@ const formatDate = (date: string | null) => {
 const normalizeParamId = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
 const parameterTabLabel = (parameter: { id: string; name: string }) => {
-    if (parameter.id === "accuracy") return "Doğruluk";
     if (parameter.id === "precision_repeatability") return "Tekrarlanabilirlik";
     if (parameter.id === "precision_reproducibility") return "Tekrarüretilebilirlik";
     if (parameter.id === "selectivity") return "Seçicilik";
@@ -76,7 +99,7 @@ const parameterTabLabel = (parameter: { id: string; name: string }) => {
 };
 
 const buildParameterTabs = (parameters: Array<{ id: string; name: string; isEnabled: boolean }>): ParameterTab[] => {
-    const enabled = sortValidationParameters(parameters.filter(parameter => parameter.isEnabled));
+    const enabled = sortValidationParameters(parameters.filter(parameter => parameter.isEnabled && parameter.id !== "accuracy"));
     const tabs: ParameterTab[] = [];
     const used = new Set<string>();
 
@@ -160,6 +183,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                 setValidation(json);
                 setReportData(prev => ({
                     ...prev,
+                    moduleData: json.config?.moduleData || {},
                     meta: {
                         title: json.title || json.method_name,
                         id: json.code || String(json.id),
@@ -211,6 +235,13 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
     const handleReportDataUpdate = (payload: any) => {
         setReportData(prev => {
             const newData = { ...prev };
+            newData.moduleData = {
+                ...(newData.moduleData || {}),
+                [payload.type]: {
+                    ...((newData.moduleData || {})[payload.type] || {}),
+                    [payload.component]: payload.data,
+                },
+            };
 
             if (payload.type === "LOD_LOQ") {
                 const compIndex = newData.lodData?.components.findIndex(c => c.name === payload.component);
@@ -282,11 +313,57 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
         );
     }
 
-    const enabledParameters = sortValidationParameters((validation.config?.parameters || []).filter(parameter => parameter.isEnabled));
+    const enabledParameters = sortValidationParameters((validation.config?.parameters || []).filter(parameter => parameter.isEnabled && parameter.id !== "accuracy"));
     const parameterTabs = buildParameterTabs(validation.config?.parameters || []);
     const defaultTab = "protocol";
     const parameterById = new Map((validation.config?.parameters || []).map(parameter => [parameter.id, parameter]));
     const moduleData = (validation.config as any)?.moduleData || {};
+    const fixedTabs = [
+        { value: "sample_preparation", label: "Numune Hazırlama", title: "Numune Hazırlama", description: "Numune hazırlama adımları, seyreltme/ekstraksiyon işlemleri ve çalışma koşulları bu alanda takip edilir." },
+        { value: "measurement_uncertainty", label: "Ölçüm Belirsizliği", title: "Ölçüm Belirsizliği", description: "Validasyon çalışmasına ait belirsizlik bileşenleri ve hesap özetleri bu alanda takip edilir." },
+    ];
+
+    const renderFixedPanel = (tab: typeof fixedTabs[number]) => {
+        if (tab.value === "sample_preparation") {
+            return (
+                <div className={detailStyles.modulePanel}>
+                    <SamplePreparationUncertaintyForm
+                        devices={validation.config?.devices || []}
+                        components={validation.config?.components || []}
+                        initialData={moduleData.SAMPLE_PREPARATION || {}}
+                        onReportDataChange={handleReportDataUpdate}
+                    />
+                </div>
+            );
+        }
+
+        if (tab.value === "measurement_uncertainty") {
+            return (
+                <div className={detailStyles.modulePanel}>
+                    <MeasurementUncertaintyBudgetForm
+                        moduleData={moduleData}
+                        initialData={moduleData.MEASUREMENT_UNCERTAINTY?.summary || {}}
+                        onReportDataChange={handleReportDataUpdate}
+                    />
+                </div>
+            );
+        }
+
+        return (
+            <div className={detailStyles.parameterPanel}>
+                <div className={detailStyles.parameterPanelHeader}>
+                    <span className={detailStyles.parameterPanelTitle}>{tab.title}</span>
+                    <span className={detailStyles.parameterPanelMeta}>Standart validasyon bölümü</span>
+                </div>
+                <div className={detailStyles.parameterPanelBody}>
+                    <div className={detailStyles.parameterNoteCard}>
+                        <strong>{tab.title}</strong>
+                        <p>{tab.description}</p>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     const renderParameterPanel = (tab: ParameterTab) => {
         if (tab.value === "linearity") {
@@ -423,6 +500,11 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                             {tab.label}
                         </TabsTrigger>
                     ))}
+                    {fixedTabs.map(tab => (
+                        <TabsTrigger key={tab.value} value={tab.value} className={detailStyles.tabTrigger}>
+                            {tab.label}
+                        </TabsTrigger>
+                    ))}
                     <TabsTrigger value="report" className={detailStyles.tabTrigger}>
                         <FileText className="h-4 w-4 mr-2" /> Rapor Önizleme
                     </TabsTrigger>
@@ -431,6 +513,12 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                 {parameterTabs.map(tab => (
                     <TabsContent key={tab.value} value={tab.value} className={detailStyles.tabContent}>
                         {renderParameterPanel(tab)}
+                    </TabsContent>
+                ))}
+
+                {fixedTabs.map(tab => (
+                    <TabsContent key={tab.value} value={tab.value} className={detailStyles.tabContent}>
+                        {renderFixedPanel(tab)}
                     </TabsContent>
                 ))}
 

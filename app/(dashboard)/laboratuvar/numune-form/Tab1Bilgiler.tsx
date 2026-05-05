@@ -34,17 +34,22 @@ function Card({
 
 // ── Typeahead: Firma / Proje arama ────────────────────────
 function FirmaSearch({
-  label, value, displayValue, onChange, placeholder,
+  label, value, displayValue, onChange, placeholder, allowCreate = false,
 }: {
   label: string;
   value: number | null;
   displayValue: string;
   onChange: (id: number | null, ad: string) => void;
   placeholder?: string;
+  allowCreate?: boolean;
 }) {
   const [q, setQ]           = useState(displayValue);
   const [results, setRes]   = useState<{ ID: number; Ad: string }[]>([]);
   const [open, setOpen]     = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [newFirma, setNewFirma] = useState({ Ad: "", Yetkili: "", Telefon: "", Email: "" });
   const timer               = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef             = useRef<HTMLDivElement>(null);
 
@@ -73,16 +78,59 @@ function FirmaSearch({
     }, 200);
   }, []);
 
+  const submitNewFirma = async () => {
+    const ad = (newFirma.Ad || q).trim();
+    if (!ad) { setCreateError("Firma adı zorunludur."); return; }
+    setCreating(true);
+    setCreateError("");
+    try {
+      const response = await fetch("/api/musteriler", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newFirma, Ad: ad, Kimin: "Root" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Firma kaydedilemedi.");
+      onChange(Number(data.id), ad);
+      setQ(ad);
+      setRes([]);
+      setOpen(false);
+      setCreateOpen(false);
+      setNewFirma({ Ad: "", Yetkili: "", Telefon: "", Email: "" });
+    } catch (error: any) {
+      setCreateError(error.message || "Firma kaydedilemedi.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className={styles.formGroup} ref={wrapRef} style={{ position: "relative" }}>
       <label>{label}</label>
-      <input
-        value={q}
-        placeholder={placeholder || "Yazmaya başlayın…"}
-        onChange={e => { setQ(e.target.value); search(e.target.value); if (!e.target.value) onChange(null, ""); }}
-        onFocus={() => { if (results.length) setOpen(true); }}
-        autoComplete="off"
-      />
+      <div className={allowCreate ? t1.firmaSearchRow : undefined}>
+        <input
+          className={allowCreate ? t1.firmaSearchInput : undefined}
+          value={q}
+          placeholder={placeholder || "Yazmaya başlayın…"}
+          onChange={e => { setQ(e.target.value); search(e.target.value); if (!e.target.value) onChange(null, ""); }}
+          onFocus={() => { if (results.length) setOpen(true); }}
+          autoComplete="off"
+        />
+        {allowCreate ? (
+          <button
+            type="button"
+            title="Yeni firma ekle"
+            className={t1.quickAddBtn}
+            onClick={() => {
+              setNewFirma(current => ({ ...current, Ad: q || current.Ad }));
+              setCreateOpen(open => !open);
+              setOpen(false);
+            }}
+          >
+            +
+          </button>
+        ) : null}
+      </div>
       {value ? (
         <button
           type="button"
@@ -111,6 +159,22 @@ function FirmaSearch({
               {r.Ad}
             </div>
           ))}
+        </div>
+      ) : null}
+      {allowCreate && createOpen ? (
+        <div className={t1.quickCreatePanel}>
+          <div className={t1.quickCreateTitle}>Yeni firma kaydı</div>
+          <div className={t1.quickCreateGrid}>
+            <input value={newFirma.Ad} onChange={e => setNewFirma(f => ({ ...f, Ad: e.target.value }))} placeholder="Firma adı" />
+            <input value={newFirma.Yetkili} onChange={e => setNewFirma(f => ({ ...f, Yetkili: e.target.value }))} placeholder="Yetkili" />
+            <input value={newFirma.Telefon} onChange={e => setNewFirma(f => ({ ...f, Telefon: e.target.value }))} placeholder="Telefon" />
+            <input value={newFirma.Email} onChange={e => setNewFirma(f => ({ ...f, Email: e.target.value }))} placeholder="E-posta" />
+          </div>
+          {createError ? <div className={t1.quickCreateError}>{createError}</div> : null}
+          <div className={t1.quickCreateActions}>
+            <button type="button" onClick={() => setCreateOpen(false)} disabled={creating}>İptal</button>
+            <button type="button" onClick={submitNewFirma} disabled={creating}>{creating ? "Kaydediliyor..." : "Kaydet"}</button>
+          </div>
         </div>
       ) : null}
     </div>
@@ -273,13 +337,14 @@ export default function Tab1Bilgiler({ form, onChange, lookup, loadingNos }: Pro
         title="Müşteri"
         hint="Firma ve proje kayıtları RootTedarikci üzerinden aranır."
       >
-        <div className={t1.gridTwo}>
+        <div className={`${t1.gridTwo} ${t1.customerGrid}`}>
           <FirmaSearch
             label="Firma"
             value={form.Firma_ID}
             displayValue={form.FirmaAd}
             onChange={(id, ad) => onChange({ Firma_ID: id, FirmaAd: ad })}
             placeholder="Firma adı…"
+            allowCreate
           />
           <FirmaSearch
             label="Proje"

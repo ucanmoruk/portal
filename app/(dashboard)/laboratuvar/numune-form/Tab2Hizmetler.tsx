@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import styles from "@/app/styles/table.module.css";
 import type { HizmetRow } from "./numuneFormTypes";
@@ -149,8 +149,20 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
   const [paketDetaylari, setPaketDetaylari] = useState<Record<number, any[]>>({});
   const [loadingDetayId, setLoadingDetayId] = useState<number | null>(null);
   const [selectedPaketItems, setSelectedPaketItems] = useState<Record<string, boolean>>({});
+  const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
   const [loadingPaketId, setLoadingPaketId] = useState<number | null>(null);
   const hizmetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setSelectedRows(prev => {
+      const liveKeys = new Set(rows.map(r => r.key));
+      const next: Record<string, boolean> = {};
+      for (const key of Object.keys(prev)) {
+        if (liveKeys.has(key) && prev[key]) next[key] = true;
+      }
+      return next;
+    });
+  }, [rows]);
 
   const handleHizmetQ = useCallback((val: string) => {
     setHizmetQ(val);
@@ -342,6 +354,27 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
 
   const setTermin = (key: string, termin: string) =>
     onChange(rows.map(r => (r.key === key ? { ...r, Termin: termin } : r)));
+
+  const selectedCount = rows.filter(r => selectedRows[r.key]).length;
+  const allSelected = rows.length > 0 && selectedCount === rows.length;
+
+  const toggleRowSelection = (key: string) => {
+    setSelectedRows(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleAllRows = (checked: boolean) => {
+    if (!checked) {
+      setSelectedRows({});
+      return;
+    }
+    setSelectedRows(Object.fromEntries(rows.map(r => [r.key, true])));
+  };
+
+  const removeSelectedRows = () => {
+    if (selectedCount === 0) return;
+    onChange(rows.filter(r => !selectedRows[r.key]));
+    setSelectedRows({});
+  };
 
   return (
     <div style={{ padding: "20px 24px" }}>
@@ -553,82 +586,120 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
           Henüz hizmet eklenmedi.
         </div>
       ) : (
-        <div className={styles.tableWrapper}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Kod</th>
-                <th>Ad</th>
-                <th>Metot</th>
-                <th style={{ width: 140 }}>Limit</th>
-                <th style={{ width: 100 }}>Birim</th>
-                <th style={{ width: 140 }}>Termin</th>
-                <th style={{ width: 56 }} />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(r => (
-                <tr key={r.key}>
-                  <td style={{ fontVariantNumeric: "tabular-nums" }}>{r.Kod}</td>
-                  <td>{r.Ad}</td>
-                  <td style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>{r.Metot}</td>
-                  <td style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+              {selectedCount > 0 ? `${selectedCount} hizmet seçildi` : `${rows.length} hizmet listede`}
+            </span>
+            <button
+              type="button"
+              className={styles.deleteBtn}
+              onClick={removeSelectedRows}
+              disabled={selectedCount === 0}
+              style={{
+                opacity: selectedCount === 0 ? 0.45 : 1,
+                cursor: selectedCount === 0 ? "not-allowed" : "pointer",
+              }}
+            >
+              Seçilileri sil
+            </button>
+          </div>
+
+          <div className={styles.tableWrapper}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th style={{ width: 42, textAlign: "center" }}>
                     <input
-                      type="text"
-                      value={r.Limit || ""}
-                      onChange={e => setLimit(r.key, e.target.value)}
-                      placeholder="Limit girin..."
-                      style={{
-                        width: "100%",
-                        padding: "4px 8px",
-                        border: "1px solid var(--color-border)",
-                        borderRadius: "4px",
-                        fontSize: "0.82rem",
-                        background: "var(--color-surface)",
-                        color: "var(--color-text-primary)"
-                      }}
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={e => toggleAllRows(e.target.checked)}
+                      aria-label="Tüm hizmetleri seç"
+                      style={{ cursor: "pointer" }}
                     />
-                  </td>
-                  <td style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
-                    <input
-                      type="text"
-                      value={r.Birim || ""}
-                      onChange={e => setBirim(r.key, e.target.value)}
-                      placeholder="Birim..."
-                      style={{
-                        width: "100%",
-                        padding: "4px 8px",
-                        border: "1px solid var(--color-border)",
-                        borderRadius: "4px",
-                        fontSize: "0.82rem",
-                        background: "var(--color-surface)",
-                        color: "var(--color-text-primary)"
-                      }}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="date"
-                      value={r.Termin?.slice(0, 10) || ""}
-                      onChange={e => setTermin(r.key, e.target.value)}
-                      style={{ width: "100%" }}
-                    />
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className={styles.editBtn}
-                      style={{ color: "var(--color-danger)" }}
-                      onClick={() => remove(r.key)}
-                      title="Kaldır"
-                    >
-                      ✕
-                    </button>
-                  </td>
+                  </th>
+                  <th>Kod</th>
+                  <th>Ad</th>
+                  <th>Metot</th>
+                  <th style={{ width: 140 }}>Limit</th>
+                  <th style={{ width: 100 }}>Birim</th>
+                  <th style={{ width: 140 }}>Termin</th>
+                  <th style={{ width: 56 }} />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.key}>
+                    <td style={{ textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(selectedRows[r.key])}
+                        onChange={() => toggleRowSelection(r.key)}
+                        aria-label={`${r.Ad} hizmetini seç`}
+                        style={{ cursor: "pointer" }}
+                      />
+                    </td>
+                    <td style={{ fontVariantNumeric: "tabular-nums" }}>{r.Kod}</td>
+                    <td>{r.Ad}</td>
+                    <td style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>{r.Metot}</td>
+                    <td style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
+                      <input
+                        type="text"
+                        value={r.Limit || ""}
+                        onChange={e => setLimit(r.key, e.target.value)}
+                        placeholder="Limit girin..."
+                        style={{
+                          width: "100%",
+                          padding: "4px 8px",
+                          border: "1px solid var(--color-border)",
+                          borderRadius: "4px",
+                          fontSize: "0.82rem",
+                          background: "var(--color-surface)",
+                          color: "var(--color-text-primary)"
+                        }}
+                      />
+                    </td>
+                    <td style={{ color: "var(--color-text-secondary)", fontSize: "0.82rem" }}>
+                      <input
+                        type="text"
+                        value={r.Birim || ""}
+                        onChange={e => setBirim(r.key, e.target.value)}
+                        placeholder="Birim..."
+                        style={{
+                          width: "100%",
+                          padding: "4px 8px",
+                          border: "1px solid var(--color-border)",
+                          borderRadius: "4px",
+                          fontSize: "0.82rem",
+                          background: "var(--color-surface)",
+                          color: "var(--color-text-primary)"
+                        }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="date"
+                        value={r.Termin?.slice(0, 10) || ""}
+                        onChange={e => setTermin(r.key, e.target.value)}
+                        style={{ width: "100%" }}
+                      />
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={styles.editBtn}
+                        style={{ color: "var(--color-danger)" }}
+                        onClick={() => remove(r.key)}
+                        title="Kaldır"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

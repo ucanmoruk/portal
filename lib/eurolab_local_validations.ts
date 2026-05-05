@@ -142,7 +142,7 @@ export async function updateLocalValidation(id: string | number, input: {
         status: input.status ?? validations[index].status,
         planned_start_date: input.planned_start_date ?? validations[index].planned_start_date,
         planned_end_date: input.planned_end_date ?? validations[index].planned_end_date,
-        config: input.config ?? validations[index].config,
+        config: input.config ? { ...(validations[index].config || {}), ...input.config } : validations[index].config,
     };
     await writeLocalValidations(validations);
     return validations[index];

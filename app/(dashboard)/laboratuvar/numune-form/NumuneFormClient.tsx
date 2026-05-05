@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "@/app/styles/table.module.css";
@@ -125,6 +125,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
   const [loadErr, setLoadErr]       = useState("");
   const [saving, setSaving]         = useState(false);
   const [saveErr, setSaveErr]       = useState("");
+  const savingRef = useRef(false);
   // Yeni kayıtta ilk kaydet sonrası tab kilidi kalkar
   const [tab1Saved, setTab1Saved]   = useState(false);
   const [createdId, setCreatedId]   = useState<number | null>(null);
@@ -231,6 +232,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
   });
 
   const handleSave = async () => {
+    if (savingRef.current) return;
     setSaveErr("");
     if (!form.Evrak_No.trim() || !form.RaporNo.trim() || !form.Numune_Adi.trim()) {
       setSaveErr("Evrak No, Rapor No ve Numune Adı zorunludur.");
@@ -238,6 +240,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
       return;
     }
     const body = buildPayload();
+    savingRef.current = true;
     setSaving(true);
     try {
       if (isEdit) {
@@ -309,6 +312,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
     } catch (e: unknown) {
       setSaveErr(e instanceof Error ? e.message : "Hata");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };

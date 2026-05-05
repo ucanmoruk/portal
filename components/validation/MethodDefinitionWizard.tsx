@@ -40,6 +40,13 @@ interface Device {
     code: string;
     name: string;
     serialNo: string;
+    inventoryId?: number;
+    intendedUse?: string;
+    unit?: string;
+    valueText?: string;
+    uncertaintyComponent?: string;
+    uncertaintyValue?: string | number | null;
+    distributionType?: string;
 }
 
 interface Person {
@@ -56,19 +63,44 @@ interface PersonnelOption {
 
 interface Component {
     id: string;
+    code: string;
     name: string;
     casNo: string;
     limit: string;
+    inventoryId?: number;
+    unit?: string;
+    valueText?: string;
+    uncertaintyComponent?: string;
+    uncertaintyValue?: string | number | null;
+    distributionType?: string;
+}
+
+interface InventoryItem {
+    id: number;
+    code: string;
+    name: string;
+    serial_lot_no: string | null;
+    intended_use: string;
+    cas_no: string | null;
+    limit_info: string | null;
+    value_text: string | null;
+    unit: string | null;
+    uncertainty_component?: string | null;
+    uncertainty_value?: string | number | null;
+    distribution_type?: string | null;
 }
 
 const normalizeWizardParameters = (parameters: ValidationParameter[]) => {
-    const merged = parameters.reduce<ValidationParameter[]>((acc, parameter) => {
+    const merged = parameters.filter(parameter => parameter.id !== "accuracy").reduce<ValidationParameter[]>((acc, parameter) => {
         if (parameter.id === "loq") {
             const lod = acc.find(item => item.id === "lod");
             if (lod) {
+                const lodWithNote = lod as ValidationParameter & { note?: string };
+                const parameterWithNote = parameter as ValidationParameter & { note?: string };
                 lod.name = "LOD (Tespit Limiti) ve LOQ (Tayini Limiti)";
                 lod.isEnabled = lod.isEnabled || parameter.isEnabled;
                 lod.requiredFor = Array.from(new Set([...lod.requiredFor, ...parameter.requiredFor]));
+                lodWithNote.note = [lodWithNote.note, parameterWithNote.note].filter(Boolean).join("\n");
                 return acc;
             }
             acc.push({ ...parameter, id: "lod", name: "LOD (Tespit Limiti) ve LOQ (Tayini Limiti)" });
@@ -119,6 +151,9 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
 
     const [devices, setDevices] = useState<Device[]>([]);
     const [newDevice, setNewDevice] = useState({ code: "", name: "", serialNo: "" });
+    const [deviceInventorySearch, setDeviceInventorySearch] = useState("");
+    const [deviceInventory, setDeviceInventory] = useState<InventoryItem[]>([]);
+    const [deviceInventoryLoading, setDeviceInventoryLoading] = useState(false);
 
     const [personnel, setPersonnel] = useState<Person[]>([]);
     const [newPerson, setNewPerson] = useState({ userId: "", name: "", role: "" });
@@ -127,7 +162,10 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
     const [personnelError, setPersonnelError] = useState("");
 
     const [components, setComponents] = useState<Component[]>([]);
-    const [newComponent, setNewComponent] = useState({ name: "", casNo: "", limit: "" });
+    const [newComponent, setNewComponent] = useState({ code: "", name: "", casNo: "", limit: "" });
+    const [componentInventorySearch, setComponentInventorySearch] = useState("");
+    const [componentInventory, setComponentInventory] = useState<InventoryItem[]>([]);
+    const [componentInventoryLoading, setComponentInventoryLoading] = useState(false);
 
     const selectedMethod = useMemo(
         () => methods.find(method => String(method.id) === selectedMethodId),
@@ -234,6 +272,13 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                     code: device.code || "",
                     name: device.name || "",
                     serialNo: device.serialNo || "",
+                    inventoryId: device.inventoryId,
+                    intendedUse: device.intendedUse,
+                    unit: device.unit,
+                    valueText: device.valueText,
+                    uncertaintyComponent: device.uncertaintyComponent,
+                    uncertaintyValue: device.uncertaintyValue,
+                    distributionType: device.distributionType,
                 })) : []);
                 setPersonnel(Array.isArray(json.config?.personnel) ? json.config.personnel.map((person: any) => ({
                     id: person.id || crypto.randomUUID(),
@@ -242,9 +287,16 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                 })) : []);
                 setComponents(Array.isArray(json.config?.components) ? json.config.components.map((component: any) => ({
                     id: component.id || crypto.randomUUID(),
+                    code: component.code || "",
                     name: component.name || "",
                     casNo: component.casNo || "",
                     limit: component.limit || "",
+                    inventoryId: component.inventoryId,
+                    unit: component.unit,
+                    valueText: component.valueText,
+                    uncertaintyComponent: component.uncertaintyComponent,
+                    uncertaintyValue: component.uncertaintyValue,
+                    distributionType: component.distributionType,
                 })) : []);
             } catch (error: any) {
                 if (alive) setSaveError(error.message);
@@ -276,10 +328,107 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
         ));
     };
 
-    const addDevice = () => {
+    const loadInventory = async (search: string, intendedUses: string[]): Promise<InventoryItem[]> => {
+        const res = await fetch(`/api/eurolab/inventory?${new URLSearchParams({ search, page: "1", pageSize: "100" }).toString()}`, {
+            credentials: "same-origin",
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Envanter listesi alınamadı.");
+        return (json.rows || []).filter((item: InventoryItem) => intendedUses.includes(item.intended_use));
+    };
+
+    useEffect(() => {
+        let alive = true;
+        setDeviceInventoryLoading(true);
+        loadInventory(deviceInventorySearch, ["Ana Cihaz", "Numune Hazırlama"])
+            .then(rows => {
+                if (alive) setDeviceInventory(rows);
+            })
+            .catch(() => {
+                if (alive) setDeviceInventory([]);
+            })
+            .finally(() => {
+                if (alive) setDeviceInventoryLoading(false);
+            });
+        return () => {
+            alive = false;
+        };
+    }, [deviceInventorySearch]);
+
+    useEffect(() => {
+        let alive = true;
+        setComponentInventoryLoading(true);
+        loadInventory(componentInventorySearch, ["Standart"])
+            .then(rows => {
+                if (alive) setComponentInventory(rows);
+            })
+            .catch(() => {
+                if (alive) setComponentInventory([]);
+            })
+            .finally(() => {
+                if (alive) setComponentInventoryLoading(false);
+            });
+        return () => {
+            alive = false;
+        };
+    }, [componentInventorySearch]);
+
+    const findInventoryByCode = async (code: string, intendedUses: string[]) => {
+        const trimmedCode = code.trim().toLocaleLowerCase("tr-TR");
+        if (!trimmedCode) return null;
+        const rows = await loadInventory(code.trim(), intendedUses);
+        return rows.find(item => item.code.trim().toLocaleLowerCase("tr-TR") === trimmedCode) || null;
+    };
+
+    const createInventoryItem = async (payload: Record<string, unknown>) => {
+        const res = await fetch("/api/eurolab/inventory", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Envanter kaydı oluşturulamadı.");
+        return json as InventoryItem;
+    };
+
+    const addDeviceFromInventory = (item: InventoryItem) => {
+        if (devices.some(device => device.code.trim().toLocaleLowerCase("tr-TR") === item.code.trim().toLocaleLowerCase("tr-TR"))) return;
+        setDevices(current => [...current, {
+            id: crypto.randomUUID(),
+            code: item.code,
+            name: item.name,
+            serialNo: item.serial_lot_no || "",
+            inventoryId: item.id,
+            intendedUse: item.intended_use,
+            unit: item.unit || "",
+            valueText: item.value_text || "",
+            uncertaintyComponent: item.uncertainty_component || "",
+            uncertaintyValue: item.uncertainty_value ?? "",
+            distributionType: item.distribution_type || "",
+        }]);
+    };
+
+    const addDevice = async () => {
         if (newDevice.code && newDevice.name && newDevice.serialNo) {
-            setDevices([...devices, { ...newDevice, id: crypto.randomUUID() }]);
-            setNewDevice({ code: "", name: "", serialNo: "" });
+            try {
+                const existing = await findInventoryByCode(newDevice.code, ["Ana Cihaz", "Numune Hazırlama"]);
+                if (existing) {
+                    addDeviceFromInventory(existing);
+                } else {
+                    const created = await createInventoryItem({
+                        code: newDevice.code,
+                        name: newDevice.name,
+                        serial_lot_no: newDevice.serialNo,
+                        intended_use: "Ana Cihaz",
+                    });
+                    addDeviceFromInventory(created);
+                }
+                setNewDevice({ code: "", name: "", serialNo: "" });
+                setDeviceInventorySearch("");
+            } catch (error: any) {
+                setSaveError(error.message);
+            }
         }
     };
 
@@ -307,10 +456,45 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
 
     const removePerson = (id: string) => setPersonnel(personnel.filter(p => p.id !== id));
 
-    const addComponent = () => {
+    const addComponentFromInventory = (item: InventoryItem) => {
+        if (components.some(component => component.code && component.code.trim().toLocaleLowerCase("tr-TR") === item.code.trim().toLocaleLowerCase("tr-TR"))) return;
+        setComponents(current => [...current, {
+            id: crypto.randomUUID(),
+            code: item.code,
+            name: item.name,
+            casNo: item.cas_no || "",
+            limit: item.limit_info || "",
+            inventoryId: item.id,
+            unit: item.unit || "",
+            valueText: item.value_text || "",
+            uncertaintyComponent: item.uncertainty_component || "",
+            uncertaintyValue: item.uncertainty_value ?? "",
+            distributionType: item.distribution_type || "",
+        }]);
+    };
+
+    const addComponent = async () => {
         if (newComponent.name && newComponent.casNo) {
-            setComponents([...components, { ...newComponent, id: crypto.randomUUID() }]);
-            setNewComponent({ name: "", casNo: "", limit: "" });
+            try {
+                const existing = newComponent.code ? await findInventoryByCode(newComponent.code, ["Standart"]) : null;
+                if (existing) {
+                    addComponentFromInventory(existing);
+                } else {
+                    const code = newComponent.code || `STD-${newComponent.casNo.replace(/[^a-zA-Z0-9]/g, "") || Date.now()}`;
+                    const created = await createInventoryItem({
+                        code,
+                        name: newComponent.name,
+                        intended_use: "Standart",
+                        cas_no: newComponent.casNo,
+                        limit_info: newComponent.limit,
+                    });
+                    addComponentFromInventory(created);
+                }
+                setNewComponent({ code: "", name: "", casNo: "", limit: "" });
+                setComponentInventorySearch("");
+            } catch (error: any) {
+                setSaveError(error.message);
+            }
         }
     };
 
@@ -617,6 +801,72 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
 
                     {step === 3 && (
                         <div className={styles.section}>
+                            <div className={styles.field}>
+                                <Label className={styles.label}>Envanterden cihaz seç</Label>
+                                <input
+                                    className={styles.input}
+                                    placeholder="Kod, cihaz adı veya seri no ile ara..."
+                                    value={deviceInventorySearch}
+                                    onChange={(event) => setDeviceInventorySearch(event.target.value)}
+                                />
+                            </div>
+                            <div className={styles.tableShell}>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Kod</TableHead>
+                                            <TableHead>Cihaz adı</TableHead>
+                                            <TableHead>Seri/Lot No</TableHead>
+                                            <TableHead className="w-[96px]">Seç</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {deviceInventoryLoading ? (
+                                            <TableRow><TableCell colSpan={4} className={styles.emptyCell}>Envanter yükleniyor...</TableCell></TableRow>
+                                        ) : (
+                                            <>
+                                                <TableRow>
+                                                    <TableCell colSpan={4} className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">Ana cihaz</TableCell>
+                                                </TableRow>
+                                                {deviceInventory.filter(item => item.intended_use === "Ana Cihaz").map(item => (
+                                                    <TableRow key={item.id}>
+                                                        <TableCell>{item.code}</TableCell>
+                                                        <TableCell className="font-medium">{item.name}</TableCell>
+                                                        <TableCell>{item.serial_lot_no || "—"}</TableCell>
+                                                        <TableCell>
+                                                            <Button variant="outline" size="sm" className={styles.secondaryButton} onClick={() => addDeviceFromInventory(item)} disabled={devices.some(device => device.inventoryId === item.id || device.code === item.code)}>
+                                                                Seç
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                                {deviceInventory.filter(item => item.intended_use === "Ana Cihaz").length === 0 && (
+                                                    <TableRow><TableCell colSpan={4} className={styles.emptyCell}>Ana cihaz bulunamadı.</TableCell></TableRow>
+                                                )}
+                                                <TableRow>
+                                                    <TableCell colSpan={4} className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">Numune hazırlama cihazları</TableCell>
+                                                </TableRow>
+                                                {deviceInventory.filter(item => item.intended_use === "Numune Hazırlama").map(item => (
+                                                    <TableRow key={item.id}>
+                                                        <TableCell>{item.code}</TableCell>
+                                                        <TableCell className="font-medium">{item.name}</TableCell>
+                                                        <TableCell>{item.serial_lot_no || "—"}</TableCell>
+                                                        <TableCell>
+                                                            <Button variant="outline" size="sm" className={styles.secondaryButton} onClick={() => addDeviceFromInventory(item)} disabled={devices.some(device => device.inventoryId === item.id || device.code === item.code)}>
+                                                                Seç
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                                {deviceInventory.filter(item => item.intended_use === "Numune Hazırlama").length === 0 && (
+                                                    <TableRow><TableCell colSpan={4} className={styles.emptyCell}>Numune hazırlama cihazı bulunamadı.</TableCell></TableRow>
+                                                )}
+                                            </>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+
                             <div className={styles.entryBox}>
                                 <div className={styles.field}>
                                     <Label className={styles.label}>Kod</Label>
@@ -630,7 +880,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                     <Label className={styles.label}>Seri No</Label>
                                     <input className={styles.input} placeholder="Örn: TR-123456" value={newDevice.serialNo} onChange={(event) => setNewDevice({ ...newDevice, serialNo: event.target.value })} />
                                 </div>
-                                <Button onClick={addDevice} className={styles.primaryButton}><Plus size={16} /> Ekle</Button>
+                                <Button onClick={addDevice} className={styles.primaryButton}><Plus size={16} /> Manuel Ekle</Button>
                             </div>
 
                             <div className={styles.tableShell}>
@@ -640,6 +890,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                             <TableHead>Kod</TableHead>
                                             <TableHead>Cihaz adı</TableHead>
                                             <TableHead>Seri No</TableHead>
+                                            <TableHead>Kaynak</TableHead>
                                             <TableHead className="w-[90px]">İşlem</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -649,6 +900,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                                 <TableCell>{device.code}</TableCell>
                                                 <TableCell className="font-medium">{device.name}</TableCell>
                                                 <TableCell>{device.serialNo}</TableCell>
+                                                <TableCell>{device.inventoryId ? "Envanter" : "Manuel"}</TableCell>
                                                 <TableCell>
                                                     <Button variant="ghost" size="icon" className={styles.iconButton} onClick={() => removeDevice(device.id)}>
                                                         <Trash2 size={16} />
@@ -656,7 +908,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                                 </TableCell>
                                             </TableRow>
                                         )) : (
-                                            <TableRow><TableCell colSpan={4} className={styles.emptyCell}>Henüz cihaz eklenmedi.</TableCell></TableRow>
+                                            <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Henüz cihaz eklenmedi.</TableCell></TableRow>
                                         )}
                                     </TableBody>
                                 </Table>
@@ -722,7 +974,53 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
 
                     {step === 5 && (
                         <div className={styles.section}>
+                            <div className={styles.field}>
+                                <Label className={styles.label}>Envanterden standart / komponent seç</Label>
+                                <input
+                                    className={styles.input}
+                                    placeholder="Kod, komponent adı, CAS no veya limit ile ara..."
+                                    value={componentInventorySearch}
+                                    onChange={(event) => setComponentInventorySearch(event.target.value)}
+                                />
+                            </div>
+                            <div className={styles.tableShell}>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Kod</TableHead>
+                                            <TableHead>Komponent adı</TableHead>
+                                            <TableHead>CAS No</TableHead>
+                                            <TableHead>Limit</TableHead>
+                                            <TableHead className="w-[96px]">Seç</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {componentInventoryLoading ? (
+                                            <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Envanter yükleniyor...</TableCell></TableRow>
+                                        ) : componentInventory.length > 0 ? componentInventory.map(item => (
+                                            <TableRow key={item.id}>
+                                                <TableCell>{item.code}</TableCell>
+                                                <TableCell className="font-medium">{item.name}</TableCell>
+                                                <TableCell>{item.cas_no || "—"}</TableCell>
+                                                <TableCell>{item.limit_info || "—"}</TableCell>
+                                                <TableCell>
+                                                    <Button variant="outline" size="sm" className={styles.secondaryButton} onClick={() => addComponentFromInventory(item)} disabled={components.some(component => component.inventoryId === item.id || component.code === item.code)}>
+                                                        Seç
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        )) : (
+                                            <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Standart envanteri bulunamadı.</TableCell></TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+
                             <div className={styles.entryBox}>
+                                <div className={styles.field}>
+                                    <Label className={styles.label}>Kod</Label>
+                                    <input className={styles.input} placeholder="Örn: STD-001" value={newComponent.code} onChange={(event) => setNewComponent({ ...newComponent, code: event.target.value })} />
+                                </div>
                                 <div className={styles.field}>
                                     <Label className={styles.label}>Komponent adı</Label>
                                     <input className={styles.input} placeholder="Örn: Kafein" value={newComponent.name} onChange={(event) => setNewComponent({ ...newComponent, name: event.target.value })} />
@@ -735,25 +1033,29 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                     <Label className={styles.label}>Limit</Label>
                                     <input className={styles.input} placeholder="Örn: 10 mg/kg" value={newComponent.limit} onChange={(event) => setNewComponent({ ...newComponent, limit: event.target.value })} />
                                 </div>
-                                <Button onClick={addComponent} className={styles.primaryButton}><Plus size={16} /> Ekle</Button>
+                                <Button onClick={addComponent} className={styles.primaryButton}><Plus size={16} /> Manuel Ekle</Button>
                             </div>
 
                             <div className={styles.tableShell}>
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
+                                            <TableHead>Kod</TableHead>
                                             <TableHead>Komponent adı</TableHead>
                                             <TableHead>CAS No</TableHead>
                                             <TableHead>Limit</TableHead>
+                                            <TableHead>Kaynak</TableHead>
                                             <TableHead className="w-[90px]">İşlem</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {components.length > 0 ? components.map(comp => (
                                             <TableRow key={comp.id}>
+                                                <TableCell>{comp.code || "—"}</TableCell>
                                                 <TableCell className="font-medium">{comp.name}</TableCell>
                                                 <TableCell>{comp.casNo}</TableCell>
                                                 <TableCell>{comp.limit || "—"}</TableCell>
+                                                <TableCell>{comp.inventoryId ? "Envanter" : "Manuel"}</TableCell>
                                                 <TableCell>
                                                     <Button variant="ghost" size="icon" className={styles.iconButton} onClick={() => removeComponent(comp.id)}>
                                                         <Trash2 size={16} />
@@ -761,7 +1063,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                                 </TableCell>
                                             </TableRow>
                                         )) : (
-                                            <TableRow><TableCell colSpan={4} className={styles.emptyCell}>Henüz bileşen eklenmedi.</TableCell></TableRow>
+                                            <TableRow><TableCell colSpan={6} className={styles.emptyCell}>Henüz bileşen eklenmedi.</TableCell></TableRow>
                                         )}
                                     </TableBody>
                                 </Table>

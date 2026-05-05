@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardEvent, useState } from "react";
+import { ClipboardEvent, Fragment, useState } from "react";
 import { Activity, Calculator, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { calculateGrubbs } from "../shared/grubbs";
 
 type AnalystGrid = string[][];
 type LevelData = Record<string, Record<string, AnalystGrid>>;
@@ -104,7 +105,18 @@ export function PrecisionRepeatabilityForm({ components = ["Genel"], personnel =
     const [allData, setAllData] = useState<ComponentData>(() =>
         Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.rawData || {}]))
     );
-    const [calculatedResults, setCalculatedResults] = useState<Record<string, Record<string, any>>>({});
+    const [calculatedResults, setCalculatedResults] = useState<Record<string, Record<string, any>>>(() =>
+        Object.fromEntries(Object.entries(initialData).map(([component, data]) => [
+            component,
+            Object.fromEntries((data?.levels || []).map((level: any) => [
+                level.key,
+                {
+                    analystStats: level.analysts,
+                    pooledRsd: level.pooledRsd
+                }
+            ]))
+        ]))
+    );
 
     const getUnit = (component: string) => units[component] || "mg_kg";
     const getUnitLabel = (component: string) => UNITS.find(unit => unit.value === getUnit(component))?.label || "mg/kg (ppm)";
@@ -286,8 +298,9 @@ export function PrecisionRepeatabilityForm({ components = ["Genel"], personnel =
         const rsdr = Number.isFinite(stdDev) && mean !== 0 ? stdDev / mean : Number.NaN;
         const rsdrPoolPart = Number.isFinite(rsdr) && n > 1 ? Math.pow(rsdr, 2) * (n - 1) : Number.NaN;
         const repeatabilityLimit = Number.isFinite(stdDev) ? 2.83 * stdDev : Number.NaN;
+        const grubbs = calculateGrubbs(values);
 
-        return { values, n, mean, stdDev, rsdr, rsdrPoolPart, repeatabilityLimit };
+        return { values, n, mean, stdDev, rsdr, rsdrPoolPart, repeatabilityLimit, grubbs };
     };
 
     const calculateLevelStats = (component: string, levelKey: string) => {
@@ -380,8 +393,6 @@ export function PrecisionRepeatabilityForm({ components = ["Genel"], personnel =
                 );
             }
 
-            const resultAnalysts = analysts.slice(0, 2);
-            const [firstAnalyst, secondAnalyst] = resultAnalysts;
             const statRows = [
                 ["Std Sapma", "stdDev"],
                 ["n", "n"],
@@ -420,37 +431,53 @@ export function PrecisionRepeatabilityForm({ components = ["Genel"], personnel =
                     </div>
 
                     <div className="space-y-4" style={{marginTop:"10px"}}>
+                        {Object.values(calculated.analystStats || {}).some((stat: any) => stat.grubbs) && (
+                            <div className="rounded-md border border-red-200 bg-red-50 text-xs font-semibold text-red-700" style={{ padding: "10px", marginBottom: "10px" }}>
+                                {Object.entries(calculated.analystStats || {}).some(([, stat]: [string, any]) => stat.grubbs?.hasOutlier)
+                                    ? <>Grubbs testi aykırı değer uyarısı:
+                                        {Object.entries(calculated.analystStats || {})
+                                            .filter(([, stat]: [string, any]) => stat.grubbs?.hasOutlier)
+                                            .map(([analyst, stat]: [string, any]) => ` ${analyst}: ${formatValue(stat.grubbs.value)} (G=${formatValue(stat.grubbs.gCalculated)}, Gkritik=${formatValue(stat.grubbs.gCritical)})`)
+                                            .join(";")}
+                                    </>
+                                    : <span className="text-green-700">Grubbs testi yapıldı. İstatistiksel aykırı değer bulunmadı.</span>}
+                            </div>
+                        )}
                         <div className="overflow-hidden rounded-md border border-slate-200 bg-white [&_td]:border-slate-200 [&_th]:border-slate-200 [&_tr]:border-slate-200">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead colSpan={3} className="h-8 text-center text-xs font-bold">{firstAnalyst || "1. Kişi"}</TableHead>
-                                        <TableHead colSpan={2} className="h-8 border-l border-slate-200 text-center text-xs font-bold">{secondAnalyst || "2. Kişi"}</TableHead>
+                                        <TableHead className="h-8 text-center text-xs font-bold">#</TableHead>
+                                        {analysts.map(analyst => (
+                                            <TableHead key={`${levelKey}-${analyst}-diff-head`} colSpan={2} className="h-8 border-l border-slate-200 text-center text-xs font-bold">{analyst}</TableHead>
+                                        ))}
                                     </TableRow>
                                     <TableRow >
-                                        <TableHead className="h-8 text-xs"   style={{paddingLeft:"10px"}}>#</TableHead>
-                                        <TableHead className="h-8 text-xs" style={{paddingLeft:"10px"}}>|1.A-2.A|</TableHead>
-                                        <TableHead className="h-8 text-xs" >|1.A-2.A| &lt; r</TableHead>
-                                        <TableHead className="h-8 border-l border-slate-200 text-xs" style={{paddingLeft:"10px"}}>|1.A-2.A|</TableHead>
-                                        <TableHead className="h-8 text-xs">|1.A-2.A| &lt; r</TableHead>
+                                        <TableHead className="h-8 text-xs" style={{paddingLeft:"10px"}}></TableHead>
+                                        {analysts.map(analyst => (
+                                            <Fragment key={`${levelKey}-${analyst}-diff-cols`}>
+                                                <TableHead className="h-8 border-l border-slate-200 text-xs" style={{paddingLeft:"10px"}}>|1.A-2.A|</TableHead>
+                                                <TableHead className="h-8 text-xs">|1.A-2.A| &lt; r</TableHead>
+                                            </Fragment>
+                                        ))}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {Array.from({ length: rowCount }).map((_, rowIndex) => {
-                                        const first = getDiffResult(firstAnalyst, rowIndex);
-                                        const second = getDiffResult(secondAnalyst, rowIndex);
-
                                         return (
                                             <TableRow key={`${levelKey}-diff-row-${rowIndex}`}>
                                                 <TableCell className="py-1 text-xs" style={{padding:"3px"}}>{rowIndex + 1}</TableCell>
-                                                <TableCell className="py-1 text-xs font-semibold" style={{paddingLeft:"10px"}}>{formatValue(first.diff)}</TableCell>
-                                                <TableCell className={`py-1 text-xs font-bold ${first.hasStatus ? (first.isSuitable ? "text-green-700" : "text-red-700") : "text-slate-400"}`} style={{paddingLeft:"10px"}}>
-                                                    {first.hasStatus ? (first.isSuitable ? "Uygun" : "Uygun Değil") : "-"}
-                                                </TableCell>
-                                                <TableCell className="border-l border-slate-200 py-1 text-xs font-semibold" style={{paddingLeft:"10px"}}>{formatValue(second.diff)}</TableCell>
-                                                <TableCell className={`py-1 text-xs font-bold ${second.hasStatus ? (second.isSuitable ? "text-green-700" : "text-red-700") : "text-slate-400"}`}>
-                                                    {second.hasStatus ? (second.isSuitable ? "Uygun" : "Uygun Değil") : "-"}
-                                                </TableCell>
+                                                {analysts.map(analyst => {
+                                                    const diffResult = getDiffResult(analyst, rowIndex);
+                                                    return (
+                                                        <Fragment key={`${levelKey}-${analyst}-${rowIndex}-diff-result`}>
+                                                            <TableCell className="border-l border-slate-200 py-1 text-xs font-semibold" style={{paddingLeft:"10px"}}>{formatValue(diffResult.diff)}</TableCell>
+                                                            <TableCell className={`py-1 text-xs font-bold ${diffResult.hasStatus ? (diffResult.isSuitable ? "text-green-700" : "text-red-700") : "text-slate-400"}`}>
+                                                                {diffResult.hasStatus ? (diffResult.isSuitable ? "Uygun" : "Uygun Değil") : "-"}
+                                                            </TableCell>
+                                                        </Fragment>
+                                                    );
+                                                })}
                                             </TableRow>
                                         );
                                     })}
@@ -463,20 +490,20 @@ export function PrecisionRepeatabilityForm({ components = ["Genel"], personnel =
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead className="h-8 text-center text-xs font-bold">İstatistik</TableHead>
-                                        <TableHead className="h-8 text-center text-xs font-bold">{firstAnalyst || "1. Kişi"}</TableHead>
-                                        <TableHead className="h-8 text-center text-xs font-bold">{secondAnalyst || "2. Kişi"}</TableHead>
+                                        {analysts.map(analyst => (
+                                            <TableHead key={`${levelKey}-${analyst}-stat-head`} className="h-8 text-center text-xs font-bold">{analyst}</TableHead>
+                                        ))}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {statRows.map(([label, key]) => (
                                         <TableRow key={`${levelKey}-stat-${label}`}>
                                             <TableCell className="py-1 text-xs font-semibold text-slate-600" style={{padding:"3px"}}>{label}</TableCell>
-                                            <TableCell className="py-1 text-center text-xs text-slate-900">
-                                                {formatValue(calculated.analystStats[firstAnalyst]?.[key])}
-                                            </TableCell>
-                                            <TableCell className="py-1 text-center text-xs text-slate-900">
-                                                {formatValue(calculated.analystStats[secondAnalyst]?.[key])}
-                                            </TableCell>
+                                            {analysts.map(analyst => (
+                                                <TableCell key={`${levelKey}-${analyst}-${key}`} className="py-1 text-center text-xs text-slate-900">
+                                                    {formatValue(calculated.analystStats[analyst]?.[key])}
+                                                </TableCell>
+                                            ))}
                                         </TableRow>
                                     ))}
                                 </TableBody>

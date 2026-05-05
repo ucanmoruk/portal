@@ -34,6 +34,7 @@ export interface ReportData {
         }[];
         notes?: string;
     };
+    moduleData?: Record<string, Record<string, any>>;
 }
 
 interface ValidationReportProps {
@@ -42,6 +43,28 @@ interface ValidationReportProps {
 
 export function ValidationReport({ data }: ValidationReportProps) {
     const today = new Date().toLocaleDateString('tr-TR');
+    const moduleData = data.moduleData || {};
+    const numberValue = (value: any, digits = 4) => Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : "-";
+    const textValue = (value: any) => String(value ?? "-");
+
+    const renderSmallTable = (headers: string[], rows: Array<Array<React.ReactNode>>, keyPrefix: string) => (
+        <div className="rounded border border-slate-200 overflow-hidden">
+            <table className="w-full text-xs text-left">
+                <thead className="bg-slate-100 text-slate-700 font-semibold border-b">
+                    <tr>{headers.map(header => <th key={`${keyPrefix}-${header}`} className="p-2">{header}</th>)}</tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {rows.length > 0 ? rows.map((row, rowIndex) => (
+                        <tr key={`${keyPrefix}-row-${rowIndex}`}>
+                            {row.map((cell, cellIndex) => <td key={`${keyPrefix}-${rowIndex}-${cellIndex}`} className="p-2">{cell}</td>)}
+                        </tr>
+                    )) : (
+                        <tr><td colSpan={headers.length} className="p-3 text-center text-slate-400">Kayıtlı veri bulunamadı.</td></tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
+    );
 
     return (
         <div className="w-full max-w-[210mm] mx-auto bg-white p-8 print:p-0 print:max-w-none print:shadow-none min-h-[297mm]">
@@ -172,6 +195,157 @@ export function ValidationReport({ data }: ValidationReportProps) {
                                 <span className="font-semibold not-italic">Notlar:</span> {data.linearityData.notes}
                             </div>
                         )}
+                    </section>
+                )}
+
+                {moduleData.PRECISION_REPEATABILITY && Object.keys(moduleData.PRECISION_REPEATABILITY).length > 0 && (
+                    <section className="break-inside-avoid">
+                        <h2 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2 border-l-4 border-blue-600 pl-3">
+                            3. Kesinlik (Tekrarlanabilirlik)
+                        </h2>
+                        <div className="space-y-4">
+                            {Object.entries(moduleData.PRECISION_REPEATABILITY).map(([component, item]: [string, any]) => (
+                                <div key={`repeatability-${component}`} className="space-y-2">
+                                    <h3 className="text-sm font-bold text-slate-800">{component}</h3>
+                                    <div className="text-xs text-slate-500">Birim: {textValue(item.unitLabel || item.unit)} | Paralel: {textValue(item.parallelCount)} | Düzey: {textValue(item.levelCount)}</div>
+                                    {item.notes && <p className="text-xs italic text-slate-500">{item.notes}</p>}
+                                    {(item.levels || []).map((level: any) => (
+                                        <div key={`${component}-${level.key}`} className="rounded border border-slate-200 p-3">
+                                            <div className="mb-2 text-xs font-bold text-slate-700">
+                                                {level.label} | Matriks: {textValue(level.matrix)} | Hedef: {textValue(level.target)} | RSDpool: {numberValue(level.pooledRsd)}
+                                            </div>
+                                            {renderSmallTable(
+                                                ["Analist", "Xort", "Std Sapma", "n", "RSDr", "r:2,83*Sr"],
+                                                Object.entries(level.analysts || {}).map(([analyst, stat]: [string, any]) => [
+                                                    analyst,
+                                                    numberValue(stat.mean, 3),
+                                                    numberValue(stat.stdDev, 3),
+                                                    textValue(stat.n),
+                                                    numberValue(stat.rsdr, 4),
+                                                    numberValue(stat.repeatabilityLimit, 3),
+                                                ]),
+                                                `repeatability-${component}-${level.key}`
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {moduleData.TRUENESS && Object.keys(moduleData.TRUENESS).length > 0 && (
+                    <section className="break-inside-avoid">
+                        <h2 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2 border-l-4 border-blue-600 pl-3">
+                            4. Gerçeklik (Bias / Geri Kazanım)
+                        </h2>
+                        <div className="space-y-4">
+                            {Object.entries(moduleData.TRUENESS).map(([component, item]: [string, any]) => (
+                                <div key={`trueness-${component}`} className="space-y-2">
+                                    <h3 className="text-sm font-bold text-slate-800">{component}</h3>
+                                    <div className="text-xs text-slate-500">Matriks: {textValue(item.matrix)} | Hedef: {textValue(item.target)} | Birim: {textValue(item.unitLabel || item.unit)}</div>
+                                    {item.notes && <p className="text-xs italic text-slate-500">{item.notes}</p>}
+                                    {renderSmallTable(
+                                        ["#", ...(item.analysts || []).flatMap((analyst: string) => [`${analyst} Değer`, `${analyst} Geri Kazanım %`, `${analyst} Sonuç`])],
+                                        (item.rows || []).map((row: string[], rowIndex: number) => [
+                                            rowIndex + 1,
+                                            ...(item.analysts || []).flatMap((analyst: string, analystIndex: number) => {
+                                                const recovery = item.results?.[analyst]?.recoveries?.[rowIndex];
+                                                return [
+                                                    textValue(row?.[analystIndex]),
+                                                    numberValue(recovery?.recovery, 3),
+                                                    recovery?.isSuitable == null ? "-" : recovery.isSuitable ? "Uygun" : "Uygun Değil",
+                                                ];
+                                            }),
+                                        ]),
+                                        `trueness-${component}`
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {moduleData.PRECISION_REPRODUCIBILITY && Object.keys(moduleData.PRECISION_REPRODUCIBILITY).length > 0 && (
+                    <section className="break-inside-avoid">
+                        <h2 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2 border-l-4 border-blue-600 pl-3">
+                            5. Kesinlik (Tekrarüretilebilirlik)
+                        </h2>
+                        <div className="space-y-4">
+                            {Object.entries(moduleData.PRECISION_REPRODUCIBILITY).map(([component, item]: [string, any]) => (
+                                <div key={`reproducibility-${component}`} className="space-y-2">
+                                    <h3 className="text-sm font-bold text-slate-800">{component}</h3>
+                                    <div className="text-xs text-slate-500">Birim: {textValue(item.unitLabel || item.unit)} | Çalışma günü: {textValue(item.parallelCount)}</div>
+                                    {item.notes && <p className="text-xs italic text-slate-500">{item.notes}</p>}
+                                    {renderSmallTable(
+                                        ["#", "Tarih", ...(item.analysts || []).map((analyst: string) => analyst)],
+                                        (item.rows || []).map((row: any, rowIndex: number) => [
+                                            rowIndex + 1,
+                                            textValue(row.date),
+                                            ...(row.values || []).map((value: string) => textValue(value)),
+                                        ]),
+                                        `reproducibility-${component}`
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {moduleData.LOD_LOQ && Object.keys(moduleData.LOD_LOQ).length > 0 && (
+                    <section className="break-inside-avoid">
+                        <h2 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2 border-l-4 border-blue-600 pl-3">
+                            6. LOD / LOQ Ham Veri
+                        </h2>
+                        <div className="space-y-4">
+                            {Object.entries(moduleData.LOD_LOQ).map(([component, item]: [string, any]) => (
+                                <div key={`lod-raw-${component}`} className="space-y-2">
+                                    <h3 className="text-sm font-bold text-slate-800">{component}</h3>
+                                    {renderSmallTable(
+                                        ["#", ...((item.rows?.[0] || []).map((_: string, index: number) => `Veri ${index + 1}`))],
+                                        (item.rows || []).map((row: string[], rowIndex: number) => [rowIndex + 1, ...row.map(value => textValue(value))]),
+                                        `lod-raw-${component}`
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {moduleData.LINEARITY && Object.keys(moduleData.LINEARITY).length > 0 && (
+                    <section className="break-inside-avoid">
+                        <h2 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2 border-l-4 border-blue-600 pl-3">
+                            7. Doğrusallık Ham Veri ve İstatistik
+                        </h2>
+                        <div className="space-y-4">
+                            {Object.entries(moduleData.LINEARITY).map(([component, item]: [string, any]) => (
+                                <div key={`linearity-raw-${component}`} className="space-y-2">
+                                    <h3 className="text-sm font-bold text-slate-800">{component}</h3>
+                                    {renderSmallTable(
+                                        ["Düzey", "Konsantrasyon", "Yanıt"],
+                                        (item.rows || []).flatMap((row: any) => (row.concentrations || []).map((conc: string, index: number) => [
+                                            row.level,
+                                            textValue(conc),
+                                            textValue(row.responses?.[index]),
+                                        ])),
+                                        `linearity-raw-${component}`
+                                    )}
+                                    {item.statistics && renderSmallTable(
+                                        ["İstatistik", "Değer"],
+                                        [
+                                            ["Kesim", numberValue(item.statistics.intercept)],
+                                            ["Eğim", numberValue(item.statistics.slope)],
+                                            ["Std Sapma", numberValue(item.statistics.standardDeviation)],
+                                            ["Co", numberValue(item.statistics.co)],
+                                            ["Cort", numberValue(item.statistics.cort)],
+                                            ["U(Co)", numberValue(item.statistics.uCo)],
+                                            ["RSD U(Co) (%)", numberValue(item.statistics.rsdUCo)],
+                                        ],
+                                        `linearity-stat-${component}`
+                                    )}
+                                </div>
+                            ))}
+                        </div>
                     </section>
                 )}
 

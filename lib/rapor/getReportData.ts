@@ -125,27 +125,28 @@ export async function getReportData(
   const hasLOQ  = loqRes.recordset.length > 0;
 
   // ── NKR + Firma sorgusu ──────────────────────────────────────────────────
-  const adresE   = rtCols.has("Adres")   ? "ISNULL(f.Adres,   '')" : "''";
-  const yetkiliE = rtCols.has("Yetkili") ? "ISNULL(f.Yetkili, '')" : "''";
-  const emailE   = rtCols.has("Email")   ? "ISNULL(f.Email,   '')" : "''";
-  const revnoE   = nkrCols.has("Revno")        ? "ISNULL(n.Revno, '0')" : "'0'";
-  const adiEnE   = nkrCols.has("Numune_Adi_En") ? "ISNULL(n.Numune_Adi_En, '')" : "''";
+  const adresE   = rtCols.has("Adres")   ? "ISNULL(CAST(f.Adres AS nvarchar(500)),   '')" : "''";
+  const yetkiliE = rtCols.has("Yetkili") ? "ISNULL(CAST(f.Yetkili AS nvarchar(200)), '')" : "''";
+  const emailE   = rtCols.has("Email")   ? "ISNULL(CAST(f.Email AS nvarchar(200)),   '')" : "''";
+  const revnoE   = nkrCols.has("Revno")        ? "ISNULL(CAST(n.Revno AS nvarchar(50)), '0')" : "'0'";
+  const adiEnE   = nkrCols.has("Numune_Adi_En") ? "ISNULL(CAST(n.Numune_Adi_En AS nvarchar(500)), '')" : "''";
 
   const nkrRes = await pool.request()
     .input("nkrId", nkrId)
     .query(`
       SELECT
-        ISNULL(n.RaporNo, '')                        AS RaporNo,
+        ISNULL(CAST(n.RaporNo AS nvarchar(50)), '')  AS RaporNo,
         ${revnoE}                                    AS Revno,
         ISNULL(CONVERT(varchar(10), n.Tarih, 104),'') AS Tarih,
-        ISNULL(n.Numune_Adi, '')                     AS NumuneAdi,
+        ISNULL(CAST(n.Numune_Adi AS nvarchar(500)), '') AS NumuneAdi,
         ${adiEnE}                                    AS NumuneAdiEn,
-        ISNULL(f.Ad, '')                             AS FirmaAd,
+        ISNULL(CAST(f.Ad AS nvarchar(500)), '')      AS FirmaAd,
         ${adresE}                                    AS Adres,
         ${yetkiliE}                                  AS FirmaYetkili,
         ${emailE}                                    AS FirmaMail
       FROM NKR n
-      LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
+      LEFT JOIN RootTedarikci f
+        ON CAST(f.ID AS nvarchar(50)) = NULLIF(CAST(n.Firma_ID AS nvarchar(50)), '')
       WHERE n.ID = @nkrId AND n.Durum = 'Aktif'
     `);
 
@@ -154,9 +155,9 @@ export async function getReportData(
 
   // ── NumuneDetay: Miktar / Seri / Urt / SKT ──────────────────────────────
   // Her kolon runtime kontrol — yoksa boş string döner, dash() ile '-' yapılır
-  const ndMiktar = ndCols.has("Miktar")       ? "ISNULL(nd.Miktar, '')"                           : "''";
-  const ndBirim  = ndCols.has("Birim")        ? "ISNULL(nd.Birim, '')"                            : "''";
-  const ndSeri   = ndCols.has("SeriNo")       ? "ISNULL(nd.SeriNo, '')"                           : "''";
+  const ndMiktar = ndCols.has("Miktar")       ? "ISNULL(CAST(nd.Miktar AS nvarchar(100)), '')"     : "''";
+  const ndBirim  = ndCols.has("Birim")        ? "ISNULL(CAST(nd.Birim AS nvarchar(100)), '')"      : "''";
+  const ndSeri   = ndCols.has("SeriNo")       ? "ISNULL(CAST(nd.SeriNo AS nvarchar(200)), '')"     : "''";
   const ndUrt    = ndCols.has("UretimTarihi") ? "ISNULL(CONVERT(varchar(10), nd.UretimTarihi, 104), '')" : "''";
   const ndSKT    = ndCols.has("SKT")          ? "ISNULL(CONVERT(varchar(10), nd.SKT, 104), '')"   : "''";
 
@@ -170,23 +171,23 @@ export async function getReportData(
         ${ndUrt}    AS UretimTarihi,
         ${ndSKT}    AS SKT
       FROM NumuneDetay nd
-      WHERE nd.RaporID = @nkrId
+      WHERE CAST(nd.RaporID AS nvarchar(50)) = CAST(@nkrId AS nvarchar(50))
     `);
 
   const nd = ndRes.recordset[0] ?? {};
 
   // ── Hizmetler: NumuneX1 + StokAnalizListesi ──────────────────────────────
   // Opsiyonel NumuneX1 kolonları (migration ile eklenmiş olabilir)
-  const sonucE = x1Cols.has("Sonuc")         ? "ISNULL(x1.Sonuc, '')"         : "''";
-  const degE   = x1Cols.has("Degerlendirme") ? "ISNULL(x1.Degerlendirme, '')" : "''";
-  const limitE = x1Cols.has("Limit")         ? "ISNULL(x1.[Limit], '')"       : "''";
-  const birimE = x1Cols.has("Birim")         ? "ISNULL(x1.Birim, '')"         : "''";
+  const sonucE = x1Cols.has("Sonuc")         ? "ISNULL(CAST(x1.Sonuc AS nvarchar(200)), '')"         : "''";
+  const degE   = x1Cols.has("Degerlendirme") ? "ISNULL(CAST(x1.Degerlendirme AS nvarchar(50)), '')"  : "''";
+  const limitE = x1Cols.has("Limit")         ? "ISNULL(CAST(x1.[Limit] AS nvarchar(200)), '')"       : "''";
+  const birimE = x1Cols.has("Birim")         ? "ISNULL(CAST(x1.Birim AS nvarchar(100)), '')"         : "''";
 
   // StokAnalizListesi opsiyonel kolonları
-  const adEnE    = salCols.has("AdEn")     ? "ISNULL(s.AdEn, '')"     : "''";
-  const metotEnE = salCols.has("MethodEn") ? "ISNULL(s.MethodEn, '')" : "''";
+  const adEnE    = salCols.has("AdEn")     ? "ISNULL(CAST(s.AdEn AS nvarchar(500)), '')"     : "''";
+  const metotEnE = salCols.has("MethodEn") ? "ISNULL(CAST(s.MethodEn AS nvarchar(500)), '')" : "''";
   const loqE     = hasLOQ                  ? "ISNULL(CAST(s.LOQ AS nvarchar(200)), '')"
-                 : salCols.has("NumDipnot") ? "ISNULL(s.NumDipnot, '')"
+                 : salCols.has("NumDipnot") ? "ISNULL(CAST(s.NumDipnot AS nvarchar(200)), '')"
                  : "''";
 
   // Kullanıcının çalışan sorgusuna birebir uygun yapı:
@@ -195,7 +196,7 @@ export async function getReportData(
   // from NumuneX1 x left join StokAnalizListesi l on x.AnalizID = l.ID
   // where RaporID = @nkrId
   const raporFormatiFilter = salCols.has("RaporFormati")
-    ? "AND (ISNULL(s.RaporFormati,'') = '' OR s.RaporFormati = @format)"
+    ? "AND (ISNULL(CAST(s.RaporFormati AS nvarchar(100)), '') = '' OR CAST(s.RaporFormati AS nvarchar(100)) = @format)"
     : "";
 
   const hRes = await pool.request()
@@ -203,10 +204,10 @@ export async function getReportData(
     .input("format", format)
     .query(`
       SELECT
-        ISNULL(s.Akreditasyon, '') AS Akreditasyon,
-        ISNULL(s.Ad,           '') AS Analiz,
+        ISNULL(CAST(s.Akreditasyon AS nvarchar(100)), '') AS Akreditasyon,
+        ISNULL(CAST(s.Ad AS nvarchar(500)),           '') AS Analiz,
         ${adEnE}                   AS AnalizEn,
-        ISNULL(s.Method,       '') AS Metot,
+        ISNULL(CAST(s.Method AS nvarchar(500)),       '') AS Metot,
         ${metotEnE}                AS MetotEn,
         ${limitE}                  AS LimitDeger,
         ${birimE}                  AS Birim,
@@ -214,8 +215,9 @@ export async function getReportData(
         ${degE}                    AS Deg,
         ${loqE}                    AS LOQ
       FROM NumuneX1 x1
-      LEFT JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-      WHERE x1.RaporID = @nkrId
+      LEFT JOIN StokAnalizListesi s
+        ON CAST(s.ID AS nvarchar(50)) = NULLIF(CAST(x1.AnalizID AS nvarchar(50)), '')
+      WHERE CAST(x1.RaporID AS nvarchar(50)) = CAST(@nkrId AS nvarchar(50))
         ${raporFormatiFilter}
       ORDER BY s.Ad
     `);
