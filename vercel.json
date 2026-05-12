@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "app/api/urunler/rapor-sablon/route.ts": {
+      "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
+    }
+  }
+}
