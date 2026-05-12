@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
+import { findUgdIngredientProfile, findUgdRegulationDetails } from "@/lib/ugdRegulationLookup";
 import { type NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -49,15 +50,8 @@ export async function POST(request: NextRequest) {
       }
 
       // 3. rUGDYonetmelik fetch (limitler)
-      const yonetmelikResult = await pool.request()
-        .input("name", normalizedName)
-        .query(`
-          SELECT TOP 1 Maks as 'Maks', Diger as 'Diger', Etiket as 'Etiket'
-          FROM rUGDYonetmelik
-          WHERE INCI = @name OR INCI LIKE '%' + @name + '%'
-        `);
-
-      const yonetmelik = yonetmelikResult.recordset[0] || {};
+      const yonetmelik = await findUgdRegulationDetails(cosing.INCIName || normalizedName, cosing.Regulation);
+      const profile = await findUgdIngredientProfile(cosing.ID);
 
       results.push({
         inputName: item.name,
@@ -73,6 +67,9 @@ export async function POST(request: NextRequest) {
         Maks: yonetmelik.Maks || null,
         Diger: yonetmelik.Diger || null,
         Etiket: yonetmelik.Etiket || null,
+        Fizikokimya: profile.Fizikokimya || null,
+        Toksikoloji: profile.Toksikoloji || null,
+        Kaynak: profile.Kaynak || null,
         noael: noael,
       });
     }

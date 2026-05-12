@@ -6,9 +6,14 @@ type IngredientRow = {
   Ec?: string | null;
   Functions?: string | null;
   Regulation?: string | null;
+  YonetmelikNo?: string | null;
+  YonetmelikUrunTipi?: string | null;
   Maks?: string | null;
   Diger?: string | null;
   Etiket?: string | null;
+  Fizikokimya?: string | null;
+  Toksikoloji?: string | null;
+  Kaynak?: string | null;
   dap?: number;
   noael?: string;
   matched?: boolean;
@@ -82,7 +87,11 @@ function isAnnexII(row: IngredientRow) {
 }
 
 function hasRegulatoryRestriction(row: IngredientRow) {
-  return isAnnexII(row) || hasMeaningfulValue(row.Maks) || hasMeaningfulValue(row.Diger) || hasMeaningfulValue(row.Etiket);
+  return hasMeaningfulValue(row.YonetmelikNo)
+    || hasMeaningfulValue(row.Regulation)
+    || hasMeaningfulValue(row.Maks)
+    || hasMeaningfulValue(row.Diger)
+    || hasMeaningfulValue(row.Etiket);
 }
 
 function exposureValue(value: unknown, label: string) {
@@ -191,9 +200,9 @@ function regulationRows(rows: IngredientRow[]) {
   return regulatedRows.map((row) => {
     const banned = isAnnexII(row);
     return `<tr${banned ? ' class="danger-row"' : ""}>
-      <td>${esc(row.Regulation, empty)}</td>
+      <td>${esc(row.YonetmelikNo || row.Regulation, empty)}</td>
       <td>${esc(row.INCIName || row.inputName, empty)}</td>
-      <td>${empty}</td>
+      <td>${esc(row.YonetmelikUrunTipi, empty)}</td>
       <td>${esc(row.Maks, empty)}</td>
       <td>${esc(row.Diger, empty)}</td>
       <td>${esc(row.Etiket, empty)}</td>
@@ -209,13 +218,9 @@ function ingredientProfiles(rows: IngredientRow[]) {
   return rows.map((row) => `<section class="ingredient-profile">
     <h3>${esc(row.INCIName || row.inputName, empty)}</h3>
     ${infoTable([
-      ["CAS No", row.Cas],
-      ["EC No", row.Ec],
-      ["Fonksiyon", row.Functions],
-      ["Yönetmelik", row.Regulation],
-      ["Fizikokimyasal Özellikler", "Tedarikçi güvenlik bilgi formu ve mevcut literatür verileri esas alınarak değerlendirilmiştir."],
-      ["Toksikolojik Özellikler", row.noael ? `NO(A)EL: ${text(row.noael)} mg/kg vücut ağırlığı/gün` : "Mevcut kullanım konsantrasyonu ve düzenleyici durum dikkate alınarak değerlendirilmiştir."],
-      ["Kaynak", "SCCS, CIR, ECHA, CosIng ve tedarikçi güvenlik bilgi formları."],
+      ["Fizikokimyasal Özellikler", row.Fizikokimya],
+      ["Toksikolojik Özellikler", row.Toksikoloji],
+      ["Kaynak", row.Kaynak],
     ])}
   </section>`).join("");
 }
@@ -244,8 +249,8 @@ export function renderUgdReportHtml(input: UGDReportInput) {
   <meta charset="utf-8">
   <title>${esc(title)}</title>
   <style>
-    @page WordSection1 { size: A4; margin: 32mm 14mm 18mm 14mm; mso-header: ugdWordHeader; }
-    @page { size: A4; margin: 32mm 14mm 18mm 14mm; }
+    @page WordSection1 { size: A4; margin: 25mm 14mm 18mm 14mm; mso-header: ugdWordHeader; }
+    @page { size: A4; margin: 20mm 14mm 18mm 14mm; }
     * { box-sizing: border-box; }
     body { margin: 0; color: #111827; font-family: Microsoft Sans Serif, Tahoma, sans-serif; font-size: 9.5pt; line-height: 1.48; }
     .WordSection1 { page: WordSection1; }
@@ -253,7 +258,7 @@ export function renderUgdReportHtml(input: UGDReportInput) {
     .screen-page-header { display: none; }
     .report-header { width: 100%; border-bottom: 1px solid #1f4788; padding-bottom: 5px; display: table; table-layout: fixed; color: #143b6f; }
     .report-header > div { display: table-cell; vertical-align: top; }
-    .report-header-title { font-size: 9.5pt; font-weight: 700; letter-spacing: .02em; }
+    .report-header-title { font-size: 9.5pt; font-weight: 700; }
     .report-header-subtitle { margin-top: 2px; color: #000000; font-size: 7.4pt; line-height: 1.25; }
     .report-header-meta { width: 38mm; text-align: right; font-size: 7.5pt; color: #000000; }
     .report-header-meta strong { display: block; margin-top: 2px; color: #111827; font-size: 8.5pt; }
@@ -755,10 +760,7 @@ ${infoTable([
       <li>Üretici Tarafından Ciddi İstenmeyen Etkinin Kuruma Bildirilmesine İlişkin Kılavuz</li>
       <li>Kozmetik Ürünlerin Etiketlenmesinde Dikkat Edilmesi Gerekenler Hakkında Kılavuz</li>
     </ol>
-<div style="page-break-after: always;"></div>
 
-    <h2>EK-4 GÜVENLİK DEĞERLENDİRİCİSİNİN YETERLİLİK KANITLARI</h2>
-    <p>${nl2br(f.SorumluKanit, empty)}</p>
   </section>
 </div>
 </body>

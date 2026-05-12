@@ -11,6 +11,7 @@ import chromium from "@sparticuz/chromium";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
+import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 import { renderUgdReportHtml } from "@/lib/ugdReportHtml";
 
 function sv(v: unknown, fb = ""): string {
@@ -294,7 +295,8 @@ export async function POST(request: Request) {
   try {
     const format = new URL(request.url).searchParams.get("format") || "doc";
     const firmaDetails = await getFirmaDetails(form.FirmaID);
-    const html = renderUgdReportHtml({ form, formulResults, firmaAd, ...firmaDetails });
+    const enrichedFormulResults = await enrichUgdFormulaRows(formulResults);
+    const html = renderUgdReportHtml({ form, formulResults: enrichedFormulResults, firmaAd, ...firmaDetails });
     const safeName = safeReportName(form.RaporNo);
 
     if (format === "html") {

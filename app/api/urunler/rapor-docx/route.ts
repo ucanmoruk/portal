@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   AlignmentType, WidthType, BorderStyle, ShadingType, HeadingLevel,
@@ -90,7 +91,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     form = body.form || {};
-    formulResults = body.formulResults || [];
+    formulResults = await enrichUgdFormulaRows(body.formulResults || []);
     firmaAd = body.firmaAd || "";
   } catch {
     return Response.json({ error: "Geçersiz istek gövdesi" }, { status: 400 });
@@ -161,9 +162,9 @@ export async function POST(request: Request) {
   });
 
   // ── EK-2 regulation table ──────────────────────────────────────────────────
-  const regulatedItems = formulResults.filter((r: any) => r.Regulation && r.Regulation !== "—");
-  const EK2_COLS = [800, 2200, 3800, 1500, 1338];
-  const EK2_HEADERS = ["Ek No", "INCI Adı", "Etiket Bilgisi / Uyarı", "Konsantrasyon (%)", "Değerlendirme"];
+  const regulatedItems = formulResults.filter((r: any) => (r.YonetmelikNo || r.Regulation) && (r.YonetmelikNo || r.Regulation) !== "—");
+  const EK2_COLS = [800, 1900, 2400, 1500, 1700, 1338];
+  const EK2_HEADERS = ["Ek No", "INCI Adı", "Etiket Bilgisi / Uyarı", "Maks. Kons.", "Konsantrasyon (%)", "Değerlendirme"];
 
   const ek2HeaderRow = new TableRow({
     tableHeader: true,
@@ -182,11 +183,12 @@ export async function POST(request: Request) {
   const ek2DataRows = regulatedItems.map((row: any, idx: number) =>
     new TableRow({
       children: [
-        cell(EK2_COLS[0], val(row.Regulation), idx, AlignmentType.CENTER),
+        cell(EK2_COLS[0], val(row.YonetmelikNo || row.Regulation), idx, AlignmentType.CENTER),
         cell(EK2_COLS[1], val(row.INCIName || row.inputName), idx),
         cell(EK2_COLS[2], val(row.Etiket), idx),
-        cell(EK2_COLS[3], (row.inputAmount || "0") + "%", idx, AlignmentType.CENTER),
-        cellColored(EK2_COLS[4], "UYGUN", "1A7340", idx),
+        cell(EK2_COLS[3], val(row.Maks), idx, AlignmentType.CENTER),
+        cell(EK2_COLS[4], (row.inputAmount || "0") + "%", idx, AlignmentType.CENTER),
+        cellColored(EK2_COLS[5], "UYGUN", "1A7340", idx),
       ],
     })
   );
@@ -208,9 +210,9 @@ export async function POST(request: Request) {
         children: [new TextRun({ text: val(row.INCIName), font: FONT, size: 22, bold: true })],
         spacing: { before: 160, after: 40 },
       }));
-      ek3Paras.push(body(`CAS No: ${val(row.Cas)} | EC No: ${val(row.Ec)}`));
-      ek3Paras.push(body(`Fonksiyon: ${val(row.Functions)}`));
-      if (row.Maks) ek3Paras.push(body(`Maksimum Konsantrasyon: ${row.Maks}`));
+      ek3Paras.push(body(`Fizikokimyasal Özellikler: ${val(row.Fizikokimya)}`));
+      ek3Paras.push(body(`Toksikolojik Özellikler: ${val(row.Toksikoloji)}`));
+      ek3Paras.push(body(`Kaynak: ${val(row.Kaynak)}`));
       ek3Paras.push(body(""));
     });
   }

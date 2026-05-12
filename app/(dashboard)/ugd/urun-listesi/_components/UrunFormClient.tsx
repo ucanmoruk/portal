@@ -11,7 +11,9 @@ interface MatchedIngredient {
   cosingId?: number | null;
   INCIName: string | null; Cas: string | null; Ec: string | null;
   Functions: string | null; Regulation: string | null;
+  YonetmelikNo?: string | null; YonetmelikUrunTipi?: string | null;
   Link?: string | null; Maks: string | null; Diger: string | null; Etiket: string | null;
+  Fizikokimya?: string | null; Toksikoloji?: string | null; Kaynak?: string | null;
   // Toksikolojik hesaplama (EK-1)
   dap: number;    // Dermal Absorption % — default 100
   noael: string;  // mg/kg/gün — DB'den gelir veya kullanıcı girer
@@ -572,8 +574,15 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
             Ec: r.EC || null,
             Functions: r.Functions || null,
             Regulation: r.Regulation || null,
+            YonetmelikNo: r.YonetmelikNo || null,
+            YonetmelikUrunTipi: r.YonetmelikUrunTipi || null,
             Link: r.Link || null,
-            Maks: null, Diger: null, Etiket: null,
+            Maks: r.Maks || null,
+            Diger: r.Diger || null,
+            Etiket: r.Etiket || null,
+            Fizikokimya: r.Fizikokimya || null,
+            Toksikoloji: r.Toksikoloji || null,
+            Kaynak: r.Kaynak || null,
             dap: r.DaP ?? 100,
             noael: r.Noael != null ? String(r.Noael) : '',
           })));

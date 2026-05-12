@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
+import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 import { type NextRequest } from "next/server";
 
 // POST /api/urunler/formul — formül satırlarını rUGDFormül tablosuna kaydeder
@@ -66,7 +67,8 @@ export async function GET(request: NextRequest) {
         ORDER BY f.ID
       `);
 
-    return Response.json(result.recordset);
+    const rows = await enrichUgdFormulaRows(result.recordset);
+    return Response.json(rows);
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }
