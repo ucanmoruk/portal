@@ -1,7 +1,8 @@
 export const runtime = "nodejs";
 
 import { randomUUID } from "node:crypto";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -42,6 +43,55 @@ function pdfHeaderTemplate(form: Record<string, unknown>) {
         </div>
       </div>
     </div>`;
+}
+
+function commandExists(command: string) {
+  const result = spawnSync(process.platform === "win32" ? "where" : "which", [command], {
+    stdio: "ignore",
+  });
+  return result.status === 0;
+}
+
+function findChromeExecutable() {
+  const configured = [
+    process.env.CHROME_EXECUTABLE_PATH,
+    process.env.CHROME_PATH,
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+  ].map((item) => sv(item)).filter(Boolean);
+
+  const platformCandidates =
+    process.platform === "darwin"
+      ? [
+          "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+          "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        ]
+      : process.platform === "win32"
+        ? [
+            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+            "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+          ]
+        : [
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/snap/bin/chromium",
+          ];
+
+  const commandCandidates = process.platform === "win32"
+    ? ["chrome", "chrome.exe"]
+    : ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
+
+  for (const candidate of [...configured, ...platformCandidates]) {
+    if (path.isAbsolute(candidate) && existsSync(candidate)) return candidate;
+    if (!path.isAbsolute(candidate) && commandExists(candidate)) return candidate;
+  }
+
+  for (const candidate of commandCandidates) {
+    if (commandExists(candidate)) return candidate;
+  }
+
+  return null;
 }
 
 async function getFirmaDetails(firmaId: unknown) {
@@ -92,7 +142,11 @@ function waitForDevtoolsUrl(proc: ChildProcessWithoutNullStreams) {
 }
 
 async function renderPdf(html: string, form: Record<string, unknown>) {
-  const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  const chromePath = findChromeExecutable();
+  if (!chromePath) {
+    throw new Error("PDF oluşturmak için Chrome/Chromium bulunamadı. Sunucuda google-chrome/chromium kurulu olmalı veya CHROME_PATH/CHROME_EXECUTABLE_PATH ortam değişkeni tanımlanmalı.");
+  }
+
   const workDir = path.join(os.tmpdir(), `ugd-report-${randomUUID()}`);
   await mkdir(workDir, { recursive: true });
 
@@ -108,6 +162,8 @@ async function renderPdf(html: string, form: Record<string, unknown>) {
     chrome = spawn(chromePath, [
       "--headless=new",
       "--disable-gpu",
+      "--disable-dev-shm-usage",
+      "--no-sandbox",
       "--no-first-run",
       "--no-default-browser-check",
       "--remote-debugging-port=0",

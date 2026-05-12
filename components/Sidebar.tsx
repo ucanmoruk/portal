@@ -140,7 +140,6 @@ const topLevelAfterLaboratuvar: NavItem[] = [
 /** Gezilen sayfaya ait tek bir accordion grubu (üst menü linkleri hariç). */
 function groupIdForPath(path: string): string | null {
   if (path.startsWith("/admin")) return "admin";
-  if (path.startsWith("/ugd/formul-kontrol")) return "ugd";
   if (path.startsWith("/laboratuvar/numune-form")) return "laboratuvar";
   if (path.startsWith("/laboratuvar/spektrotek")) return "spektrotek";
   if (path.startsWith("/laboratuvar/root-kozmetik")) return "root-kozmetik";
@@ -159,7 +158,12 @@ function openGroupsForPath(path: string): string[] {
 export default function Sidebar({ allowedKeys, isAdmin }: Props) {
   const pathname = usePathname();
   const { isOpen, close } = useSidebar();
+  const [mounted, setMounted] = useState(false);
   const [openGroups, setOpenGroups] = useState<string[]>(() => openGroupsForPath(pathname));
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setOpenGroups(openGroupsForPath(pathname));
@@ -199,7 +203,7 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
       <div className={styles.divider} />
 
       <nav className={styles.nav}>
-        {canSee("dashboard") && (
+        {mounted && canSee("dashboard") && (
           <Link href="/" className={`${styles.navLink} ${pathname === "/" ? styles.navLinkActive : ""}`}>
             <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
               <path fillRule="evenodd" d="M9.293 2.293a1 1 0 0 1 1.414 0l7 7A1 1 0 0 1 17 11h-1v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6H3a1 1 0 0 1-.707-1.707l7-7Z" clipRule="evenodd" />
@@ -208,12 +212,25 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
           </Link>
         )}
 
+        {mounted && canSee("formul-kontrol") && (
+          <Link
+            href="/ugd/formul-kontrol"
+            className={`${styles.navLink} ${
+              pathname.startsWith("/ugd/formul-kontrol") ? styles.navLinkActive : ""
+            }`}
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+              <path fillRule="evenodd" d="M4.5 2A2.5 2.5 0 0 0 2 4.5v11A2.5 2.5 0 0 0 4.5 18h11a2.5 2.5 0 0 0 2.5-2.5V7.621a2.5 2.5 0 0 0-.732-1.768l-2.621-2.621A2.5 2.5 0 0 0 12.379 2H4.5Zm4.75 5.75a.75.75 0 0 0-1.5 0v1.5h-1.5a.75.75 0 0 0 0 1.5h1.5v1.5a.75.75 0 0 0 1.5 0v-1.5h1.5a.75.75 0 0 0 0-1.5h-1.5v-1.5Zm3.25 4.5a.75.75 0 1 0 0 1.5h1.5a.75.75 0 0 0 0-1.5h-1.5Z" clipRule="evenodd" />
+            </svg>
+            <span>Formül Kontrol</span>
+          </Link>
+        )}
+
         {/* Gruplar — yetki filtrelidir */}
-        {navGroups.map(group => {
+        {mounted && navGroups.map(group => {
           // Grubun görünmesi için: parent key veya en az 1 child key yetkili olmalı
           const visibleItems = group.items.filter(item => canSee(item.menuKey));
-          const hasSpecialFormulaAccess = group.id === "ugd" && canSee("formul-kontrol");
-          const groupVisible = canSee(group.menuKey) || visibleItems.length > 0 || hasSpecialFormulaAccess;
+          const groupVisible = canSee(group.menuKey) || visibleItems.length > 0;
           if (!groupVisible) return null;
 
           const isOpen  = openGroups.includes(group.id);
@@ -253,25 +270,11 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
                 </div>
               )}
 
-              {/* Formül Kontrol — ÜGD grubunun hemen altına */}
-              {group.id === "ugd" && canSee("formul-kontrol") && (
-                <Link
-                  href="/ugd/formul-kontrol"
-                  className={`${styles.navLink} ${
-                    pathname.startsWith("/ugd/formul-kontrol") ? styles.navLinkActive : ""
-                  }`}
-                >
-                  <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
-                    <path fillRule="evenodd" d="M4.5 2A2.5 2.5 0 0 0 2 4.5v11A2.5 2.5 0 0 0 4.5 18h11a2.5 2.5 0 0 0 2.5-2.5V7.621a2.5 2.5 0 0 0-.732-1.768l-2.621-2.621A2.5 2.5 0 0 0 12.379 2H4.5Zm4.75 5.75a.75.75 0 0 0-1.5 0v1.5h-1.5a.75.75 0 0 0 0 1.5h1.5v1.5a.75.75 0 0 0 1.5 0v-1.5h1.5a.75.75 0 0 0 0-1.5h-1.5v-1.5Zm3.25 4.5a.75.75 0 1 0 0 1.5h1.5a.75.75 0 0 0 0-1.5h-1.5Z" clipRule="evenodd" />
-                  </svg>
-                  <span>Formül Kontrol</span>
-                </Link>
-              )}
             </div>
           );
         })}
 
-        {topLevelAfterLaboratuvar.filter(item => canSee(item.menuKey)).map(item => {
+        {mounted && topLevelAfterLaboratuvar.filter(item => canSee(item.menuKey)).map(item => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link
