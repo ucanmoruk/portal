@@ -788,12 +788,18 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
     }
   };
 
-  // ── Word İndir ────────────────────────────────────────────────────────────
-  const handlePrint = async () => {
+  // ── Rapor İndir ───────────────────────────────────────────────────────────
+  const handleReportDownload = async (format: "preview" | "word" | "pdf") => {
     setPrintLoading(true);
+    const previewWindow = format === "preview" ? window.open("", "_blank") : null;
+    if (previewWindow) {
+      previewWindow.document.write("<!doctype html><title>Rapor hazırlanıyor</title><body style=\"font-family:system-ui;padding:32px\">PDF önizleme hazırlanıyor...</body>");
+      previewWindow.document.close();
+    }
     try {
       const firmaAd = lookups.firmalar.find(f => f.ID.toString() === form.FirmaID)?.Ad || "";
-      const res = await fetch("/api/urunler/rapor-sablon", {
+      const endpointFormat = format === "preview" ? "pdf" : format === "word" ? "doc" : "pdf";
+      const res = await fetch(`/api/urunler/rapor-sablon?format=${endpointFormat}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ form, formulResults, firmaAd }),
@@ -804,12 +810,26 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
+      if (format === "preview") {
+        if (previewWindow) {
+          previewWindow.location.href = url;
+        } else {
+          window.open(url, "_blank", "noopener,noreferrer");
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        return;
+      }
       const a = document.createElement("a");
       a.href = url;
-      a.download = `UGD_Rapor_${form.RaporNo || "rapor"}.docx`;
+      a.download = `UGD_Rapor_${form.RaporNo || "rapor"}.${format === "word" ? "doc" : "pdf"}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.document.open();
+        previewWindow.document.write(`<!doctype html><title>Rapor hatası</title><body style="font-family:system-ui;padding:32px;color:#991b1b">Rapor oluşturulamadı: ${String(err.message || err).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[ch] || ch))}</body>`);
+        previewWindow.document.close();
+      }
       setGlobalError(err.message);
     } finally {
       setPrintLoading(false);
@@ -834,14 +854,36 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
         <div style={{ display: 'flex', gap: 10 }}>
           <button
             type="button"
-            onClick={handlePrint}
+            onClick={() => handleReportDownload("preview")}
+            disabled={printLoading}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: '1px solid var(--color-border)', background: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', color: '#1F4788', opacity: printLoading ? 0.6 : 1 }}
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+              <path d="M10 4.5c-4.2 0-7.2 3.1-8.3 5.1a.8.8 0 0 0 0 .8c1.1 2 4.1 5.1 8.3 5.1s7.2-3.1 8.3-5.1a.8.8 0 0 0 0-.8c-1.1-2-4.1-5.1-8.3-5.1Zm0 8.5a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm0-1.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+            </svg>
+            {printLoading ? "Hazırlanıyor..." : "Online Göster"}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleReportDownload("word")}
             disabled={printLoading}
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: '1px solid var(--color-border)', background: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', color: '#1F4788', opacity: printLoading ? 0.6 : 1 }}
           >
             <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
               <path fillRule="evenodd" d="M5 4v3H4a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2h1a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1V4a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1Zm2 0h6v3H7V4Zm-1 9v-1h8v1H6Zm0 2h8v2H6v-2Z" clipRule="evenodd" />
             </svg>
-            {printLoading ? "Hazırlanıyor..." : "Yazdır / Word İndir"}
+            {printLoading ? "Hazırlanıyor..." : "Word İndir"}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleReportDownload("pdf")}
+            disabled={printLoading}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 8, border: '1px solid var(--color-border)', background: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', color: '#1F4788', opacity: printLoading ? 0.6 : 1 }}
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+              <path fillRule="evenodd" d="M4 2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.414A2 2 0 0 0 17.414 6L14 2.586A2 2 0 0 0 12.586 2H4Zm7 1.5V7a1 1 0 0 0 1 1h3.5v8.5h-11v-13H11ZM6.5 11a.75.75 0 0 1 .75-.75h5.5a.75.75 0 0 1 0 1.5h-5.5A.75.75 0 0 1 6.5 11Zm0 3a.75.75 0 0 1 .75-.75h5.5a.75.75 0 0 1 0 1.5h-5.5A.75.75 0 0 1 6.5 14Z" clipRule="evenodd" />
+            </svg>
+            {printLoading ? "Hazırlanıyor..." : "PDF İndir"}
           </button>
           <button className={styles.cancelBtn} onClick={() => router.back()}>Geri Dön</button>
         </div>
@@ -864,7 +906,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
       {globalError && <div className={styles.formError} style={{ marginBottom: 20 }}>{globalError}</div>}
       {savedOk && (
         <div style={{ marginBottom: 20, padding: '12px 18px', background: '#e6f4ea', border: '1px solid #a8d5b5', borderRadius: 8, fontSize: '0.85rem', color: '#1a7340', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>✓ Kayıt güncellendi. Raporu indirmek için <strong>Yazdır / Word İndir</strong> butonunu kullanın.</span>
+          <span>✓ Kayıt güncellendi. Raporu indirmek için <strong>Word İndir</strong> veya <strong>PDF İndir</strong> butonunu kullanın.</span>
           <button type="button" onClick={() => { router.push("/ugd/urun-listesi"); router.refresh(); }} style={{ background: 'none', border: '1px solid #1a7340', borderRadius: 6, padding: '4px 12px', fontSize: '0.8rem', color: '#1a7340', cursor: 'pointer', fontWeight: 600 }}>
             Listeye Dön
           </button>

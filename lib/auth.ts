@@ -16,6 +16,22 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Lütfen kullanıcı adı ve şifrenizi girin.");
         }
 
+        if (process.env.LOCAL_DEV_LOGIN === "true") {
+          const devUsername = process.env.LOCAL_DEV_USERNAME || "admin";
+          const devPassword = process.env.LOCAL_DEV_PASSWORD || "admin";
+
+          if (credentials.username.trim() === devUsername && credentials.password === devPassword) {
+            return {
+              id: process.env.LOCAL_DEV_USER_ID || "1",
+              name: process.env.LOCAL_DEV_NAME || "Local Admin",
+              email: process.env.LOCAL_DEV_EMAIL || null,
+              birimId: Number(process.env.LOCAL_DEV_BIRIM_ID || 0),
+            };
+          }
+
+          throw new Error("Hatalı kullanıcı adı veya şifre.");
+        }
+
         try {
           const pool = await sql;
 
