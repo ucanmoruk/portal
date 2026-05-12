@@ -43,7 +43,10 @@ export default function FormulKontrol() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items }),
       });
-      if (!res.ok) throw new Error("Kontrol işlemi başarısız");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Kontrol işlemi başarısız");
+      }
       const json = await res.json();
       setResults(json);
     } catch (e: any) {

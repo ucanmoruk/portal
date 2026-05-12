@@ -141,6 +141,40 @@ function waitForDevtoolsUrl(proc: ChildProcessWithoutNullStreams) {
   });
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function closeChromeProcess(chrome: ChildProcessWithoutNullStreams | undefined) {
+  if (!chrome || chrome.exitCode !== null || chrome.killed) return;
+
+  chrome.kill("SIGTERM");
+  await Promise.race([
+    new Promise<void>((resolve) => chrome!.once("exit", () => resolve())),
+    delay(900),
+  ]);
+
+  if (chrome.exitCode === null && !chrome.killed) {
+    chrome.kill("SIGKILL");
+    await Promise.race([
+      new Promise<void>((resolve) => chrome!.once("exit", () => resolve())),
+      delay(500),
+    ]);
+  }
+}
+
+async function cleanupWorkDir(workDir: string) {
+  try {
+    await rm(workDir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
+  } catch (error: any) {
+    if (error?.code === "EBUSY" || error?.code === "EPERM" || error?.code === "ENOTEMPTY") {
+      console.warn("[rapor-sablon] Geçici Chrome klasörü şu an kilitli, rapor oluşturma başarısız sayılmadı:", error.message);
+      return;
+    }
+    throw error;
+  }
+}
+
 async function renderPdf(html: string, form: Record<string, unknown>) {
   const chromePath = findChromeExecutable();
   if (!chromePath) {
@@ -217,8 +251,8 @@ async function renderPdf(html: string, form: Record<string, unknown>) {
     return Buffer.from(result.data, "base64");
   } finally {
     ws?.close();
-    chrome?.kill("SIGTERM");
-    await rm(workDir, { recursive: true, force: true });
+    await closeChromeProcess(chrome);
+    await cleanupWorkDir(workDir);
   }
 }
 

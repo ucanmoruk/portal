@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
         .query(`
           SELECT TOP 1 ID, INCIName, Cas, EC, Functions, Regulation, Link
           FROM rCosing
-          WHERE INCIName = @name OR CAS = @name
+          WHERE INCIName = @name OR Cas = @name
         `);
 
       const cosing = cosingResult.recordset[0] || {};
