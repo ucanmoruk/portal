@@ -562,19 +562,138 @@ ${infoTable([
     ${screenHeader}
     <h2>KISIM B. KOZMETİK ÜRÜN GÜVENLİLİK DEĞERLENDİRMESİ</h2>
     <h3>B.1. Değerlendirme Sonucu</h3>
-    <p>${nl2br(f.DegerlendirmeSonucu, "Kozmetik Yönetmeliğinin 6’ncı maddesi gereğince piyasaya arz edilen bir kozmetik ürün, normal ve üretici tarafından öngörülebilen şartlar altında uygulandığında insan sağlığı açısından güvenli olmalıdır.")}</p>
+    <p>${nl2br(f.DegerlendirmeSonucu, "")}</p>
+   
+   <p>Kozmetik Yönetmeliğinin 6’ncı maddesi gereğince piyasaya arz edilen bir kozmetik ürün, normal ve üretici tarafından öngörülebilen şartlar altında uygulandığında veya ürünün sunumu, etiketlenmesi, kullanımına dair açıklamalara veya üretici tarafından sağlanan bilgiler dikkate alınarak önerilen kullanım şartlarına göre uygulandığında, insan sağlığı açısından güvenli olmalıdır.</p>
+   <p>İşbu rapor; ürün bileşenlerinin toksikolojik karakteri, kimyasal yapısı ve maruz kalma seviyeleri, ürünün kullanımına sunulduğu hedef kitlenin veya ürünün uygulanacağı bölgenin belirgin maruziyet özellikleri göz önünde bulundurularak Kozmetik Yönetmeliği’nin 12 nci maddesi gereğince kozmetik bitmiş ürüne hazırlanmıştır.</p>
+   <p>Bütün kaynaklardan elde edilen mevcut veriler değerlendirilerek kozmetik ürün güvenlilik raporu hazırlanmıştır. Formülasyonda yer alan her bir maddenin, karışımın ve bitmiş ürünün öngörülen kullanım koşulları altında güvenlilik değerlendirilmesi yapılmıştır.</p>
+   <p>Değerlendirilen kozmetik ürün düzenli kullanım için uygun olup, harici kullanım içindir.</p>
+   <p>Hammaddeden başlayarak bitmiş kozmetik ürünün eksiksiz olarak kalitatif ve kantitatif bileşimi açıklanmış, her bir hammaddenin ismi kimliği (kalitatif) ve miktarını belirten ağırlık yüzdelerinin yer aldığı tüm ürün bileşimi değerlendirilmiştir.</p>
+   <p>Bitmiş ürüne ait fizikokimyasal spesifikasyonları değerlendirilmiştir.</p>
+   <p>Hızlandırılmış ve uzun süreli stabilite testleri kozmetik ürünün bileşimi, formülasyonu, ambalaj şekli, kullanım şekli gibi ürüne özel kriterler göz önüne alınarak belirlenen farklı sıcaklıklarda, depolama ve dağıtım için önerilen son ambalaj ve kap/kapak sistemindeki ambalajlı kozmetik ürün üzerinden fiziksel, kimyasal ve ambalaj uyumu testleri gerçekleştirilmiştir.</p>
+   <p>${nl2br(f.Stabilite)}</p>
+   <p>Normal koşullar altında depolanan kozmetik ürünün belirtilen minimum dayanma süresinin ve bitmiş ürünün açıldıktan sonra kullanım süresinin doğrulanması güvenlilik açısından önemlidir.</p>
+   <p>Ürün formülasyonu ve stabilite test sonuçlarına göre; ambalaj materyali ürünün saflığı ve stabilitesi üzerine olumsuz etki yapmamaktadır.</p>
+   <p>Ürün, yasaklı madde kalıntısı içermemektedir. Safsızlıklar ve kalıntılar hakkında bilgi bulunmamaktadır.</p>
+   <p>Bitmiş ürün iç ve dış ambalajı değerlendirilmiştir. İç ve dış ambalajda üreticinin, adı veya unvanı ve adresi, ürünün fonksiyonu, ağırlık veya hacim olarak ambalajlama anındaki nominal miktar, açıldıktan sonraki kullanım süresi, kullanma talimatı ve tedbirler, üretim kodu veya üretim şarj numarası, ürün bileşenleri, vb. bilgiler yer almaktadır. Ürün bileşenleri listesinde yer alan bütün hammaddeler INCI isimleri ile ve % konsantrasyona göre büyükten küçüğe olacak şekilde sıra ile yazılmıştır. Etiketin mevzuata uygun olduğu görülmüştür.</p>
+   <p>Dermal, oral ve inhaler maruziyet yolu insanların kozmetik ürünlere ilişkin potansiyel maruziyet yollarıdır. Değerlendirilen kozmetik ürün için dermal maruziyet söz konusudur.</p>
+   <p>Kozmetik üründeki maddelerin her birine maruziyet, bitmiş ürüne maruziyetten ve bitmiş üründeki maddelerin tek tek konsantrasyonlarından hesaplanmıştır.</p>
+   <p>Hammaddelerin üst limitteki kullanım oranı alınarak ve % 100 absorbe olduğu kabul edilerek olası en kötü durumdaki güvenlik aralığı hesaplanmıştır.</p>
+   <p>Ürün; Kozmetik Yönetmeliğinde Değişiklik Yapılmasına Dair Yönetmelik / EK II ‐Kozmetik Ürünlerde Yasaklı Maddeler Listesi yer alan yasaklı maddeler listesindeki maddeleri içermemektedir.</p>
+   <p>Ürünün, kullanım yeri, kullanım amacı ve miktarına göre normal ve makul olarak öngörülebilir kullanımı uygundur.</p>
+   <p>Bu rapor mevcut veriler doğrultusunda hazırlanmıştır.</p>
+   <p>Normal şartlar altında ürünün, kullanım yeri, kullanım amacı ve miktarına göre normal ve makul olarak öngörülebilir kullanımı uygundur.</p>
+   <p>Üründe veya mevzuatta değişiklikler gerçekleştiğinde (örneğin; üreticinin yaptığı değişiklikler, mevzuatta formülasyonda yer alan maddelerden birine getirilen kısıtlama, formülasyon veya ambalaj gereklilikleri gibi hususlarda) mevzuata uygunluğu kontrol edilmeli, güvenlilik değerlendirmesi yeniden gözden geçirilmeli ve gerekliyse güncellenmelidir.</p>
+   <p>Aşağıdaki şartlardan bir veya daha fazlası söz konusu ise, güvenlilik değerlendirmesi yeniden gözden geçirilmeli ve gerekliyse güncellenmelidir:</p>
+   
+   
+   <table>  
+  <tr>
+        <td style="white-space: nowrap;">a.</td>
+        <td>Maddeler hakkında, var olan güvenlilik değerlendirmesinin sonucunu değiştirebilecek, yeni bilimsel bulgular ve toksikolojik veriler erişilebilir durumda ise,</td>
+      </tr>
+      <tr>
+        <td style="white-space: nowrap;">b.</td>
+        <td>Hammaddelerin formülasyonunda veya spesifikasyonlarında değişiklik olmuş ise,</td>
+      </tr>
+      <tr>
+        <td style="white-space: nowrap;">c.</td>
+        <td>Kullanım koşullarında değişiklikler olmuş ise,</td>
+      </tr>
+      <tr>
+        <td style="white-space: nowrap;">d.</td>
+        <td>Hem makul öngörülebilir kullanım şartları altında, hem de kötüye kullanma durumunda istenmeyen etkilerin yapısı, şiddeti ve sıklığı açısından artan eğilim mevcut ise.</td>
+      </tr>
+ </table>
+    <p>Ürünün piyasaya sürülmesini takiben ortaya çıkan ilgili ilave bilgiler ışığında; ürünün formülünde, hammadde temin edilen kaynaklarda veya önerilen kullanım şeklinde yapılacak herhangi bir değişiklikte güvenlilik değerlendirme raporunun güncel tutulması gerekmektedir.</p>
+    <p>Ürün güvenlik değerlendirmesi tarafımca hazırlanmış olup başkalarına devredilemez.</p>
+   
     <h3>B.2. Etikette Verilen Uyarılar ve Kullanma Talimatları</h3>
     <p>Ürün üzerinde yer alan kullanım ve uyarılar bölümüne A.5. maddesinde değinilmiştir. Ürüne ait görseller ürün güvenlik dosyasında da paylaşılmıştır.</p>
     <h3>B.3. Gerekçelendirme</h3>
-    <p>${nl2br(f.Gerekce, "Bu Ürün Bilgi Dosyasında yer alan kriterlere ilişkin belgeler incelenmiş ve söz konusu ürünün güvenlik değerlendirmesi sonucuna varılması için dikkate alınmıştır.")}</p>
+    <p>Bu Ürün Bilgi Dosyasında yer alan aşağıdaki kriterlere ilişkin belgeler incelenmiş ve söz konusu ürünün güvenlik değerlendirmesi sonucuna varılması için dikkate alınmıştır:</p>
+
+<p>Kozmetik ürünün niceliksel ve niteliksel bileşimi</p>
+
+<p>Ürünün niteliksel ve niceliksel bileşimi, kozmetik formülündeki bileşenlerin tanımlanması ve işlevi değerlendirilmiştir.</p>
+
+<p>- Kozmetik ürünün fiziksel/kimyasal özellikleri ve stabilitesi</p>
+
+<p>Her bir hammadde için nihai ürün özellikleri ve tedarikçinin özellikleri incelenmiştir. Stabilite, üretici tarafından sağlanan kararlılık test raporuna göre değerlendirilir. Stabilite çalışmaları, ürünün test koşulları altında kararlı kaldığını göstermektedir. Etikette, açıldıktan sonra geçen sürenin 12 ay olduğu belirtilmektedir.</p>
+
+<p>- Mikrobiyolojik kalite</p>
+
+<p>Bu ürün Kategori 2'ye göre değerlendirilmelidir. Ürün mikrobiyolojik açıdan kararlıdır.</p>
+
+<p>Üretici, challenge testi sonuçlarına göre, challenge testi yaparak bu ürünün korunmasının etkinliğini deneysel olarak garanti eder.</p>
+
+<p>- Safsızlıklar, izler, ambalaj malzemesi hakkında bilgi</p>
+
+<p>Tüm hammaddeler güvenlik ve yönetmeliğe uygunluk açısından değerlendirildi.</p>
+
+<p>İçeriklerde bulunan safsızlıklar belirlenen sınırlar içindedir ve toksikolojik olarak önemli kabul edilmemektedir.</p>
+
+<p>- Kozmetik ürüne maruz kalma</p>
+
+<p>Tüm içerikler etikete INCI adlarıyla ve yüzdelerine göre azalan sırayla yazılmalıdır.</p>
+
+<p>Bitmiş ürüne maruz kalma, SCCS'nin kozmetik maddelerin test edilmesine ve güvenlik değerlendirmesine ilişkin kılavuz notlarının önerilerine uygun olarak belirlenmiştir.</p>
+
+<p>- Maddelere maruz kalma</p>
+
+<p>Kozmetik üründeki her bir maddeye maruz kalma, son ürüne maruz kalma ve son üründeki bireysel maddelerin</p>
+
+<p>konsantrasyonundan hesaplanır. Her bir maddeden kaynaklanan potansiyel riski değerlendirmek için bu maruz</p>
+
+<p>kalmayı hesaplamak gerekir.</p>
+
+<p>Tek tek maddelere maruz kalma, ürünün kantitatif bileşiminden hesaplanır. Ürünün kullanımı sırasında maddeler</p>
+
+<p>üretildiğinde veya salındığında, maruziyet tahmin edilir ve güvenlik değerlendirmesinde dikkate alınır. Hesaplamalar</p>
+
+<p>aşağıdaki formül kullanılarak yapılmıştır:</p>
+
+<p>Uygulanan madde miktarının yüzdesi olarak bildirilen dermal emilim</p>
+
+<p>SED = A(mg/kg vücut ağırlığı/gün) X C(%) / 100 X DA p (%) / 100</p>
+
+<p>Gerekli hesaplamalar yapılarak, bitmiş ürüne günlük 0,90 mg/kg/günlük tahmini bir maruziyet elde edilmiştir.</p>
+
+<p>Kesin verilerin bulunmaması durumunda, dermal emilim, SCCS 10. Kılavuzun 28. sayfasında önerilen kriterlere göre</p>
+
+<p>belirlenmiştir; buna göre %50'lik bir emilim seviyesi varsayılmalıdır. Sadece moleküler ağırlığın > 500 Da, Log Pow ≤ - 1 veya ≥4 ve erime noktasının > 200°C olduğu durumlarda %10'luk bir dermal emilim seviyesi varsayılmıştır.</p>
+
+<p>- Maddelerin Toksikolojik Profili</p>
+
+<p>Ürün formülünde bulunan bileşenlerin toksikolojik verileri, ham maddelerin tedarikçileri tarafından sağlanan bilgilerden, uzman literatüründe yayınlanan verilerden ve SCCS (Tüketici Güvenliği Bilimsel Komitesi), CIR (Kozmetik Bileşenler İncelemesi), OECD (Ekonomik İşbirliği ve Kalkınma Örgütü), IUCLID (Uluslararası Tekdüze Kimyasal Bilgi Veritabanı), FDA (Gıda ve İlaç Dairesi), ABD EPA (ABD Çevre Koruma Ajansı), EFSA (Avrupa Gıda Güvenliği Otoritesi) ve ECHA (Avrupa Kimyasallar Ajansı) gibi farklı ürünlerin güvenliğini değerlendirmekten sorumlu çeşitli uluslararası kuruluşlar tarafından yayınlanan raporlardan elde edilen verilerden alınmıştır.</p>
+
+<p>Güvenlik marjları (MoS) aşağıdaki formül kullanılarak hesaplanmıştır:</p>
+
+<div class="note">MoS = NO(A)EL / SED ≥ 100</div>
+
+<p>Toksikolojik verilerin mevcut olduğu bileşenler için hesaplanan güvenlik marjı, güvenlik faktörünün kabul edilebilir olduğunu buldu (MoS > 100). NOAEL'in geleneksel yöntemin güvenlik marjını hesaplamayı imkansız hale getirmediği bileşenler durumunda, kullanılan konsantrasyonlarda maddelerin düşük toksisiteleri ve uzun bir güvenli kullanım geçmişi nedeniyle bir tehdit oluşturmadığı sonucuna varılabilir. Bu bileşenler insanlar için bir tehlike oluşturmaz ve nihai kozmetik ürünün güvenliğini olumsuz yönde etkilemez. Bu ürünü üretmek için kullanılan hammaddeler, kozmetik, ilaç ve gıda ürünlerinde uzun süreli kullanım geçmişleri göz önüne alındığında herhangi bir sağlık riski oluşturmaz. Mevcut toksikolojik verilere ve hesaplanan güvenlik marjlarına dayanarak, kozmetik formülünde bulunan hammaddeler, kullanılan konsantrasyonlarda ve amaçlanan kullanımda sistemik bir toksisite riski oluşturmaz. Bitmiş ürünün gözlerde hafif bir tahrişe neden olma olasılığı düşüktür. Ürünün küçük bir miktarının kazara yutulması önemli bir toksikolojik risk oluşturmaz. Kullanım yöntemi ve ürün formatı göz önüne alındığında, makul kullanım koşulları altında diğer maruz kalma yollarıyla sistemik risk beklenmez.</p>
+
+<p>-İstenmeyen etkiler ve ciddi istenmeyen etkiler</p>
+
+<p>Kasıtsız ve ciddi olumsuz etkiler olması durumunda düzeltici önlemler alınır ve güvenlik değerlendirmesi güncellenir ve bu veri dosyasına eklenir. Ek destekleyici güvenlik verileri ve iddiaların kanıtları değerlendirildi.</p>
+
+<p>Kanıtlanması gereken bir iddia yoktur ve ürün hakkında destekleyici bir güvenlik verisi yoktur. GMP (İyi Üretim Uygulamaları), kozmetik ürünlerinin güvenli bir şekilde üretilmesini sağlamak amacıyla hammaddelerin işlenmesinden ürünün kurulması, tasarımı, üretimi, paketlenmesi, depolanması ve dağıtımına kadar tüm üretim aşamalarını kapsayan bir standarttır.</p>
+
+<p>Bu ürün, yukarıda açıklananlar dışında, aşağıda imzası bulunan kişi tarafından düzenlemelere uygunluk açısından değerlendirilmemiştir. Üründe değerlendirilen tüm bileşenlerin açıklandığı ve rapor tablosunda listelendiği gibi doğru olduğu varsayılmıştır.</p>
+
+<p>Verilen bilgilere dayanarak, bu raporda aksi belirtilmediği sürece ne bu ürünün ne de üründe kullanılan bileşenlerin bir tüketicide toksisiteye neden olabilecek herhangi bir safsızlık/kirletici içermediği varsayılmıştır.</p>
+
+<p>Bu değerlendirme yalnızca burada açıklanan koşullarla ilgilidir. Güvenlik değerlendirmesi kişisel olarak yapılmış olup devredilemez.</p>
+    
+    
     <h3>B.4. Güvenlilik Değerlendirme Sorumlusu ile İlgili Bilgiler ve Kısım B'nin Onayı</h3>
     ${infoTable([
       ["Güvenlilik Değerlendiricisinin Adı ve Adresi", `${text(f.SorumluAd, empty)}\n${text(f.SorumluAdres, empty)}`],
       ["Güvenlilik Değerlendiricisinin Yeterlilik Kanıtı", f.SorumluKanit],
       ["Rapor Tarihi", todayTr()],
+      ["İmza", '<div class="signature"></div>']
     ])}
-    <p>İmza:</p>
-    <div class="signature"></div>
+    
   </section>
 
   <section class="page-break">
@@ -594,8 +713,10 @@ ${infoTable([
       <thead><tr><th>INCI Name</th><th>CAS Number</th><th>EINECS/ELICS Numbers</th><th>Konsantrasyon (%)</th><th>A</th><th>SED</th><th>NO(A)EL</th><th>MOS</th></tr></thead>
       <tbody>${allergenRows(formulResults, a)}</tbody>
     </table>
-    <p class="muted">*C: Konsantrasyon. Üst değer üzerinden değerlendirmeye alınmıştır. *UYGUN: MoS &gt; 100 olduğundan bu hammaddenin bu konsantrasyonda bu ürün içinde kullanımı güvenlidir.</p>
-<div style="page-break-after: always;"></div>
+<p class="muted">*C: Konsantrasyon. Üst değer üzerinden değerlendirmeye alınmıştır. </p>
+<p class="muted">*N/A: Hammaddenin NOAEL değerine ulaşılamadığından MoS hesabı yapılamamıştır. Hammadde yasaklı ürünler listesinde değildir ve limit dahilinde kullanılmıştır. Dolayısıyla uygun olarak değerlendirilmiştir.</p>
+<p class="muted">*UYGUN: MoS> 100 olduğundan bu hammaddenin bu konsantrasyonda bu ürün içinde kullanımı güvenlidir.</p>
+    <div style="page-break-after: always;"></div>
 
     <h2>EK-2 KOZMETİK YÖNETMELİK EKLERİNE UYGUNLUK KONTROLÜ</h2>
     <table class="compact">
@@ -606,7 +727,7 @@ ${infoTable([
 
     <h2>EK-3 BİLEŞENLERİN FİZİKOKİMYASAL VE TOKSİKOLOJİK ÖZELLİKLERİ</h2>
     ${ingredientProfiles(formulResults)}
-
+<div style="page-break-after: always;"></div>
     <h2>KAYNAKLAR</h2>
     <ol>
       <li>Regulation (EC) No 1223/2009 of the European Parliament and of the Council on cosmetic products</li>
