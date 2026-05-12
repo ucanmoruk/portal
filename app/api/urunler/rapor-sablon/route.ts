@@ -78,8 +78,32 @@ function wordHeaderTemplate(form: Record<string, unknown>) {
 }
 
 async function renderDocx(html: string, form: Record<string, unknown>) {
+  const docxHtml = html.replace(/<style>[\s\S]*?<\/style>/i, `<style>
+    body { color: #111827; font-family: Arial, sans-serif; font-size: 9.5pt; line-height: 1.45; }
+    h1 { font-size: 25pt; text-align: center; color: #000000; }
+    h2 { margin-top: 8px; padding-bottom: 5px; border-bottom: 2px solid #000000; font-size: 14.5pt; color: #000000; }
+    h3 { margin-top: 12px; font-size: 9.5pt; color: #ffffff; padding: 5px; background-color: #003366; }
+    p { margin: 0 0 8px; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; }
+    th, td { border: 1px solid #cfd8e3; padding: 5px 6px; vertical-align: top; }
+    th { background: #dedede; color: #000000; font-weight: 700; text-align: left; }
+    .kv th { width: 40%; }
+    .compact { font-size: 8.2pt; }
+    .compact th, .compact td { padding: 4px; }
+    .num { text-align: right; }
+    .ok { color: #166534; font-weight: 700; text-align: center; }
+    .warn { color: #b91c1c; font-weight: 700; text-align: center; }
+    .danger-row td { background: #fee2e2; border-color: #ef4444; }
+    .muted { color: #6b7280; font-style: italic; }
+    .note { margin: 10px 0; padding: 9px 11px; background: #f8fafc; border-left: 4px solid #94a3b8; }
+    .page-break { page-break-before: always; }
+    .image-block { margin: 10px 0; }
+    .image-block img { max-width: 100%; max-height: 95mm; border: 1px solid #d1d5db; }
+    .image-block figcaption { margin-top: 4px; color: #6b7280; font-size: 8.5pt; }
+  </style>`);
+
   return HTMLtoDOCX(
-    html,
+    docxHtml,
     wordHeaderTemplate(form),
     {
       orientation: "portrait",
