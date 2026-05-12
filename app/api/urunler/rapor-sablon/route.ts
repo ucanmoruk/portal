@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import chromium from "@sparticuz/chromium";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
@@ -87,22 +88,6 @@ async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
     ? ["chrome", "chrome.exe"]
     : ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
 
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    try {
-      const chromium = (await import("@sparticuz/chromium")).default;
-      chromium.setGraphicsMode = false;
-      const executablePath = await chromium.executablePath();
-      if (executablePath) {
-        return {
-          executablePath,
-          args: chromium.args,
-        };
-      }
-    } catch (error) {
-      console.warn("[rapor-sablon] Bundled Chromium başlatılamadı, sistem Chrome aranacak:", error);
-    }
-  }
-
   for (const candidate of [...configured, ...platformCandidates]) {
     if (path.isAbsolute(candidate) && existsSync(candidate)) return { executablePath: candidate, args: [] };
     if (!path.isAbsolute(candidate) && commandExists(candidate)) return { executablePath: candidate, args: [] };
@@ -110,6 +95,19 @@ async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
 
   for (const candidate of commandCandidates) {
     if (commandExists(candidate)) return { executablePath: candidate, args: [] };
+  }
+
+  try {
+    chromium.setGraphicsMode = false;
+    const executablePath = await chromium.executablePath();
+    if (executablePath) {
+      return {
+        executablePath,
+        args: chromium.args,
+      };
+    }
+  } catch (error) {
+    console.warn("[rapor-sablon] Bundled Chromium başlatılamadı:", error);
   }
 
   return null;
