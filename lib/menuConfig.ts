@@ -9,6 +9,11 @@ export interface MenuItem {
 
 export const MENU_TREE: MenuItem[] = [
   {
+    key: "dashboard",
+    label: "Dashboard",
+    href: "/",
+  },
+  {
     key: "ugd",
     label: "ÜGD Detayları",
     children: [
@@ -88,4 +93,19 @@ export function allMenuKeys(): string[] {
   };
   walk(MENU_TREE);
   return keys;
+}
+
+export function firstAllowedHref(keys: string[]): string | null {
+  const allowed = new Set(keys);
+  const walk = (items: MenuItem[]): string | null => {
+    for (const item of items) {
+      if (allowed.has(item.key) && item.href) return item.href;
+      if (item.children) {
+        const childHref = walk(item.children);
+        if (childHref) return childHref;
+      }
+    }
+    return null;
+  };
+  return walk(MENU_TREE);
 }

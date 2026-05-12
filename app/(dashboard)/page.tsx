@@ -1,5 +1,8 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import poolPromise from "@/lib/db";
+import { firstAllowedHref } from "@/lib/menuConfig";
 import styles from "./page.module.css";
 
 export const metadata = {
@@ -13,8 +16,45 @@ const stats = [
   { label: "Firma Sayısı", value: "—", icon: "🏢", color: "#bf5af2" },
 ];
 
+const ADMIN_USER_IDS = new Set(["1", "2"]);
+
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
+
+  const userId = (session.user as any)?.userId as string | undefined;
+  const isAdmin = userId ? ADMIN_USER_IDS.has(userId) : false;
+
+  if (!isAdmin) {
+    let allowedKeys: string[] = [];
+    try {
+      const pool = await poolPromise;
+      const result = await pool.request()
+        .input("userId", userId ? parseInt(userId) : 0)
+        .query("SELECT MenuKey FROM PortalYetki WHERE KullaniciID = @userId");
+      allowedKeys = result.recordset.map((r: any) => r.MenuKey as string);
+    } catch {
+      allowedKeys = [];
+    }
+
+    if (!allowedKeys.includes("dashboard")) {
+      const fallbackHref = firstAllowedHref(allowedKeys);
+      if (fallbackHref) redirect(fallbackHref);
+
+      return (
+        <div className={styles.page}>
+          <div className={styles.welcomeBanner}>
+            <div>
+              <h1 className={styles.welcomeTitle}>Yetki tanımlı değil</h1>
+              <p className={styles.welcomeSubtitle}>
+                Bu kullanıcı için görüntülenebilir bir menü yetkisi bulunmuyor.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
 
   return (
     <div className={styles.page}>

@@ -71,6 +71,20 @@ function fmtMOS(value: number | null) {
   return value >= 10000 ? "&gt;10000" : value.toFixed(1);
 }
 
+function hasMeaningfulValue(value: unknown) {
+  const normalized = text(value).toLocaleLowerCase("tr-TR");
+  return !!normalized && !["-", "—", "n/a", "na", "yok", "none"].includes(normalized);
+}
+
+function isAnnexII(row: IngredientRow) {
+  const regulation = text(row.Regulation).toLocaleLowerCase("tr-TR");
+  return /(^|[^a-z0-9])(?:ek|annex)?\s*ii(?:[^a-z0-9]|$)/i.test(regulation);
+}
+
+function hasRegulatoryRestriction(row: IngredientRow) {
+  return isAnnexII(row) || hasMeaningfulValue(row.Maks) || hasMeaningfulValue(row.Diger) || hasMeaningfulValue(row.Etiket);
+}
+
 function exposureValue(value: unknown, label: string) {
   const line = text(value)
     .split(/\r?\n/)
@@ -103,7 +117,7 @@ function formulaRows(rows: IngredientRow[], a: number) {
     const dap = typeof row.dap === "number" ? row.dap : parseFloat(text(row.dap, "100")) || 100;
     const sed = calcSED(a, concentration, dap);
     const mos = calcMOS(row.noael, sed);
-    const ok = mos !== null && mos >= 100;
+    const ok = mos === null || mos >= 100;
 
     return `<tr>
       <td>${esc(row.INCIName || row.inputName, empty)}</td>
@@ -117,7 +131,7 @@ function formulaRows(rows: IngredientRow[], a: number) {
       <td class="num">${fmtSED(sed)}</td>
       <td class="num">${esc(row.noael, empty)}</td>
       <td class="num">${fmtMOS(mos)}</td>
-      <td class="${ok ? "ok" : "warn"}">${mos === null ? "NOAEL GİRİN" : ok ? "UYGUN" : "KONTROL"}</td>
+      <td class="${ok ? "ok" : "warn"}">${ok ? "UYGUN" : "UYGUN DEĞİL"}</td>
     </tr>`;
   }).join("");
 }
@@ -171,11 +185,12 @@ function allergenRows(rows: IngredientRow[], a: number) {
 }
 
 function regulationRows(rows: IngredientRow[]) {
-  if (!rows.length) return `<tr><td colspan="8" class="muted">Yönetmelik kontrol kaydı yok.</td></tr>`;
+  const regulatedRows = rows.filter(hasRegulatoryRestriction);
+  if (!regulatedRows.length) return `<tr><td colspan="8" class="muted">Limit, etiket şartı veya yasaklı madde kaydı yok.</td></tr>`;
 
-  return rows.map((row) => {
-    const ok = row.matched !== false;
-    return `<tr>
+  return regulatedRows.map((row) => {
+    const banned = isAnnexII(row);
+    return `<tr${banned ? ' class="danger-row"' : ""}>
       <td>${esc(row.Regulation, empty)}</td>
       <td>${esc(row.INCIName || row.inputName, empty)}</td>
       <td>${empty}</td>
@@ -183,7 +198,7 @@ function regulationRows(rows: IngredientRow[]) {
       <td>${esc(row.Diger, empty)}</td>
       <td>${esc(row.Etiket, empty)}</td>
       <td class="num">${esc(row.inputAmount, "0")}</td>
-      <td class="${ok ? "ok" : "warn"}">${ok ? "UYGUN" : "KONTROL"}</td>
+      <td class="${banned ? "warn" : "ok"}">${banned ? "UYGUN DEĞİL" : "UYGUN"}</td>
     </tr>`;
   }).join("");
 }
@@ -265,6 +280,7 @@ export function renderUgdReportHtml(input: UGDReportInput) {
     .num { text-align: right; white-space: nowrap; }
     .ok { color: #166534; font-weight: 700; text-align: center; }
     .warn { color: #b91c1c; font-weight: 700; text-align: center; }
+    .danger-row td { background: #fee2e2; border-color: #ef4444; }
     .muted { color: #6b7280; font-style: italic; }
     .note { margin: 10px 0; padding: 9px 11px; background: #f8fafc; border-left: 4px solid #94a3b8; }
     .page-break { page-break-before: always; }
@@ -561,9 +577,7 @@ ${infoTable([
   <section class="page-break">
     ${screenHeader}
     <h2>KISIM B. KOZMETİK ÜRÜN GÜVENLİLİK DEĞERLENDİRMESİ</h2>
-    <h3>B.1. Değerlendirme Sonucu</h3>
-    <p>${nl2br(f.DegerlendirmeSonucu, "")}</p>
-   
+    <h3>B.1. Değerlendirme Sonucu</h3>   
    <p>Kozmetik Yönetmeliğinin 6’ncı maddesi gereğince piyasaya arz edilen bir kozmetik ürün, normal ve üretici tarafından öngörülebilen şartlar altında uygulandığında veya ürünün sunumu, etiketlenmesi, kullanımına dair açıklamalara veya üretici tarafından sağlanan bilgiler dikkate alınarak önerilen kullanım şartlarına göre uygulandığında, insan sağlığı açısından güvenli olmalıdır.</p>
    <p>İşbu rapor; ürün bileşenlerinin toksikolojik karakteri, kimyasal yapısı ve maruz kalma seviyeleri, ürünün kullanımına sunulduğu hedef kitlenin veya ürünün uygulanacağı bölgenin belirgin maruziyet özellikleri göz önünde bulundurularak Kozmetik Yönetmeliği’nin 12 nci maddesi gereğince kozmetik bitmiş ürüne hazırlanmıştır.</p>
    <p>Bütün kaynaklardan elde edilen mevcut veriler değerlendirilerek kozmetik ürün güvenlilik raporu hazırlanmıştır. Formülasyonda yer alan her bir maddenin, karışımın ve bitmiş ürünün öngörülen kullanım koşulları altında güvenlilik değerlendirilmesi yapılmıştır.</p>
