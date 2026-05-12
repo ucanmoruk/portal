@@ -118,7 +118,7 @@ async function renderDocx(html: string, form: Record<string, unknown>) {
       },
       title: safeReportName(form.RaporNo),
       creator: "Root Portal",
-      font: "Microsoft Sans Serif",
+      font: "Arial",
       fontSize: 19,
       complexScriptFontSize: 19,
       header: true,
