@@ -26,6 +26,7 @@ type UGDReportInput = {
   firmaAdres: string;
   firmaTelefon: string;
   firmaMail: string;
+  output?: "html" | "word";
 };
 
 const empty = "—";
@@ -227,6 +228,7 @@ function ingredientProfiles(rows: IngredientRow[]) {
 
 export function renderUgdReportHtml(input: UGDReportInput) {
   const { form: f, formulResults, firmaAd, firmaAdres, firmaTelefon, firmaMail } = input;
+  const isWordOutput = input.output === "word";
   const a = parseFloat(text(f.A, "0").replace(",", ".")) || 0;
   const maruziyet = text(f.MaruziyetAciklama);
   const title = `UGD_Rapor_${text(f.RaporNo, "rapor")}`;
@@ -241,7 +243,7 @@ export function renderUgdReportHtml(input: UGDReportInput) {
         <strong>${esc(f.RaporNo, empty)} / ${esc(f.Versiyon, empty)}</strong>
       </div>
     </div>`;
-  const screenHeader = `<div class="screen-page-header">${reportHeader}</div>`;
+  const screenHeader = isWordOutput ? "" : `<div class="screen-page-header">${reportHeader}</div>`;
 
   return `<!doctype html>
 <html lang="tr">
@@ -310,9 +312,9 @@ export function renderUgdReportHtml(input: UGDReportInput) {
   </style>
 </head>
 <body>
-  <div class="print-actions"><button onclick="window.print()">Yazdır / PDF</button></div>
-  <div class="pdf-header">${reportHeader}</div>
-  <!--[if gte mso 9]><div style="mso-element:header" id="ugdWordHeader">${reportHeader}</div><![endif]-->
+  ${isWordOutput ? "" : `<div class="print-actions"><button onclick="window.print()">Yazdır / PDF</button></div>`}
+  ${isWordOutput ? "" : `<div class="pdf-header">${reportHeader}</div>`}
+  ${isWordOutput ? "" : `<!--[if gte mso 9]><div style="mso-element:header" id="ugdWordHeader">${reportHeader}</div><![endif]-->`}
 
   <div class="WordSection1">
   <section class="cover">

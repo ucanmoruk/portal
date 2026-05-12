@@ -8,6 +8,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import chromium from "@sparticuz/chromium";
+import HTMLtoDOCX from "html-to-docx";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
@@ -58,6 +59,51 @@ function commandExists(command: string) {
 interface ChromeLaunchConfig {
   executablePath: string;
   args: string[];
+}
+
+function wordHeaderTemplate(form: Record<string, unknown>) {
+  return `
+    <table style="width:100%;border-collapse:collapse;border:none;font-family:Arial,sans-serif;color:#143b6f;">
+      <tr>
+        <td style="border:none;border-bottom:1px solid #1f4788;padding:0 0 5px 0;vertical-align:top;">
+          <div style="font-size:9.5pt;font-weight:700;">KOZMETİK ÜRÜN GÜVENLİLİK DEĞERLENDİRMESİ</div>
+          <div style="margin-top:2px;font-size:7.4pt;line-height:1.25;color:#000;">(EC) No 1223/2009 Kozmetik Regülasyonu ve 23 Mayıs 2005 tarihli, 25823 sayılı Kozmetik Yönetmeliği uyarınca hazırlanmıştır.</div>
+        </td>
+        <td style="width:38mm;border:none;border-bottom:1px solid #1f4788;padding:0 0 5px 8px;vertical-align:top;text-align:right;font-size:7.5pt;color:#000;">
+          <span>Form / Versiyon No:</span>
+          <div style="margin-top:2px;color:#111827;font-size:8.5pt;font-weight:700;">${htmlEsc(form.RaporNo) || "—"} / ${htmlEsc(form.Versiyon) || "—"}</div>
+        </td>
+      </tr>
+    </table>`;
+}
+
+async function renderDocx(html: string, form: Record<string, unknown>) {
+  return HTMLtoDOCX(
+    html,
+    wordHeaderTemplate(form),
+    {
+      orientation: "portrait",
+      pageSize: { width: 11906, height: 16838 },
+      margins: {
+        top: 1440,
+        right: 792,
+        bottom: 864,
+        left: 792,
+        header: 360,
+        footer: 360,
+      },
+      title: safeReportName(form.RaporNo),
+      creator: "Root Portal",
+      font: "Microsoft Sans Serif",
+      fontSize: 19,
+      complexScriptFontSize: 19,
+      header: true,
+      headerType: "default",
+      footer: false,
+      table: { row: { cantSplit: true } },
+      lang: "tr-TR",
+    },
+  );
 }
 
 async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
@@ -315,6 +361,24 @@ export async function POST(request: Request) {
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `attachment; filename="UGD_Rapor_${safeName}.pdf"`,
+        },
+      });
+    }
+
+    if (format === "docx" || format === "doc" || format === "word") {
+      const wordHtml = renderUgdReportHtml({
+        form,
+        formulResults: enrichedFormulResults,
+        firmaAd,
+        ...firmaDetails,
+        output: "word",
+      });
+      const docx = await renderDocx(wordHtml, form);
+      return new Response(docx as unknown as BodyInit, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "Content-Disposition": `attachment; filename="UGD_Rapor_${safeName}.docx"`,
         },
       });
     }

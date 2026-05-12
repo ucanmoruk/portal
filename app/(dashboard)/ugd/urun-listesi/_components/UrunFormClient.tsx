@@ -807,7 +807,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
     }
     try {
       const firmaAd = lookups.firmalar.find(f => f.ID.toString() === form.FirmaID)?.Ad || "";
-      const endpointFormat = format === "preview" ? "pdf" : format === "word" ? "doc" : "pdf";
+      const endpointFormat = format === "preview" ? "pdf" : format === "word" ? "docx" : "pdf";
       const res = await fetch(`/api/urunler/rapor-sablon?format=${endpointFormat}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -830,7 +830,7 @@ export default function UrunFormClient({ editId }: UrunFormClientProps) {
       }
       const a = document.createElement("a");
       a.href = url;
-      a.download = `UGD_Rapor_${form.RaporNo || "rapor"}.${format === "word" ? "doc" : "pdf"}`;
+      a.download = `UGD_Rapor_${form.RaporNo || "rapor"}.${format === "word" ? "docx" : "pdf"}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
