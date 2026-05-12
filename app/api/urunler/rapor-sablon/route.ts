@@ -52,7 +52,12 @@ function commandExists(command: string) {
   return result.status === 0;
 }
 
-function findChromeExecutable() {
+interface ChromeLaunchConfig {
+  executablePath: string;
+  args: string[];
+}
+
+async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
   const configured = [
     process.env.CHROME_EXECUTABLE_PATH,
     process.env.CHROME_PATH,
@@ -82,13 +87,29 @@ function findChromeExecutable() {
     ? ["chrome", "chrome.exe"]
     : ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
 
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    try {
+      const chromium = (await import("@sparticuz/chromium")).default;
+      chromium.setGraphicsMode = false;
+      const executablePath = await chromium.executablePath();
+      if (executablePath) {
+        return {
+          executablePath,
+          args: chromium.args,
+        };
+      }
+    } catch (error) {
+      console.warn("[rapor-sablon] Bundled Chromium başlatılamadı, sistem Chrome aranacak:", error);
+    }
+  }
+
   for (const candidate of [...configured, ...platformCandidates]) {
-    if (path.isAbsolute(candidate) && existsSync(candidate)) return candidate;
-    if (!path.isAbsolute(candidate) && commandExists(candidate)) return candidate;
+    if (path.isAbsolute(candidate) && existsSync(candidate)) return { executablePath: candidate, args: [] };
+    if (!path.isAbsolute(candidate) && commandExists(candidate)) return { executablePath: candidate, args: [] };
   }
 
   for (const candidate of commandCandidates) {
-    if (commandExists(candidate)) return candidate;
+    if (commandExists(candidate)) return { executablePath: candidate, args: [] };
   }
 
   return null;
@@ -176,9 +197,9 @@ async function cleanupWorkDir(workDir: string) {
 }
 
 async function renderPdf(html: string, form: Record<string, unknown>) {
-  const chromePath = findChromeExecutable();
-  if (!chromePath) {
-    throw new Error("PDF oluşturmak için Chrome/Chromium bulunamadı. Sunucuda google-chrome/chromium kurulu olmalı veya CHROME_PATH/CHROME_EXECUTABLE_PATH ortam değişkeni tanımlanmalı.");
+  const chromeConfig = await resolveChromeLaunchConfig();
+  if (!chromeConfig) {
+    throw new Error("PDF oluşturmak için Chrome/Chromium bulunamadı. Vercel için bundled Chromium veya CHROME_PATH/CHROME_EXECUTABLE_PATH ortam değişkeni gerekli.");
   }
 
   const workDir = path.join(os.tmpdir(), `ugd-report-${randomUUID()}`);
@@ -193,7 +214,8 @@ async function renderPdf(html: string, form: Record<string, unknown>) {
 
   try {
     await writeFile(htmlPath, html, "utf8");
-    chrome = spawn(chromePath, [
+    chrome = spawn(chromeConfig.executablePath, [
+      ...chromeConfig.args,
       "--headless=new",
       "--disable-gpu",
       "--disable-dev-shm-usage",
