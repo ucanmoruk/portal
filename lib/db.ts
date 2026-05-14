@@ -288,7 +288,7 @@ const translateSql = async (rawSql: string, inputs: Record<string, InputValue>) 
   const aliases = extractAliases(rawSql);
 
   // Legacy self-migrations are not needed after the MSSQL mirror has been created in Neon.
-  if (/^(IF\s+NOT\s+EXISTS|IF\s+COL_LENGTH|ALTER\s+TABLE|CREATE\s+TABLE|SELECT\s+SCOPE_IDENTITY\(\))/i.test(trimmed)) {
+  if (/^(IF\s+NOT\s+EXISTS|IF\s+COL_LENGTH|ALTER\s+TABLE|SELECT\s+SCOPE_IDENTITY\(\))/i.test(trimmed)) {
     return { sql: "", values: [] as InputValue[], noOp: true, aliases };
   }
 
