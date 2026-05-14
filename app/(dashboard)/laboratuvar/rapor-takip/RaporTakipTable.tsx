@@ -214,7 +214,7 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
   // ── Accordion ──────────────────────────────────────────────────────────────
   const toggleRow = async (row: RaporRow) => {
     if (isUgdrFormat(row.RaporFormati)) {
-      router.push(`/laboratuvar/rapor-takip/ugdr/${row.RaporNo}`);
+      router.push(`/laboratuvar/rapor-takip/ugdr/${row.RaporNo}?nkrId=${row.NkrID}`);
       return;
     }
 
@@ -634,7 +634,7 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                   {isUgdrFormat(row.RaporFormati) ? (
                     <button
                       type="button"
-                      onClick={() => window.open(`/laboratuvar/rapor-takip/ugdr/${row.RaporNo}`, "_blank", "noopener,noreferrer")}
+                      onClick={() => window.open(`/laboratuvar/rapor-takip/ugdr/${row.RaporNo}?nkrId=${row.NkrID}`, "_blank", "noopener,noreferrer")}
                       style={{
                         border: "none",
                         background: "transparent",

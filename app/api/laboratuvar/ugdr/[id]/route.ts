@@ -11,24 +11,63 @@ function asText(value: unknown, fallback = "") {
 }
 
 async function resolveNkrId(pool: any, rawId: string) {
-  const numericId = Number.parseInt(rawId, 10);
   const result = await pool
     .request()
-    .input("idNum", Number.isFinite(numericId) ? numericId : null)
     .input("idRaw", rawId)
     .query(`
       SELECT TOP 1 ID
       FROM NKR
       WHERE Durum = 'Aktif'
-        AND ((@idNum IS NOT NULL AND ID = @idNum) OR RaporNo = @idRaw)
-      ORDER BY CASE WHEN RaporNo = @idRaw THEN 0 WHEN (@idNum IS NOT NULL AND ID = @idNum) THEN 1 ELSE 2 END, ID DESC
+        AND (ID = TRY_CAST(@idRaw AS INT) OR CAST(RaporNo AS NVARCHAR(100)) = @idRaw)
+      ORDER BY CASE WHEN CAST(RaporNo AS NVARCHAR(100)) = @idRaw THEN 0 ELSE 1 END, ID DESC
     `);
 
   return result.recordset[0]?.ID ? Number(result.recordset[0].ID) : null;
 }
 
+async function loadUgdDetayUsage(pool: any, tipId: unknown) {
+  const parsedTipId = Number.parseInt(String(tipId ?? ""), 10);
+  if (!Number.isFinite(parsedTipId)) return null;
+
+  const colsRes = await pool.request().query(`
+    SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = N'rUGDDetay'
+  `);
+  const cols = new Set<string>((colsRes.recordset || []).map((r: any) => String(r.COLUMN_NAME)));
+  if (!cols.size) return null;
+
+  const idCol =
+    ["UGDTip_ID", "UGDTipID", "TipID", "Tip2", "rUGDTipID", "ID"].find((c) => cols.has(c)) || null;
+  if (!idCol) return null;
+
+  const trUseCol = ["Kullanim", "Kullanım", "KullanimTr", "KullanımTr"].find((c) => cols.has(c)) || null;
+  const enUseCol = ["KullanimEn", "KullanımEn", "Kullanim_En", "Kullanım_En"].find((c) => cols.has(c)) || null;
+  const trWarnCol = ["Uyarilar", "Uyarılar", "UyarilarTr", "UyarılarTr"].find((c) => cols.has(c)) || null;
+  const enWarnCol = ["UyarilarEn", "UyarılarEn", "Uyarilar_En", "Uyarılar_En"].find((c) => cols.has(c)) || null;
+
+  if (!trUseCol && !enUseCol && !trWarnCol && !enWarnCol) return null;
+
+  const selectParts = [
+    trUseCol ? `[${trUseCol}] AS Kullanim` : "CAST(NULL AS NVARCHAR(MAX)) AS Kullanim",
+    enUseCol ? `[${enUseCol}] AS KullanimEn` : "CAST(NULL AS NVARCHAR(MAX)) AS KullanimEn",
+    trWarnCol ? `[${trWarnCol}] AS Uyarilar` : "CAST(NULL AS NVARCHAR(MAX)) AS Uyarilar",
+    enWarnCol ? `[${enWarnCol}] AS UyarilarEn` : "CAST(NULL AS NVARCHAR(MAX)) AS UyarilarEn",
+  ];
+
+  const sql = `
+    SELECT TOP 1 ${selectParts.join(", ")}
+    FROM rUGDDetay
+    WHERE [${idCol}] = @tipId
+    ORDER BY ${cols.has("ID") ? "[ID] DESC" : "(SELECT NULL)"}
+  `;
+
+  const detail = await pool.request().input("tipId", parsedTipId).query(sql);
+  return detail.recordset?.[0] || null;
+}
+
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getServerSession(authOptions);
@@ -38,7 +77,11 @@ export async function GET(
 
   try {
     const pool = await poolPromise;
-    const nkrId = await resolveNkrId(pool, id);
+    const searchParams = new URL(request.url).searchParams;
+    const forcedNkrId = searchParams.get("nkrId");
+    const nkrId = forcedNkrId
+      ? await resolveNkrId(pool, forcedNkrId)
+      : await resolveNkrId(pool, id);
     if (!nkrId) return Response.json({ error: "Kayit bulunamadi" }, { status: 404 });
 
     const ugdCol = await nkrUgdTipFkColumn(pool);
@@ -92,6 +135,14 @@ export async function GET(
       A: n.ADegeri || "",
       RaporDurum: "Tamamlandi",
     };
+
+    const ugdDetay = await loadUgdDetayUsage(pool, row.Tip2);
+    if (ugdDetay) {
+      if (!row.Kullanim && ugdDetay.Kullanim) row.Kullanim = ugdDetay.Kullanim;
+      if (!row.KullanimEn && ugdDetay.KullanimEn) row.KullanimEn = ugdDetay.KullanimEn;
+      if (!row.Uyarilar && ugdDetay.Uyarilar) row.Uyarilar = ugdDetay.Uyarilar;
+      if (!row.UyarilarEn && ugdDetay.UyarilarEn) row.UyarilarEn = ugdDetay.UyarilarEn;
+    }
 
     for (const item of textRows) {
       const key = item.Dil === "en" ? `${item.Alan}En` : item.Alan;

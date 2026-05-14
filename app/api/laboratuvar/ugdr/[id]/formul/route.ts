@@ -5,17 +5,15 @@ import { ensureLabUgdrFormulTable } from "@/lib/labUgdrStorage";
 import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 
 async function resolveNkrId(pool: any, rawId: string) {
-  const numericId = Number.parseInt(rawId, 10);
   const result = await pool
     .request()
-    .input("idNum", Number.isFinite(numericId) ? numericId : null)
     .input("idRaw", rawId)
     .query(`
       SELECT TOP 1 ID
       FROM NKR
       WHERE Durum = 'Aktif'
-        AND ((@idNum IS NOT NULL AND ID = @idNum) OR RaporNo = @idRaw)
-      ORDER BY CASE WHEN RaporNo = @idRaw THEN 0 WHEN (@idNum IS NOT NULL AND ID = @idNum) THEN 1 ELSE 2 END, ID DESC
+        AND (ID = TRY_CAST(@idRaw AS INT) OR CAST(RaporNo AS NVARCHAR(100)) = @idRaw)
+      ORDER BY CASE WHEN CAST(RaporNo AS NVARCHAR(100)) = @idRaw THEN 0 ELSE 1 END, ID DESC
     `);
 
   return result.recordset[0]?.ID ? Number(result.recordset[0].ID) : null;
