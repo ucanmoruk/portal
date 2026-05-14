@@ -11,6 +11,7 @@ interface RaporRow {
   Tarih: string | null;
   Evrak_No: string;
   RaporNo: string;
+  Barkod?: string | null;
   Numune_Adi: string;
   FirmaAd: string | null;
   ProjeAd: string | null;
@@ -667,6 +668,7 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   }}>
                     {row.Numune_Adi}
+                    {row.Barkod ? ` · Barkod: ${row.Barkod}` : ""}
                   </div>
                 </div>
 

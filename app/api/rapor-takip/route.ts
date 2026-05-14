@@ -32,6 +32,7 @@ export async function GET(request: Request) {
       ? `AND (
              LOWER(COALESCE(CAST(n.Evrak_No AS NVARCHAR), '')) LIKE LOWER(@search)
           OR LOWER(COALESCE(CAST(n.RaporNo AS NVARCHAR), '')) LIKE LOWER(@search)
+          OR LOWER(COALESCE(CAST(n.Barkod AS NVARCHAR), '')) LIKE LOWER(@search)
           OR LOWER(COALESCE(n.Numune_Adi, '')) LIKE LOWER(@search)
           OR LOWER(COALESCE(f.Ad, '')) LIKE LOWER(@search)
         )`
@@ -69,6 +70,7 @@ export async function GET(request: Request) {
           CONVERT(varchar(10), n.Tarih, 23)       AS Tarih,
           n.Evrak_No,
           n.RaporNo,
+          n.Barkod,
           n.Numune_Adi,
           f.Ad                                    AS FirmaAd,
           p.Ad                                    AS ProjeAd,
