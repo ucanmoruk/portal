@@ -51,6 +51,14 @@ function mmyy() {
   return `${pad(d.getMonth() + 1)}-${String(d.getFullYear()).slice(2)}`;
 }
 
+function normalizeDateText(v: string | null | undefined): string {
+  const s = String(v ?? "").trim();
+  if (!s) return "-";
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+  return s;
+}
+
 /** DB'den gelen string: boş/null → '-' */
 const dash = (v: string | null | undefined) => (v?.trim() || "-");
 
@@ -137,7 +145,7 @@ export async function getReportData(
       SELECT
         ISNULL(CAST(n.RaporNo AS nvarchar(50)), '')  AS RaporNo,
         ${revnoE}                                    AS Revno,
-        ISNULL(CONVERT(varchar(10), n.Tarih, 104),'') AS Tarih,
+        ISNULL(CAST(n.Tarih AS nvarchar(50)), '') AS Tarih,
         ISNULL(CAST(n.Numune_Adi AS nvarchar(500)), '') AS NumuneAdi,
         ${adiEnE}                                    AS NumuneAdiEn,
         ISNULL(CAST(f.Ad AS nvarchar(500)), '')      AS FirmaAd,
@@ -158,8 +166,8 @@ export async function getReportData(
   const ndMiktar = ndCols.has("Miktar")       ? "ISNULL(CAST(nd.Miktar AS nvarchar(100)), '')"     : "''";
   const ndBirim  = ndCols.has("Birim")        ? "ISNULL(CAST(nd.Birim AS nvarchar(100)), '')"      : "''";
   const ndSeri   = ndCols.has("SeriNo")       ? "ISNULL(CAST(nd.SeriNo AS nvarchar(200)), '')"     : "''";
-  const ndUrt    = ndCols.has("UretimTarihi") ? "ISNULL(CONVERT(varchar(10), nd.UretimTarihi, 104), '')" : "''";
-  const ndSKT    = ndCols.has("SKT")          ? "ISNULL(CONVERT(varchar(10), nd.SKT, 104), '')"   : "''";
+  const ndUrt    = ndCols.has("UretimTarihi") ? "ISNULL(CAST(nd.UretimTarihi AS nvarchar(50)), '')" : "''";
+  const ndSKT    = ndCols.has("SKT")          ? "ISNULL(CAST(nd.SKT AS nvarchar(50)), '')" : "''";
 
   const ndRes = await pool.request()
     .input("nkrId", nkrId)
@@ -244,13 +252,13 @@ export async function getReportData(
     RaporNo:         nkr.RaporNo  || "-",
     "MM-YY":         mmyy(),
     Rev:             String(nkr.Revno || "0"),
-    Tarih:           dashDate(nkr.Tarih),
+    Tarih:           normalizeDateText(nkr.Tarih),
     Yayin:           todayFormatted(),
     "NumuneAdi-Eng": nkr.NumuneAdiEn || nkr.NumuneAdi || "-",
     NumuneAdi:       nkr.NumuneAdi   || "-",
     Miktar:          dash(miktar),
-    Urt:             dashDate(nd.UretimTarihi),
-    SKT:             dashDate(nd.SKT),
+    Urt:             normalizeDateText(nd.UretimTarihi),
+    SKT:             normalizeDateText(nd.SKT),
     Seri:            dash(nd.SeriNo),
     FirmaAd:         nkr.FirmaAd      || "-",
     Adres:           nkr.Adres        || "-",

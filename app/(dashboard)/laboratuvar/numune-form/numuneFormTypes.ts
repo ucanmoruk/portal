@@ -56,6 +56,7 @@ export interface NkrFormData {
   FotoFile: File | null;
   FotoPreview: string;
   FotoPath: string;
+  RaporMetinleri: Record<string, string>;
 }
 
 export interface HizmetRow {
@@ -84,6 +85,24 @@ export interface FormulRow {
   Noael: string;
   Cas?: string;
   Regulation?: string;
+}
+
+export const RAPOR_ALANLARI = [
+  "NormalKullanim",
+  "Kullanim",
+  "Uyarilar",
+  "UrunBilgisi",
+  "DegerlendirmeSonucu",
+  "EtiketUyarilariB2",
+] as const;
+
+export function emptyRaporMetinleri(): Record<string, string> {
+  const obj: Record<string, string> = {};
+  for (const alan of RAPOR_ALANLARI) {
+    obj[alan] = "";
+    obj[`${alan}En`] = "";
+  }
+  return obj;
 }
 
 export function emptyForm(): NkrFormData {
@@ -121,5 +140,6 @@ export function emptyForm(): NkrFormData {
     FotoFile: null,
     FotoPreview: "",
     FotoPath: "",
+    RaporMetinleri: emptyRaporMetinleri(),
   };
 }

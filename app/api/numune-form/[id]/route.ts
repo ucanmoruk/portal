@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
 import { nkrUgdTipFkColumn } from "@/lib/nkrUgdTipColumn";
 import { hasNkrFormulTable, hasNkrLogTable, nkrHasColumn } from "@/lib/numuneFormTables";
+import { loadLabUgdrTexts, saveLabUgdrTexts } from "@/lib/labUgdrStorage";
 
 // Limit ve LOQ değerine göre Sonuç ve SonucEn otomatik hesapla
 function computeSonucAuto(
@@ -68,7 +69,7 @@ export async function GET(
          LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
          WHERE n.ID = @id AND n.Durum = 'Aktif'`;
 
-    const [nkrRes, detayRes, hizmetlerRes, formulRes, fotoRes] = await Promise.all([
+    const [nkrRes, detayRes, hizmetlerRes, formulRes, fotoRes, textRows] = await Promise.all([
       pool.request().input("id", nkrId).query(nkrSql),
       pool.request().input("id", nkrId).query(`
         SELECT nd.*, p.Ad AS ProjeAd
@@ -98,6 +99,7 @@ export async function GET(
       pool.request().input("id", nkrId).query(
         "SELECT Path FROM Fotograf WHERE RaporID = @id"
       ),
+      loadLabUgdrTexts(pool, nkrId),
     ]);
 
     const nkrRow = nkrRes.recordset[0];
@@ -108,12 +110,22 @@ export async function GET(
       nkrRow.UGDTip_ID = nkrRow.Tip2;
     }
 
+    const raporMetinleri: Record<string, string> = {};
+    for (const item of textRows) {
+      const alan = String(item.Alan || "");
+      const dil = String(item.Dil || "tr").toLowerCase();
+      if (!alan) continue;
+      const key = dil === "en" ? `${alan}En` : alan;
+      raporMetinleri[key] = item.Metin == null ? "" : String(item.Metin);
+    }
+
     return Response.json({
       nkr:       nkrRow,
       detay:     detayRes.recordset[0] || null,
       hizmetler: hizmetlerRes.recordset,
       formul:    formulRes.recordset,
       fotoPath:  fotoRes.recordset[0]?.Path || null,
+      raporMetinleri,
     });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
@@ -137,7 +149,7 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { nkr, detay, hizmetler = [], formul = [] } = body;
+    const { nkr, detay, hizmetler = [], formul = [], raporMetinleri = {} } = body;
 
     if (!nkr?.Evrak_No?.trim())   return Response.json({ error: "Evrak No zorunludur."   }, { status: 400 });
     if (!nkr?.RaporNo?.trim())    return Response.json({ error: "Rapor No zorunludur."   }, { status: 400 });
@@ -349,6 +361,8 @@ export async function PUT(
           .query("INSERT INTO NKR_Formul (NKRID, HammaddeID, INCIName, Miktar, DaP, Noael) VALUES (@NKRID, @HammaddeID, @INCIName, @Miktar, @DaP, @Noael)");
       }
     }
+
+    await saveLabUgdrTexts(pool, nkrId, raporMetinleri || {});
 
     // ── 5. NKR_Log ───────────────────────────────────────────────
     if (doLog) {

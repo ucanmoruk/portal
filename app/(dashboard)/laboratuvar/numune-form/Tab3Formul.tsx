@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import styles from "@/app/styles/table.module.css";
 import type { FormulRow, LookupData, NkrFormData } from "./numuneFormTypes";
+import { RAPOR_ALANLARI } from "./numuneFormTypes";
 
 function newKey() {
   return `f-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -12,7 +13,7 @@ function newKey() {
 interface Props {
   rows: FormulRow[];
   onChange: (rows: FormulRow[]) => void;
-  form: Pick<NkrFormData, "Urun_Tipi" | "Hedef_Grup" | "UGDTip_ID" | "UGDTip_Kategori">;
+  form: Pick<NkrFormData, "Urun_Tipi" | "Hedef_Grup" | "UGDTip_ID" | "UGDTip_Kategori" | "RaporMetinleri">;
   onFormChange: (u: Partial<NkrFormData>) => void;
   lookup: LookupData;
 }
@@ -222,6 +223,17 @@ export default function Tab3Formul({ rows, onChange, form, onFormChange, lookup 
   const update = (key: string, patch: Partial<FormulRow>) =>
     onChange(rows.map(r => (r.key === key ? { ...r, ...patch } : r)));
   const remove = (key: string) => onChange(rows.filter(r => r.key !== key));
+  const setRaporMetni = (alan: string, value: string) => {
+    onFormChange({ RaporMetinleri: { ...form.RaporMetinleri, [alan]: value } });
+  };
+  const alanEtiket: Record<string, string> = {
+    NormalKullanim: "Normal kullanım",
+    Kullanim: "Kullanım",
+    Uyarilar: "Uyarılar",
+    UrunBilgisi: "Ürün bilgisi",
+    DegerlendirmeSonucu: "Değerlendirme sonucu",
+    EtiketUyarilariB2: "Etiket uyarıları",
+  };
 
   const sel: React.CSSProperties = { width: "100%" };
 
@@ -307,6 +319,36 @@ export default function Tab3Formul({ rows, onChange, form, onFormChange, lookup 
           <button type="button" className={styles.cancelBtn} onClick={() => void matchAll()} disabled={rows.length === 0 || loading}>
             {loading ? "Eşleştiriliyor…" : "Cosing ile eşleştir"}
           </button>
+        </div>
+      </SCard>
+
+      <SCard
+        title="Rapor Metinleri (Hızlı Giriş)"
+        hint="Buradaki metinler kaydedildiğinde ÜGDR rapor ekranındaki Rapor sekmesine otomatik taşınır."
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
+          {RAPOR_ALANLARI.map((alan) => (
+            <div key={alan} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div className={styles.formGroup}>
+                <label>{alanEtiket[alan] || alan}</label>
+                <textarea
+                  rows={3}
+                  style={{ width: "100%", resize: "vertical" }}
+                  value={form.RaporMetinleri[alan] || ""}
+                  onChange={(e) => setRaporMetni(alan, e.target.value)}
+                />
+              </div>
+              <div className={styles.formGroup}>
+                <label>{`${alanEtiket[alan] || alan} (EN)`}</label>
+                <textarea
+                  rows={3}
+                  style={{ width: "100%", resize: "vertical" }}
+                  value={form.RaporMetinleri[`${alan}En`] || ""}
+                  onChange={(e) => setRaporMetni(`${alan}En`, e.target.value)}
+                />
+              </div>
+            </div>
+          ))}
         </div>
       </SCard>
 

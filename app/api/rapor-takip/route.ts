@@ -21,6 +21,13 @@ export async function GET(request: Request) {
 
     const pool = await poolPromise;
 
+    const overrideTableCheck = await pool.request().query(`
+      SELECT 1 AS x
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE LOWER(TABLE_NAME) = LOWER('NKR_RaporDurumOverride')
+    `);
+    const hasOverrideTable = overrideTableCheck.recordset.length > 0;
+
     // Sonuc kolonu var mi?
     const sonucCheck = await pool.request().query(`
       SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
@@ -49,11 +56,11 @@ export async function GET(request: Request) {
       : "";
 
     const raporDurumuFilter = raporDurumu === "Bekliyor"
-      ? "AND (HizmetSayisi = 0 OR SonucluSayisi = 0)"
+      ? "AND EffectiveDurum = N'Bekliyor'"
       : raporDurumu === "Devam Ediyor"
-      ? "AND HizmetSayisi > 0 AND SonucluSayisi > 0 AND SonucluSayisi < HizmetSayisi"
+      ? "AND EffectiveDurum = N'Devam Ediyor'"
       : raporDurumu === "Tamamland\u0131"
-      ? "AND HizmetSayisi > 0 AND SonucluSayisi >= HizmetSayisi"
+      ? "AND (EffectiveDurum = N'Tamamland\u0131' OR EffectiveDurum = N'Tamamlandi')"
       : "";
 
     const sonucCountExpr = hasSonuc
@@ -62,6 +69,15 @@ export async function GET(request: Request) {
            WHERE x2.RaporID = r.NkrID AND s2.RaporFormati = r.RaporFormati
              AND x2.Sonuc IS NOT NULL AND x2.Sonuc != '')`
       : "0";
+
+    const overrideSelectExpr = hasOverrideTable
+      ? `(
+            SELECT MAX(o.Durum)
+            FROM NKR_RaporDurumOverride o
+            WHERE o.NkrID = r.NkrID
+              AND UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(r.RaporFormati, N'Ü', N'U'))
+          )`
+      : `NULL`;
 
     const query = `
       WITH Raporlar AS (
@@ -93,15 +109,28 @@ export async function GET(request: Request) {
              INNER JOIN StokAnalizListesi s2 ON s2.ID = x2.AnalizID
              WHERE x2.RaporID = r.NkrID AND s2.RaporFormati = r.RaporFormati) AS HizmetSayisi,
           ${sonucCountExpr} AS SonucluSayisi,
+          ${overrideSelectExpr} AS OverrideDurum,
           (SELECT MAX(CONVERT(varchar(10), x3.Termin, 23)) FROM NumuneX1 x3
              INNER JOIN StokAnalizListesi s3 ON s3.ID = x3.AnalizID
              WHERE x3.RaporID = r.NkrID AND s3.RaporFormati = r.RaporFormati
                AND x3.Termin IS NOT NULL) AS MaxTermin
         FROM Raporlar r
       ),
+      WithEffectiveDurum AS (
+        SELECT *,
+          COALESCE(
+            OverrideDurum,
+            CASE
+              WHEN HizmetSayisi = 0 OR SonucluSayisi = 0 THEN N'Bekliyor'
+              WHEN SonucluSayisi >= HizmetSayisi THEN N'Tamamlandı'
+              ELSE N'Devam Ediyor'
+            END
+          ) AS EffectiveDurum
+        FROM WithStats
+      ),
       Filtered AS (
         SELECT *
-        FROM WithStats
+        FROM WithEffectiveDurum
         WHERE 1=1
           ${yearFilter}
           ${raporDurumuFilter}
@@ -127,17 +156,18 @@ export async function GET(request: Request) {
 
     const total = result.recordset[0]?.TotalCount ?? 0;
 
-    const data = result.recordset.map(({ TotalCount: _, HizmetSayisi, SonucluSayisi, ...row }) => ({
+    const data = result.recordset.map(({ TotalCount: _, HizmetSayisi, SonucluSayisi, EffectiveDurum, ...row }) => ({
       ...row,
-      RaporDurumu:
-        HizmetSayisi === 0      ? "Bekliyor"
+      RaporDurumu: (EffectiveDurum === "Tamamlandi" ? "Tamamlandı" : EffectiveDurum)
+        ?? (HizmetSayisi === 0      ? "Bekliyor"
         : SonucluSayisi === 0   ? "Bekliyor"
         : SonucluSayisi >= HizmetSayisi ? "Tamamland\u0131"
-        : "Devam Ediyor",
+        : "Devam Ediyor"),
     }));
 
     return Response.json({ data, total, totalPages: Math.ceil(total / limit) });
   } catch (e: any) {
+    console.error("rapor-takip GET error:", e);
     return Response.json({ error: e.message }, { status: 500 });
   }
 }

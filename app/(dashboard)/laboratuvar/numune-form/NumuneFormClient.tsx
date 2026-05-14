@@ -10,7 +10,7 @@ import Tab2Hizmetler from "./Tab2Hizmetler";
 import Tab3Formul from "./Tab3Formul";
 import Tab4Gecmis from "./Tab4Gecmis";
 import type { LookupData, NkrFormData, HizmetRow, FormulRow } from "./numuneFormTypes";
-import { emptyForm } from "./numuneFormTypes";
+import { emptyForm, emptyRaporMetinleri } from "./numuneFormTypes";
 
 const TABS = ["Numune bilgileri", "Hizmetler", "Ürün formülü", "Ürün geçmişi"] as const;
 
@@ -50,7 +50,8 @@ function normalizePartialDate(v: string): string | null {
 function mapApiToForm(
   nkr: Record<string, unknown>,
   detay: Record<string, unknown> | null,
-  fotoPath: string | null
+  fotoPath: string | null,
+  raporMetinleri?: Record<string, string> | null,
 ): NkrFormData {
   return {
     Tarih: dat(nkr.Tarih),
@@ -85,6 +86,7 @@ function mapApiToForm(
     FotoFile: null,
     FotoPreview: "",
     FotoPath: fotoPath || "",
+    RaporMetinleri: { ...emptyRaporMetinleri(), ...(raporMetinleri || {}) },
   };
 }
 
@@ -155,7 +157,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
           setLoadErr(data.error || "Kayıt bulunamadı");
           return;
         }
-        setForm(mapApiToForm(data.nkr, data.detay, data.fotoPath ?? null));
+        setForm(mapApiToForm(data.nkr, data.detay, data.fotoPath ?? null, data.raporMetinleri ?? null));
         setHizmetler(mapHizmetler(data.hizmetler || []));
         setFormul(mapFormul(data.formul || []));
       })
@@ -229,6 +231,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
       DaP: f.DaP || null,
       Noael: f.Noael || null,
     })),
+    raporMetinleri: form.RaporMetinleri,
   });
 
   const handleSave = async () => {

@@ -90,6 +90,29 @@ export async function POST(
         `);
     }
 
+    await pool.request().query(`
+      CREATE TABLE NKR_RaporDurumOverride (
+        NkrID INT NOT NULL,
+        RaporFormati NVARCHAR(100) NOT NULL,
+        Durum NVARCHAR(50) NOT NULL,
+        UpdatedAt DATETIME NOT NULL,
+        PRIMARY KEY (NkrID, RaporFormati)
+      )
+    `).catch(() => undefined);
+
+    await pool.request()
+      .input("nkrId", nkrId)
+      .input("format", "ÜGDR")
+      .input("durum", "Devam Ediyor")
+      .query(`
+        DELETE FROM NKR_RaporDurumOverride
+        WHERE NkrID = @nkrId
+          AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'));
+
+        INSERT INTO NKR_RaporDurumOverride (NkrID, RaporFormati, Durum, UpdatedAt)
+        VALUES (@nkrId, @format, @durum, GETDATE());
+      `);
+
     return Response.json({ message: "Formul kaydedildi", count: rows.length });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });

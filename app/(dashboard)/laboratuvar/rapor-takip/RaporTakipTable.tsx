@@ -384,11 +384,79 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
     window.open(`/api/rapor-takip/yazdir?ids=${ids}`, "_blank");
   };
 
-  const openOnayaGonder = (row: RaporRow) => {
-    window.open(
-      `/api/rapor-takip/yazdir/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}&output=approval`,
-      "_blank",
-    );
+  const toggleCompletion = async (row: RaporRow) => {
+    const nextDurum: RaporRow["RaporDurumu"] = row.RaporDurumu === "Tamamlandı" ? "Bekliyor" : "Tamamlandı";
+    try {
+      const res = await fetch(`/api/rapor-takip/${row.NkrID}/tamamla`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: row.RaporFormati, durum: nextDurum }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Durum guncellenemedi");
+      setRows(prev => prev.map(r =>
+        r.NkrID === row.NkrID && r.RaporFormati === row.RaporFormati
+          ? { ...r, RaporDurumu: nextDurum }
+          : r
+      ));
+      fetchData(page, search, limit, year, raporDurumu, raporTuru, { clearFirst: false });
+    } catch (e: any) {
+      setError(e.message || "Durum guncellenemedi");
+    }
+  };
+
+  const downloadUgdrReport = async (row: RaporRow, mode: "preview" | "pdf") => {
+    const previewWindow = mode === "preview" ? window.open("", "_blank") : null;
+    if (previewWindow) {
+      previewWindow.document.write("<!doctype html><title>Rapor hazirlaniyor</title><body style=\"font-family:system-ui;padding:32px\">UGDR raporu hazirlaniyor...</body>");
+      previewWindow.document.close();
+    }
+
+    try {
+      const [formRes, formulRes] = await Promise.all([
+        fetch(`/api/laboratuvar/ugdr/${row.NkrID}`),
+        fetch(`/api/laboratuvar/ugdr/${row.NkrID}/formul`),
+      ]);
+      if (!formRes.ok) throw new Error("UGDR detay verisi alinamadi");
+      if (!formulRes.ok) throw new Error("UGDR formul verisi alinamadi");
+
+      const form = await formRes.json();
+      const formulResults = await formulRes.json();
+      const firmaAd = form?.FirmaAd || row.FirmaAd || "";
+      const endpointFormat = "pdf";
+
+      const reportRes = await fetch(`/api/urunler/rapor-sablon?format=${endpointFormat}&language=tr&profile=lab`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ form, formulResults, firmaAd, language: "tr", profile: "lab" }),
+      });
+      if (!reportRes.ok) {
+        const errData = await reportRes.json().catch(() => ({}));
+        throw new Error(errData.error || `Rapor olusturulamadi (HTTP ${reportRes.status})`);
+      }
+
+      const blob = await reportRes.blob();
+      const url = URL.createObjectURL(blob);
+
+      if (mode === "preview") {
+        if (previewWindow) previewWindow.location.href = url;
+        else window.open(url, "_blank", "noopener,noreferrer");
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        return;
+      }
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `UGD_Rapor_${row.RaporNo || "rapor"}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.document.open();
+        previewWindow.document.write(`<!doctype html><title>Rapor hatasi</title><body style="font-family:system-ui;padding:32px;color:#991b1b">Rapor olusturulamadi: ${String(e.message || e)}</body>`);
+        previewWindow.document.close();
+      }
+      setError(e.message || "Rapor olusturulamadi");
+    }
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -687,8 +755,8 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                 <div style={{ display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
                   <button
                     type="button"
-                    title="Onay önizlemesini yeni sekmede aç"
-                    onClick={() => openOnayaGonder(row)}
+                    title={row.RaporDurumu === "Tamamlandı" ? "Rapor durumunu Bekliyor yap" : "Rapor durumunu Tamamlandı yap"}
+                    onClick={() => toggleCompletion(row)}
                     style={{
                       border: "1px solid #0b5c8e30",
                       borderRadius: 7,
@@ -701,19 +769,21 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                       whiteSpace: "nowrap",
                     }}
                   >
-                    Onaya Gönder
+                    {row.RaporDurumu === "Tamamlandı" ? "Geri Al" : "Tamamla"}
                   </button>
                 </div>
 
                 {/* DOCX İndir */}
                 <div style={{ display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
                   <IconBtn
-                    title="Word olarak indir (.docx)"
+                    title="PDF indir"
                     color="var(--color-accent)"
-                    onClick={() => window.open(
-                      `/api/rapor-takip/yazdir/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}&output=docx`,
-                      "_blank",
-                    )}
+                    onClick={() => isUgdrFormat(row.RaporFormati)
+                      ? downloadUgdrReport(row, "pdf")
+                      : window.open(
+                          `/api/rapor-takip/yazdir/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}&output=html`,
+                          "_blank",
+                        )}
                   >
                     {/* Word icon */}
                     <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
@@ -725,12 +795,14 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                 {/* PDF Önizleme */}
                 <div style={{ display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
                   <IconBtn
-                    title="PDF önizleme / yazdır"
+                    title="Online Goster"
                     color="#bf5af2"
-                    onClick={() => window.open(
-                      `/api/rapor-takip/yazdir/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}&output=html`,
-                      "_blank",
-                    )}
+                    onClick={() => isUgdrFormat(row.RaporFormati)
+                      ? downloadUgdrReport(row, "preview")
+                      : window.open(
+                          `/api/rapor-takip/yazdir/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}&output=html`,
+                          "_blank",
+                        )}
                   >
                     {/* PDF icon */}
                     <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
