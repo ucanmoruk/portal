@@ -61,3 +61,4 @@ data/*.local.json
 **/inspect_db*.js
 **/verify-auth.js
 gen_onboarding.js
+portal/
