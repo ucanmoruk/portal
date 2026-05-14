@@ -22,6 +22,24 @@ function pickField(row: Record<string, unknown> | null | undefined, ...names: st
   return undefined;
 }
 
+function normalizeToken(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/ı/g, "i")
+    .replace(/İ/g, "i")
+    .replace(/ş/g, "s")
+    .replace(/Ş/g, "s")
+    .replace(/ğ/g, "g")
+    .replace(/Ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/Ü/g, "u")
+    .replace(/ö/g, "o")
+    .replace(/Ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/Ç/g, "c")
+    .replace(/[^a-z0-9_]/g, "");
+}
+
 async function resolveNkrId(pool: any, rawId: string) {
   const result = await pool
     .request()
@@ -40,7 +58,16 @@ async function resolveNkrId(pool: any, rawId: string) {
 }
 
 function findCol(cols: Set<string>, candidates: string[]) {
-  return candidates.find((c) => cols.has(c) || cols.has(c.toLowerCase()) || cols.has(c.toUpperCase())) || null;
+  const normalized = new Map<string, string>();
+  for (const col of cols) normalized.set(normalizeToken(col), col);
+  for (const candidate of candidates) {
+    for (const col of cols) {
+      if (col.toLowerCase() === candidate.toLowerCase()) return col;
+    }
+    const found = normalized.get(normalizeToken(candidate));
+    if (found) return found;
+  }
+  return null;
 }
 
 async function loadUgdDetayUsage(pool: any, tipId: unknown) {
@@ -244,4 +271,3 @@ export async function PUT(
     return Response.json({ error: e.message }, { status: 500 });
   }
 }
-
