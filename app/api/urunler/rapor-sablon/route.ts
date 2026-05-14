@@ -15,6 +15,9 @@ import poolPromise from "@/lib/db";
 import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 import { renderUgdReportHtml } from "@/lib/ugdReportHtml";
 
+type ReportLanguage = "tr" | "en";
+type ReportProfile = "ugd" | "lab";
+
 function sv(v: unknown, fb = ""): string {
   if (v === null || v === undefined) return fb;
   const s = String(v).trim();
@@ -33,16 +36,52 @@ function htmlEsc(v: unknown) {
     .replace(/"/g, "&quot;");
 }
 
-function pdfHeaderTemplate(form: Record<string, unknown>) {
+function pickLanguage(value: unknown): ReportLanguage {
+  return value === "en" ? "en" : "tr";
+}
+
+function pickProfile(value: unknown): ReportProfile {
+  return value === "lab" ? "lab" : "ugd";
+}
+
+function reportHeaderCopy(language: ReportLanguage, profile: ReportProfile) {
+  const trSubtitleByProfile: Record<ReportProfile, string> = {
+    ugd: "(EC) No 1223/2009 Kozmetik Regülasyonu ve 23 Mayıs 2005 tarihli, 25823 sayılı Kozmetik Yönetmeliği uyarınca hazırlanmıştır.",
+    lab: "(EC) No 1223/2009 Kozmetik Regülasyonu ve 23 Mayıs 2005 tarihli, 25823 sayılı Kozmetik Yönetmeliği uyarınca hazırlanmıştır.",
+  };
+  const enSubtitleByProfile: Record<ReportProfile, string> = {
+    ugd: "Prepared pursuant to Regulation (EC) No 1223/2009 and the Turkish Cosmetic Regulation published in the Official Gazette No. 25823 on 23 May 2005.",
+    lab: "Prepared pursuant to Regulation (EC) No 1223/2009 and the Turkish Cosmetic Regulation published in the Official Gazette No. 25823 on 23 May 2005.",
+  };
+
+  if (language === "en") {
+    return {
+      title: "COSMETIC PRODUCT SAFETY ASSESSMENT",
+      subtitle: enSubtitleByProfile[profile],
+      formVersion: "Form / Version No:",
+      docxLang: "en-US",
+    };
+  }
+
+  return {
+    title: "KOZMETİK ÜRÜN GÜVENLİLİK DEĞERLENDİRMESİ",
+    subtitle: trSubtitleByProfile[profile],
+    formVersion: "Form / Versiyon No:",
+    docxLang: "tr-TR",
+  };
+}
+
+function pdfHeaderTemplate(form: Record<string, unknown>, language: ReportLanguage, profile: ReportProfile) {
+  const copy = reportHeaderCopy(language, profile);
   return `
     <div style="box-sizing:border-box;width:100%;margin:0 14mm;padding-bottom:5px;border-bottom:1px solid #1f4788;font-family:Arial,sans-serif;color:#143b6f;">
       <div style="display:flex;justify-content:space-between;gap:12px;width:100%;">
         <div style="min-width:0;">
-          <div style="font-size:9.5pt;font-weight:700;letter-spacing:.02em;">KOZMETİK ÜRÜN GÜVENLİLİK DEĞERLENDİRMESİ</div>
-          <div style="margin-top:2px;font-size:7.4pt;line-height:1.25;color:#000;">(EC) No 1223/2009 Kozmetik Regülasyonu ve 23 Mayıs 2005 tarihli, 25823 sayılı Kozmetik Yönetmeliği uyarınca hazırlanmıştır.</div>
+          <div style="font-size:9.5pt;font-weight:700;letter-spacing:.02em;">${htmlEsc(copy.title)}</div>
+          <div style="margin-top:2px;font-size:7.4pt;line-height:1.25;color:#000;">${htmlEsc(copy.subtitle)}</div>
         </div>
         <div style="width:38mm;text-align:right;font-size:7.5pt;color:#000;flex:none;">
-          <span>Form / Versiyon No:</span>
+          <span>${htmlEsc(copy.formVersion)}</span>
           <strong style="display:block;margin-top:2px;color:#111827;font-size:8.5pt;">${htmlEsc(form.RaporNo) || "—"} / ${htmlEsc(form.Versiyon) || "—"}</strong>
         </div>
       </div>
@@ -61,25 +100,33 @@ interface ChromeLaunchConfig {
   args: string[];
 }
 
-function wordHeaderTemplate(form: Record<string, unknown>) {
+function wordHeaderTemplate(form: Record<string, unknown>, language: ReportLanguage, profile: ReportProfile) {
+  const copy = reportHeaderCopy(language, profile);
   return `
-    <table style="width:100%;border-collapse:collapse;border:none;font-family:Arial,sans-serif;color:#143b6f;">
-      <tr>
-        <td style="border:none;border-bottom:1px solid #1f4788;padding:0 0 5px 0;vertical-align:top;">
-          <div style="font-size:9.5pt;font-weight:700;">KOZMETİK ÜRÜN GÜVENLİLİK DEĞERLENDİRMESİ</div>
-          <div style="margin-top:2px;font-size:7.4pt;line-height:1.25;color:#000;">(EC) No 1223/2009 Kozmetik Regülasyonu ve 23 Mayıs 2005 tarihli, 25823 sayılı Kozmetik Yönetmeliği uyarınca hazırlanmıştır.</div>
-        </td>
-        <td style="width:38mm;border:none;border-bottom:1px solid #1f4788;padding:0 0 5px 8px;vertical-align:top;text-align:right;font-size:7.5pt;color:#000;">
-          <span>Form / Versiyon No:</span>
-          <div style="margin-top:2px;color:#111827;font-size:8.5pt;font-weight:700;">${htmlEsc(form.RaporNo) || "—"} / ${htmlEsc(form.Versiyon) || "—"}</div>
-        </td>
-      </tr>
-    </table>`;
+    <div style="width:100%;border-bottom:1px solid #1f4788;padding-bottom:5px;color:#143b6f;">
+      <div style="font-size:9.5pt;font-weight:700;">${htmlEsc(copy.title)}</div>
+      <div style="margin-top:2px;font-size:7.4pt;line-height:1.25;color:#000;">${htmlEsc(copy.subtitle)}</div>
+      <div style="margin-top:2px;text-align:right;font-size:7.5pt;color:#000;">${htmlEsc(copy.formVersion)} <strong style="color:#111827;font-size:8.5pt;">${htmlEsc(form.RaporNo) || "—"} / ${htmlEsc(form.Versiyon) || "—"}</strong></div>
+    </div>`;
 }
 
-async function renderDocx(html: string, form: Record<string, unknown>) {
-  const docxHtml = html.replace(/<style>[\s\S]*?<\/style>/i, `<style>
-    body { color: #111827; font-family: Arial, sans-serif; font-size: 9.5pt; line-height: 1.45; }
+function pdfFooterTemplate() {
+  return `
+    <div style="box-sizing:border-box;width:100%;padding:0 14mm;text-align:right;font-family:Arial,sans-serif;font-size:8pt;color:#4b5563;">
+      <span class="pageNumber"></span> / <span class="totalPages"></span>
+    </div>`;
+}
+
+function sanitizeDocxHtml(html: string) {
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  const body = bodyMatch ? bodyMatch[1] : html;
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { color: #111827; font-size: 9.5pt; line-height: 1.45; }
     h1 { font-size: 25pt; text-align: center; color: #000000; }
     h2 { margin-top: 8px; padding-bottom: 5px; border-bottom: 2px solid #000000; font-size: 14.5pt; color: #000000; }
     h3 { margin-top: 12px; font-size: 9.5pt; color: #ffffff; padding: 5px; background-color: #003366; }
@@ -97,14 +144,28 @@ async function renderDocx(html: string, form: Record<string, unknown>) {
     .muted { color: #6b7280; font-style: italic; }
     .note { margin: 10px 0; padding: 9px 11px; background: #f8fafc; border-left: 4px solid #94a3b8; }
     .page-break { page-break-before: always; }
-    .image-block { margin: 10px 0; }
-    .image-block img { max-width: 100%; max-height: 95mm; border: 1px solid #d1d5db; }
+    .image-block { box-sizing: border-box; max-width: 100%; margin: 10px 0; overflow: hidden; text-align: center; }
+    .image-block img { width: auto; height: auto; max-width: 100%; max-height: 150mm; display: block; margin: 0 auto; object-fit: contain; border: 1px solid #d1d5db; }
     .image-block figcaption { margin-top: 4px; color: #6b7280; font-size: 8.5pt; }
-  </style>`);
+  </style>
+</head>
+<body>
+${body
+  .replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, "")
+  .replace(/\sstyle="[^"]*(?:mso-|page:\s*WordSection1)[^"]*"/gi, "")
+  .replace(/font-family\s*:[^;"]*;?/gi, "")
+  .replace(/\sonclick="[^"]*"/gi, "")}
+</body>
+</html>`;
+}
+
+async function renderDocx(html: string, form: Record<string, unknown>, language: ReportLanguage, profile: ReportProfile) {
+  const docxHtml = sanitizeDocxHtml(html);
+  const copy = reportHeaderCopy(language, profile);
 
   return HTMLtoDOCX(
     docxHtml,
-    wordHeaderTemplate(form),
+    wordHeaderTemplate(form, language, profile),
     {
       orientation: "portrait",
       pageSize: { width: 11906, height: 16838 },
@@ -125,7 +186,7 @@ async function renderDocx(html: string, form: Record<string, unknown>) {
       headerType: "default",
       footer: false,
       table: { row: { cantSplit: true } },
-      lang: "tr-TR",
+      lang: copy.docxLang,
     },
   );
 }
@@ -266,7 +327,7 @@ async function cleanupWorkDir(workDir: string) {
   }
 }
 
-async function renderPdf(html: string, form: Record<string, unknown>) {
+async function renderPdf(html: string, form: Record<string, unknown>, language: ReportLanguage, profile: ReportProfile) {
   const chromeConfig = await resolveChromeLaunchConfig();
   if (!chromeConfig) {
     throw new Error("PDF oluşturmak için Chrome/Chromium bulunamadı. Vercel için bundled Chromium veya CHROME_PATH/CHROME_EXECUTABLE_PATH ortam değişkeni gerekli.");
@@ -329,8 +390,8 @@ async function renderPdf(html: string, form: Record<string, unknown>) {
     const result = await send("Page.printToPDF", {
       printBackground: true,
       displayHeaderFooter: true,
-      headerTemplate: pdfHeaderTemplate(form),
-      footerTemplate: "<div></div>",
+      headerTemplate: pdfHeaderTemplate(form, language, profile),
+      footerTemplate: pdfFooterTemplate(),
       preferCSSPageSize: false,
       paperWidth: 8.27,
       paperHeight: 11.69,
@@ -352,22 +413,27 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz" }, { status: 401 });
 
-  let form: Record<string, unknown>, formulResults: any[], firmaAd: string;
+  let form: Record<string, unknown>, formulResults: any[], firmaAd: string, bodyLanguage: ReportLanguage, bodyProfile: ReportProfile;
   try {
     const b = await request.json();
     form = b.form || {};
     formulResults = b.formulResults || [];
     firmaAd = b.firmaAd || "";
+    bodyLanguage = pickLanguage(b.language);
+    bodyProfile = pickProfile(b.profile);
   } catch {
     return Response.json({ error: "Geçersiz istek gövdesi" }, { status: 400 });
   }
 
   try {
-    const format = new URL(request.url).searchParams.get("format") || "doc";
+    const searchParams = new URL(request.url).searchParams;
+    const format = searchParams.get("format") || "doc";
+    const language = pickLanguage(searchParams.get("language") || bodyLanguage);
+    const profile = pickProfile(searchParams.get("profile") || bodyProfile);
     const firmaDetails = await getFirmaDetails(form.FirmaID);
     const enrichedFormulResults = await enrichUgdFormulaRows(formulResults);
-    const html = renderUgdReportHtml({ form, formulResults: enrichedFormulResults, firmaAd, ...firmaDetails });
-    const safeName = safeReportName(form.RaporNo);
+    const html = renderUgdReportHtml({ form, formulResults: enrichedFormulResults, firmaAd, ...firmaDetails, language, profile });
+    const safeName = `${safeReportName(form.RaporNo)}${language === "en" ? "_EN" : ""}`;
 
     if (format === "html") {
       return new Response(html, {
@@ -379,7 +445,7 @@ export async function POST(request: Request) {
     }
 
     if (format === "pdf") {
-      const pdf = await renderPdf(html, form);
+      const pdf = await renderPdf(html, form, language, profile);
       return new Response(pdf as unknown as BodyInit, {
         status: 200,
         headers: {
@@ -395,9 +461,11 @@ export async function POST(request: Request) {
         formulResults: enrichedFormulResults,
         firmaAd,
         ...firmaDetails,
+        language,
+        profile,
         output: "word",
       });
-      const docx = await renderDocx(wordHtml, form);
+      const docx = await renderDocx(wordHtml, form, language, profile);
       return new Response(docx as unknown as BodyInit, {
         status: 200,
         headers: {

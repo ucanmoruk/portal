@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         SELECT TOP 15 ID, Ad
         FROM RootTedarikci
         WHERE Durum = N'Aktif'
-          AND Ad LIKE N'%' + @q + '%'
+          AND ISNULL(Ad, '') COLLATE Turkish_CI_AS LIKE N'%' + @q + '%'
         ORDER BY Ad
       `);
 

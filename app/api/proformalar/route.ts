@@ -42,7 +42,12 @@ export async function GET(request: NextRequest) {
   try {
     const pool = await poolPromise;
     const where = search
-      ? `AND (p.ProformaNo LIKE @search OR p.EvrakNo LIKE @search OR f.Ad LIKE @search OR p.Durum LIKE @search)`
+      ? `AND (
+          ISNULL(p.ProformaNo, '') COLLATE Turkish_CI_AS LIKE @search
+          OR ISNULL(p.EvrakNo, '') COLLATE Turkish_CI_AS LIKE @search
+          OR ISNULL(f.Ad, '') COLLATE Turkish_CI_AS LIKE @search
+          OR ISNULL(p.Durum, '') COLLATE Turkish_CI_AS LIKE @search
+        )`
       : "";
 
     const countRes = await pool.request()

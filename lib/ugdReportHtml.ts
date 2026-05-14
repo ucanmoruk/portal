@@ -1,3 +1,6 @@
+import { LAB_UGDR_REPORT_CONTENT_OVERRIDES } from "@/lib/reportContent/labUgdrReportContent";
+import { UGD_REPORT_CONTENT_OVERRIDES } from "@/lib/reportContent/ugdReportContent";
+
 type IngredientRow = {
   inputName?: string;
   inputAmount?: string;
@@ -19,6 +22,9 @@ type IngredientRow = {
   matched?: boolean;
 };
 
+type ReportLanguage = "tr" | "en";
+type ReportProfile = "ugd" | "lab";
+
 type UGDReportInput = {
   form: Record<string, unknown>;
   formulResults: IngredientRow[];
@@ -26,6 +32,8 @@ type UGDReportInput = {
   firmaAdres: string;
   firmaTelefon: string;
   firmaMail: string;
+  language?: ReportLanguage;
+  profile?: ReportProfile;
   output?: "html" | "word";
 };
 
@@ -55,6 +63,153 @@ function todayTr() {
     month: "2-digit",
     year: "numeric",
   }).format(new Date());
+}
+
+function todayByLanguage(language: ReportLanguage) {
+  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date());
+}
+
+function pickLanguage(value: unknown): ReportLanguage {
+  return value === "en" ? "en" : "tr";
+}
+
+function localizedField(form: Record<string, unknown>, field: string, language: ReportLanguage, fallback = "") {
+  if (language === "en") {
+    return text(form[`${field}En`], text(form[field], fallback));
+  }
+  return text(form[field], fallback);
+}
+
+const reportCopy = {
+  tr: {
+    htmlLang: "tr",
+    headerTitle: "KOZMETİK ÜRÜN GÜVENLİLİK DEĞERLENDİRMESİ",
+    headerSubtitle: "(EC) No 1223/2009 Kozmetik Regülasyonu ve 23 Mayıs 2005 tarihli, 25823 sayılı Kozmetik Yönetmeliği uyarınca hazırlanmıştır.",
+    formVersion: "Form / Versiyon No:",
+    printPdf: "Yazdır / PDF",
+    coverTitle: "KOZMETİK ÜRÜN GÜVENLİLİK<br>DEĞERLENDİRMESİ",
+    basis1: "(EC) No 1223/2009 Kozmetik Regülasyonu, 23 Mayıs 2005 tarihli 25823 Resmi Gazete sayılı Kozmetik Yönetmeliği ve ekleri,",
+    basis2: "The SCCS's Notes of Guidance For The Testing of Cosmetics Ingredients and Their Safety Evaluation 12th Revision,",
+    basis3: "Türkiye İlaç ve Tıbbi Cihaz Kurumu Kozmetik Ürünlerde Güvenlilik Değerlendirmesine İlişkin Kılavuz Sürüm 3.0 uyarınca hazırlanmıştır.",
+    toc: "İÇİNDEKİLER",
+    partA: "KISIM A - KOZMETİK ÜRÜN GÜVENLİLİK BİLGİLERİ",
+    partB: "KISIM B - KOZMETİK ÜRÜN GÜVENLİLİK DEĞERLENDİRMESİ",
+    sectionA: "A. KOZMETİK ÜRÜN GÜVENLİLİK BİLGİSİ",
+    productInfo: "Ürün Hakkında Bilgiler",
+    supplier: "Tedarikçi / Dağıtıcı Firma",
+    productName: "Ürün Adı",
+    barcode: "Barkodu",
+    nominalAmount: "Nominal Miktar",
+    productType: "Ürün Tipi",
+    applicationArea: "Uygulama Yeri",
+    targetUsers: "Hedeflenen Kişiler",
+    supplierName: "Tedarikçi / Dağıtıcı Firma",
+    address: "Adresi",
+    phone: "Telefon",
+    email: "E-Mail",
+    use: "Kullanım",
+    warnings: "Uyarılar",
+    appearance: "Görünüm",
+    color: "Renk",
+    odor: "Koku",
+    boilingPoint: "Kaynama Noktası",
+    meltingPoint: "Erime Noktası",
+    density: "Yoğunluk",
+    viscosity: "Viskozite",
+    waterSolubility: "Suda Çözünebilirlik",
+    otherSolubility: "Diğer Çözünebilirlik",
+    reportDate: "Rapor Tarihi",
+    signature: "İmza",
+    evaluator: "Güvenlilik Değerlendiricisinin Adı ve Adresi",
+    qualification: "Güvenlilik Değerlendiricisinin Yeterlilik Kanıtı",
+    statusOk: "UYGUN",
+    statusWarn: "UYGUN DEĞİL",
+    formulaEmpty: "Formül bileşeni girilmedi.",
+    preservativeEmpty: "Koruyucu bileşen kaydı yok.",
+    allergenEmpty: "Alerjen bileşen kaydı yok.",
+    regulationEmpty: "Limit, etiket şartı veya yasaklı madde kaydı yok.",
+    profileEmpty: "Bileşen profili kaydı yok.",
+    physicochemical: "Fizikokimyasal Özellikler",
+    toxicological: "Toksikolojik Özellikler",
+    source: "Kaynak",
+    stabilityImage: "Stabilite görseli",
+    challengeImage: "Challenge test görseli",
+    microbiologyImage: "Mikrobiyoloji görseli",
+    labelImage: "Etiket / ambalaj görseli",
+  },
+  en: {
+    htmlLang: "en",
+    headerTitle: "COSMETIC PRODUCT SAFETY ASSESSMENT",
+    headerSubtitle: "According to Cosmetics Regulation No. 25823, 23 May 2005",
+    formVersion: "Form / Version Nr:",
+    printPdf: "Print / PDF",
+    coverTitle: "COSMETIC PRODUCT SAFETY<br>ASSESSMENT",
+    basis1: "According to REGULATION (EC) No 1223/2009 OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL on Cosmetic Products, Annex 1-Cosmetic Product Safety Report",
+    basis2: "The SCCS's Notes Of Guidance For The Testing Of Cosmetic Ingredients And Their Safety Evaluation 12th Revision,  ",
+    basis3: "Prepared in accordance with the Turkish Medicines and Medical Devices Agency Guideline on Safety Assessment of Cosmetic Products Version 3.0.",
+    toc: "CONTENTS",
+    partA: "PART A - COSMETIC PRODUCT SAFETY INFORMATION",
+    partB: "PART B - COSMETIC PRODUCT SAFETY ASSESSMENT",
+    sectionA: "A. COSMETIC PRODUCT SAFETY INFORMATION",
+    productInfo: "Product Information",
+    supplier: "Supplier / Distributor Company",
+    productName: "Product Name",
+    barcode: "Barcode",
+    nominalAmount: "Nominal Amount",
+    productType: "Product Type",
+    applicationArea: "Application Area",
+    targetUsers: "Target Users",
+    supplierName: "Supplier / Distributor Company",
+    address: "Address",
+    phone: "Phone",
+    email: "E-Mail",
+    use: "Use",
+    warnings: "Warnings",
+    appearance: "Appearance",
+    color: "Color",
+    odor: "Odor",
+    boilingPoint: "Boiling Point",
+    meltingPoint: "Melting Point",
+    density: "Density",
+    viscosity: "Viscosity",
+    waterSolubility: "Water Solubility",
+    otherSolubility: "Other Solubility",
+    reportDate: "Report Date",
+    signature: "Signature",
+    evaluator: "Name and Address of the Safety Assessor",
+    qualification: "Proof of Qualification of the Safety Assessor",
+    statusOk: "COMPLIANT",
+    statusWarn: "NOT COMPLIANT",
+    formulaEmpty: "No formula ingredient was entered.",
+    preservativeEmpty: "No preservative ingredient record.",
+    allergenEmpty: "No allergen ingredient record.",
+    regulationEmpty: "No limit, labelling condition, or prohibited substance record.",
+    profileEmpty: "No ingredient profile record.",
+    physicochemical: "Physicochemical Properties",
+    toxicological: "Toxicological Properties",
+    source: "Source",
+    stabilityImage: "Stability image",
+    challengeImage: "Challenge test image",
+    microbiologyImage: "Microbiology image",
+    labelImage: "Label / packaging image",
+  },
+} as const;
+
+function mergeReportCopy(language: ReportLanguage, profile: ReportProfile) {
+  const baseCopy = reportCopy[language];
+  const overrides =
+    profile === "lab"
+      ? LAB_UGDR_REPORT_CONTENT_OVERRIDES[language]
+      : UGD_REPORT_CONTENT_OVERRIDES[language];
+
+  return {
+    ...baseCopy,
+    ...(overrides || {}),
+  };
 }
 
 function calcSED(a: number, c: number, dap: number) {
@@ -117,9 +272,9 @@ function infoTable(rows: [string, unknown][]) {
   </table>`;
 }
 
-function formulaRows(rows: IngredientRow[], a: number) {
+function formulaRows(rows: IngredientRow[], a: number, copy: typeof reportCopy[ReportLanguage]) {
   if (!rows.length) {
-    return `<tr><td colspan="12" class="muted">Formül bileşeni girilmedi.</td></tr>`;
+    return `<tr><td colspan="12" class="muted">${esc(copy.formulaEmpty)}</td></tr>`;
   }
 
   return rows.map((row) => {
@@ -141,15 +296,15 @@ function formulaRows(rows: IngredientRow[], a: number) {
       <td class="num">${fmtSED(sed)}</td>
       <td class="num">${esc(row.noael, empty)}</td>
       <td class="num">${fmtMOS(mos)}</td>
-      <td class="${ok ? "ok" : "warn"}">${ok ? "UYGUN" : "UYGUN DEĞİL"}</td>
+      <td class="${ok ? "ok" : "warn"}">${ok ? esc(copy.statusOk) : esc(copy.statusWarn)}</td>
     </tr>`;
   }).join("");
 }
 
-function preservativeRows(rows: IngredientRow[]) {
+function preservativeRows(rows: IngredientRow[], copy: typeof reportCopy[ReportLanguage]) {
   const filtered = rows.filter((row) => text(row.Regulation).toLocaleLowerCase("tr-TR").includes("v"));
   const source = filtered.length ? filtered : rows;
-  if (!source.length) return `<tr><td colspan="7" class="muted">Koruyucu bileşen kaydı yok.</td></tr>`;
+  if (!source.length) return `<tr><td colspan="7" class="muted">${esc(copy.preservativeEmpty)}</td></tr>`;
 
   return source.map((row) => {
     const concentration = parseFloat(text(row.inputAmount, "0").replace(",", ".")) || 0;
@@ -168,13 +323,13 @@ function preservativeRows(rows: IngredientRow[]) {
   }).join("");
 }
 
-function allergenRows(rows: IngredientRow[], a: number) {
+function allergenRows(rows: IngredientRow[], a: number, copy: typeof reportCopy[ReportLanguage]) {
   const filtered = rows.filter((row) => {
     const haystack = `${text(row.Functions)} ${text(row.Regulation)} ${text(row.INCIName)}`.toLocaleLowerCase("tr-TR");
     return haystack.includes("fragrance") || haystack.includes("parfum") || haystack.includes("aroma") || haystack.includes("allergen");
   });
   const source = filtered.length ? filtered : rows;
-  if (!source.length) return `<tr><td colspan="8" class="muted">Alerjen bileşen kaydı yok.</td></tr>`;
+  if (!source.length) return `<tr><td colspan="8" class="muted">${esc(copy.allergenEmpty)}</td></tr>`;
 
   return source.map((row) => {
     const concentration = parseFloat(text(row.inputAmount, "0").replace(",", ".")) || 0;
@@ -194,9 +349,9 @@ function allergenRows(rows: IngredientRow[], a: number) {
   }).join("");
 }
 
-function regulationRows(rows: IngredientRow[]) {
+function regulationRows(rows: IngredientRow[], copy: typeof reportCopy[ReportLanguage]) {
   const regulatedRows = rows.filter(hasRegulatoryRestriction);
-  if (!regulatedRows.length) return `<tr><td colspan="8" class="muted">Limit, etiket şartı veya yasaklı madde kaydı yok.</td></tr>`;
+  if (!regulatedRows.length) return `<tr><td colspan="8" class="muted">${esc(copy.regulationEmpty)}</td></tr>`;
 
   return regulatedRows.map((row) => {
     const banned = isAnnexII(row);
@@ -208,20 +363,20 @@ function regulationRows(rows: IngredientRow[]) {
       <td>${esc(row.Diger, empty)}</td>
       <td>${esc(row.Etiket, empty)}</td>
       <td class="num">${esc(row.inputAmount, "0")}</td>
-      <td class="${banned ? "warn" : "ok"}">${banned ? "UYGUN DEĞİL" : "UYGUN"}</td>
+      <td class="${banned ? "warn" : "ok"}">${banned ? esc(copy.statusWarn) : esc(copy.statusOk)}</td>
     </tr>`;
   }).join("");
 }
 
-function ingredientProfiles(rows: IngredientRow[]) {
-  if (!rows.length) return `<p class="muted">Bileşen profili kaydı yok.</p>`;
+function ingredientProfiles(rows: IngredientRow[], copy: typeof reportCopy[ReportLanguage]) {
+  if (!rows.length) return `<p class="muted">${esc(copy.profileEmpty)}</p>`;
 
   return rows.map((row) => `<section class="ingredient-profile">
     <h3>${esc(row.INCIName || row.inputName, empty)}</h3>
     ${infoTable([
-      ["Fizikokimyasal Özellikler", row.Fizikokimya],
-      ["Toksikolojik Özellikler", row.Toksikoloji],
-      ["Kaynak", row.Kaynak],
+      [copy.physicochemical, row.Fizikokimya],
+      [copy.toxicological, row.Toksikoloji],
+      [copy.source, row.Kaynak],
     ])}
   </section>`).join("");
 }
@@ -229,29 +384,38 @@ function ingredientProfiles(rows: IngredientRow[]) {
 export function renderUgdReportHtml(input: UGDReportInput) {
   const { form: f, formulResults, firmaAd, firmaAdres, firmaTelefon, firmaMail } = input;
   const isWordOutput = input.output === "word";
+  const language = pickLanguage(input.language);
+  const profile: ReportProfile = input.profile === "lab" ? "lab" : "ugd";
+  const copy = mergeReportCopy(language, profile);
   const a = parseFloat(text(f.A, "0").replace(",", ".")) || 0;
-  const maruziyet = text(f.MaruziyetAciklama);
+  const maruziyet = localizedField(f, "MaruziyetAciklama", language);
+  const productName = localizedField(f, "Urun", language, empty);
+  const useText = localizedField(f, "Kullanim", language, empty);
+  const warningsText = localizedField(f, "Uyarilar", language, empty);
+  const evaluatorName = localizedField(f, "SorumluAd", language, empty);
+  const evaluatorAddress = localizedField(f, "SorumluAdres", language, empty);
+  const evaluatorQualification = localizedField(f, "SorumluKanit", language, empty);
   const title = `UGD_Rapor_${text(f.RaporNo, "rapor")}`;
   const reportHeader = `
     <div class="report-header">
       <div>
-        <div class="report-header-title">KOZMETİK ÜRÜN GÜVENLİLİK DEĞERLENDİRMESİ</div>
-        <div class="report-header-subtitle">(EC) No 1223/2009 Kozmetik Regülasyonu ve 23 Mayıs 2005 tarihli, 25823 sayılı Kozmetik Yönetmeliği uyarınca hazırlanmıştır.</div>
+        <div class="report-header-title">${esc(copy.headerTitle)}</div>
+        <div class="report-header-subtitle">${esc(copy.headerSubtitle)}</div>
       </div>
       <div class="report-header-meta">
-        <span>Form / Versiyon No:</span>
+        <span>${esc(copy.formVersion)}</span>
         <strong>${esc(f.RaporNo, empty)} / ${esc(f.Versiyon, empty)}</strong>
       </div>
     </div>`;
   const screenHeader = isWordOutput ? "" : `<div class="screen-page-header">${reportHeader}</div>`;
 
   return `<!doctype html>
-<html lang="tr">
+<html lang="${copy.htmlLang}">
 <head>
   <meta charset="utf-8">
   <title>${esc(title)}</title>
   <style>
-    @page WordSection1 { size: A4; margin: 25mm 14mm 18mm 14mm; mso-header: ugdWordHeader; }
+    @page WordSection1 { size: A4; margin: 20mm 14mm 18mm 14mm; mso-header: ugdWordHeader; }
     @page { size: A4; margin: 20mm 14mm 18mm 14mm; }
     * { box-sizing: border-box; }
     body { margin: 0; color: #111827; font-family: Microsoft Sans Serif, Tahoma, sans-serif; font-size: 9.5pt; line-height: 1.48; }
@@ -260,7 +424,7 @@ export function renderUgdReportHtml(input: UGDReportInput) {
     .screen-page-header { display: none; }
     .report-header { width: 100%; border-bottom: 1px solid #1f4788; padding-bottom: 5px; display: table; table-layout: fixed; color: #143b6f; }
     .report-header > div { display: table-cell; vertical-align: top; }
-    .report-header-title { font-size: 9.5pt; font-weight: 700; }
+    .report-header-title { font-size: 9.5pt; font-weight: 700; letter-spacing: .02em; }
     .report-header-subtitle { margin-top: 2px; color: #000000; font-size: 7.4pt; line-height: 1.25; }
     .report-header-meta { width: 38mm; text-align: right; font-size: 7.5pt; color: #000000; }
     .report-header-meta strong { display: block; margin-top: 2px; color: #111827; font-size: 8.5pt; }
@@ -291,8 +455,8 @@ export function renderUgdReportHtml(input: UGDReportInput) {
     .muted { color: #6b7280; font-style: italic; }
     .note { margin: 10px 0; padding: 9px 11px; background: #f8fafc; border-left: 4px solid #94a3b8; }
     .page-break { page-break-before: always; }
-    .image-block { margin: 10px 0; page-break-inside: avoid; }
-    .image-block img { max-width: 100%; max-height: 95mm; display: block; border: 1px solid #d1d5db; }
+    .image-block { box-sizing: border-box; max-width: 100%; margin: 10px 0; overflow: hidden; text-align: center; page-break-inside: avoid; }
+    .image-block img { width: auto; height: auto; max-width: 100%; max-height: 150mm; display: block; margin: 0 auto; object-fit: contain; border: 1px solid #d1d5db; }
     .image-block figcaption { margin-top: 4px; color: #6b7280; font-size: 8.5pt; }
     .signature { height: 34mm; border-bottom: 1px solid #111827; width: 70mm; margin-top: 16px; }
     .print-actions { position: fixed; top: 12px; right: 12px; z-index: 20; }
@@ -312,16 +476,16 @@ export function renderUgdReportHtml(input: UGDReportInput) {
   </style>
 </head>
 <body>
-  ${isWordOutput ? "" : `<div class="print-actions"><button onclick="window.print()">Yazdır / PDF</button></div>`}
+  ${isWordOutput ? "" : `<div class="print-actions"><button onclick="window.print()">${esc(copy.printPdf)}</button></div>`}
   ${isWordOutput ? "" : `<div class="pdf-header">${reportHeader}</div>`}
   ${isWordOutput ? "" : `<!--[if gte mso 9]><div style="mso-element:header" id="ugdWordHeader">${reportHeader}</div><![endif]-->`}
 
   <div class="WordSection1">
   <section class="cover">
     ${screenHeader}
-    <h1>KOZMETİK ÜRÜN GÜVENLİLİK<br>DEĞERLENDİRMESİ</h1>
+    <h1>${copy.coverTitle}</h1>
     <div class="rule"></div>
-    <div class="product">${esc(f.Urun, empty)}</div>
+    <div class="product">${esc(productName, empty)}</div>
     <div class="company">${esc(firmaAd, empty)}</div>
     <p class="basis" style="border: 1px solid #add8e6; 
     width: 500px; 
@@ -329,26 +493,26 @@ export function renderUgdReportHtml(input: UGDReportInput) {
     padding: 15px; 
     text-align: center; 
     line-height: 1.5;
-    word-wrap: break-word;">(EC) No 1223/2009 Kozmetik Regülasyonu, 23 Mayıs 2005 tarihli 25823 Resmi Gazete sayılı Kozmetik Yönetmeliği ve ekleri,</p>
+    word-wrap: break-word;">${esc(copy.basis1)}</p>
     <p class="basis" style="border: 1px solid #add8e6; 
     width: 500px; 
     margin-bottom: 2px; 
     padding: 15px; 
     text-align: center; 
     line-height: 1.5;
-    word-wrap: break-word;">The SCCS's Notes of Guidance For The Testing of Cosmetics Ingerients and Their Safety Evaluation 12th Revision,</p>
+    word-wrap: break-word;">${esc(copy.basis2)}</p>
     <p class="basis" style="border: 1px solid #add8e6; 
     width: 500px; 
     padding: 15px; 
     text-align: center; 
     line-height: 1.5;
-    word-wrap: break-word;">Türkiye İlaç ve Tıbbi Cihaz Kurumu Kozmetik Ürünlerde Güvenlilik Değerlendirmesine İlişkin Kılavuz Sürüm 3.0 uyarınca hazırlanmıştır.</p>
+    word-wrap: break-word;">${esc(copy.basis3)}</p>
   </section>
 
   <section class="toc">
     ${screenHeader}
-    <h2>İÇİNDEKİLER</h2>
-    <div class="part-title">KISIM A - KOZMETİK ÜRÜN GÜVENLİLİK BİLGİLERİ</div>
+    <h2>${esc(copy.toc)}</h2>
+    <div class="part-title">${esc(copy.partA)}</div>
     <p>A.1. Kozmetik ürünün kantitatif ve kalitatif bileşimi</p>
     <p>A.2. Kozmetik ürünün fiziksel/kimyasal özellikleri ve stabilitesi</p>
     <p>A.3. Mikrobiyolojik kalite</p>
@@ -359,7 +523,7 @@ export function renderUgdReportHtml(input: UGDReportInput) {
     <p>A.8. Formülde yer alan maddelerin toksikolojik profili</p>
     <p>A.9. İstenmeyen etkiler ve ciddi istenmeyen etkiler</p>
     <p>A.10. Kozmetik ürün bilgisi</p>
-    <div class="part-title">KISIM B - KOZMETİK ÜRÜN GÜVENLİLİK DEĞERLENDİRMESİ</div>
+    <div class="part-title">${esc(copy.partB)}</div>
     <p>B.1. Değerlendirme sonucu</p>
     <p>B.2. Etikette yer alan uyarılar ve kullanım talimatları</p>
     <p>B.3. Gerekçelendirme</p>
@@ -368,23 +532,23 @@ export function renderUgdReportHtml(input: UGDReportInput) {
 
   <section>
     ${screenHeader}
-    <h2>A. KOZMETİK ÜRÜN GÜVENLİLİK BİLGİSİ</h2>
-    <h3>Ürün Hakkında Bilgiler</h3>
+    <h2>${esc(copy.sectionA)}</h2>
+    <h3>${esc(copy.productInfo)}</h3>
     ${infoTable([
-      ["Ürün Adı", f.Urun],
-      ["Barkodu", f.Barkod],
-      ["Nominal Miktar", f.Miktar],
-      ["Ürün Tipi", f.Tip1],
-      ["Uygulama Yeri", f.Uygulama],
-      ["Hedeflenen Kişiler", f.Hedef],
+      [copy.productName, productName],
+      [copy.barcode, f.Barkod],
+      [copy.nominalAmount, f.Miktar],
+      [copy.productType, f.Tip1],
+      [copy.applicationArea, f.Uygulama],
+      [copy.targetUsers, f.Hedef],
     ])}
 
-     <h3>Tedarikçi / Dağıtıcı Firma</h3>
+     <h3>${esc(copy.supplier)}</h3>
     ${infoTable([
-      ["Tedarikçi / Dağıtıcı Firma", firmaAd],
-      ["Adresi", firmaAdres],
-      ["Telefon", firmaTelefon],
-      ["E-Mail", firmaMail],
+      [copy.supplierName, firmaAd],
+      [copy.address, firmaAdres],
+      [copy.phone, firmaTelefon],
+      [copy.email, firmaMail],
     ])}
 
     <h3>A.1. Kozmetik Ürünün Kalitatif ve Kantitatif Bileşimi</h3>
@@ -395,16 +559,16 @@ export function renderUgdReportHtml(input: UGDReportInput) {
     <p>Madde veya karışımlara ait fiziksel ve kimyasal özellikler Ek-3 bölümünde detaylı olarak paylaşılmıştır.</p>
     <div style="font-weight: bold;">b. Bitmiş kozmetik ürününün fiziksel ve kimyasal özellikleri</div>
     ${infoTable([
-      ["Görünüm", f.Gorunum],
-      ["Renk", f.Renk],
-      ["Koku", f.Koku],
-      ["pH", f.PH ?? f.pH],
-      ["Kaynama Noktası", f.Kaynama],
-      ["Erime Noktası", f.Erime],
-      ["Yoğunluk", f.Yogunluk],
-      ["Viskozite", f.Viskozite],
-      ["Suda Çözünebilirlik", f.SudaCozunebilirlik],
-      ["Diğer Çözünebilirlik", f.DigerCozunebilirlik],
+      [copy.appearance, localizedField(f, "Gorunum", language)],
+      [copy.color, localizedField(f, "Renk", language)],
+      [copy.odor, localizedField(f, "Koku", language)],
+      ["pH", localizedField(f, "PH", language, text(f.pH))],
+      [copy.boilingPoint, localizedField(f, "Kaynama", language)],
+      [copy.meltingPoint, localizedField(f, "Erime", language)],
+      [copy.density, localizedField(f, "Yogunluk", language)],
+      [copy.viscosity, localizedField(f, "Viskozite", language)],
+      [copy.waterSolubility, localizedField(f, "SudaCozunebilirlik", language)],
+      [copy.otherSolubility, localizedField(f, "DigerCozunebilirlik", language)],
     ])}
 
     <div style="page-break-after: always;"></div> 
@@ -412,7 +576,7 @@ export function renderUgdReportHtml(input: UGDReportInput) {
     <div style="font-weight: bold;">c. Kozmetik Ürünün Stabilitesi</div>
     <p>Piyasada satılan bir kozmetik ürün, normal veya öngörülebilir kullanım koşulları altında kullanıldığında insan sağlığı için güvenli olmalıdır. Bitmiş ürün üzerinde stabilite çalışmaları yapılmıştır. Ürünün görünümü, rengi, kokusu, pH ve ağırlık değerleri farklı sıcaklık koşulları altında düzenli aralıklarla kontrol edilir. Stabilite test sonuçları ürün bilgi dosyasına eklenmektedir.</p>
     <p>${nl2br(f.Stabilite)}</p>
-    ${imageBlock(f.StabiliteGorsel, "Stabilite görseli")}
+    ${imageBlock(f.StabiliteGorsel, copy.stabilityImage)}
 
 
 <div style="font-weight: bold; margin-bottom: 2px">(1) Stabilite testinde kullanılan ürünün bileşiminin piyasada fiilen bulunan ürünle aynı olduğunun kanıtı</div>
@@ -424,7 +588,7 @@ export function renderUgdReportHtml(input: UGDReportInput) {
 <p>Test sonuçlarına göre, üretici bu ürünün korunmasının etkinliğini challenge testi yaparak deneysel olarak garanti eder.</p>
 
    <p>${nl2br(f.KoruyucuEtkinlik)}</p>
-    ${imageBlock(f.KoruyucuEtkinlikGorsel, "Challenge test görseli")}
+    ${imageBlock(f.KoruyucuEtkinlikGorsel, copy.challengeImage)}
 
 <div style="font-weight: bold; margin-bottom: 2px">(3) Uygulanabilir olduğunda, açıldıktan sonra kullanım süresi ve gerekçesi</div>
 <p>PAO (Açıldıktan sonraki süre) tahmini, mikrobiyal kontaminasyona karşı direnç, ambalaj türü, kullanım süresi (hacim/doz/sıklık), uygulama alanı ve kozmetik ürüne yönelik popülasyon tipi gibi çeşitli faktörlerin değerlendirilmesiyle yapılır. Bu faktörlerin birlikte değerlendirilmesinden sonra, ürünün PAO'su 12 ay şeklinde tahmin edilebilir.
@@ -479,7 +643,7 @@ export function renderUgdReportHtml(input: UGDReportInput) {
 <p>Son ürün için yapılan mikrobiyolojik analiz sonuçları ürün güvenlik dosyasında sunulmuştur. Sonuçlar mikrobiyolojik kalite kontrol limitlerine uygundur. Mikrobiyolojik kontaminasyon riski taşımamaktadır. Mikrobiyolojik olarak ürün kategori 2’dedir. </p>
 
 <p>${nl2br(f.Mikrobiyoloji)}</p>
-    ${imageBlock(f.MikrobiyolojiGorsel, "Mikrobiyoloji görseli")}
+    ${imageBlock(f.MikrobiyolojiGorsel, copy.microbiologyImage)}
 
     <h3>A.4. Safsızlıklar, Kalıntılar, Ambalaj Materyali Bilgisi</h3>
     
@@ -499,10 +663,10 @@ export function renderUgdReportHtml(input: UGDReportInput) {
 
     <h3>A.5. Normal ve Makul Olarak Öngörülebilir Kullanım</h3>
     ${infoTable([
-      ["Kullanım", f.Kullanim],
-      ["Uyarılar", f.Uyarilar],
+      [copy.use, useText],
+      [copy.warnings, warningsText],
     ])}
-    ${imageBlock(f.EtiketGorsel, "Etiket / ambalaj görseli")}
+    ${imageBlock(f.EtiketGorsel, copy.labelImage)}
 
     <h3>A.6. Kozmetik Ürüne Maruziyet</h3>
     ${infoTable([
@@ -709,10 +873,10 @@ ${infoTable([
     
     <h3>B.4. Güvenlilik Değerlendirme Sorumlusu ile İlgili Bilgiler ve Kısım B'nin Onayı</h3>
     ${infoTable([
-      ["Güvenlilik Değerlendiricisinin Adı ve Adresi", `${text(f.SorumluAd, empty)}\n${text(f.SorumluAdres, empty)}`],
-      ["Güvenlilik Değerlendiricisinin Yeterlilik Kanıtı", f.SorumluKanit],
-      ["Rapor Tarihi", todayTr()],
-      ["İmza", '<div class="signature"></div>']
+      [copy.evaluator, `${text(evaluatorName, empty)}\n${text(evaluatorAddress, empty)}`],
+      [copy.qualification, evaluatorQualification],
+      [copy.reportDate, todayByLanguage(language)],
+      [copy.signature, '<div class="signature"></div>']
     ])}
     
   </section>
@@ -722,17 +886,17 @@ ${infoTable([
     <h2>EK-1 KOZMETİK ÜRÜNÜN FORMÜLASYON ve DEĞERLENDİRMESİ</h2>
     <table class="compact">
       <thead><tr><th>Bileşen</th><th>CAS No</th><th>EC No</th><th>Fonksiyon</th><th>Yönetmelik</th><th>C (%)</th><th>A</th><th>Dap</th><th>SED</th><th>NO(A)EL</th><th>MOS</th><th>Değerlendirme</th></tr></thead>
-      <tbody>${formulaRows(formulResults, a)}</tbody>
+      <tbody>${formulaRows(formulResults, a, copy)}</tbody>
     </table>
     <h3>Üründe Kullanılan Koruyucu Bileşenler</h3>
     <table class="compact">
       <thead><tr><th>INCI Name</th><th>CAS Number</th><th>Bitmiş Üründeki Max Konsantrasyon (%)</th><th>A (Koruyucular İçin)</th><th>SED</th><th>NO(A)EL</th><th>MOS</th></tr></thead>
-      <tbody>${preservativeRows(formulResults)}</tbody>
+      <tbody>${preservativeRows(formulResults, copy)}</tbody>
     </table>
     <h3>Alerjen Bileşenlerin Bilgisi</h3>
     <table class="compact">
       <thead><tr><th>INCI Name</th><th>CAS Number</th><th>EINECS/ELICS Numbers</th><th>Konsantrasyon (%)</th><th>A</th><th>SED</th><th>NO(A)EL</th><th>MOS</th></tr></thead>
-      <tbody>${allergenRows(formulResults, a)}</tbody>
+      <tbody>${allergenRows(formulResults, a, copy)}</tbody>
     </table>
 <p class="muted">*C: Konsantrasyon. Üst değer üzerinden değerlendirmeye alınmıştır. </p>
 <p class="muted">*N/A: Hammaddenin NOAEL değerine ulaşılamadığından MoS hesabı yapılamamıştır. Hammadde yasaklı ürünler listesinde değildir ve limit dahilinde kullanılmıştır. Dolayısıyla uygun olarak değerlendirilmiştir.</p>
@@ -742,12 +906,12 @@ ${infoTable([
     <h2>EK-2 KOZMETİK YÖNETMELİK EKLERİNE UYGUNLUK KONTROLÜ</h2>
     <table class="compact">
       <thead><tr><th>Ek No</th><th>Maddenin INCI Adı</th><th>Ürün Tipi, Vücut Bölgeleri</th><th>Kullanıma Hazır Ürünlerdeki Maksimum Konsantrasyon</th><th>Diğer</th><th>Etiket Üzerinde Belirtilmesi Gereken Kullanma Talimatı ve Tedbirler</th><th>Bitmiş Üründeki Konsantrasyonu</th><th>Değerlendirme</th></tr></thead>
-      <tbody>${regulationRows(formulResults)}</tbody>
+      <tbody>${regulationRows(formulResults, copy)}</tbody>
     </table>
 <div style="page-break-after: always;"></div>
 
     <h2>EK-3 BİLEŞENLERİN FİZİKOKİMYASAL VE TOKSİKOLOJİK ÖZELLİKLERİ</h2>
-    ${ingredientProfiles(formulResults)}
+    ${ingredientProfiles(formulResults, copy)}
 <div style="page-break-after: always;"></div>
     <h2>KAYNAKLAR</h2>
     <ol>

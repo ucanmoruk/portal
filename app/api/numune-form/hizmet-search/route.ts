@@ -21,8 +21,8 @@ export async function GET(request: NextRequest) {
         FROM StokAnalizListesi
         WHERE Durumu = 'Aktif'
           AND (
-            Kod  LIKE N'%' + @q + '%'
-            OR Ad LIKE N'%' + @q + '%'
+            ISNULL(Kod, '') COLLATE Turkish_CI_AS LIKE N'%' + @q + '%'
+            OR ISNULL(Ad, '') COLLATE Turkish_CI_AS LIKE N'%' + @q + '%'
           )
         ORDER BY Kod
       `);

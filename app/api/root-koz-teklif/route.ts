@@ -128,7 +128,12 @@ export async function GET(req: NextRequest) {
   const offset = (page - 1) * limit;
 
   const whereClause = search
-    ? `AND (t.MusteriAdi LIKE @s OR t.MarkaAdi LIKE @s OR t.TeklifNo LIKE @s OR t.UrunKategorisi LIKE @s)`
+    ? `AND (
+        ISNULL(t.MusteriAdi, '') COLLATE Turkish_CI_AS LIKE @s
+        OR ISNULL(t.MarkaAdi, '') COLLATE Turkish_CI_AS LIKE @s
+        OR ISNULL(t.TeklifNo, '') COLLATE Turkish_CI_AS LIKE @s
+        OR ISNULL(t.UrunKategorisi, '') COLLATE Turkish_CI_AS LIKE @s
+      )`
     : "";
 
   const countRes = await pool.request()

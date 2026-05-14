@@ -45,10 +45,10 @@ export async function GET(request: NextRequest) {
       // SQL Server default collation allows case insensitivity but I/i logic can be tricky.
       // COLLATE Turkish_CI_AS is used for exact Tr logic if available.
       whereClauses.push(`(
-        INCIName COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
-        OR Cas LIKE N'%' + @search + '%'
-        OR EC LIKE N'%' + @search + '%'
-        OR Functions COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        ISNULL(INCIName, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        OR ISNULL(Cas, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        OR ISNULL(EC, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        OR ISNULL(Functions, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
       )`);
     }
 

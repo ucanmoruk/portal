@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import styles from "@/app/styles/table.module.css";
 
 // ── Tipler ──────────────────────────────────────────────────────────────────
@@ -43,6 +44,7 @@ interface LocalEdit {
 
 // Accordion için benzersiz anahtar
 const rowKey = (r: RaporRow) => `${r.NkrID}__${r.RaporFormati}`;
+const isUgdrFormat = (format: string) => ["ÜGDR", "UGDR", "ÜGD", "UGD"].includes(format.toLocaleUpperCase("tr-TR"));
 
 // ── Küçük bileşenler ─────────────────────────────────────────────────────────
 
@@ -67,6 +69,10 @@ function FormatBadge({ format }: { format: string }) {
     "Challenge": { bg: "#bf5af218", fg: "#8944ab" },
     "Mikrobiyoloji": { bg: "#34c75918", fg: "#248a3d" },
     "Kimya":     { bg: "#ff950018", fg: "#c06800" },
+    "Stabilite": { bg: "#ff950018", fg: "#c06800" },
+    "Dermatoloji": { bg: "#34c75918", fg: "#248a3d" },
+    "ÜGDR": { bg: "#1f478818", fg: "#1f4788" },
+    "UGDR": { bg: "#1f478818", fg: "#1f4788" },
   };
   const c = colors[format] ?? { bg: "#8e8e9318", fg: "#636366" };
   return (
@@ -99,7 +105,8 @@ function IconBtn({
 
 // ── Ana bileşen ───────────────────────────────────────────────────────────────
 
-export default function RaporTakipTable() {
+export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: string } = {}) {
+  const router = useRouter();
   const [rows, setRows]           = useState<RaporRow[]>([]);
   const [total, setTotal]         = useState(0);
   const [page, setPage]           = useState(1);
@@ -108,8 +115,9 @@ export default function RaporTakipTable() {
   const [search, setSearch]       = useState("");
   const [year, setYear]           = useState("2026");
   const [raporDurumu, setRaporDurumu] = useState("Bekliyor");
-  const [raporTuru, setRaporTuru] = useState("");
-  const raporTurleri = ["Genel", "Challenge", "Stabilite", "Dermatoloji"];
+  const [raporTuru, setRaporTuru] = useState(fixedRaporTuru ?? "");
+  const raporTurleri = ["Genel", "Challenge", "Stabilite", "Dermatoloji", "ÜGDR"];
+  const raporTabs = ["", ...raporTurleri];
   const [loading, setLoading]     = useState(true);
   const [transitioning, setTrans] = useState(false);
   const [error, setError]         = useState("");
@@ -204,6 +212,11 @@ export default function RaporTakipTable() {
 
   // ── Accordion ──────────────────────────────────────────────────────────────
   const toggleRow = async (row: RaporRow) => {
+    if (isUgdrFormat(row.RaporFormati)) {
+      router.push(`/laboratuvar/rapor-takip/ugdr/${row.NkrID}`);
+      return;
+    }
+
     const key = rowKey(row);
     const wasOpen = openKeys.has(key);
 
@@ -380,6 +393,50 @@ export default function RaporTakipTable() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
+      {!fixedRaporTuru && (
+        <div style={{
+          display: "flex",
+          gap: 6,
+          padding: 4,
+          marginBottom: 14,
+          border: "1px solid var(--color-border-light)",
+          borderRadius: 10,
+          background: "var(--color-surface)",
+          width: "fit-content",
+          maxWidth: "100%",
+          overflowX: "auto",
+        }}>
+          {raporTabs.map((tab) => {
+            const active = raporTuru === tab;
+            return (
+              <button
+                key={tab || "all"}
+                type="button"
+                onClick={() => {
+                  setRaporTuru(tab);
+                  setPage(1);
+                  setSelectedIds(new Set());
+                  setOpenKeys(new Set());
+                }}
+                style={{
+                  border: "none",
+                  borderRadius: 7,
+                  padding: "8px 14px",
+                  background: active ? "var(--color-accent)" : "transparent",
+                  color: active ? "#fff" : "var(--color-text-secondary)",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {tab || "Tümü"}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Toolbar - Search + Filtreler + Seçili Yazdır */}
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
@@ -424,16 +481,6 @@ export default function RaporTakipTable() {
             <option value="Bekliyor">Bekliyor</option>
             <option value="Devam Ediyor">Devam Ediyor</option>
             <option value="Tamamlandı">Tamamlandı</option>
-          </select>
-
-          {/* Rapor Türü Filtresi */}
-          <select value={raporTuru} onChange={e => { setRaporTuru(e.target.value); setPage(1); }}
-            style={{
-              padding: "6px 8px", borderRadius: 6, border: "1px solid var(--color-border)",
-              background: "var(--color-bg)", fontSize: "0.75rem", cursor: "pointer",
-            }}>
-            <option value="">Tümü</option>
-            {raporTurleri.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
 
           {/* Seçili Yazdır */}
@@ -579,8 +626,31 @@ export default function RaporTakipTable() {
                 </div>
 
                 {/* Rapor No */}
-                <div style={{ fontWeight: 700, fontSize: "0.82rem", color: "var(--color-accent)", fontVariantNumeric: "tabular-nums" }}>
-                  {row.RaporNo}
+                <div
+                  style={{ fontWeight: 700, fontSize: "0.82rem", color: "var(--color-accent)", fontVariantNumeric: "tabular-nums" }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  {isUgdrFormat(row.RaporFormati) ? (
+                    <button
+                      type="button"
+                      onClick={() => window.open(`/laboratuvar/rapor-takip/ugdr/${row.NkrID}`, "_blank", "noopener,noreferrer")}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "var(--color-accent)",
+                        fontWeight: 700,
+                        padding: 0,
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        fontSize: "0.82rem",
+                      }}
+                      title="ÜGDR detayını yeni sekmede aç"
+                    >
+                      {row.RaporNo}
+                    </button>
+                  ) : (
+                    row.RaporNo
+                  )}
                 </div>
 
                 {/* Firma / Numune */}

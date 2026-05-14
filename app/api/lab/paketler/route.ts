@@ -96,7 +96,7 @@ export async function GET(request: Request) {
     const offset = (page - 1) * limit;
 
     const nameCol    = await findUserNameCol();
-    const searchClause = q ? `AND x3.ListeAdi LIKE @q` : "";
+    const searchClause = q ? `AND ISNULL(x3.ListeAdi, '') COLLATE Turkish_CI_AS LIKE @q` : "";
     const pool = await poolPromise;
 
     const countRes = await pool.request()

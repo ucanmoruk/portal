@@ -37,11 +37,11 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       whereClauses.push(`(
-        Ad       LIKE N'%' + @search + '%'
-        OR AdEn  LIKE N'%' + @search + '%'
-        OR Kod   LIKE N'%' + @search + '%'
-        OR Method LIKE N'%' + @search + '%'
-        OR Matriks LIKE N'%' + @search + '%'
+        ISNULL(Ad, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        OR ISNULL(AdEn, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        OR ISNULL(Kod, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        OR ISNULL(Method, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        OR ISNULL(Matriks, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
       )`);
     }
 

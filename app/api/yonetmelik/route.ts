@@ -25,9 +25,9 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       whereClauses.push(`(
-        INCI LIKE N'%' + @search + '%'
-        OR Num LIKE N'%' + @search + '%'
-        OR UrunTipi LIKE N'%' + @search + '%'
+        ISNULL(INCI, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        OR ISNULL(Num, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        OR ISNULL(UrunTipi, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
       )`);
     }
 

@@ -81,9 +81,9 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       whereClauses.push(`(
-        l.Urun LIKE N'%' + @search + '%'
-        OR l.Barkod LIKE N'%' + @search + '%'
-        OR t.Ad LIKE N'%' + @search + '%'
+        ISNULL(l.Urun, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        OR ISNULL(l.Barkod, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        OR ISNULL(t.Ad, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
       )`);
     }
 
