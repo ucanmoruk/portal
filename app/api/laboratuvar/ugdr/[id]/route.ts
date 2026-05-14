@@ -21,7 +21,7 @@ async function resolveNkrId(pool: any, rawId: string) {
       FROM NKR
       WHERE Durum = 'Aktif'
         AND ((@idNum IS NOT NULL AND ID = @idNum) OR RaporNo = @idRaw)
-      ORDER BY CASE WHEN (@idNum IS NOT NULL AND ID = @idNum) THEN 0 ELSE 1 END, ID DESC
+      ORDER BY CASE WHEN RaporNo = @idRaw THEN 0 WHEN (@idNum IS NOT NULL AND ID = @idNum) THEN 1 ELSE 2 END, ID DESC
     `);
 
   return result.recordset[0]?.ID ? Number(result.recordset[0].ID) : null;
