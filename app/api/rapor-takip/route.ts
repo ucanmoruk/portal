@@ -41,7 +41,9 @@ export async function GET(request: Request) {
       ? `AND MaxTermin IS NOT NULL AND YEAR(CONVERT(date, MaxTermin)) = @year`
       : "";
 
-    const raporTuruFilter = raporTuru
+    const raporTuruFilter = ["ÜGDR", "UGDR", "ÜGD", "UGD"].includes(raporTuru.toLocaleUpperCase("tr-TR"))
+      ? `AND UPPER(REPLACE(s.RaporFormati, N'Ü', N'U')) IN (N'UGDR', N'UGD')`
+      : raporTuru
       ? `AND s.RaporFormati = @raporTuru`
       : "";
 
@@ -105,10 +107,8 @@ export async function GET(request: Request) {
       SELECT *, COUNT(*) OVER() AS TotalCount
       FROM Filtered
       ORDER BY
-        CASE WHEN MaxTermin IS NULL THEN 1 ELSE 0 END,
-        MaxTermin ASC,
-        Tarih DESC,
-        RaporNo DESC,
+        Tarih ASC,
+        RaporNo ASC,
         RaporFormati
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `;
