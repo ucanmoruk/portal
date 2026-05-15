@@ -111,7 +111,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   try {
     const body = await request.json();
-    const { Tarih, RaporNo, Versiyon, FirmaID, Barkod, Urun, Miktar, Tip1, Tip2, A, RaporDurum } = body;
+    const { Tarih, RaporNo, Versiyon, FirmaID, Barkod, Urun, UrunEn, Miktar, Tip1, Tip2, Uygulama, Hedef, A, RaporDurum } = body;
 
     const pool = await poolPromise;
     await pool.request()
@@ -122,16 +122,19 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       .input("FirmaID", FirmaID || null)
       .input("Barkod", Barkod || null)
       .input("Urun", Urun || null)
+      .input("UrunEn", UrunEn || null)
       .input("Miktar", Miktar || null)
       .input("Tip1", Tip1 || null)
       .input("Tip2", Tip2 || null)
+      .input("Uygulama", Uygulama || null)
+      .input("Hedef", Hedef || null)
       .input("A", A || null)
       .input("RaporDurum", RaporDurum || null)
       .query(`
         UPDATE rUGDListe
         SET Tarih = @Tarih, RaporNo = @RaporNo, Versiyon = @Versiyon, FirmaID = @FirmaID,
-            Barkod = @Barkod, Urun = @Urun, Miktar = @Miktar, Tip1 = @Tip1,
-            Tip2 = @Tip2, A = @A, RaporDurum = @RaporDurum
+            Barkod = @Barkod, Urun = @Urun, UrunEn = @UrunEn, Miktar = @Miktar, Tip1 = @Tip1,
+            Tip2 = @Tip2, Uygulama = @Uygulama, Hedef = @Hedef, A = @A, RaporDurum = @RaporDurum
         WHERE ID = @id
       `);
 

@@ -787,6 +787,37 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
     reader.readAsBinaryString(file);
   };
 
+  const saveProductDetails = async () => {
+    if (!form.Urun || !form.FirmaID) {
+      throw new Error("Ürün adı ve firma seçimi zorunludur.");
+    }
+
+    if (!savedId && !isLabSource) {
+      const res = await fetch("/api/urunler", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Kayıt başarısız");
+      const data = await res.json();
+      if (data.id) {
+        setSavedId(String(data.id));
+        return String(data.id);
+      }
+      throw new Error("Kayıt oluşturuldu ancak ürün ID bilgisi alınamadı.");
+    }
+
+    const targetId = savedId || editId;
+    if (!targetId) throw new Error("Güncellenecek kayıt bulunamadı.");
+    const res = await fetch(isLabSource ? `/api/laboratuvar/ugdr/${targetId}` : `/api/urunler/${targetId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || "Güncelleme başarısız");
+    return String(targetId);
+  };
+
   // ── Sonraki → (tab 1'de kayıt yap, diğerlerinde ilerle) ─────────────────
   const handleNext = async () => {
     const tabIndex = TABS.findIndex(t => t.id === activeTab);
@@ -830,6 +861,22 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       setSaving(false);
     }
 
+    if (activeTab === 'formul') {
+      setGlobalError("");
+      setSaving(true);
+      try {
+        const currentId = await saveProductDetails();
+        if (formulResults.length > 0) {
+          await saveFormulToDB(currentId, formulResults);
+        }
+      } catch (err: any) {
+        setGlobalError(err.message);
+        setSaving(false);
+        return;
+      }
+      setSaving(false);
+    }
+
     setActiveTab(TABS[tabIndex + 1].id);
   };
 
@@ -844,32 +891,14 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
     setSavedOk(false);
     setSaving(true);
     try {
-      if (!savedId && !isLabSource) {
-        const res = await fetch("/api/urunler", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
-        });
-        if (!res.ok) throw new Error((await res.json()).error || "Kayıt başarısız");
-        const data = await res.json();
-        if (data.id) setSavedId(String(data.id));
-        // Yeni kayıt → listeye git
-        router.push(returnHref);
-        router.refresh();
-      } else {
-        const res = await fetch(isLabSource ? `/api/laboratuvar/ugdr/${savedId}` : `/api/urunler/${savedId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
-        });
-        if (!res.ok) throw new Error((await res.json()).error || "Güncelleme başarısız");
-        // Formül satırlarını da kaydet
-        if (savedId && formulResults.length > 0) {
-          await saveFormulToDB(savedId, formulResults);
-        }
-        // Güncelleme → sayfada kal, rapor indirilebilsin
-        setSavedOk(true);
-        setTimeout(() => setSavedOk(false), 4000);
+      const currentId = await saveProductDetails();
+      if (formulResults.length > 0) {
+        await saveFormulToDB(currentId, formulResults);
+      }
+      setSavedOk(true);
+      setTimeout(() => setSavedOk(false), 4000);
+      if (activeTab === 'rapor') {
+        await handleReportDownload("preview");
       }
     } catch (err: any) {
       setGlobalError(err.message);
@@ -1826,7 +1855,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         </button>
         <div style={{ display: 'flex', gap: 12 }}>
           <button type="button" className={styles.cancelBtn} onClick={() => router.back()}>İptal</button>
-          {tabIndex < TABS.length - 1 ? (
+          {tabIndex < 2 ? (
             <button
               type="button"
               className={styles.saveBtn}
@@ -1845,7 +1874,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
               disabled={saving}
               style={{ minWidth: 200, opacity: saving ? 0.6 : 1 }}
             >
-              {saving ? "Kaydediliyor..." : isEdit ? "GÜNCELLE" : "ÜRÜNÜ KAYDET"}
+              {saving ? "Kaydediliyor..." : tabIndex === 2 ? "KAYDET VE ÖNİZLE" : isEdit ? "GÜNCELLE" : "ÜRÜNÜ KAYDET"}
             </button>
           )}
         </div>

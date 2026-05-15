@@ -14,6 +14,7 @@ import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
 import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 import { renderUgdReportHtml } from "@/lib/ugdReportHtml";
+import { renderUgdReportHtmlEn } from "@/lib/ugdReportHtmlEn";
 
 type ReportLanguage = "tr" | "en";
 type ReportProfile = "ugd" | "lab";
@@ -433,7 +434,8 @@ export async function POST(request: Request) {
     const profile = pickProfile(searchParams.get("profile") || bodyProfile);
     const firmaDetails = await getFirmaDetails(form.FirmaID);
     const enrichedFormulResults = await enrichUgdFormulaRows(formulResults);
-    const html = editedHtml || renderUgdReportHtml({ form, formulResults: enrichedFormulResults, firmaAd, ...firmaDetails, language, profile });
+    const renderReportHtml = language === "en" ? renderUgdReportHtmlEn : renderUgdReportHtml;
+    const html = editedHtml || renderReportHtml({ form, formulResults: enrichedFormulResults, firmaAd, ...firmaDetails, language, profile });
     const safeName = `${safeReportName(form.RaporNo)}${language === "en" ? "_EN" : ""}`;
 
     if (format === "html") {
