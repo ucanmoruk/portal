@@ -3,8 +3,56 @@ import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
 import { type NextRequest } from "next/server";
 
+const isPostgres = Boolean(process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL);
+
 async function ensureTables() {
   const pool = await poolPromise;
+
+  if (isPostgres) {
+    await pool.request().query(`
+      CREATE TABLE IF NOT EXISTS RootKozTeklif (
+        ID SERIAL PRIMARY KEY,
+        TeklifNo VARCHAR(30) NOT NULL,
+        RevNo INT NOT NULL DEFAULT 0,
+        Tarih TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        MusteriAdi VARCHAR(200) NULL,
+        MusteriEmail VARCHAR(200) NULL,
+        MusteriTelefon VARCHAR(50) NULL,
+        MarkaAdi VARCHAR(200) NULL,
+        UrunKategorisi VARCHAR(300) NULL,
+        SKUSayisi INT NULL,
+        UretimMiktari VARCHAR(100) NULL,
+        HedefPazar VARCHAR(100) NULL,
+        OdemeTuru VARCHAR(50) NULL,
+        KDVOran DECIMAL(5,2) NOT NULL DEFAULT 20,
+        GenelIskonto DECIMAL(5,2) NOT NULL DEFAULT 0,
+        ToplamTutar DECIMAL(18,2) NOT NULL DEFAULT 0,
+        Durum VARCHAR(30) NOT NULL DEFAULT 'Taslak',
+        Notlar TEXT NULL,
+        KID INT NULL,
+        OlusturmaTarihi TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        GuncellenmeTarihi TIMESTAMP NULL,
+        SilindiMi BOOLEAN NOT NULL DEFAULT FALSE
+      )
+    `);
+    await pool.request().query(`
+      CREATE TABLE IF NOT EXISTS RootKozTeklifKalem (
+        ID SERIAL PRIMARY KEY,
+        TeklifID INT NOT NULL,
+        Bolum VARCHAR(50) NOT NULL,
+        HizmetAdi VARCHAR(300) NOT NULL,
+        Sure VARCHAR(100) NULL,
+        Miktar DECIMAL(18,2) NOT NULL DEFAULT 1,
+        BirimFiyat DECIMAL(18,2) NOT NULL DEFAULT 0,
+        ParaBirimi VARCHAR(10) NOT NULL DEFAULT 'TRY',
+        Iskonto DECIMAL(5,2) NOT NULL DEFAULT 0,
+        Dahil BOOLEAN NOT NULL DEFAULT TRUE,
+        Sira INT NOT NULL DEFAULT 0,
+        Notlar TEXT NULL
+      )
+    `);
+    return;
+  }
 
   await pool.request().query(`
     IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='RootKozTeklif' AND xtype='U')
@@ -86,7 +134,7 @@ async function insertKalemler(pool: any, teklifId: number, kalemler: any[]) {
       .input("BirimFiyat", parseFloat(k.birimFiyat) || 0)
       .input("ParaBirimi", k.paraBirimi || "TRY")
       .input("Iskonto",    parseFloat(k.iskonto)    || 0)
-      .input("Dahil",      k.dahil ? 1 : 0)
+      .input("Dahil",      isPostgres ? Boolean(k.dahil) : (k.dahil ? 1 : 0))
       .input("Sira",       i)
       .input("Notlar",     k.notlar || null)
       .query(`
@@ -178,53 +226,63 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  await ensureTables();
-  const pool = await poolPromise;
-  const body = await req.json();
+  try {
+    await ensureTables();
+    const pool = await poolPromise;
+    const body = await req.json();
 
-  const {
-    musteriAdi, musteriEmail, musteriTelefon,
-    markaAdi, urunKategorisi, skuSayisi, uretimMiktari, hedefPazar,
-    odemeTuru, kdvOran, genelIskonto, notlar,
-    kalemler = [],
-  } = body;
+    const {
+      musteriAdi, musteriEmail, musteriTelefon,
+      markaAdi, urunKategorisi, skuSayisi, uretimMiktari, hedefPazar,
+      odemeTuru, kdvOran, genelIskonto, notlar,
+      kalemler = [],
+    } = body;
 
-  const teklifNo   = await nextTeklifNo(pool);
-  const kdv        = parseFloat(kdvOran)       || 20;
-  const gIskonto   = parseFloat(genelIskonto)  || 0;
-  const toplam     = calcToplam(kalemler, gIskonto, kdv);
-  const kid        = (session.user as any)?.userId || null;
+    const teklifNo   = await nextTeklifNo(pool);
+    const kdv        = parseFloat(kdvOran)       || 20;
+    const gIskonto   = parseFloat(genelIskonto)  || 0;
+    const toplam     = calcToplam(kalemler, gIskonto, kdv);
+    const kid        = (session.user as any)?.userId || null;
 
-  const ins = await pool.request()
-    .input("TeklifNo",       teklifNo)
-    .input("MusteriAdi",     musteriAdi     || null)
-    .input("MusteriEmail",   musteriEmail   || null)
-    .input("MusteriTelefon", musteriTelefon || null)
-    .input("MarkaAdi",       markaAdi       || null)
-    .input("UrunKategorisi", urunKategorisi || null)
-    .input("SKUSayisi",      parseInt(skuSayisi) || null)
-    .input("UretimMiktari",  uretimMiktari  || null)
-    .input("HedefPazar",     hedefPazar     || null)
-    .input("OdemeTuru",      odemeTuru      || null)
-    .input("KDVOran",        kdv)
-    .input("GenelIskonto",   gIskonto)
-    .input("ToplamTutar",    toplam)
-    .input("Notlar",         notlar         || null)
-    .input("KID",            kid)
-    .query(`
-      INSERT INTO RootKozTeklif
-        (TeklifNo, MusteriAdi, MusteriEmail, MusteriTelefon, MarkaAdi, UrunKategorisi,
-         SKUSayisi, UretimMiktari, HedefPazar, OdemeTuru, KDVOran, GenelIskonto,
-         ToplamTutar, Notlar, KID)
-      OUTPUT INSERTED.ID
-      VALUES
-        (@TeklifNo, @MusteriAdi, @MusteriEmail, @MusteriTelefon, @MarkaAdi, @UrunKategorisi,
-         @SKUSayisi, @UretimMiktari, @HedefPazar, @OdemeTuru, @KDVOran, @GenelIskonto,
-         @ToplamTutar, @Notlar, @KID)
-    `);
+    await pool.request()
+      .input("TeklifNo",       teklifNo)
+      .input("MusteriAdi",     musteriAdi     || null)
+      .input("MusteriEmail",   musteriEmail   || null)
+      .input("MusteriTelefon", musteriTelefon || null)
+      .input("MarkaAdi",       markaAdi       || null)
+      .input("UrunKategorisi", urunKategorisi || null)
+      .input("SKUSayisi",      parseInt(skuSayisi) || null)
+      .input("UretimMiktari",  uretimMiktari  || null)
+      .input("HedefPazar",     hedefPazar     || null)
+      .input("OdemeTuru",      odemeTuru      || null)
+      .input("KDVOran",        kdv)
+      .input("GenelIskonto",   gIskonto)
+      .input("ToplamTutar",    toplam)
+      .input("Notlar",         notlar         || null)
+      .input("KID",            kid)
+      .input("SilindiMi",      isPostgres ? false : 0)
+      .query(`
+        INSERT INTO RootKozTeklif
+          (TeklifNo, RevNo, Tarih, MusteriAdi, MusteriEmail, MusteriTelefon, MarkaAdi, UrunKategorisi,
+           SKUSayisi, UretimMiktari, HedefPazar, OdemeTuru, KDVOran, GenelIskonto,
+           ToplamTutar, Durum, Notlar, KID, OlusturmaTarihi, SilindiMi)
+        VALUES
+          (@TeklifNo, 0, GETDATE(), @MusteriAdi, @MusteriEmail, @MusteriTelefon, @MarkaAdi, @UrunKategorisi,
+           @SKUSayisi, @UretimMiktari, @HedefPazar, @OdemeTuru, @KDVOran, @GenelIskonto,
+           @ToplamTutar, 'Taslak', @Notlar, @KID, GETDATE(), @SilindiMi)
+      `);
 
-  const newId = ins.recordset[0].ID as number;
-  await insertKalemler(pool, newId, kalemler);
+    const idRes = await pool.request()
+      .input("TeklifNo", teklifNo)
+      .query("SELECT TOP 1 ID FROM RootKozTeklif WHERE TeklifNo = @TeklifNo ORDER BY ID DESC");
+    const newId = idRes.recordset[0]?.ID as number | undefined;
+    if (!newId) throw new Error("Teklif oluşturuldu ancak yeni kayıt ID bilgisi okunamadı.");
 
-  return Response.json({ id: newId, teklifNo });
+    await insertKalemler(pool, newId, kalemler);
+
+    return Response.json({ id: newId, teklifNo });
+  } catch (error: any) {
+    console.error("[root-koz-teklif] POST error:", error);
+    return Response.json({ error: error?.message || "Kayıt hatası" }, { status: 500 });
+  }
 }

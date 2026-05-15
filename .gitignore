@@ -55,6 +55,7 @@ app/(dashboard)/laboratuvar/lab-crm/
 tmp/
 .tmp/
 dev*.log
+.next-dev*.log
 data/*.local.json
 
 # Geliştirici scriptleri (üretimde gereksiz)

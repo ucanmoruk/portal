@@ -413,7 +413,7 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz" }, { status: 401 });
 
-  let form: Record<string, unknown>, formulResults: any[], firmaAd: string, bodyLanguage: ReportLanguage, bodyProfile: ReportProfile;
+  let form: Record<string, unknown>, formulResults: any[], firmaAd: string, bodyLanguage: ReportLanguage, bodyProfile: ReportProfile, editedHtml: string;
   try {
     const b = await request.json();
     form = b.form || {};
@@ -421,6 +421,7 @@ export async function POST(request: Request) {
     firmaAd = b.firmaAd || "";
     bodyLanguage = pickLanguage(b.language);
     bodyProfile = pickProfile(b.profile);
+    editedHtml = sv(b.editedHtml);
   } catch {
     return Response.json({ error: "Geçersiz istek gövdesi" }, { status: 400 });
   }
@@ -432,7 +433,7 @@ export async function POST(request: Request) {
     const profile = pickProfile(searchParams.get("profile") || bodyProfile);
     const firmaDetails = await getFirmaDetails(form.FirmaID);
     const enrichedFormulResults = await enrichUgdFormulaRows(formulResults);
-    const html = renderUgdReportHtml({ form, formulResults: enrichedFormulResults, firmaAd, ...firmaDetails, language, profile });
+    const html = editedHtml || renderUgdReportHtml({ form, formulResults: enrichedFormulResults, firmaAd, ...firmaDetails, language, profile });
     const safeName = `${safeReportName(form.RaporNo)}${language === "en" ? "_EN" : ""}`;
 
     if (format === "html") {

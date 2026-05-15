@@ -24,6 +24,7 @@ const TABS = [
   { id: 'genel',  label: '1 · Genel Bilgiler' },
   { id: 'formul', label: '2 · Ürün Formülü' },
   { id: 'rapor',  label: '3 · Rapor' },
+  { id: 'canli-rapor', label: '4 · Canlı Rapor Editörü' },
 ];
 
 // ── Rapor default metinleri ───────────────────────────────────────────────────
@@ -396,11 +397,30 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
   const isLabSource = source === 'lab';
 
   const [activeTab, setActiveTab] = useState('genel');
+  const [editorLoading, setEditorLoading] = useState(false);
+  const [editorHead, setEditorHead] = useState("");
+  const [editorSections, setEditorSections] = useState<{ key: string; title: string; html: string }[]>([
+    { key: "s1", title: "Başlangıçtan B Bölümüne Kadar", html: "" },
+    { key: "s2", title: "B Bölümü", html: "" },
+    { key: "s3", title: "Ek - 1", html: "" },
+    { key: "s4", title: "Ek - 2", html: "" },
+    { key: "s5", title: "Ek - 3", html: "" },
+    { key: "s6", title: "Devamı", html: "" },
+  ]);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    s1: true, s2: true, s3: true, s4: true, s5: true, s6: true,
+  });
+  const editorRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const selectedEditorRowRef = useRef<HTMLTableRowElement | null>(null);
+  const floatingRowDeleteRef = useRef<HTMLButtonElement | null>(null);
+  const liveReportImageInputRef = useRef<HTMLInputElement | null>(null);
+  const activeEditorRef = useRef<HTMLDivElement | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(editId ?? null);
   const [globalError, setGlobalError] = useState("");
   const [savedOk, setSavedOk] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
+  const [editorSaveStatus, setEditorSaveStatus] = useState("");
   const [loadingEdit, setLoadingEdit] = useState(isEdit);
   const [reportLang, setReportLang] = useState<'tr' | 'en'>('tr');
 
@@ -908,6 +928,296 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
     }
   };
 
+  const getEditedReportHtml = () => editorSections
+    .map((s) => editorRefs.current[s.key]?.innerHTML ?? s.html ?? "")
+    .join("");
+
+  const saveEditedReport = async (bodyHtml: string) => {
+    const recordId = Number(savedId || editId || 0);
+    if (!recordId || !bodyHtml.trim()) return null;
+    const profile = isLabSource ? "lab" : "ugd";
+    const res = await fetch("/api/urunler/canli-rapor", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: isLabSource ? "lab" : "ugd",
+        recordId,
+        language: reportLang,
+        profile,
+        headHtml: editorHead,
+        bodyHtml,
+        sections: editorSections.map(s => ({
+          ...s,
+          html: editorRefs.current[s.key]?.innerHTML ?? s.html,
+        })),
+      }),
+    });
+    if (!res.ok) {
+      console.warn("Canlı rapor kaydı atlandı:", await res.text().catch(() => `HTTP ${res.status}`));
+      return null;
+    }
+    return res.json().catch(() => ({ ok: true }));
+  };
+
+  const loadEditableReport = async (preferSaved = true) => {
+    setEditorLoading(true);
+    try {
+      const recordId = Number(savedId || editId || 0);
+      const profile = isLabSource ? "lab" : "ugd";
+      if (preferSaved && recordId) {
+        const saved = await fetch(`/api/urunler/canli-rapor?source=${isLabSource ? "lab" : "ugd"}&recordId=${recordId}&language=${reportLang}&profile=${profile}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null);
+        if (saved?.item?.bodyHtml) {
+          setEditorHead(saved.item.headHtml || "");
+          if (Array.isArray(saved.item.sections) && saved.item.sections.length === 6) {
+            setEditorSections(saved.item.sections);
+          } else {
+            setEditorSections(prev => prev.map((section, index) => ({
+              ...section,
+              html: index === 0 ? saved.item.bodyHtml : "",
+            })));
+          }
+          setEditorSaveStatus(saved.item.createdAt ? `Son kayıt yüklendi: ${new Date(saved.item.createdAt).toLocaleString("tr-TR")}` : "Son kayıt yüklendi.");
+          return;
+        }
+      }
+
+      const firmaAd = lookups.firmalar.find(f => f.ID.toString() === form.FirmaID)?.Ad || "";
+      const language = reportLang;
+      const res = await fetch(`/api/urunler/rapor-sablon?format=html&language=${language}&profile=${profile}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ form, formulResults, firmaAd, language, profile }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Rapor HTML alınamadı (HTTP ${res.status})`);
+      }
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      setEditorHead(doc.head?.innerHTML || "");
+      const splitSections = [
+        { key: "s1", title: "Başlangıçtan B Bölümüne Kadar", html: "" },
+        { key: "s2", title: "B Bölümü", html: "" },
+        { key: "s3", title: "Ek - 1", html: "" },
+        { key: "s4", title: "Ek - 2", html: "" },
+        { key: "s5", title: "Ek - 3", html: "" },
+        { key: "s6", title: "Devamı", html: "" },
+      ];
+      let active = 0;
+      const pushNode = (idx: number, node: ChildNode) => {
+        const holder = document.createElement("div");
+        holder.appendChild(node.cloneNode(true));
+        splitSections[idx].html += holder.innerHTML;
+      };
+
+      const reportRoot = doc.querySelector(".WordSection1") || doc.body;
+      const children = Array.from(reportRoot?.childNodes || []);
+      children.forEach((node) => {
+        const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : null;
+        const h2 = el?.matches("h2") ? el : el?.querySelector("h2");
+        const t = (h2?.textContent || "").toLocaleUpperCase("tr-TR");
+
+        if (t.includes("KISIM B")) {
+          active = 1; // 748-883
+          pushNode(active, node);
+          return;
+        }
+
+        if (t.includes("EK-1") || t.includes("EK 1") || t.includes("EK-2") || t.includes("EK 2") || t.includes("EK-3") || t.includes("EK 3") || t.includes("KAYNAKLAR")) {
+          if (t.includes("EK-1") || t.includes("EK 1")) active = 2;
+          else if (t.includes("EK-2") || t.includes("EK 2")) active = 3;
+          else if (t.includes("EK-3") || t.includes("EK 3")) active = 4;
+          else if (t.includes("KAYNAKLAR")) active = 5;
+          const innerNodes = Array.from(el?.childNodes || [node]);
+          innerNodes.forEach((innerNode) => {
+            const innerEl = innerNode.nodeType === Node.ELEMENT_NODE ? (innerNode as Element) : null;
+            const innerText = (innerNode.textContent || "").toLocaleUpperCase("tr-TR");
+            if (innerEl?.tagName.toUpperCase() === "H2") {
+              if (innerText.includes("EK-1") || innerText.includes("EK 1")) active = 2; // 884-905
+              else if (innerText.includes("EK-2") || innerText.includes("EK 2")) active = 3; // 906-912
+              else if (innerText.includes("EK-3") || innerText.includes("EK 3")) active = 4; // 913-915
+              else if (innerText.includes("KAYNAKLAR")) active = 5; // 916-son
+            }
+            pushNode(active, innerNode);
+          });
+          return;
+        }
+
+        pushNode(active, node);
+      });
+      setEditorSections(splitSections.map((section, index) => ({
+        ...section,
+        html: index >= 2 && section.html.trim()
+          ? `<section class="page-break">${section.html}</section>`
+          : section.html,
+      })));
+    } catch (err: any) {
+      setGlobalError(err.message || "Canlı rapor yüklenemedi");
+    } finally {
+      setEditorLoading(false);
+    }
+  };
+
+  const runEditorCmd = (cmd: string, value?: string) => {
+    const activeEl = document.activeElement as HTMLElement | null;
+    if (!activeEl || activeEl.getAttribute("contenteditable") !== "true") return;
+    activeEl.focus();
+    document.execCommand(cmd, false, value);
+  };
+
+  const insertImageIntoEditor = (dataUrl: string) => {
+    const editor = activeEditorRef.current;
+    if (!editor) return;
+    editor.focus();
+    document.execCommand(
+      "insertHTML",
+      false,
+      `<figure class="image-block"><img src="${dataUrl}" alt="Rapor görseli" /><figcaption></figcaption></figure>`,
+    );
+    const key = editor.dataset.liveEditorKey || "";
+    if (key) {
+      setEditorSections(prev => prev.map(s => s.key === key ? { ...s, html: editor.innerHTML } : s));
+    }
+  };
+
+  const handleLiveReportImageFile = (file?: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setGlobalError("Lütfen bir görsel dosyası seçin.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => insertImageIntoEditor(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  };
+
+  const deleteSelectedTableRow = () => {
+    const removeRow = (row: HTMLTableRowElement) => {
+      const editor = row.closest("[data-live-editor-key]") as HTMLDivElement | null;
+      const key = editor?.dataset.liveEditorKey || "";
+      row.remove();
+      if (key && editor) {
+        setEditorSections(prev => prev.map(s => s.key === key ? { ...s, html: editor.innerHTML } : s));
+      }
+      selectedEditorRowRef.current = null;
+      if (floatingRowDeleteRef.current) {
+        floatingRowDeleteRef.current.style.display = "none";
+      }
+    };
+
+    if (selectedEditorRowRef.current) {
+      removeRow(selectedEditorRowRef.current);
+      return;
+    }
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const node = sel.anchorNode as Node | null;
+    const el = (node instanceof Element ? node : node?.parentElement) || null;
+    const tr = el?.closest("tr") as HTMLTableRowElement | null;
+    if (tr) removeRow(tr);
+  };
+
+  const markSelectedEditorRow = (target: EventTarget | null) => {
+    const el = target instanceof Element ? target : null;
+    const row = el?.closest("tr") as HTMLTableRowElement | null;
+    if (selectedEditorRowRef.current && selectedEditorRowRef.current !== row) {
+      selectedEditorRowRef.current.removeAttribute("data-live-selected-row");
+    }
+	    selectedEditorRowRef.current = row;
+    const editor = el?.closest("[data-live-editor-key]") as HTMLDivElement | null;
+    if (editor) activeEditorRef.current = editor;
+    if (row) {
+      row.setAttribute("data-live-selected-row", "true");
+      const rect = row.getBoundingClientRect();
+      const top = Math.max(76, Math.min(window.innerHeight - 44, rect.top + rect.height / 2 - 16));
+      const left = Math.max(16, Math.min(window.innerWidth - 124, rect.right + 8));
+      if (floatingRowDeleteRef.current) {
+        floatingRowDeleteRef.current.style.display = "block";
+        floatingRowDeleteRef.current.style.top = `${top}px`;
+        floatingRowDeleteRef.current.style.left = `${left}px`;
+      }
+    } else {
+      if (floatingRowDeleteRef.current) {
+        floatingRowDeleteRef.current.style.display = "none";
+      }
+    }
+  };
+
+  const printEditedAsPdf = async () => {
+    const bodyHtml = getEditedReportHtml();
+    if (!bodyHtml.trim()) {
+      setGlobalError("Yazdırılacak rapor içeriği henüz yüklenmedi. Lütfen Şablonu Yenile butonuna basın.");
+      return;
+    }
+    setPrintLoading(true);
+    setGlobalError("");
+    const previewWindow = window.open("", "_blank");
+    if (previewWindow) {
+      previewWindow.document.write("<!doctype html><title>Rapor hazırlanıyor</title><body style=\"font-family:system-ui;padding:32px\">Düzenlenen rapor kaydediliyor ve PDF hazırlanıyor...</body>");
+      previewWindow.document.close();
+    }
+    try {
+      try {
+        await saveEditedReport(bodyHtml);
+      } catch (saveErr) {
+        console.warn("Canlı rapor kaydı yapılamadı, PDF yine de oluşturuluyor:", saveErr);
+      }
+      const firmaAd = lookups.firmalar.find(f => f.ID.toString() === form.FirmaID)?.Ad || "";
+      const language = reportLang;
+      const profile = isLabSource ? "lab" : "ugd";
+      const editedHtml = `<!doctype html><html><head><meta charset="utf-8" />${editorHead}</head><body><div class="WordSection1">${bodyHtml}</div></body></html>`;
+      const res = await fetch(`/api/urunler/rapor-sablon?format=pdf&language=${language}&profile=${profile}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ form, formulResults, firmaAd, language, profile, editedHtml }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `PDF oluşturulamadı (HTTP ${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if (previewWindow) {
+        previewWindow.location.href = url;
+      } else {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: any) {
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.document.open();
+        previewWindow.document.write(`<!doctype html><title>Rapor hatası</title><body style="font-family:system-ui;padding:32px;color:#991b1b">Rapor oluşturulamadı: ${String(err.message || err)}</body>`);
+        previewWindow.document.close();
+      }
+      setGlobalError(err.message || "Canlı rapor yazdırılamadı.");
+    } finally {
+      setPrintLoading(false);
+    }
+  };
+
+  const handleSaveEditedReport = async () => {
+    const bodyHtml = getEditedReportHtml();
+    if (!bodyHtml.trim()) {
+      setEditorSaveStatus("Kaydedilecek içerik bulunamadı.");
+      return;
+    }
+    setEditorSaveStatus("Kaydediliyor...");
+    try {
+      await saveEditedReport(bodyHtml);
+      setEditorSaveStatus(`Kaydedildi: ${new Date().toLocaleString("tr-TR")}`);
+    } catch {
+      setEditorSaveStatus("Kaydedilemedi.");
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== "canli-rapor") return;
+    void loadEditableReport(true);
+  }, [activeTab, reportLang]);
+
   const tabIndex = TABS.findIndex(t => t.id === activeTab);
   const aVal = parseFloat(form.A) || 0;
 
@@ -1348,6 +1658,162 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 
 
       {/* ── Alt navigasyon ────────────────────────────────────────────────── */}
+      {activeTab === 'canli-rapor' && (
+        <>
+          <ReportLanguageSwitch language={reportLang} onChange={setReportLang} />
+          <SectionCard title="Canlı Rapor Editörü">
+            <style>{`
+              .liveReportEditorBody {
+                color: #111827;
+                font-family: "Microsoft Sans Serif", Tahoma, sans-serif;
+                font-size: 9.5pt;
+                line-height: 1.48;
+                width: 100%;
+                max-width: 100%;
+                overflow-x: hidden;
+              }
+              .liveReportEditorBody section {
+                width: 100%;
+                max-width: 100%;
+                min-height: auto;
+                margin: 0 0 16px;
+                padding: 18px;
+                background: #fff;
+                border: 1px solid #e5e7eb;
+                box-shadow: none;
+                overflow-x: hidden;
+              }
+              .liveReportEditorBody h1,
+              .liveReportEditorBody h2,
+              .liveReportEditorBody h3 {
+                margin: 0 0 8px;
+                color: #000;
+                line-height: 1.2;
+              }
+              .liveReportEditorBody h1 { font-size: 25pt; text-align: center; letter-spacing: .04em; }
+              .liveReportEditorBody h2 { margin-top: 5px; padding-bottom: 5px; border-bottom: 2px solid #000; font-size: 14.5pt; }
+              .liveReportEditorBody h3 { margin-top: 12px; font-size: 9.5pt; color: #fff; padding: 5px; background-color: #003366; }
+              .liveReportEditorBody p { margin: 0 0 8px; }
+              .liveReportEditorBody table { width: 100%; max-width: 100%; border-collapse: collapse; margin: 8px 0 12px; table-layout: fixed; }
+              .liveReportEditorBody th,
+              .liveReportEditorBody td { border: 1px solid #cfd8e3; padding: 5px 6px; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; white-space: normal !important; min-width: 0; }
+              .liveReportEditorBody td[style*="white-space"],
+              .liveReportEditorBody th[style*="white-space"] { white-space: normal !important; }
+              .liveReportEditorBody th { background: #dedede; color: #000; font-weight: 700; text-align: left; }
+              .liveReportEditorBody .compact { font-size: 7.6pt; }
+              .liveReportEditorBody .compact th,
+              .liveReportEditorBody .compact td { padding: 3px; }
+              .liveReportEditorBody .report-header { width: 100%; border-bottom: 1px solid #1f4788; padding-bottom: 5px; display: table; table-layout: fixed; color: #143b6f; }
+              .liveReportEditorBody .report-header > div { display: table-cell; vertical-align: top; }
+              .liveReportEditorBody .report-header-title { font-size: 9.5pt; font-weight: 700; letter-spacing: .02em; }
+              .liveReportEditorBody .report-header-subtitle { margin-top: 2px; color: #000; font-size: 7.4pt; line-height: 1.25; }
+              .liveReportEditorBody .report-header-meta { width: 38mm; text-align: right; font-size: 7.5pt; color: #000; }
+              .liveReportEditorBody .image-block { max-width: 100%; margin: 10px 0; overflow: hidden; text-align: center; }
+              .liveReportEditorBody .image-block img { width: auto; height: auto; max-width: 100%; max-height: 150mm; display: block; margin: 0 auto; object-fit: contain; border: 1px solid #d1d5db; }
+              .liveReportEditorBody .muted { color: #6b7280; font-style: italic; }
+              .liveReportEditorBody .note { margin: 10px 0; padding: 9px 11px; background: #f8fafc; border-left: 4px solid #94a3b8; }
+              .liveReportEditorBody tr[data-live-selected-row="true"] td,
+              .liveReportEditorBody tr[data-live-selected-row="true"] th {
+                outline: 2px solid #1f4788;
+                outline-offset: -2px;
+                background-color: #eef4fb;
+              }
+            `}</style>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+	              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input
+                  ref={liveReportImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={e => {
+                    handleLiveReportImageFile(e.target.files?.[0]);
+                    e.currentTarget.value = "";
+                  }}
+                />
+	                <button type="button" className={styles.cancelBtn} onClick={() => runEditorCmd('bold')}>B</button>
+	                <button type="button" className={styles.cancelBtn} onClick={() => runEditorCmd('italic')}><i>I</i></button>
+	                <button type="button" className={styles.cancelBtn} onClick={() => runEditorCmd('underline')}><u>U</u></button>
+	                <button type="button" className={styles.cancelBtn} onClick={() => runEditorCmd('insertUnorderedList')}>Madde</button>
+                <button type="button" className={styles.cancelBtn} onMouseDown={e => e.preventDefault()} onClick={() => liveReportImageInputRef.current?.click()}>Fotoğraf Ekle</button>
+	                <button type="button" className={styles.cancelBtn} onMouseDown={e => e.preventDefault()} onClick={deleteSelectedTableRow}>Satır Sil</button>
+	              </div>
+	              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+	                <button type="button" className={styles.cancelBtn} onClick={() => void loadEditableReport(false)} disabled={editorLoading} style={{ opacity: editorLoading ? 0.6 : 1 }}>
+	                  {editorLoading ? 'Yükleniyor...' : 'Şablonu Yenile'}
+	                </button>
+                <button type="button" className={styles.cancelBtn} onClick={handleSaveEditedReport}>
+                  Kaydet
+                </button>
+	                <button type="button" className={styles.saveBtn} onClick={printEditedAsPdf} disabled={printLoading} style={{ opacity: printLoading ? 0.65 : 1 }}>
+	                  {printLoading ? "Hazırlanıyor..." : "Yazdır"}
+	                </button>
+	              </div>
+	            </div>
+            {editorSaveStatus && (
+              <div style={{ margin: '0 0 12px', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
+                {editorSaveStatus}
+              </div>
+            )}
+
+	            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
+              {editorSections.map((section, idx) => (
+                <div key={section.key} style={{ border: '1px solid var(--color-border-light)', borderRadius: 8, background: '#fff' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--color-border-light)', fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text-secondary)' }}>
+                    <span>{idx + 1}. {section.title}</span>
+                    <button
+                      type="button"
+                      className={styles.cancelBtn}
+                      onClick={() => setOpenSections(prev => ({ ...prev, [section.key]: !prev[section.key] }))}
+                      style={{ padding: '2px 10px', minHeight: 28 }}
+                    >
+                      {openSections[section.key] ? 'Kapat' : 'Aç'}
+                    </button>
+                  </div>
+                  {openSections[section.key] && (
+	                    <div
+	                      ref={(el) => { editorRefs.current[section.key] = el; }}
+	                      className="liveReportEditorBody WordSection1"
+	                      data-live-editor-key={section.key}
+	                      contentEditable
+                      suppressContentEditableWarning
+                      style={{ minHeight: 320, padding: 12, overflowX: 'hidden', overflowY: 'auto', lineHeight: 1.55, maxWidth: '100%' }}
+                      dangerouslySetInnerHTML={{ __html: section.html || '<p></p>' }}
+	                      onMouseUp={(e) => markSelectedEditorRow(e.target)}
+                      onFocus={(e) => { activeEditorRef.current = e.currentTarget; }}
+	                      onBlur={(e) => {
+                        const html = (e.currentTarget as HTMLDivElement).innerHTML;
+                        setEditorSections(prev => prev.map(s => s.key === section.key ? { ...s, html } : s));
+                      }}
+                    />
+                  )}
+                </div>
+	              ))}
+	            </div>
+            <button
+              ref={floatingRowDeleteRef}
+              type="button"
+              className={styles.cancelBtn}
+              onMouseDown={e => e.preventDefault()}
+              onClick={deleteSelectedTableRow}
+              style={{
+                display: 'none',
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                zIndex: 1000,
+                padding: '7px 10px',
+                borderColor: '#dc2626',
+                color: '#dc2626',
+                background: '#fff',
+                boxShadow: '0 8px 20px rgba(15, 23, 42, .18)',
+              }}
+            >
+              Satırı Sil
+            </button>
+          </SectionCard>
+        </>
+      )}
       <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'space-between', borderTop: '1px solid var(--color-border-light)', paddingTop: 24 }}>
         <button
           type="button"
