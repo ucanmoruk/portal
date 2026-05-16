@@ -1,13 +1,62 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import sql from "mssql";
 import { isNumuneFtpConfigured, uploadNumuneFotoToFtp } from "@/lib/numuneFotoUpload";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
-// POST multipart: file — FTP (NUMUNE_FTP_*) veya yerel public/uploads/numune/{id}.jpg, Fotograf upsert
+async function ensureFotografBinaryColumns() {
+  const pool = await poolPromise;
+  await pool.request().query(`
+    IF COL_LENGTH('Fotograf', 'FotoData') IS NULL
+      ALTER TABLE Fotograf ADD FotoData VARBINARY(MAX) NULL;
+
+    IF COL_LENGTH('Fotograf', 'MimeType') IS NULL
+      ALTER TABLE Fotograf ADD MimeType NVARCHAR(80) NULL;
+  `);
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const nkrId = parseInt(id, 10);
+  if (!nkrId) return Response.json({ error: "Geçersiz ID" }, { status: 400 });
+
+  try {
+    await ensureFotografBinaryColumns();
+    await ensureFotografBinaryColumns();
+    const pool = await poolPromise;
+    const res = await pool.request()
+      .input("id", nkrId)
+      .query("SELECT Path, FotoData, MimeType FROM Fotograf WHERE RaporID = @id");
+
+    const row = res.recordset[0];
+    if (!row) return Response.json({ error: "Fotoğraf bulunamadı" }, { status: 404 });
+
+    if (row.FotoData) {
+      return new Response(row.FotoData, {
+        headers: {
+          "Content-Type": row.MimeType || "image/jpeg",
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
+      });
+    }
+
+    if (typeof row.Path === "string" && /^https?:\/\//i.test(row.Path)) {
+      return Response.redirect(row.Path, 302);
+    }
+
+    return Response.json({ error: "Fotoğraf verisi bulunamadı" }, { status: 404 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Fotoğraf alınamadı";
+    return Response.json({ error: msg }, { status: 500 });
+  }
+}
+
+// POST multipart: file — FTP (NUMUNE_FTP_*) veya SQL binary fallback, Fotograf upsert
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -34,6 +83,10 @@ export async function POST(
       typeof (file as File).name === "string" && (file as File).name
         ? (file as File).name
         : "yukleme.jpg";
+    const mimeType =
+      typeof (file as File).type === "string" && (file as File).type
+        ? (file as File).type
+        : "image/jpeg";
 
     const pool = await poolPromise;
     const raporRes = await pool.request().input("id", nkrId).query("SELECT RaporNo FROM NKR WHERE ID = @id");
@@ -49,11 +102,7 @@ export async function POST(
       });
       rel = pathForDb;
     } else {
-      rel = `/uploads/numune/${nkrId}.jpg`;
-      const absDir = path.join(process.cwd(), "public", "uploads", "numune");
-      const absFile = path.join(absDir, `${nkrId}.jpg`);
-      await mkdir(absDir, { recursive: true });
-      await writeFile(absFile, buf);
+      rel = `/api/numune-form/${nkrId}/foto`;
     }
 
     const exists = await pool.request()
@@ -61,15 +110,29 @@ export async function POST(
       .query("SELECT 1 AS x FROM Fotograf WHERE RaporID = @id");
 
     if (exists.recordset.length > 0) {
-      await pool.request()
+      const req = pool.request()
         .input("id", nkrId)
-        .input("path", rel)
-        .query("UPDATE Fotograf SET Path = @path WHERE RaporID = @id");
+        .input("path", rel);
+      if (isNumuneFtpConfigured()) {
+        await req.query("UPDATE Fotograf SET Path = @path, FotoData = NULL, MimeType = NULL WHERE RaporID = @id");
+      } else {
+        await req
+          .input("fotoData", sql.VarBinary(sql.MAX), buf)
+          .input("mimeType", sql.NVarChar(80), mimeType)
+          .query("UPDATE Fotograf SET Path = @path, FotoData = @fotoData, MimeType = @mimeType WHERE RaporID = @id");
+      }
     } else {
-      await pool.request()
+      const req = pool.request()
         .input("id", nkrId)
-        .input("path", rel)
-        .query("INSERT INTO Fotograf (RaporID, Path) VALUES (@id, @path)");
+        .input("path", rel);
+      if (isNumuneFtpConfigured()) {
+        await req.query("INSERT INTO Fotograf (RaporID, Path, FotoData, MimeType) VALUES (@id, @path, NULL, NULL)");
+      } else {
+        await req
+          .input("fotoData", sql.VarBinary(sql.MAX), buf)
+          .input("mimeType", sql.NVarChar(80), mimeType)
+          .query("INSERT INTO Fotograf (RaporID, Path, FotoData, MimeType) VALUES (@id, @path, @fotoData, @mimeType)");
+      }
     }
 
     return Response.json({ path: rel });

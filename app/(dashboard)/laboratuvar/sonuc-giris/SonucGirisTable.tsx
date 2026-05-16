@@ -82,6 +82,10 @@ function getMinTermin(hizmetler: HizmetRow[]): string {
   return dates.length > 0 ? formatTarih(dates[0]) : "—";
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 // ── Alt bileşenler ────────────────────────────────────────────────────────────
 
 function ProgressBar({ done, total }: { done: number; total: number }) {
@@ -232,9 +236,9 @@ export default function SonucGirisTable() {
         }
         return next;
       });
-    } catch (e: any) {
-      if (e.name === "AbortError" || reqId !== latestReqId.current) return;
-      setError(e.message);
+    } catch (e: unknown) {
+      if ((e instanceof Error && e.name === "AbortError") || reqId !== latestReqId.current) return;
+      setError(getErrorMessage(e, "Sonuç kayıtları alınamadı."));
     } finally {
       if (reqId === latestReqId.current) { setLoading(false); setTrans(false); }
     }
@@ -261,7 +265,8 @@ export default function SonucGirisTable() {
   const toggleGroup = (nkrId: number) =>
     setCollapsedNkrIds(prev => {
       const s = new Set(prev);
-      s.has(nkrId) ? s.delete(nkrId) : s.add(nkrId);
+      if (s.has(nkrId)) s.delete(nkrId);
+      else s.add(nkrId);
       return s;
     });
 
@@ -297,9 +302,9 @@ export default function SonucGirisTable() {
       return { ...prev, [x1Id]: { ...cur, [field]: val, dirty: true, saveError: "" } };
     });
 
-  const handleSave = async (x1Id: number) => {
+  const handleSave = async (x1Id: number, opts: { force?: boolean } = {}) => {
     const edit = editMap[x1Id];
-    if (!edit || !edit.dirty) return;
+    if (!edit || (!edit.dirty && !opts.force)) return;
     setEditMap(prev => ({ ...prev, [x1Id]: { ...prev[x1Id], saving: true, saveError: "" } }));
     try {
       const res = await fetch(`/api/sonuc-giris/${x1Id}`, {
@@ -321,8 +326,8 @@ export default function SonucGirisTable() {
         ...prev,
         [x1Id]: { ...prev[x1Id], dirty: false, saving: false, saveError: "", durum: "Tamamlandı" },
       }));
-    } catch (e: any) {
-      setEditMap(prev => ({ ...prev, [x1Id]: { ...prev[x1Id], saving: false, saveError: e.message } }));
+    } catch (e: unknown) {
+      setEditMap(prev => ({ ...prev, [x1Id]: { ...prev[x1Id], saving: false, saveError: getErrorMessage(e, "Kayıt hatası") } }));
     }
   };
 
@@ -357,8 +362,8 @@ export default function SonucGirisTable() {
         [revizyon.x1Id]: { ...prev[revizyon.x1Id], durum: "Devam", dirty: false },
       }));
       setRevizyon(null);
-    } catch (e: any) {
-      setRevizyon(r => r ? { ...r, saving: false, error: e.message } : null);
+    } catch (e: unknown) {
+      setRevizyon(r => r ? { ...r, saving: false, error: getErrorMessage(e, "Hata") } : null);
     }
   };
 
@@ -793,15 +798,20 @@ export default function SonucGirisTable() {
                                 )}
 
                                 {!edit.saving && !edit.dirty && !isTamam && (
-                                  <span style={{
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSave(row.X1ID, { force: true })}
+                                    title="Sonuç girmeden tamamlandı olarak işaretle"
+                                    style={{
                                     padding: "4px 10px", borderRadius: 20,
                                     border: "1px solid var(--color-border)",
                                     color: "var(--color-text-tertiary)",
                                     fontSize: "0.72rem", whiteSpace: "nowrap",
                                     background: "var(--color-surface)",
+                                    cursor: "pointer", fontFamily: "inherit",
                                   }}>
                                     Devam
-                                  </span>
+                                  </button>
                                 )}
                               </div>
                             </td>
