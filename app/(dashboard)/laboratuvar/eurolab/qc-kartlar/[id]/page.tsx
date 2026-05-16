@@ -220,7 +220,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                     <YAxis tick={{ fontSize: 12 }} domain={["auto", "auto"]} />
                     <Tooltip
                       formatter={(value: unknown) => [`${formatNumber(Number(value))}%`, "Geri kazanım"]}
-                      labelFormatter={(_label: unknown, payload: Array<{ payload?: { label?: string } }>) => payload?.[0]?.payload?.label || ""}
+                      labelFormatter={(_label: unknown, payload: ReadonlyArray<{ payload?: { label?: string } }>) => payload?.[0]?.payload?.label || ""}
                     />
                     <ReferenceLine y={card.lower_limit} stroke="#ef4444" strokeDasharray="4 4" label="Alt" />
                     <ReferenceLine y={card.center_line} stroke="#2563eb" strokeDasharray="4 4" label="Orta" />
