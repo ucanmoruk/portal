@@ -5,6 +5,10 @@ import { ensureEurolabRawdataTable } from "@/lib/eurolab_rawdata_schema";
 const PAGE_SIZE_OPTIONS = new Set([10, 20, 50, 100]);
 
 const normalizeText = (value: unknown) => String(value || "").trim();
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+const getDbErrorCode = (error: unknown) =>
+  typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code) : "";
 
 export async function GET(request: Request) {
   try {
@@ -49,9 +53,9 @@ export async function GET(request: Request) {
       page,
       pageSize,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Eurolab Rawdata GET Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error, "Hamveri kayıtları alınamadı.") }, { status: 500 });
   }
 }
 
@@ -96,9 +100,11 @@ export async function POST(request: Request) {
     ]);
 
     return NextResponse.json(result.rows[0]);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Eurolab Rawdata POST Error:", error);
-    const message = error.code === "23505" ? "Bu rapor no ile kayıtlı hamveri zaten var." : error.message;
+    const message = getDbErrorCode(error) === "23505"
+      ? "Bu rapor no ile kayıtlı hamveri zaten var."
+      : getErrorMessage(error, "Hamveri kaydedilemedi.");
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

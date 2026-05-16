@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { BarChart3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import styles from "@/app/styles/table.module.css";
 
@@ -53,11 +55,17 @@ const formatDate = (date: string | null) => {
   return new Date(date).toLocaleDateString("tr-TR");
 };
 
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
 export default function ValidationDashboard() {
+  const router = useRouter();
   const [rows, setRows] = useState<ValidationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [qcDialogRow, setQcDialogRow] = useState<ValidationRow | null>(null);
+  const [creatingQcId, setCreatingQcId] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -74,8 +82,8 @@ export default function ValidationDashboard() {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Validasyon kayıtları alınamadı.");
         if (alive) setRows(json);
-      } catch (err: any) {
-        if (alive) setError(err.message);
+      } catch (err: unknown) {
+        if (alive) setError(getErrorMessage(err, "Validasyon kayıtları alınamadı."));
       } finally {
         if (alive) setLoading(false);
       }
@@ -102,9 +110,9 @@ export default function ValidationDashboard() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Durum güncellenemedi.");
-    } catch (err: any) {
+    } catch (err: unknown) {
       setRows(previousRows);
-      setError(err.message);
+      setError(getErrorMessage(err, "Durum güncellenemedi."));
     } finally {
       setUpdatingId(null);
     }
@@ -123,11 +131,33 @@ export default function ValidationDashboard() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Validasyon pasife alınamadı.");
-    } catch (err: any) {
+    } catch (err: unknown) {
       setRows(previousRows);
-      setError(err.message);
+      setError(getErrorMessage(err, "Validasyon pasife alınamadı."));
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const createRangeCard = async (row: ValidationRow) => {
+    setCreatingQcId(row.id);
+    setError("");
+
+    try {
+      const res = await fetch("/api/eurolab/qc-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ validation_id: row.id, card_type: "RANGE" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Range kart oluşturulamadı.");
+      setQcDialogRow(null);
+      router.push("/laboratuvar/eurolab/qc-kartlar");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Range kart oluşturulamadı."));
+    } finally {
+      setCreatingQcId(null);
     }
   };
 
@@ -218,6 +248,9 @@ export default function ValidationDashboard() {
                   </td>
                   <td>
                     <div className={styles.actionBtns}>
+                      <button className={styles.editBtn} onClick={() => setQcDialogRow(row)} title="QC kartı oluştur">
+                        <BarChart3 size={14} />
+                      </button>
                       <Link href={`/laboratuvar/eurolab/validasyon/${row.id}`}>
                         <button className={styles.editBtn} title="Düzenle">
                           <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
@@ -238,6 +271,34 @@ export default function ValidationDashboard() {
           </table>
         </div>
       </div>
+
+      {qcDialogRow && (
+        <div className={styles.modalOverlay} onClick={() => setQcDialogRow(null)}>
+          <div className={`${styles.modal} ${styles.modalSm}`} onClick={event => event.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>QC Kartı Oluştur</h2>
+              <button className={styles.modalClose} onClick={() => setQcDialogRow(null)} aria-label="Kapat">
+                <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                </svg>
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <p style={{ margin: "0 0 14px", color: "var(--color-text-secondary)", fontSize: "0.86rem", lineHeight: 1.5 }}>
+                {qcDialogRow.code || `VAL-${qcDialogRow.id}`} validasyonu için kart tipini seçin.
+              </p>
+              <div style={{ display: "grid", gap: 10 }}>
+                <button className={styles.saveBtn} style={{ width: "100%", height: 42 }} onClick={() => createRangeCard(qcDialogRow)} disabled={creatingQcId === qcDialogRow.id}>
+                  {creatingQcId === qcDialogRow.id ? <span className={styles.loader} /> : "Range Kart"}
+                </button>
+                <button className={styles.cancelBtn} style={{ width: "100%", height: 42 }} disabled title="Sonraki aşamada eklenecek">
+                  X Kart
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

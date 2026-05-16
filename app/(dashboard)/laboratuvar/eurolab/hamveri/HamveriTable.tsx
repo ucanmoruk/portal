@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Edit, Eye, Printer } from "lucide-react";
 import styles from "@/app/styles/table.module.css";
 
 interface RawdataRow {
@@ -36,6 +37,9 @@ const formatDate = (date: string | null) => {
   return new Date(date).toLocaleDateString("tr-TR");
 };
 
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
 export default function HamveriTable() {
   const [rows, setRows] = useState<RawdataRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -62,8 +66,8 @@ export default function HamveriTable() {
       if (!res.ok) throw new Error(json.error || "Hamveri kayıtları alınamadı.");
       setRows(json.rows || []);
       setTotal(json.total || 0);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Hamveri kayıtları alınamadı."));
     } finally {
       setLoading(false);
     }
@@ -125,6 +129,7 @@ export default function HamveriTable() {
                 <th style={{ width: 130 }}>Yaş Grubu</th>
                 <th style={{ width: 120 }}>Test Durumu</th>
                 <th style={{ width: 110 }}>Tarih</th>
+                <th style={{ width: 118 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -138,11 +143,12 @@ export default function HamveriTable() {
                     <td><div className={styles.skeleton} /></td>
                     <td><div className={styles.skeleton} /></td>
                     <td><div className={styles.skeleton} /></td>
+                    <td><div className={styles.skeleton} /></td>
                   </tr>
                 ))
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     <div className={styles.empty}>
                       <p>Hamveri kaydı bulunamadı.</p>
                       <Link className={styles.addBtn} href="/laboratuvar/eurolab/hamveri/yeni">İlk hamveriyi oluştur</Link>
@@ -158,6 +164,25 @@ export default function HamveriTable() {
                   <td>{row.age_group || "—"}</td>
                   <td><span className={styles.badge}>{row.status}</span></td>
                   <td>{formatDate(row.created_at)}</td>
+                  <td>
+                    <div className={styles.actionBtns}>
+                      <Link href={`/laboratuvar/eurolab/hamveri/${row.id}`}>
+                        <button className={styles.editBtn} title="Görüntüle / çıktı al">
+                          <Eye size={14} />
+                        </button>
+                      </Link>
+                      <Link href={`/laboratuvar/eurolab/hamveri/${row.id}`}>
+                        <button className={styles.editBtn} title="Çıktı ekranı">
+                          <Printer size={14} />
+                        </button>
+                      </Link>
+                      <Link href={`/laboratuvar/eurolab/hamveri/${row.id}/duzenle`}>
+                        <button className={styles.editBtn} title="Düzenle">
+                          <Edit size={14} />
+                        </button>
+                      </Link>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

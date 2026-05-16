@@ -124,6 +124,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Metotlar",            href: "/laboratuvar/eurolab/metotlar",            menuKey: "eurolab.metotlar" },
       { label: "Validasyon",          href: "/laboratuvar/eurolab/validasyon",          menuKey: "eurolab.validasyon" },
+      { label: "QC Kartlar",          href: "/laboratuvar/eurolab/qc-kartlar",          menuKey: "eurolab.qc-kartlar" },
       { label: "Envanter",            href: "/laboratuvar/eurolab/envanter",            menuKey: "eurolab.envanter" },
       { label: "Hamveri",             href: "/laboratuvar/eurolab/hamveri",             menuKey: "eurolab.hamveri" },
       { label: "Ölçüm Belirsizliği", href: "/laboratuvar/eurolab/olcum-belirsizligi", menuKey: "eurolab.olcum-belirsizligi" },

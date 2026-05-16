@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, ClipboardCheck, FileText, ListChecks, PackageSearch, Ruler, Shapes, Users } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardCheck, ListChecks, PackageSearch, Ruler, Shapes, Users } from "lucide-react";
 
 type StepKey = "identity" | "age" | "type" | "tests" | "records";
 type AgeGroup = "under36" | "over36" | "";
@@ -23,6 +23,17 @@ interface RecordRow {
   measuredValue: string;
   decision: TestDecision;
   observation: string;
+}
+
+interface RawdataDetail {
+  id: number;
+  code: string;
+  sample_name: string;
+  product_data: Partial<FormState>;
+  test_data: {
+    selectedTests?: TestRow[];
+    records?: Record<string, RecordRow>;
+  };
 }
 
 const steps: Array<{ key: StepKey; label: string; icon: React.ReactNode }> = [
@@ -274,7 +285,15 @@ const testCatalog: Array<TestRow & { when: (state: FormState) => boolean }> = [
 
 const standardTestOptions: TestRow[] = [
   ...baseTests,
-  ...testCatalog.map(({ when: _when, ...test }) => test),
+  ...testCatalog.map(test => ({
+    id: test.id,
+    source: test.source,
+    group: test.group,
+    title: test.title,
+    clause: test.clause,
+    method: test.method,
+    reason: test.reason,
+  })),
 ].sort((a, b) => {
   const getParts = (clause: string) => (clause.match(/\d+(?:\.\d+)*/)?.[0] || "999")
     .split(".")
@@ -328,7 +347,10 @@ const decisionClass = (decision: TestDecision) => {
   return "border-amber-200 bg-amber-50 text-amber-700";
 };
 
-export default function En71RawDataFlow() {
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
+export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
   const router = useRouter();
   const [activeStep, setActiveStep] = useState<StepKey>("identity");
   const [form, setForm] = useState<FormState>(emptyState);
@@ -339,7 +361,49 @@ export default function En71RawDataFlow() {
     reason: "",
   });
   const [saving, setSaving] = useState(false);
+  const [loadingRecord, setLoadingRecord] = useState(Boolean(rawdataId));
   const [saveError, setSaveError] = useState("");
+
+  useEffect(() => {
+    if (!rawdataId) return;
+    let alive = true;
+
+    async function loadRecord() {
+      setLoadingRecord(true);
+      setSaveError("");
+      try {
+        const response = await fetch(`/api/eurolab/rawdata/${rawdataId}`, { credentials: "same-origin" });
+        const json: RawdataDetail & { error?: string } = await response.json();
+        if (!response.ok) throw new Error(json.error || "Hamveri kaydı alınamadı.");
+        if (!alive) return;
+
+        setForm({
+          ...emptyState,
+          ...json.product_data,
+          criticalAges: {
+            ...emptyState.criticalAges,
+            ...(json.product_data?.criticalAges || {}),
+          },
+          toyTypes: {
+            ...emptyState.toyTypes,
+            ...(json.product_data?.toyTypes || {}),
+          },
+          materials: Array.isArray(json.product_data?.materials) ? json.product_data.materials : [],
+        });
+        setRecords(json.test_data?.records || {});
+        setManualTests((json.test_data?.selectedTests || []).filter(test => test.source === "Harici"));
+      } catch (error: unknown) {
+        if (alive) setSaveError(getErrorMessage(error, "Hamveri kaydı alınamadı."));
+      } finally {
+        if (alive) setLoadingRecord(false);
+      }
+    }
+
+    loadRecord();
+    return () => {
+      alive = false;
+    };
+  }, [rawdataId]);
 
   const activeIndex = steps.findIndex(step => step.key === activeStep);
   const selectedTests = useMemo(() => {
@@ -455,8 +519,8 @@ export default function En71RawDataFlow() {
         .map(([key]) => key)
         .join(", ");
 
-      const response = await fetch("/api/eurolab/rawdata", {
-        method: "POST",
+      const response = await fetch(rawdataId ? `/api/eurolab/rawdata/${rawdataId}` : "/api/eurolab/rawdata", {
+        method: rawdataId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
         body: JSON.stringify({
@@ -473,10 +537,10 @@ export default function En71RawDataFlow() {
 
       const json = await response.json();
       if (!response.ok) throw new Error(json.error || "Hamveri kaydedilemedi.");
-      window.alert("Kaydedildi.");
+      window.alert(rawdataId ? "Güncellendi." : "Kaydedildi.");
       router.push("/laboratuvar/eurolab/hamveri");
-    } catch (error: any) {
-      setSaveError(error.message);
+    } catch (error: unknown) {
+      setSaveError(getErrorMessage(error, "Hamveri kaydedilemedi."));
     } finally {
       setSaving(false);
     }
@@ -488,6 +552,11 @@ export default function En71RawDataFlow() {
 
   return (
     <div className="space-y-5">
+      {loadingRecord && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-600">
+          Hamveri kaydı yükleniyor...
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link href="/laboratuvar/eurolab/hamveri" className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" style={{padding: "10px", marginBottom: "8px"}}>
           <ArrowLeft className="h-4 w-4" />
@@ -720,7 +789,7 @@ export default function En71RawDataFlow() {
                     Yazdır
                   </button>
                   <button type="button" className="rounded-full bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60" style={{ padding: "9px 22px" }} onClick={handleSave} disabled={saving}>
-                    {saving ? "Kaydediliyor..." : "Kaydet"}
+                    {saving ? "Kaydediliyor..." : rawdataId ? "Güncelle" : "Kaydet"}
                   </button>
                 </div>
               ) : (
