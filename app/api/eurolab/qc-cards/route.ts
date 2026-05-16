@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasEurolabDatabaseConfig } from "@/lib/db_eurolab";
-import { createRangeCardsFromValidation, listQcCards } from "@/lib/eurolab_qc_cards";
+import { createRangeCardsFromValidation, findQcCardGroupByValidation, listQcCards } from "@/lib/eurolab_qc_cards";
 
 export async function GET(request: Request) {
   try {
@@ -8,7 +8,8 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
-    return NextResponse.json(await listQcCards(search));
+    const validationId = Number(searchParams.get("validation_id") || "");
+    return NextResponse.json(await listQcCards(search, Number.isFinite(validationId) && validationId > 0 ? validationId : undefined));
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "QC kartları alınamadı.";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -32,6 +33,9 @@ export async function POST(request: Request) {
     if (cardType !== "RANGE") {
       return NextResponse.json({ error: "Şimdilik yalnızca Range Kart oluşturulabilir." }, { status: 400 });
     }
+
+    const existingGroup = await findQcCardGroupByValidation(validationId, "RANGE");
+    if (existingGroup) return NextResponse.json(existingGroup);
 
     return NextResponse.json(await createRangeCardsFromValidation(validationId));
   } catch (error: unknown) {

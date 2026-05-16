@@ -28,11 +28,12 @@ type QcPoint = {
   created_at: string;
 };
 
-type QcCard = {
+type QcCardComponent = {
   id: number;
   code: string;
   card_type: string;
   validation_code: string;
+  validation_id: number;
   method_name: string;
   component_name: string;
   lower_limit: number;
@@ -43,6 +44,20 @@ type QcCard = {
   updated_at: string;
   points: QcPoint[];
   audit_logs: QcAuditLog[];
+};
+
+type QcCard = {
+  id: number;
+  code: string;
+  card_type: string;
+  validation_id: number;
+  validation_code: string;
+  method_name: string;
+  component_count: number;
+  component_names: string[];
+  created_at: string;
+  updated_at: string;
+  components: QcCardComponent[];
 };
 
 type QcAuditLog = {
@@ -70,6 +85,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   const [card, setCard] = useState<QcCard | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activeComponentId, setActiveComponentId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [workingPointId, setWorkingPointId] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -84,6 +100,9 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "QC kart alınamadı.");
       setCard(json);
+      setActiveComponentId((current) => current && json.components?.some((component: QcCardComponent) => component.id === current)
+        ? current
+        : json.components?.[0]?.id || null);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "QC kart alınamadı."));
     } finally {
@@ -95,19 +114,24 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     if (cardId) loadCard(cardId);
   }, [cardId]);
 
+  const activeComponent = useMemo(() => {
+    if (!card) return null;
+    return card.components.find(component => component.id === activeComponentId) || card.components[0] || null;
+  }, [activeComponentId, card]);
+
   const chartData = useMemo(() => {
-    return (card?.points || []).map(point => ({
+    return (activeComponent?.points || []).map(point => ({
       no: point.sequence_no,
       label: point.label || String(point.sequence_no),
       recovery: point.recovery,
       source: point.source,
       analyst: point.analyst || "-",
     }));
-  }, [card]);
+  }, [activeComponent]);
 
   const addPoint = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!cardId) return;
+    if (!cardId || !activeComponent) return;
     setSaving(true);
     setError("");
     try {
@@ -115,7 +139,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, component_card_id: activeComponent.id }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Veri eklenemedi.");
@@ -140,7 +164,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   };
 
   const updatePoint = async (pointId: number) => {
-    if (!cardId) return;
+    if (!cardId || !activeComponent) return;
     setWorkingPointId(pointId);
     setError("");
     try {
@@ -148,7 +172,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ ...editForm, point_id: pointId }),
+        body: JSON.stringify({ ...editForm, point_id: pointId, component_card_id: activeComponent.id }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Veri güncellenemedi.");
@@ -162,7 +186,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   };
 
   const deletePoint = async (pointId: number) => {
-    if (!cardId) return;
+    if (!cardId || !activeComponent) return;
     const confirmed = window.confirm("Manuel QC verisi silinsin mi?");
     if (!confirmed) return;
     setWorkingPointId(pointId);
@@ -172,7 +196,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ point_id: pointId }),
+        body: JSON.stringify({ point_id: pointId, component_card_id: activeComponent.id }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Veri silinemedi.");
@@ -193,7 +217,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
           </Link>
           <h1 className={styles.pageTitle}>{card?.code || "QC Kart"}</h1>
           <p className={styles.pageSubtitle}>
-            {card ? `${card.method_name || "-"} · ${card.component_name} · ${card.validation_code}` : "Kart yükleniyor..."}
+            {card ? `${card.method_name || "-"} · ${card.component_count} alt bileşen · ${card.validation_code}` : "Kart yükleniyor..."}
           </p>
         </div>
       </div>
@@ -204,13 +228,30 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
         <div style={{ padding: 20, borderBottom: "1px solid var(--color-border-light)" }}>
           {loading ? (
             <div className={styles.skeleton} style={{ height: 280, width: "100%" }} />
-          ) : card ? (
+          ) : card && activeComponent ? (
             <>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+                {card.components.map(component => (
+                  <button
+                    key={component.id}
+                    type="button"
+                    className={component.id === activeComponent.id ? styles.saveBtn : styles.cancelBtn}
+                    style={{ height: 34, borderRadius: 999 }}
+                    onClick={() => {
+                      setActiveComponentId(component.id);
+                      setEditingId(null);
+                      setError("");
+                    }}
+                  >
+                    {component.component_name}
+                  </button>
+                ))}
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(120px, 1fr))", gap: 12, marginBottom: 18 }}>
-                <Metric label="Alt Limit" value={`${formatNumber(card.lower_limit)}%`} />
-                <Metric label="Orta Çizgi" value={`${formatNumber(card.center_line)}%`} />
-                <Metric label="Üst Limit" value={`${formatNumber(card.upper_limit)}%`} />
-                <Metric label="Veri" value={`${card.points.length} satır`} />
+                <Metric label="Alt Limit" value={`${formatNumber(activeComponent.lower_limit)}%`} />
+                <Metric label="Orta Çizgi" value={`${formatNumber(activeComponent.center_line)}%`} />
+                <Metric label="Üst Limit" value={`${formatNumber(activeComponent.upper_limit)}%`} />
+                <Metric label="Veri" value={`${activeComponent.points.length} satır`} />
               </div>
               <div style={{ width: "100%", height: 360 }}>
                 <ResponsiveContainer>
@@ -222,9 +263,9 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                       formatter={(value: unknown) => [`${formatNumber(Number(value))}%`, "Geri kazanım"]}
                       labelFormatter={(_label: unknown, payload: ReadonlyArray<{ payload?: { label?: string } }>) => payload?.[0]?.payload?.label || ""}
                     />
-                    <ReferenceLine y={card.lower_limit} stroke="#ef4444" strokeDasharray="4 4" label="Alt" />
-                    <ReferenceLine y={card.center_line} stroke="#2563eb" strokeDasharray="4 4" label="Orta" />
-                    <ReferenceLine y={card.upper_limit} stroke="#ef4444" strokeDasharray="4 4" label="Üst" />
+                    <ReferenceLine y={activeComponent.lower_limit} stroke="#ef4444" strokeDasharray="4 4" label="Alt" />
+                    <ReferenceLine y={activeComponent.center_line} stroke="#2563eb" strokeDasharray="4 4" label="Orta" />
+                    <ReferenceLine y={activeComponent.upper_limit} stroke="#ef4444" strokeDasharray="4 4" label="Üst" />
                     <Line type="monotone" dataKey="recovery" stroke="#0f766e" strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -236,7 +277,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
-      {card && (
+      {card && activeComponent && (
         <div className={styles.tableCard}>
           <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--color-border-light)" }}>
             <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>Yeni Veri</h2>
@@ -273,7 +314,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
         </div>
       )}
 
-      {card && (
+      {card && activeComponent && (
         <div className={styles.tableCard}>
           <div className={styles.tableWrapper}>
             <table className={styles.table}>
@@ -290,9 +331,9 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                 </tr>
               </thead>
               <tbody>
-                {card.points.length === 0 ? (
+                {activeComponent.points.length === 0 ? (
                   <tr><td colSpan={8}><div className={styles.empty}>Veri bulunamadı.</div></td></tr>
-                ) : card.points.map(point => (
+                ) : activeComponent.points.map(point => (
                   <tr key={point.id}>
                     <td className={styles.tdMono}>{point.sequence_no}</td>
                     <td className={styles.tdName}>
@@ -358,7 +399,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
         </div>
       )}
 
-      {card && (
+      {card && activeComponent && (
         <div className={styles.tableCard}>
           <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--color-border-light)" }}>
             <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>İşlem İzi</h2>
@@ -374,9 +415,9 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                 </tr>
               </thead>
               <tbody>
-                {card.audit_logs.length === 0 ? (
+                {activeComponent.audit_logs.length === 0 ? (
                   <tr><td colSpan={4}><div className={styles.empty}>İşlem izi bulunamadı.</div></td></tr>
-                ) : card.audit_logs.map(log => (
+                ) : activeComponent.audit_logs.map(log => (
                   <tr key={log.id}>
                     <td className={styles.tdMono}>{formatDate(log.created_at)}</td>
                     <td>{auditLabel(log.action)}</td>

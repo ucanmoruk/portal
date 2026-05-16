@@ -9,6 +9,19 @@ export type QcCardListRow = {
   validation_id: number;
   validation_code: string;
   method_name: string;
+  component_count: number;
+  component_names: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type QcCardComponent = {
+  id: number;
+  code: string;
+  card_type: string;
+  validation_id: number;
+  validation_code: string;
+  method_name: string;
   component_name: string;
   lower_limit: number;
   center_line: number;
@@ -16,6 +29,8 @@ export type QcCardListRow = {
   unit: string | null;
   created_at: string;
   updated_at: string;
+  points: QcCardPoint[];
+  audit_logs: QcCardAuditLog[];
 };
 
 export type QcCardPoint = {
@@ -41,8 +56,7 @@ export type QcCardAuditLog = {
 };
 
 export type QcCardDetail = QcCardListRow & {
-  points: QcCardPoint[];
-  audit_logs: QcCardAuditLog[];
+  components: QcCardComponent[];
 };
 
 type ValidationForQc = {
@@ -144,7 +158,7 @@ export async function ensureQcCardSchema() {
   `);
 }
 
-export async function listQcCards(search = ""): Promise<QcCardListRow[]> {
+export async function listQcCards(search = "", validationId?: number): Promise<QcCardListRow[]> {
   await ensureQcCardSchema();
   const params: unknown[] = [];
   let where = "1=1";
@@ -156,9 +170,79 @@ export async function listQcCards(search = ""): Promise<QcCardListRow[]> {
     )`;
   }
 
+  if (validationId) {
+    params.push(validationId);
+    where += ` AND validation_id = $${params.length}`;
+  }
+
   const res = await query(`
     SELECT
-      id, code, card_type, validation_id, validation_code, method_name, component_name,
+      MIN(id)::int AS id,
+      'QC-' || validation_code AS code,
+      card_type,
+      validation_id,
+      validation_code,
+      MAX(method_name) AS method_name,
+      COUNT(*)::int AS component_count,
+      ARRAY_AGG(component_name ORDER BY component_name) AS component_names,
+      MIN(created_at) AS created_at,
+      MAX(updated_at) AS updated_at
+    FROM eurolab_qc_cards
+    WHERE ${where}
+    GROUP BY validation_id, validation_code, card_type
+    ORDER BY MAX(updated_at) DESC, MIN(id) DESC
+  `, params);
+
+  return res.rows as QcCardListRow[];
+}
+
+export async function findQcCardGroupByValidation(validationId: number, cardType = "RANGE") {
+  const rows = await listQcCards("", validationId);
+  return rows.find(row => row.card_type === cardType) || null;
+}
+
+export async function getQcCard(id: number): Promise<QcCardDetail | null> {
+  await ensureQcCardSchema();
+  const baseResult = await query(`
+    SELECT
+      validation_id,
+      validation_code,
+      card_type
+    FROM eurolab_qc_cards
+    WHERE id = $1
+  `, [id]);
+
+  if (baseResult.rowCount === 0) return null;
+  const base = baseResult.rows[0] as { validation_id: number; validation_code: string; card_type: string };
+
+  const groupResult = await query(`
+    SELECT
+      MIN(id)::int AS id,
+      'QC-' || validation_code AS code,
+      card_type,
+      validation_id,
+      validation_code,
+      MAX(method_name) AS method_name,
+      COUNT(*)::int AS component_count,
+      ARRAY_AGG(component_name ORDER BY component_name) AS component_names,
+      MIN(created_at) AS created_at,
+      MAX(updated_at) AS updated_at
+    FROM eurolab_qc_cards
+    WHERE validation_id = $1 AND card_type = $2
+    GROUP BY validation_id, validation_code, card_type
+  `, [base.validation_id, base.card_type]);
+
+  if (groupResult.rowCount === 0) return null;
+
+  const cardsResult = await query(`
+    SELECT
+      id,
+      code,
+      card_type,
+      validation_id,
+      validation_code,
+      method_name,
+      component_name,
       lower_limit::float AS lower_limit,
       center_line::float AS center_line,
       upper_limit::float AS upper_limit,
@@ -166,14 +250,58 @@ export async function listQcCards(search = ""): Promise<QcCardListRow[]> {
       created_at,
       updated_at
     FROM eurolab_qc_cards
-    WHERE ${where}
-    ORDER BY updated_at DESC, id DESC
-  `, params);
+    WHERE validation_id = $1 AND card_type = $2
+    ORDER BY component_name ASC, id ASC
+  `, [base.validation_id, base.card_type]);
 
-  return res.rows as QcCardListRow[];
+  const components: QcCardComponent[] = [];
+
+  for (const card of cardsResult.rows as Omit<QcCardComponent, "points" | "audit_logs">[]) {
+    const pointsResult = await query(`
+      SELECT
+        id,
+        sequence_no,
+        COALESCE(label, '') AS label,
+        analyst,
+        value::float AS value,
+        recovery::float AS recovery,
+        source,
+        locked,
+        measured_at,
+        created_at
+      FROM eurolab_qc_card_points
+      WHERE card_id = $1
+      ORDER BY sequence_no ASC, id ASC
+    `, [card.id]);
+
+    const auditResult = await query(`
+      SELECT
+        id,
+        action,
+        point_id,
+        before_data,
+        after_data,
+        created_at
+      FROM eurolab_qc_card_audit_logs
+      WHERE card_id = $1
+      ORDER BY created_at DESC, id DESC
+      LIMIT 100
+    `, [card.id]);
+
+    components.push({
+      ...card,
+      points: pointsResult.rows as QcCardPoint[],
+      audit_logs: auditResult.rows as QcCardAuditLog[],
+    });
+  }
+
+  return {
+    ...(groupResult.rows[0] as QcCardListRow),
+    components,
+  };
 }
 
-export async function getQcCard(id: number): Promise<QcCardDetail | null> {
+export async function getSingleQcCard(id: number): Promise<QcCardComponent | null> {
   await ensureQcCardSchema();
   const cardResult = await query(`
     SELECT
@@ -208,21 +336,14 @@ export async function getQcCard(id: number): Promise<QcCardDetail | null> {
   `, [id]);
 
   const auditResult = await query(`
-    SELECT
-      id,
-      action,
-      point_id,
-      before_data,
-      after_data,
-      created_at
+    SELECT id, action, point_id, before_data, after_data, created_at
     FROM eurolab_qc_card_audit_logs
     WHERE card_id = $1
     ORDER BY created_at DESC, id DESC
     LIMIT 100
   `, [id]);
-
   return {
-    ...(cardResult.rows[0] as QcCardListRow),
+    ...(cardResult.rows[0] as Omit<QcCardComponent, "points" | "audit_logs">),
     points: pointsResult.rows as QcCardPoint[],
     audit_logs: auditResult.rows as QcCardAuditLog[],
   };
@@ -349,7 +470,7 @@ export async function createRangeCardsFromValidation(validationId: number) {
     throw new Error("Validasyonda alt etken madde bulunamadı.");
   }
 
-  const createdCards: QcCardListRow[] = [];
+  const createdCards: QcCardComponent[] = [];
 
   for (const componentName of componentNames) {
     const componentData = asRecord(truenessData[componentName]) as TruenessComponentData;
@@ -431,7 +552,7 @@ export async function createRangeCardsFromValidation(validationId: number) {
       }),
     ]);
 
-    const card = cardResult.rows[0] as QcCardListRow;
+    const card = cardResult.rows[0] as QcCardComponent;
     await query(`DELETE FROM eurolab_qc_card_points WHERE card_id = $1 AND source = 'VALIDATION'`, [card.id]);
 
     for (const [index, point] of sourcePoints.entries()) {
@@ -449,5 +570,5 @@ export async function createRangeCardsFromValidation(validationId: number) {
     throw new Error("Range kartı için geri kazanım verisi bulunamadı.");
   }
 
-  return createdCards;
+  return findQcCardGroupByValidation(validationId, "RANGE");
 }

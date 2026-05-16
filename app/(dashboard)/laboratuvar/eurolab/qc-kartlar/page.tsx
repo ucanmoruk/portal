@@ -9,22 +9,17 @@ type QcCardRow = {
   id: number;
   code: string;
   card_type: string;
+  validation_id: number;
   validation_code: string;
   method_name: string;
-  component_name: string;
-  lower_limit: number;
-  center_line: number;
-  upper_limit: number;
-  unit: string | null;
+  component_count: number;
+  component_names: string[];
   created_at: string;
   updated_at: string;
 };
 
 const formatDate = (date: string) =>
   date ? new Date(date).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "-";
-
-const formatNumber = (value: number) =>
-  Number.isFinite(value) ? value.toLocaleString("tr-TR", { maximumFractionDigits: 2 }) : "-";
 
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
@@ -103,7 +98,7 @@ export default function QcCardsPage() {
             <Search className={styles.searchIcon} size={15} />
             <input
               className={styles.searchInput}
-              placeholder="Kart kodu, validasyon, metot, alt etken madde..."
+              placeholder="Kart kodu, validasyon, metot, alt bileşen..."
               value={search}
               onChange={event => setSearch(event.target.value)}
             />
@@ -133,9 +128,8 @@ export default function QcCardsPage() {
                 <th style={{ width: 150 }}>Kart No</th>
                 <th style={{ width: 120 }}>Validasyon</th>
                 <th>Metot</th>
-                <th style={{ width: 180 }}>Alt Etken Madde</th>
+                <th style={{ width: 220 }}>Alt Bileşenler</th>
                 <th style={{ width: 90 }}>Tip</th>
-                <th style={{ width: 180 }}>Aralık</th>
                 <th style={{ width: 120 }}>Oluşturma</th>
                 <th style={{ width: 120 }}>Güncelleme</th>
                 <th style={{ width: 60 }}></th>
@@ -145,14 +139,14 @@ export default function QcCardsPage() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, rowIndex) => (
                   <tr key={rowIndex}>
-                    {Array.from({ length: 9 }).map((__, cellIndex) => (
+                    {Array.from({ length: 8 }).map((__, cellIndex) => (
                       <td key={cellIndex}><div className={styles.skeleton} /></td>
                     ))}
                   </tr>
                 ))
               ) : pagedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={9}>
+                  <td colSpan={8}>
                     <div className={styles.empty}>QC kart bulunamadı.</div>
                   </td>
                 </tr>
@@ -165,9 +159,8 @@ export default function QcCardsPage() {
                   </td>
                   <td className={styles.tdMono}>{row.validation_code}</td>
                   <td className={styles.tdName}>{row.method_name || "-"}</td>
-                  <td>{row.component_name}</td>
+                  <td>{row.component_count} bileşen · {row.component_names.slice(0, 3).join(", ")}{row.component_names.length > 3 ? "..." : ""}</td>
                   <td>{row.card_type === "RANGE" ? "Range" : row.card_type}</td>
-                  <td className={styles.tdMono}>{formatNumber(row.lower_limit)} - {formatNumber(row.upper_limit)}%</td>
                   <td className={styles.tdMono}>{formatDate(row.created_at)}</td>
                   <td className={styles.tdMono}>{formatDate(row.updated_at)}</td>
                   <td>

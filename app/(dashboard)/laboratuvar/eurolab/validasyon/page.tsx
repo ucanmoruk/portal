@@ -20,6 +20,11 @@ interface ValidationRow {
   study_date: string | null;
 }
 
+type QcCardGroupRow = {
+  id: number;
+  card_type: string;
+};
+
 const statusLabel = (status: string) => {
   if (status === "NEW") return "Yeni";
   if (status === "COMPLETED") return "Tamamlandı";
@@ -153,9 +158,29 @@ export default function ValidationDashboard() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Range kart oluşturulamadı.");
       setQcDialogRow(null);
-      router.push("/laboratuvar/eurolab/qc-kartlar");
+      router.push(`/laboratuvar/eurolab/qc-kartlar/${json.id}`);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Range kart oluşturulamadı."));
+    } finally {
+      setCreatingQcId(null);
+    }
+  };
+
+  const openQcCardDialogOrExisting = async (row: ValidationRow) => {
+    setCreatingQcId(row.id);
+    setError("");
+    try {
+      const res = await fetch(`/api/eurolab/qc-cards?validation_id=${row.id}`, { credentials: "same-origin" });
+      const json: QcCardGroupRow[] & { error?: string } = await res.json();
+      if (!res.ok) throw new Error(json.error || "QC kart kontrol edilemedi.");
+      const existing = Array.isArray(json) ? json.find(card => card.card_type === "RANGE") || json[0] : null;
+      if (existing) {
+        router.push(`/laboratuvar/eurolab/qc-kartlar/${existing.id}`);
+        return;
+      }
+      setQcDialogRow(row);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "QC kart kontrol edilemedi."));
     } finally {
       setCreatingQcId(null);
     }
@@ -248,8 +273,8 @@ export default function ValidationDashboard() {
                   </td>
                   <td>
                     <div className={styles.actionBtns}>
-                      <button className={styles.editBtn} onClick={() => setQcDialogRow(row)} title="QC kartı oluştur">
-                        <BarChart3 size={14} />
+                      <button className={styles.editBtn} onClick={() => openQcCardDialogOrExisting(row)} disabled={creatingQcId === row.id} title="QC kartı">
+                        {creatingQcId === row.id ? <span className={styles.loader} style={{ width: 13, height: 13 }} /> : <BarChart3 size={14} />}
                       </button>
                       <Link href={`/laboratuvar/eurolab/validasyon/${row.id}`}>
                         <button className={styles.editBtn} title="Düzenle">
