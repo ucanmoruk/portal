@@ -47,7 +47,7 @@ interface ValidationDetail {
             uncertaintyValue?: string | number | null;
             distributionType?: string;
         }>;
-        personnel?: Array<{ id: string; name: string; role: string }>;
+        personnel?: Array<{ id: string; userId?: number; name: string; role: string }>;
         components?: Array<{
             id: string;
             code?: string;
@@ -60,13 +60,27 @@ interface ValidationDetail {
             uncertaintyValue?: string | number | null;
             distributionType?: string;
         }>;
+        moduleData?: Record<string, Record<string, unknown>>;
     };
 }
+
+type PersonnelDirectoryRow = {
+    id: number;
+    username?: string;
+    name: string;
+    role: string;
+};
 
 type ParameterTab = {
     value: string;
     label: string;
     parameterIds: string[];
+};
+
+type ReportModulePayload = {
+    type: string;
+    component: string;
+    data: Record<string, unknown>;
 };
 
 const typeLabel = (type: string) => {
@@ -86,6 +100,33 @@ const formatDate = (date: string | null) => {
     if (!date) return "—";
     return new Date(date).toLocaleDateString("tr-TR");
 };
+
+const normalizePersonName = (value: string) =>
+    value.trim().toLocaleLowerCase("tr-TR").replace(/\s+/g, " ");
+
+const isPlaceholderRole = (value?: string) => normalizePersonName(value || "").includes("yetkili");
+
+const enrichPersonnelRoles = (
+    personnel: Array<{ id?: string; userId?: number; name: string; role?: string }>,
+    directory: PersonnelDirectoryRow[],
+) => personnel.map(person => {
+    const numericId = Number(person.userId ?? person.id);
+    const byId = Number.isFinite(numericId) ? directory.find(row => row.id === numericId) : undefined;
+    const personName = normalizePersonName(person.name);
+    const byName = directory.find(row => {
+        const directoryName = normalizePersonName(row.name);
+        const username = normalizePersonName(row.username || "");
+        return directoryName === personName
+            || username === personName
+            || directoryName.includes(personName)
+            || personName.includes(directoryName);
+    });
+    const match = byId || byName;
+    return {
+        ...person,
+        role: match?.role || (isPlaceholderRole(person.role) ? "" : person.role) || "-",
+    };
+});
 
 const normalizeParamId = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
@@ -140,6 +181,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
     const [validation, setValidation] = useState<ValidationDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [personnelDirectory, setPersonnelDirectory] = useState<PersonnelDirectoryRow[]>([]);
 
     const components = useMemo(() => {
         const configured = validation?.config?.components?.map(component => component.name).filter(Boolean) || [];
@@ -168,6 +210,25 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
     useEffect(() => {
         let alive = true;
 
+        async function loadPersonnelDirectory() {
+            try {
+                const res = await fetch("/api/eurolab/personnel", { credentials: "same-origin" });
+                const json: PersonnelDirectoryRow[] = await res.json();
+                if (alive && res.ok && Array.isArray(json)) setPersonnelDirectory(json);
+            } catch {
+                if (alive) setPersonnelDirectory([]);
+            }
+        }
+
+        loadPersonnelDirectory();
+        return () => {
+            alive = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        let alive = true;
+
         async function loadValidation() {
             setLoading(true);
             setError("");
@@ -183,17 +244,34 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                 setValidation(json);
                 setReportData(prev => ({
                     ...prev,
+                    description: json.config?.description,
+                    devices: json.config?.devices || [],
+                    personnel: enrichPersonnelRoles(json.config?.personnel || [], personnelDirectory),
+                    components: json.config?.components || [],
+                    parameters: json.config?.parameters || [],
                     moduleData: json.config?.moduleData || {},
                     meta: {
-                        title: json.title || json.method_name,
+                        title: String(json.title || json.method_name || "").replace(/\s+Validasyonu\s*$/i, "").trim(),
                         id: json.code || String(json.id),
                         method: json.technique || json.method_code || "",
+                        methodCode: json.method_code || "",
+                        methodSource: json.config?.methodSource || json.method_code || "",
+                        matrix: json.matrix || "",
+                        studyType: json.study_type || "",
+                        plannedStartDate: json.planned_start_date,
+                        plannedEndDate: json.planned_end_date,
+                        documentNo: json.config?.documentNo || "K.SOP.16 / Ek-1",
+                        publishDate: json.config?.publishDate || "",
+                        revisionNo: json.config?.revisionNo || "-",
+                        revisionDate: json.config?.revisionDate || "-",
+                        reportingUnit: json.config?.reportingUnit || json.config?.components?.find((component: { unit?: string }) => component.unit)?.unit || "",
+                        conclusion: json.config?.conclusion,
                         date: new Date().toLocaleDateString("tr-TR"),
                         analyst: "Analist",
                     },
                 }));
-            } catch (err: any) {
-                if (alive) setError(err.message);
+            } catch (err: unknown) {
+                if (alive) setError(err instanceof Error ? err.message : "Validasyon detayı alınamadı.");
             } finally {
                 if (alive) setLoading(false);
             }
@@ -203,16 +281,16 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
         return () => {
             alive = false;
         };
-    }, [id]);
+    }, [id, personnelDirectory]);
 
-    const persistModuleData = async (payload: any) => {
+    const persistModuleData = async (payload: ReportModulePayload) => {
         if (!validation) return;
 
         const currentConfig = validation.config || {};
         const moduleData = {
-            ...((currentConfig as any).moduleData || {}),
+            ...(currentConfig.moduleData || {}),
             [payload.type]: {
-                ...(((currentConfig as any).moduleData || {})[payload.type] || {}),
+                ...((currentConfig.moduleData || {})[payload.type] || {}),
                 [payload.component]: payload.data,
             },
         };
@@ -228,11 +306,12 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
-            throw new Error(json.error || "Validasyon verileri kaydedilemedi.");
+            const errorMessage = typeof json === "object" && json && "error" in json ? String(json.error) : "";
+            throw new Error(errorMessage || "Validasyon verileri kaydedilemedi.");
         }
     };
 
-    const handleReportDataUpdate = (payload: any) => {
+    const handleReportDataUpdate = (payload: ReportModulePayload) => {
         setReportData(prev => {
             const newData = { ...prev };
             newData.moduleData = {
@@ -247,11 +326,11 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                 const compIndex = newData.lodData?.components.findIndex(c => c.name === payload.component);
                 const newCompData = {
                     name: payload.component,
-                    lod: payload.data.lod,
-                    loq: payload.data.loq,
-                    unit: payload.data.unit,
-                    mean: payload.data.mean,
-                    stdDev: payload.data.stdDev,
+                    lod: Number(payload.data.lod),
+                    loq: Number(payload.data.loq),
+                    unit: String(payload.data.unit || ""),
+                    mean: Number(payload.data.mean),
+                    stdDev: Number(payload.data.stdDev),
                 };
 
                 if (compIndex !== undefined && compIndex >= 0) {
@@ -260,7 +339,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                     if (!newData.lodData) newData.lodData = { components: [] };
                     newData.lodData.components.push(newCompData);
                 }
-                if (payload.data.notes) {
+                if (typeof payload.data.notes === "string" && payload.data.notes) {
                     if (!newData.lodData) newData.lodData = { components: [], notes: "" };
                     newData.lodData.notes = payload.data.notes;
                 }
@@ -268,11 +347,11 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                 const compIndex = newData.linearityData?.components.findIndex(c => c.name === payload.component);
                 const newCompData = {
                     name: payload.component,
-                    slope: payload.data.slope,
-                    intercept: payload.data.intercept,
-                    rSquared: payload.data.rSquared,
-                    equation: payload.data.equation,
-                    range: payload.data.range,
+                    slope: Number(payload.data.slope),
+                    intercept: Number(payload.data.intercept),
+                    rSquared: Number(payload.data.rSquared),
+                    equation: String(payload.data.equation || ""),
+                    range: String(payload.data.range || ""),
                 };
 
                 if (compIndex !== undefined && compIndex >= 0) {
@@ -281,7 +360,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                     if (!newData.linearityData) newData.linearityData = { components: [] };
                     newData.linearityData.components.push(newCompData);
                 }
-                if (payload.data.notes) {
+                if (typeof payload.data.notes === "string" && payload.data.notes) {
                     if (!newData.linearityData) newData.linearityData = { components: [], notes: "" };
                     newData.linearityData.notes = payload.data.notes;
                 }
@@ -290,8 +369,8 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
             return newData;
         });
 
-        persistModuleData(payload).catch((error: any) => {
-            alert(error.message || "Validasyon verileri kaydedilemedi.");
+        persistModuleData(payload).catch((error: unknown) => {
+            alert(error instanceof Error ? error.message : "Validasyon verileri kaydedilemedi.");
         });
     };
 
@@ -317,7 +396,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
     const parameterTabs = buildParameterTabs(validation.config?.parameters || []);
     const defaultTab = "protocol";
     const parameterById = new Map((validation.config?.parameters || []).map(parameter => [parameter.id, parameter]));
-    const moduleData = (validation.config as any)?.moduleData || {};
+    const moduleData = validation.config?.moduleData || {};
     const fixedTabs = [
         { value: "sample_preparation", label: "Numune Hazırlama", title: "Numune Hazırlama", description: "Numune hazırlama adımları, seyreltme/ekstraksiyon işlemleri ve çalışma koşulları bu alanda takip edilir." },
         { value: "measurement_uncertainty", label: "Ölçüm Belirsizliği", title: "Ölçüm Belirsizliği", description: "Validasyon çalışmasına ait belirsizlik bileşenleri ve hesap özetleri bu alanda takip edilir." },

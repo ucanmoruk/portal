@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { type ChangeEvent, useState, useEffect, useCallback } from "react";
 import styles from '@/app/styles/table.module.css';
 import { useRouter } from "next/navigation";
 
@@ -70,6 +70,8 @@ export default function MetotTable() {
     const [previewError, setPreviewError] = useState("");
     const [personnelOptions, setPersonnelOptions] = useState<PersonnelOption[]>([]);
     const [personnelLoading, setPersonnelLoading] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [importMessage, setImportMessage] = useState("");
 
     const fetchData = useCallback(async (s: string) => {
         setLoading(true);
@@ -85,8 +87,8 @@ export default function MetotTable() {
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || "Veri alınamadı");
             setData(json);
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "Veri alınamadı.");
         } finally {
             setLoading(false);
         }
@@ -160,8 +162,8 @@ export default function MetotTable() {
             if (!res.ok) throw new Error("İşlem başarısız");
             setModalOpen(false);
             fetchData(search);
-        } catch (e: any) {
-            setFormError(e.message);
+        } catch (e: unknown) {
+            setFormError(e instanceof Error ? e.message : "İşlem başarısız.");
         } finally {
             setSaving(false);
         }
@@ -175,10 +177,38 @@ export default function MetotTable() {
             if (!res.ok) throw new Error("İşlem başarısız");
             setDeleteTarget(null);
             fetchData(search);
-        } catch (e: any) {
-            alert(e.message);
+        } catch (e: unknown) {
+            alert(e instanceof Error ? e.message : "İşlem başarısız.");
         } finally {
             setDeleting(false);
+        }
+    };
+
+    const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (!file) return;
+
+        setImporting(true);
+        setImportMessage("");
+        setError("");
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            const res = await fetch("/api/eurolab/methods/import", {
+                method: "POST",
+                body: formData,
+                credentials: "same-origin",
+            });
+            const json: { imported?: number; errors?: string[]; error?: string } = await res.json();
+            if (!res.ok) throw new Error(json.error || "Excel içeri aktarılamadı.");
+            const warning = json.errors?.length ? ` ${json.errors.length} satır atlandı.` : "";
+            setImportMessage(`${json.imported || 0} metot kaydı içeri aktarıldı.${warning}`);
+            fetchData(search);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Excel içeri aktarılamadı.");
+        } finally {
+            setImporting(false);
         }
     };
 
@@ -198,8 +228,8 @@ export default function MetotTable() {
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || "Analiz talimatı alınamadı.");
             setPreviewTarget(json);
-        } catch (e: any) {
-            setPreviewError(e.message);
+        } catch (e: unknown) {
+            setPreviewError(e instanceof Error ? e.message : "Analiz talimatı alınamadı.");
         } finally {
             setPreviewLoading(false);
         }
@@ -236,6 +266,13 @@ export default function MetotTable() {
 
                 <div className={styles.toolbarRight}>
                     <span className={styles.totalCount}>{data.length} kayıt</span>
+                    <button className={styles.cancelBtn} onClick={() => window.location.assign("/api/eurolab/methods/import")}>
+                        Şablon
+                    </button>
+                    <label className={styles.cancelBtn} style={{ cursor: importing ? "not-allowed" : "pointer" }}>
+                        {importing ? "Yükleniyor..." : "Excelden Aktar"}
+                        <input type="file" accept=".xlsx,.xls" onChange={handleImport} disabled={importing} style={{ display: "none" }} />
+                    </label>
                     <button className={styles.addBtn} onClick={openAdd}>
                         <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
                             <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
@@ -247,6 +284,7 @@ export default function MetotTable() {
 
             <div className={styles.tableCard}>
                 {error && <div className={styles.errorBar}>{error}</div>}
+                {importMessage && <div className={styles.formError} style={{ background: "#ecfdf5", color: "#047857", margin: "12px" }}>{importMessage}</div>}
                 <div className={styles.tableWrapper}>
                     <table className={styles.table}>
                         <thead>

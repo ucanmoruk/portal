@@ -82,9 +82,9 @@ CREATE TABLE eurolab_qc_card_audit_logs (
 
 -- 5. Başlangıç Verileri (Seed Data)
 INSERT INTO eurolab_methods (method_code, name, technique, matrix, personnel, validation_date, status) VALUES 
-('M001', 'HPLC ile Kahvede Kafein Tayini', 'HPLC-UV', 'Gıda', '["Dr. Ahmet Yılmaz", "Ayşe Demir"]', '2023-03-15', 'Active'),
+('M001', 'HPLC ile Kahvede Kafein Tayini', 'HPLC-UV', 'Gıda', '["Ayşe Demir"]', '2023-03-15', 'Active'),
 ('M002', 'Süt ve Süt Ürünlerinde Aflatoksin M1', 'HPLC-FLD', 'Gıda', '["Mehmet Kaya"]', '2023-06-20', 'Active'),
-('M003', 'İçme Sularında Ağır Metal Analizi', 'ICP-MS', 'Su', '["Dr. Ahmet Yılmaz", "Canan Çelik"]', '2023-09-10', 'Pending'),
+('M003', 'İçme Sularında Ağır Metal Analizi', 'ICP-MS', 'Su', '["Canan Çelik"]', '2023-09-10', 'Pending'),
 ('M004', 'Balda Pestisit Kalıntısı', 'GC-MS/MS', 'Gıda', '["Ayşe Demir", "Burak Yıldız"]', '2023-11-05', 'Active');
 
 INSERT INTO eurolab_validations (title, method_id, study_type, status) VALUES 

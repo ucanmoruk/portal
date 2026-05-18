@@ -65,6 +65,7 @@ export async function GET() {
                 COALESCE(v.config, '{}'::jsonb) AS config
             FROM eurolab_validations v
             LEFT JOIN eurolab_methods m ON m.id = v.method_id
+            WHERE COALESCE(v.status, '') <> 'PASSIVE'
             ORDER BY COALESCE(v.planned_start_date, v.study_date) DESC, v.id DESC
         `);
 

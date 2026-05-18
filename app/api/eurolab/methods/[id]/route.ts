@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasEurolabDatabaseConfig, query } from "@/lib/db_eurolab";
 import { deactivateLocalMethod, getLocalMethod, updateLocalMethod } from "@/lib/eurolab_local_methods";
+import { sanitizeMethodPersonnel, sanitizeMethodRow } from "@/lib/eurolab_methods";
 
 // GET /api/eurolab/methods/[id]
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -10,14 +11,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         if (!hasEurolabDatabaseConfig()) {
             const method = await getLocalMethod(id);
             if (!method) return NextResponse.json({ error: "Not found" }, { status: 404 });
-            return NextResponse.json(method);
+            return NextResponse.json(sanitizeMethodRow(method));
         }
 
         const res = await query("SELECT * FROM eurolab_methods WHERE id = $1", [id]);
         if (res.rowCount === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        return NextResponse.json(res.rows[0]);
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json(sanitizeMethodRow(res.rows[0]));
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Kayıt alınamadı.";
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
 
@@ -27,13 +29,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         const { id } = await params;
         const body = await request.json();
         const { method_code, name, technique, matrix, personnel, validation_date, instruction } = body;
+        const sanitizedPersonnel = sanitizeMethodPersonnel(personnel);
 
         if (!hasEurolabDatabaseConfig()) {
             const method = await updateLocalMethod(id, instruction !== undefined
                 ? { instruction }
-                : { method_code, name, technique, matrix, personnel, validation_date: validation_date || null });
+                : { method_code, name, technique, matrix, personnel: sanitizedPersonnel, validation_date: validation_date || null });
             if (!method) return NextResponse.json({ error: "Kayıt bulunamadı" }, { status: 404 });
-            return NextResponse.json(method);
+            return NextResponse.json(sanitizeMethodRow(method));
         }
 
         let sql = "";
@@ -51,14 +54,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
                 WHERE id = $7
                 RETURNING *
             `;
-            values = [method_code, name, technique, matrix, JSON.stringify(personnel || []), validation_date || null, id];
+            values = [method_code, name, technique, matrix, JSON.stringify(sanitizedPersonnel), validation_date || null, id];
         }
         
         const res = await query(sql, values);
         if (res.rowCount === 0) return NextResponse.json({ error: "Kayıt bulunamadı" }, { status: 404 });
-        return NextResponse.json(res.rows[0]);
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json(sanitizeMethodRow(res.rows[0]));
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Kayıt güncellenemedi.";
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
 
@@ -76,7 +80,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         const res = await query("UPDATE eurolab_methods SET status = 'Passive' WHERE id = $1 RETURNING *", [id]);
         if (res.rowCount === 0) return NextResponse.json({ error: "Kayıt bulunamadı" }, { status: 404 });
         return NextResponse.json({ message: "Kayıt pasifleştirildi" });
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Kayıt pasifleştirilemedi.";
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

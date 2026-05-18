@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import styles from "@/app/styles/table.module.css";
 
@@ -86,7 +86,7 @@ export default function ValidationDashboard() {
         }
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Validasyon kayıtları alınamadı.");
-        if (alive) setRows(json);
+        if (alive) setRows(Array.isArray(json) ? json.filter(row => row.status !== "PASSIVE") : []);
       } catch (err: unknown) {
         if (alive) setError(getErrorMessage(err, "Validasyon kayıtları alınamadı."));
       } finally {
@@ -126,7 +126,7 @@ export default function ValidationDashboard() {
   const markPassive = async (row: ValidationRow) => {
     const previousRows = rows;
     setUpdatingId(row.id);
-    setRows(current => current.map(item => item.id === row.id ? { ...item, status: "PASSIVE" } : item));
+    setRows(current => current.filter(item => item.id !== row.id));
     setError("");
 
     try {
@@ -223,7 +223,7 @@ export default function ValidationDashboard() {
                 <th style={{ width: 150 }}>Tür</th>
                 <th style={{ width: 150 }}>Durum</th>
                 <th style={{ width: 190 }}>Tarih</th>
-                <th style={{ width: 118 }}></th>
+                <th style={{ width: 154 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -281,6 +281,11 @@ export default function ValidationDashboard() {
                           <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                             <path d="m5.433 13.917 1.262-3.155A4 4 0 0 1 7.58 9.42l6.92-6.918a2.121 2.121 0 0 1 3 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 0 1-.65-.65Z" />
                           </svg>
+                        </button>
+                      </Link>
+                      <Link href={`/laboratuvar/eurolab/validasyon/${row.id}/rapor`}>
+                        <button className={styles.editBtn} title="Rapor yazdır">
+                          <Printer size={14} />
                         </button>
                       </Link>
                       <button className={styles.deleteBtn} onClick={() => markPassive(row)} disabled={updatingId === row.id || row.status === "PASSIVE"} title="Pasife al">

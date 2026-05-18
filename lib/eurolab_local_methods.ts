@@ -29,7 +29,7 @@ const seedMethods: EurolabMethod[] = [
         name: "HPLC ile Kahvede Kafein Tayini",
         technique: "HPLC-UV",
         matrix: "Gıda",
-        personnel: ["Dr. Ahmet Yılmaz", "Ayşe Demir"],
+        personnel: ["Ayşe Demir"],
         validation_date: "2023-03-15",
         status: "Active",
     },
@@ -49,7 +49,7 @@ const seedMethods: EurolabMethod[] = [
         name: "İçme Sularında Ağır Metal Analizi",
         technique: "ICP-MS",
         matrix: "Su",
-        personnel: ["Dr. Ahmet Yılmaz", "Canan Çelik"],
+        personnel: ["Canan Çelik"],
         validation_date: "2023-09-10",
         status: "Pending",
     },
@@ -115,6 +115,40 @@ export async function createLocalMethod(input: Partial<EurolabMethod>) {
     methods.push(method);
     await writeLocalMethods(methods);
     return method;
+}
+
+export async function upsertLocalMethods(inputs: Array<Partial<EurolabMethod>>) {
+    const methods = await readLocalMethods();
+    let imported = 0;
+
+    inputs.forEach(input => {
+        const methodCode = String(input.method_code || "").trim();
+        const name = String(input.name || "").trim();
+        if (!methodCode || !name) return;
+
+        const index = methods.findIndex(method => method.method_code.toLocaleLowerCase("tr-TR") === methodCode.toLocaleLowerCase("tr-TR"));
+        const nextMethod: EurolabMethod = {
+            id: index >= 0 ? methods[index].id : Math.max(0, ...methods.map(method => method.id)) + 1,
+            method_code: methodCode,
+            name,
+            technique: input.technique || "",
+            matrix: input.matrix || "",
+            personnel: Array.isArray(input.personnel) ? input.personnel : [],
+            validation_date: input.validation_date || null,
+            status: "Active",
+            instruction: index >= 0 ? methods[index].instruction : undefined,
+        };
+
+        if (index >= 0) {
+            methods[index] = { ...methods[index], ...nextMethod };
+        } else {
+            methods.push(nextMethod);
+        }
+        imported += 1;
+    });
+
+    await writeLocalMethods(methods);
+    return { imported };
 }
 
 export async function updateLocalMethod(id: string | number, input: Partial<EurolabMethod>) {

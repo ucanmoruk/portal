@@ -347,6 +347,74 @@ select.input {
   padding: 14px;
 }
 
+.selectorCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--color-border-light);
+  border-radius: 14px;
+  background: var(--color-surface-2);
+  padding: 14px;
+}
+
+.selectorTitle {
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.selectorDescription {
+  margin-top: 3px;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.45);
+  padding: 24px;
+}
+
+.selectorModal {
+  display: flex;
+  width: min(980px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-light);
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: 0 18px 60px rgba(15, 23, 42, 0.24);
+  padding: 18px;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.modalTitle {
+  color: var(--color-text-primary);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.modalTableShell {
+  overflow: auto;
+  border: 1px solid var(--color-border-light);
+  border-radius: 12px;
+}
+
 .tableShell {
   overflow: hidden;
   border: 1px solid var(--color-border-light);
@@ -485,8 +553,15 @@ select.input {
   .dateGrid,
   .methodPreview,
   .entryBox,
+  .selectorCard,
   .summaryGrid {
     grid-template-columns: 1fr;
+  }
+
+  .selectorCard,
+  .modalHeader {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .panelFooter {

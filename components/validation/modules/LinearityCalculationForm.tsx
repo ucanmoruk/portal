@@ -72,6 +72,12 @@ const formatStat = (value: number, digits = 4) => {
     return value.toLocaleString("tr-TR", { maximumFractionDigits: digits });
 };
 
+const rangeUnitLabel = (unit: string) => {
+    const match = UNITS.find(item => item.value === unit);
+    if (match) return match.label.replace(/\s*\(.+\)$/, "");
+    return unit.replace("_", "/");
+};
+
 export function LinearityCalculationForm({ components = ["Genel"], initialData = {}, onReportDataChange }: LinearityFormProps) {
     const [activeComponent, setActiveComponent] = useState(components[0]);
     const [replicates, setReplicates] = useState(() => Number(Object.values(initialData)[0]?.replicates) || 1); // Default n=1
@@ -389,7 +395,7 @@ export function LinearityCalculationForm({ components = ["Genel"], initialData =
             component: comp,
             data: {
                 ...results[comp],
-                range: `${minX} - ${maxX} ${settings.unit.split('_')[0]}`,
+                range: `${minX} - ${maxX} ${rangeUnitLabel(settings.unit)}`,
                 unit: settings.unit,
                 notes: settings.notes,
                 replicates,

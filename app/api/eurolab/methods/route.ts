@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasEurolabDatabaseConfig, query } from "@/lib/db_eurolab";
 import { createLocalMethod, listLocalMethods } from "@/lib/eurolab_local_methods";
+import { sanitizeMethodPersonnel, sanitizeMethodRow } from "@/lib/eurolab_methods";
 
 // GET /api/eurolab/methods
 export async function GET(request: Request) {
@@ -9,10 +10,11 @@ export async function GET(request: Request) {
         const search = searchParams.get("search") || "";
 
         if (!hasEurolabDatabaseConfig()) {
-            return NextResponse.json(await listLocalMethods(search));
+            const rows = await listLocalMethods(search);
+            return NextResponse.json(rows.map(sanitizeMethodRow));
         }
         
-        let sql = `
+        const sql = `
             SELECT * FROM eurolab_methods 
             WHERE (method_code ILIKE $1 OR name ILIKE $1 OR technique ILIKE $1 OR matrix ILIKE $1)
             AND status = 'Active'
@@ -20,10 +22,11 @@ export async function GET(request: Request) {
         `;
         
         const res = await query(sql, [`%${search}%`]);
-        return NextResponse.json(res.rows);
-    } catch (error: any) {
+        return NextResponse.json(res.rows.map(sanitizeMethodRow));
+    } catch (error: unknown) {
         console.error("Eurolab Methods GET Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = error instanceof Error ? error.message : "Veri alınamadı.";
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
 
@@ -32,6 +35,7 @@ export async function POST(request: Request) {
     try {
         const body = await request.json();
         const { method_code, name, technique, matrix, personnel, validation_date } = body;
+        const sanitizedPersonnel = sanitizeMethodPersonnel(personnel);
 
         if (!hasEurolabDatabaseConfig()) {
             return NextResponse.json(await createLocalMethod({
@@ -39,7 +43,7 @@ export async function POST(request: Request) {
                 name,
                 technique,
                 matrix,
-                personnel,
+                personnel: sanitizedPersonnel,
                 validation_date: validation_date || null,
             }));
         }
@@ -55,13 +59,14 @@ export async function POST(request: Request) {
             name, 
             technique, 
             matrix, 
-            JSON.stringify(personnel || []), 
+            JSON.stringify(sanitizedPersonnel), 
             validation_date || null
         ]);
         
         return NextResponse.json(res.rows[0]);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Eurolab Methods POST Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = error instanceof Error ? error.message : "Kayıt oluşturulamadı.";
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

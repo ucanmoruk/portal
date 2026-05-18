@@ -51,7 +51,7 @@ async function writeLocalValidations(validations: EurolabValidation[]) {
 
 export async function listLocalValidations() {
     const validations = await readLocalValidations();
-    return validations.sort((a, b) => {
+    return validations.filter(validation => validation.status !== "PASSIVE").sort((a, b) => {
         const aDate = a.planned_start_date || a.study_date || "";
         const bDate = b.planned_start_date || b.study_date || "";
         return bDate.localeCompare(aDate) || b.id - a.id;

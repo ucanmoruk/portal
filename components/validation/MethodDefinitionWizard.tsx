@@ -51,6 +51,7 @@ interface Device {
 
 interface Person {
     id: string;
+    userId?: number;
     name: string;
     role: string;
 }
@@ -124,6 +125,11 @@ const escapeHtml = (value: string | number | null | undefined) => String(value ?
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
+const normalizePersonName = (value: string) =>
+    value.trim().toLocaleLowerCase("tr-TR").replace(/\s+/g, " ");
+
+const isPlaceholderRole = (value?: string) => normalizePersonName(value || "").includes("yetkili");
+
 const STEPS = [
     { id: 1, title: "Tip", hint: "Metot ve kapsam" },
     { id: 2, title: "Parametre", hint: "Çalışma modülleri" },
@@ -145,6 +151,9 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
     const [description, setDescription] = useState("");
     const [plannedStartDate, setPlannedStartDate] = useState("");
     const [plannedEndDate, setPlannedEndDate] = useState("");
+    const [reportPublishDate, setReportPublishDate] = useState("");
+    const [reportRevisionNo, setReportRevisionNo] = useState("");
+    const [reportRevisionDate, setReportRevisionDate] = useState("");
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState("");
     const [loadingValidation, setLoadingValidation] = useState(false);
@@ -156,7 +165,6 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
     const [deviceInventoryLoading, setDeviceInventoryLoading] = useState(false);
 
     const [personnel, setPersonnel] = useState<Person[]>([]);
-    const [newPerson, setNewPerson] = useState({ userId: "", name: "", role: "" });
     const [personnelOptions, setPersonnelOptions] = useState<PersonnelOption[]>([]);
     const [personnelLoading, setPersonnelLoading] = useState(false);
     const [personnelError, setPersonnelError] = useState("");
@@ -166,11 +174,23 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
     const [componentInventorySearch, setComponentInventorySearch] = useState("");
     const [componentInventory, setComponentInventory] = useState<InventoryItem[]>([]);
     const [componentInventoryLoading, setComponentInventoryLoading] = useState(false);
+    const [selectorModal, setSelectorModal] = useState<"device" | "personnel" | "component" | null>(null);
+    const [personnelSearch, setPersonnelSearch] = useState("");
 
     const selectedMethod = useMemo(
         () => methods.find(method => String(method.id) === selectedMethodId),
         [methods, selectedMethodId],
     );
+
+    const filteredPersonnelOptions = useMemo(() => {
+        const term = normalizePersonName(personnelSearch);
+        if (!term) return personnelOptions;
+        return personnelOptions.filter(person => {
+            const name = normalizePersonName(person.name);
+            const role = normalizePersonName(person.role || "");
+            return name.includes(term) || role.includes(term);
+        });
+    }, [personnelOptions, personnelSearch]);
 
     useEffect(() => {
         let alive = true;
@@ -239,10 +259,31 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
             (selectedMethod.personnel || []).map((name, index) => ({
                 id: `method-person-${index}`,
                 name,
-                role: "Yetkili",
+                role: "",
             })),
         );
     }, [selectedMethod, editId]);
+
+    useEffect(() => {
+        if (personnelOptions.length === 0) return;
+        setPersonnel(current => {
+            let changed = false;
+            const next = current.map(person => {
+                const byId = person.userId ? personnelOptions.find(option => option.id === person.userId) : undefined;
+                const personName = normalizePersonName(person.name);
+                const byName = personnelOptions.find(option => {
+                    const optionName = normalizePersonName(option.name);
+                    return optionName === personName || optionName.includes(personName) || personName.includes(optionName);
+                });
+                const match = byId || byName;
+                const role = match?.role || (isPlaceholderRole(person.role) ? "" : person.role);
+                if (role === person.role) return person;
+                changed = true;
+                return { ...person, role };
+            });
+            return changed ? next : current;
+        });
+    }, [personnelOptions]);
 
     useEffect(() => {
         if (!editId) return;
@@ -266,6 +307,9 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                 setPlannedStartDate(json.planned_start_date ? String(json.planned_start_date).slice(0, 10) : "");
                 setPlannedEndDate(json.planned_end_date ? String(json.planned_end_date).slice(0, 10) : "");
                 setDescription(json.config?.description || "");
+                setReportPublishDate(json.config?.publishDate || "");
+                setReportRevisionNo(json.config?.revisionNo || "");
+                setReportRevisionDate(json.config?.revisionDate || "");
                 setParameters(Array.isArray(json.config?.parameters) ? normalizeWizardParameters(json.config.parameters) : parametersForType((json.study_type || "FULL_VALIDATION") as MethodType));
                 setDevices(Array.isArray(json.config?.devices) ? json.config.devices.map((device: any) => ({
                     id: device.id || crypto.randomUUID(),
@@ -282,8 +326,9 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                 })) : []);
                 setPersonnel(Array.isArray(json.config?.personnel) ? json.config.personnel.map((person: any) => ({
                     id: person.id || crypto.randomUUID(),
+                    userId: person.userId,
                     name: person.name || "",
-                    role: person.role || "",
+                    role: isPlaceholderRole(person.role) ? "" : person.role || "",
                 })) : []);
                 setComponents(Array.isArray(json.config?.components) ? json.config.components.map((component: any) => ({
                     id: component.id || crypto.randomUUID(),
@@ -409,6 +454,11 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
         }]);
     };
 
+    const chooseDeviceFromInventory = (item: InventoryItem) => {
+        addDeviceFromInventory(item);
+        setSelectorModal(null);
+    };
+
     const addDevice = async () => {
         if (newDevice.code && newDevice.name && newDevice.serialNo) {
             try {
@@ -434,24 +484,15 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
 
     const removeDevice = (id: string) => setDevices(devices.filter(d => d.id !== id));
 
-    const addPerson = () => {
-        if (newPerson.name && newPerson.role) {
-            setPersonnel([...personnel, {
-                id: crypto.randomUUID(),
-                name: newPerson.name,
-                role: newPerson.role,
-            }]);
-            setNewPerson({ userId: "", name: "", role: "" });
-        }
-    };
-
-    const selectPerson = (userId: string) => {
-        const selected = personnelOptions.find(option => String(option.id) === userId);
-        setNewPerson({
-            userId,
-            name: selected?.name || "",
-            role: selected?.role || "",
-        });
+    const addPersonFromOption = (person: PersonnelOption) => {
+        if (personnel.some(item => item.userId === person.id || normalizePersonName(item.name) === normalizePersonName(person.name))) return;
+        setPersonnel(current => [...current, {
+            id: crypto.randomUUID(),
+            userId: person.id,
+            name: person.name,
+            role: person.role || "",
+        }]);
+        setSelectorModal(null);
     };
 
     const removePerson = (id: string) => setPersonnel(personnel.filter(p => p.id !== id));
@@ -471,6 +512,11 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
             uncertaintyValue: item.uncertainty_value ?? "",
             distributionType: item.distribution_type || "",
         }]);
+    };
+
+    const chooseComponentFromInventory = (item: InventoryItem) => {
+        addComponentFromInventory(item);
+        setSelectorModal(null);
     };
 
     const addComponent = async () => {
@@ -604,6 +650,9 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                     planned_end_date: plannedEndDate || null,
                     config: {
                         description,
+                        publishDate: reportPublishDate,
+                        revisionNo: reportRevisionNo,
+                        revisionDate: reportRevisionDate,
                         parameters,
                         devices,
                         personnel,
@@ -730,6 +779,21 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                 </div>
                             </div>
 
+                            <div className={styles.dateGrid}>
+                                <div className={styles.field}>
+                                    <Label htmlFor="report-publish-date" className={styles.label}>Validasyon raporu yayın tarihi</Label>
+                                    <input id="report-publish-date" type="date" className={styles.input} value={reportPublishDate} onChange={event => setReportPublishDate(event.target.value)} />
+                                </div>
+                                <div className={styles.field}>
+                                    <Label htmlFor="report-revision-no" className={styles.label}>Revizyon no</Label>
+                                    <input id="report-revision-no" className={styles.input} value={reportRevisionNo} onChange={event => setReportRevisionNo(event.target.value)} placeholder="Örn: 00" />
+                                </div>
+                                <div className={styles.field}>
+                                    <Label htmlFor="report-revision-date" className={styles.label}>Revizyon tarihi</Label>
+                                    <input id="report-revision-date" type="date" className={styles.input} value={reportRevisionDate} onChange={event => setReportRevisionDate(event.target.value)} />
+                                </div>
+                            </div>
+
                             <div className={styles.field}>
                                 <Label htmlFor="method-desc" className={styles.label}>Açıklama</Label>
                                 <textarea
@@ -801,70 +865,14 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
 
                     {step === 3 && (
                         <div className={styles.section}>
-                            <div className={styles.field}>
-                                <Label className={styles.label}>Envanterden cihaz seç</Label>
-                                <input
-                                    className={styles.input}
-                                    placeholder="Kod, cihaz adı veya seri no ile ara..."
-                                    value={deviceInventorySearch}
-                                    onChange={(event) => setDeviceInventorySearch(event.target.value)}
-                                />
-                            </div>
-                            <div className={styles.tableShell}>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Kod</TableHead>
-                                            <TableHead>Cihaz adı</TableHead>
-                                            <TableHead>Seri/Lot No</TableHead>
-                                            <TableHead className="w-[96px]">Seç</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {deviceInventoryLoading ? (
-                                            <TableRow><TableCell colSpan={4} className={styles.emptyCell}>Envanter yükleniyor...</TableCell></TableRow>
-                                        ) : (
-                                            <>
-                                                <TableRow>
-                                                    <TableCell colSpan={4} className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">Ana cihaz</TableCell>
-                                                </TableRow>
-                                                {deviceInventory.filter(item => item.intended_use === "Ana Cihaz").map(item => (
-                                                    <TableRow key={item.id}>
-                                                        <TableCell>{item.code}</TableCell>
-                                                        <TableCell className="font-medium">{item.name}</TableCell>
-                                                        <TableCell>{item.serial_lot_no || "—"}</TableCell>
-                                                        <TableCell>
-                                                            <Button variant="outline" size="sm" className={styles.secondaryButton} onClick={() => addDeviceFromInventory(item)} disabled={devices.some(device => device.inventoryId === item.id || device.code === item.code)}>
-                                                                Seç
-                                                            </Button>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                                {deviceInventory.filter(item => item.intended_use === "Ana Cihaz").length === 0 && (
-                                                    <TableRow><TableCell colSpan={4} className={styles.emptyCell}>Ana cihaz bulunamadı.</TableCell></TableRow>
-                                                )}
-                                                <TableRow>
-                                                    <TableCell colSpan={4} className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">Numune hazırlama cihazları</TableCell>
-                                                </TableRow>
-                                                {deviceInventory.filter(item => item.intended_use === "Numune Hazırlama").map(item => (
-                                                    <TableRow key={item.id}>
-                                                        <TableCell>{item.code}</TableCell>
-                                                        <TableCell className="font-medium">{item.name}</TableCell>
-                                                        <TableCell>{item.serial_lot_no || "—"}</TableCell>
-                                                        <TableCell>
-                                                            <Button variant="outline" size="sm" className={styles.secondaryButton} onClick={() => addDeviceFromInventory(item)} disabled={devices.some(device => device.inventoryId === item.id || device.code === item.code)}>
-                                                                Seç
-                                                            </Button>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                                {deviceInventory.filter(item => item.intended_use === "Numune Hazırlama").length === 0 && (
-                                                    <TableRow><TableCell colSpan={4} className={styles.emptyCell}>Numune hazırlama cihazı bulunamadı.</TableCell></TableRow>
-                                                )}
-                                            </>
-                                        )}
-                                    </TableBody>
-                                </Table>
+                            <div className={styles.selectorCard}>
+                                <div>
+                                    <div className={styles.selectorTitle}>Cihaz / ekipman seçimi</div>
+                                    <div className={styles.selectorDescription}>Ana cihaz ve numune hazırlama ekipmanlarını aramalı seçim penceresinden ekleyin.</div>
+                                </div>
+                                <Button className={styles.primaryButton} onClick={() => setSelectorModal("device")}>
+                                    <Monitor size={16} /> Envanterden Seç
+                                </Button>
                             </div>
 
                             <div className={styles.entryBox}>
@@ -918,28 +926,14 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
 
                     {step === 4 && (
                         <div className={styles.section}>
-                            <div className={styles.entryBox}>
-                                <div className={styles.field}>
-                                    <Label className={styles.label}>Yetkili personel</Label>
-                                    <select
-                                        className={styles.input}
-                                        value={newPerson.userId}
-                                        onChange={(event) => selectPerson(event.target.value)}
-                                        disabled={personnelLoading}
-                                    >
-                                        <option value="">{personnelLoading ? "Personel listesi yükleniyor..." : "Kullanıcı seçin"}</option>
-                                        {personnelOptions.map(person => (
-                                            <option key={person.id} value={person.id}>
-                                                {person.name}{person.role ? ` (${person.role})` : ""}
-                                            </option>
-                                        ))}
-                                    </select>
+                            <div className={styles.selectorCard}>
+                                <div>
+                                    <div className={styles.selectorTitle}>Validasyona katılan personel</div>
+                                    <div className={styles.selectorDescription}>Kullanıcı listesinden görev tanımıyla birlikte personel seçin.</div>
                                 </div>
-                                <div className={styles.field}>
-                                    <Label className={styles.label}>Görevi / Unvanı</Label>
-                                    <input className={styles.input} placeholder="Örn: Analist" value={newPerson.role} onChange={(event) => setNewPerson({ ...newPerson, role: event.target.value })} />
-                                </div>
-                                <Button onClick={addPerson} className={styles.primaryButton}><UserPlus size={16} /> Ekle</Button>
+                                <Button className={styles.primaryButton} onClick={() => setSelectorModal("personnel")} disabled={personnelLoading}>
+                                    <UserPlus size={16} /> Kullanıcı Listesinden Seç
+                                </Button>
                             </div>
                             {personnelError && <div className={styles.errorText}>{personnelError}</div>}
 
@@ -974,46 +968,14 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
 
                     {step === 5 && (
                         <div className={styles.section}>
-                            <div className={styles.field}>
-                                <Label className={styles.label}>Envanterden standart / komponent seç</Label>
-                                <input
-                                    className={styles.input}
-                                    placeholder="Kod, komponent adı, CAS no veya limit ile ara..."
-                                    value={componentInventorySearch}
-                                    onChange={(event) => setComponentInventorySearch(event.target.value)}
-                                />
-                            </div>
-                            <div className={styles.tableShell}>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Kod</TableHead>
-                                            <TableHead>Komponent adı</TableHead>
-                                            <TableHead>CAS No</TableHead>
-                                            <TableHead>Limit</TableHead>
-                                            <TableHead className="w-[96px]">Seç</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {componentInventoryLoading ? (
-                                            <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Envanter yükleniyor...</TableCell></TableRow>
-                                        ) : componentInventory.length > 0 ? componentInventory.map(item => (
-                                            <TableRow key={item.id}>
-                                                <TableCell>{item.code}</TableCell>
-                                                <TableCell className="font-medium">{item.name}</TableCell>
-                                                <TableCell>{item.cas_no || "—"}</TableCell>
-                                                <TableCell>{item.limit_info || "—"}</TableCell>
-                                                <TableCell>
-                                                    <Button variant="outline" size="sm" className={styles.secondaryButton} onClick={() => addComponentFromInventory(item)} disabled={components.some(component => component.inventoryId === item.id || component.code === item.code)}>
-                                                        Seç
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        )) : (
-                                            <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Standart envanteri bulunamadı.</TableCell></TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
+                            <div className={styles.selectorCard}>
+                                <div>
+                                    <div className={styles.selectorTitle}>Standart / komponent seçimi</div>
+                                    <div className={styles.selectorDescription}>Standart envanterinden CAS no, limit ve belirsizlik bilgileriyle seçim yapın.</div>
+                                </div>
+                                <Button className={styles.primaryButton} onClick={() => setSelectorModal("component")}>
+                                    <Beaker size={16} /> Standart Listesinden Seç
+                                </Button>
                             </div>
 
                             <div className={styles.entryBox}>
@@ -1154,6 +1116,151 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                     )}
                 </div>
             </section>
+
+            {selectorModal && (
+                <div className={styles.modalOverlay} onClick={(event) => event.target === event.currentTarget && setSelectorModal(null)}>
+                    <div className={styles.selectorModal}>
+                        <div className={styles.modalHeader}>
+                            <div>
+                                <div className={styles.modalTitle}>
+                                    {selectorModal === "device" && "Cihaz / Ekipman Seç"}
+                                    {selectorModal === "personnel" && "Personel Seç"}
+                                    {selectorModal === "component" && "Standart / Komponent Seç"}
+                                </div>
+                                <div className={styles.selectorDescription}>
+                                    Listede arama yapıp ilgili kaydı seçin. Seçilen kayıt protokol listesine eklenir.
+                                </div>
+                            </div>
+                            <Button variant="outline" className={styles.secondaryButton} onClick={() => setSelectorModal(null)}>Kapat</Button>
+                        </div>
+
+                        {selectorModal === "device" && (
+                            <>
+                                <input
+                                    className={styles.input}
+                                    placeholder="Kod, cihaz adı veya seri no ile ara..."
+                                    value={deviceInventorySearch}
+                                    onChange={(event) => setDeviceInventorySearch(event.target.value)}
+                                />
+                                <div className={styles.modalTableShell}>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Kod</TableHead>
+                                                <TableHead>Cihaz adı</TableHead>
+                                                <TableHead>Kullanım</TableHead>
+                                                <TableHead>Seri/Lot No</TableHead>
+                                                <TableHead className="w-[96px]">Seç</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {deviceInventoryLoading ? (
+                                                <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Envanter yükleniyor...</TableCell></TableRow>
+                                            ) : deviceInventory.length > 0 ? deviceInventory.map(item => (
+                                                <TableRow key={item.id}>
+                                                    <TableCell>{item.code}</TableCell>
+                                                    <TableCell className="font-medium">{item.name}</TableCell>
+                                                    <TableCell>{item.intended_use}</TableCell>
+                                                    <TableCell>{item.serial_lot_no || "—"}</TableCell>
+                                                    <TableCell>
+                                                        <Button variant="outline" size="sm" className={styles.secondaryButton} onClick={() => chooseDeviceFromInventory(item)} disabled={devices.some(device => device.inventoryId === item.id || device.code === item.code)}>
+                                                            Seç
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )) : (
+                                                <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Cihaz veya ekipman bulunamadı.</TableCell></TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </>
+                        )}
+
+                        {selectorModal === "personnel" && (
+                            <>
+                                <input
+                                    className={styles.input}
+                                    placeholder="Ad soyad veya görev ile ara..."
+                                    value={personnelSearch}
+                                    onChange={(event) => setPersonnelSearch(event.target.value)}
+                                />
+                                <div className={styles.modalTableShell}>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Ad Soyad</TableHead>
+                                                <TableHead>Görevi</TableHead>
+                                                <TableHead className="w-[96px]">Seç</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {personnelLoading ? (
+                                                <TableRow><TableCell colSpan={3} className={styles.emptyCell}>Personel listesi yükleniyor...</TableCell></TableRow>
+                                            ) : filteredPersonnelOptions.length > 0 ? filteredPersonnelOptions.map(person => (
+                                                <TableRow key={person.id}>
+                                                    <TableCell className="font-medium">{person.name}</TableCell>
+                                                    <TableCell>{person.role || "—"}</TableCell>
+                                                    <TableCell>
+                                                        <Button variant="outline" size="sm" className={styles.secondaryButton} onClick={() => addPersonFromOption(person)} disabled={personnel.some(item => item.userId === person.id || normalizePersonName(item.name) === normalizePersonName(person.name))}>
+                                                            Seç
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )) : (
+                                                <TableRow><TableCell colSpan={3} className={styles.emptyCell}>Personel bulunamadı.</TableCell></TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </>
+                        )}
+
+                        {selectorModal === "component" && (
+                            <>
+                                <input
+                                    className={styles.input}
+                                    placeholder="Kod, komponent adı, CAS no veya limit ile ara..."
+                                    value={componentInventorySearch}
+                                    onChange={(event) => setComponentInventorySearch(event.target.value)}
+                                />
+                                <div className={styles.modalTableShell}>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Kod</TableHead>
+                                                <TableHead>Komponent adı</TableHead>
+                                                <TableHead>CAS No</TableHead>
+                                                <TableHead>Limit</TableHead>
+                                                <TableHead className="w-[96px]">Seç</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {componentInventoryLoading ? (
+                                                <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Standart listesi yükleniyor...</TableCell></TableRow>
+                                            ) : componentInventory.length > 0 ? componentInventory.map(item => (
+                                                <TableRow key={item.id}>
+                                                    <TableCell>{item.code}</TableCell>
+                                                    <TableCell className="font-medium">{item.name}</TableCell>
+                                                    <TableCell>{item.cas_no || "—"}</TableCell>
+                                                    <TableCell>{item.limit_info || "—"}</TableCell>
+                                                    <TableCell>
+                                                        <Button variant="outline" size="sm" className={styles.secondaryButton} onClick={() => chooseComponentFromInventory(item)} disabled={components.some(component => component.inventoryId === item.id || component.code === item.code)}>
+                                                            Seç
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )) : (
+                                                <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Standart envanteri bulunamadı.</TableCell></TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

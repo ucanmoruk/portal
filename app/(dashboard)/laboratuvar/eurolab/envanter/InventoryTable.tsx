@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import styles from "@/app/styles/table.module.css";
 
 interface InventoryRow {
@@ -94,6 +94,8 @@ export default function InventoryTable() {
   const [usageRows, setUsageRows] = useState<InventoryUsageRow[]>([]);
   const [usageLoading, setUsageLoading] = useState(false);
   const [usageError, setUsageError] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState("");
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const pages = useMemo(() => buildPages(page, pageCount), [page, pageCount]);
@@ -116,8 +118,8 @@ export default function InventoryTable() {
       if (!res.ok) throw new Error(json.error || "Envanter kayıtları alınamadı.");
       setRows(json.rows || []);
       setTotal(json.total || 0);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Envanter kayıtları alınamadı.");
     } finally {
       setLoading(false);
     }
@@ -180,8 +182,8 @@ export default function InventoryTable() {
       if (!res.ok) throw new Error(json.error || "İşlem tamamlanamadı.");
       setModalOpen(false);
       fetchData();
-    } catch (err: any) {
-      setFormError(err.message);
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "İşlem tamamlanamadı.");
     } finally {
       setSaving(false);
     }
@@ -199,10 +201,38 @@ export default function InventoryTable() {
       if (!res.ok) throw new Error(json.error || "Kayıt pasife alınamadı.");
       setDeleteTarget(null);
       fetchData();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Kayıt pasife alınamadı.");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setImporting(true);
+    setImportMessage("");
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/eurolab/inventory/import", {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin",
+      });
+      const json: { imported?: number; errors?: string[]; error?: string } = await res.json();
+      if (!res.ok) throw new Error(json.error || "Excel içeri aktarılamadı.");
+      const warning = json.errors?.length ? ` ${json.errors.length} satır atlandı.` : "";
+      setImportMessage(`${json.imported || 0} envanter kaydı içeri aktarıldı.${warning}`);
+      fetchData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Excel içeri aktarılamadı.");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -217,8 +247,8 @@ export default function InventoryTable() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Validasyon kullanımları alınamadı.");
       setUsageRows(json.rows || []);
-    } catch (err: any) {
-      setUsageError(err.message);
+    } catch (err: unknown) {
+      setUsageError(err instanceof Error ? err.message : "Validasyon kullanımları alınamadı.");
     } finally {
       setUsageLoading(false);
     }
@@ -267,6 +297,13 @@ export default function InventoryTable() {
 
         <div className={styles.toolbarRight}>
           <span className={styles.totalCount}>{total} kayıt</span>
+          <button className={styles.cancelBtn} onClick={() => window.location.assign("/api/eurolab/inventory/import")}>
+            Şablon
+          </button>
+          <label className={styles.cancelBtn} style={{ cursor: importing ? "not-allowed" : "pointer" }}>
+            {importing ? "Yükleniyor..." : "Excelden Aktar"}
+            <input type="file" accept=".xlsx,.xls" onChange={handleImport} disabled={importing} style={{ display: "none" }} />
+          </label>
           <select className={styles.pageSizeSelect} value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
             <option value={10}>10 / sayfa</option>
             <option value={20}>20 / sayfa</option>
@@ -284,6 +321,7 @@ export default function InventoryTable() {
 
       <div className={styles.tableCard}>
         {error && <div className={styles.errorBar}>{error}</div>}
+        {importMessage && <div className={styles.formError} style={{ background: "#ecfdf5", color: "#047857", margin: "12px" }}>{importMessage}</div>}
         <div className={styles.tableWrapper}>
           <table className={styles.table} style={{ tableLayout: "fixed" }}>
             <thead>
