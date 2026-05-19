@@ -58,6 +58,7 @@ export type QcCardAuditLog = {
   id: number;
   action: string;
   point_id: number | null;
+  actor_name: string | null;
   before_data: JsonRecord | null;
   after_data: JsonRecord | null;
   created_at: string;
@@ -197,11 +198,13 @@ export async function ensureQcCardSchema() {
       card_id INTEGER REFERENCES eurolab_qc_cards(id) ON DELETE CASCADE,
       point_id INTEGER,
       action VARCHAR(30) NOT NULL,
+      actor_name VARCHAR(160),
       before_data JSONB,
       after_data JSONB,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  await query(`ALTER TABLE eurolab_qc_card_audit_logs ADD COLUMN IF NOT EXISTS actor_name VARCHAR(160);`);
 }
 
 export async function listQcCards(search = "", validationId?: number): Promise<QcCardListRow[]> {
@@ -333,6 +336,7 @@ export async function getQcCard(id: number): Promise<QcCardDetail | null> {
         id,
         action,
         point_id,
+        actor_name,
         before_data,
         after_data,
         created_at
@@ -398,7 +402,7 @@ export async function getSingleQcCard(id: number): Promise<QcCardComponent | nul
   `, [id]);
 
   const auditResult = await query(`
-    SELECT id, action, point_id, before_data, after_data, created_at
+    SELECT id, action, point_id, actor_name, before_data, after_data, created_at
     FROM eurolab_qc_card_audit_logs
     WHERE card_id = $1
     ORDER BY created_at DESC, id DESC
@@ -411,7 +415,7 @@ export async function getSingleQcCard(id: number): Promise<QcCardComponent | nul
   };
 }
 
-export async function addQcCardPoint(cardId: number, input: { label?: string; analyst?: string; value?: number | null; target_value?: number | null; recovery: number; measured_at?: string | null }) {
+export async function addQcCardPoint(cardId: number, input: { label?: string; analyst?: string; value?: number | null; target_value?: number | null; recovery: number; measured_at?: string | null }, actorName?: string | null) {
   await ensureQcCardSchema();
   const maxResult = await query(
     `SELECT COALESCE(MAX(sequence_no), 0) + 1 AS next_no FROM eurolab_qc_card_points WHERE card_id = $1`,
@@ -436,9 +440,9 @@ export async function addQcCardPoint(cardId: number, input: { label?: string; an
   ]);
 
   await query(`
-    INSERT INTO eurolab_qc_card_audit_logs (card_id, point_id, action, after_data)
-    VALUES ($1, $2, 'CREATE_POINT', $3::jsonb)
-  `, [cardId, insertResult.rows[0]?.id || null, JSON.stringify(insertResult.rows[0] || {})]);
+    INSERT INTO eurolab_qc_card_audit_logs (card_id, point_id, action, actor_name, after_data)
+    VALUES ($1, $2, 'CREATE_POINT', $3, $4::jsonb)
+  `, [cardId, insertResult.rows[0]?.id || null, actorName || null, JSON.stringify(insertResult.rows[0] || {})]);
 
   await query(`UPDATE eurolab_qc_cards SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [cardId]);
 }
@@ -447,6 +451,7 @@ export async function updateQcCardPoint(
   cardId: number,
   pointId: number,
   input: { label?: string; analyst?: string; value?: number | null; target_value?: number | null; recovery: number; measured_at?: string | null },
+  actorName?: string | null,
 ) {
   await ensureQcCardSchema();
   const beforeResult = await query(`
@@ -463,7 +468,7 @@ export async function updateQcCardPoint(
     UPDATE eurolab_qc_card_points
     SET label = $3, analyst = $4, value = $5, target_value = $6, recovery = $7, measured_at = $8
     WHERE id = $1 AND card_id = $2 AND locked = false
-    RETURNING id, sequence_no, label, analyst, value::float AS value, recovery::float AS recovery, source, locked, measured_at, created_at
+    RETURNING id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, recovery::float AS recovery, source, locked, measured_at, created_at
   `, [
     pointId,
     cardId,
@@ -476,14 +481,14 @@ export async function updateQcCardPoint(
   ]);
 
   await query(`
-    INSERT INTO eurolab_qc_card_audit_logs (card_id, point_id, action, before_data, after_data)
-    VALUES ($1, $2, 'UPDATE_POINT', $3::jsonb, $4::jsonb)
-  `, [cardId, pointId, JSON.stringify(before), JSON.stringify(afterResult.rows[0] || {})]);
+    INSERT INTO eurolab_qc_card_audit_logs (card_id, point_id, action, actor_name, before_data, after_data)
+    VALUES ($1, $2, 'UPDATE_POINT', $3, $4::jsonb, $5::jsonb)
+  `, [cardId, pointId, actorName || null, JSON.stringify(before), JSON.stringify(afterResult.rows[0] || {})]);
 
   await query(`UPDATE eurolab_qc_cards SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [cardId]);
 }
 
-export async function deleteQcCardPoint(cardId: number, pointId: number) {
+export async function deleteQcCardPoint(cardId: number, pointId: number, actorName?: string | null) {
   await ensureQcCardSchema();
   const beforeResult = await query(`
     SELECT id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, recovery::float AS recovery, source, locked, measured_at, created_at
@@ -497,9 +502,9 @@ export async function deleteQcCardPoint(cardId: number, pointId: number) {
 
   await query(`DELETE FROM eurolab_qc_card_points WHERE id = $1 AND card_id = $2 AND locked = false`, [pointId, cardId]);
   await query(`
-    INSERT INTO eurolab_qc_card_audit_logs (card_id, point_id, action, before_data)
-    VALUES ($1, $2, 'DELETE_POINT', $3::jsonb)
-  `, [cardId, pointId, JSON.stringify(before)]);
+    INSERT INTO eurolab_qc_card_audit_logs (card_id, point_id, action, actor_name, before_data)
+    VALUES ($1, $2, 'DELETE_POINT', $3, $4::jsonb)
+  `, [cardId, pointId, actorName || null, JSON.stringify(before)]);
   await query(`UPDATE eurolab_qc_cards SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [cardId]);
 }
 

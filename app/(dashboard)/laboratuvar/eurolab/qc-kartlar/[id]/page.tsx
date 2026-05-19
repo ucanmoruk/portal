@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { use, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -72,6 +72,7 @@ type QcAuditLog = {
   id: number;
   action: string;
   point_id: number | null;
+  actor_name: string | null;
   before_data: Record<string, unknown> | null;
   after_data: Record<string, unknown> | null;
   created_at: string;
@@ -107,6 +108,9 @@ const parseDecimal = (value: string) => {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 };
 
+const axisValueText = (value: number | null | undefined) =>
+  typeof value === "number" && Number.isFinite(value) ? String(Number(value.toFixed(3))) : "";
+
 export default function QcCardDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: cardId } = use(params);
   const [card, setCard] = useState<QcCard | null>(null);
@@ -118,11 +122,12 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   const [error, setError] = useState("");
   const [personnelOptions, setPersonnelOptions] = useState<string[]>([]);
   const [form, setForm] = useState({ analyst: "", value: "", target_value: "", measured_at: "" });
-  const [editForm, setEditForm] = useState({ label: "", analyst: "", value: "", recovery: "", target_value: "", measured_at: "" });
   const [xAxisMin, setXAxisMin] = useState("");
   const [xAxisMax, setXAxisMax] = useState("");
   const [yAxisMin, setYAxisMin] = useState("");
   const [yAxisMax, setYAxisMax] = useState("");
+  const [axisReadyKey, setAxisReadyKey] = useState("");
+  const formRef = useRef<HTMLDivElement | null>(null);
 
   const loadCard = async (id: string) => {
     setLoading(true);
@@ -167,6 +172,36 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     return card.components.find(component => component.id === activeComponentId) || card.components[0] || null;
   }, [activeComponentId, card]);
 
+  const axisStorageKey = activeComponent ? `eurolab-qc-axis:${activeComponent.id}` : "";
+
+  useEffect(() => {
+    if (!activeComponent || typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(`eurolab-qc-axis:${activeComponent.id}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as Partial<Record<"xAxisMin" | "xAxisMax" | "yAxisMin" | "yAxisMax", string>>;
+        setXAxisMin(parsed.xAxisMin ?? "14");
+        setXAxisMax(parsed.xAxisMax ?? "30");
+        setYAxisMin(parsed.yAxisMin ?? axisValueText(activeComponent.lower_control_limit - 3));
+        setYAxisMax(parsed.yAxisMax ?? axisValueText(activeComponent.upper_control_limit + 3));
+        setAxisReadyKey(`eurolab-qc-axis:${activeComponent.id}`);
+        return;
+      } catch {
+        window.localStorage.removeItem(`eurolab-qc-axis:${activeComponent.id}`);
+      }
+    }
+    setXAxisMin("14");
+    setXAxisMax("30");
+    setYAxisMin(axisValueText(activeComponent.lower_control_limit - 3));
+    setYAxisMax(axisValueText(activeComponent.upper_control_limit + 3));
+    setAxisReadyKey(`eurolab-qc-axis:${activeComponent.id}`);
+  }, [activeComponent]);
+
+  useEffect(() => {
+    if (!axisStorageKey || axisReadyKey !== axisStorageKey || typeof window === "undefined") return;
+    window.localStorage.setItem(axisStorageKey, JSON.stringify({ xAxisMin, xAxisMax, yAxisMin, yAxisMax }));
+  }, [axisReadyKey, axisStorageKey, xAxisMax, xAxisMin, yAxisMax, yAxisMin]);
+
   const chartData = useMemo(() => {
     return (activeComponent?.points || []).filter(point => point.source !== "VALIDATION_BASELINE").map(point => ({
       no: point.sequence_no,
@@ -208,24 +243,25 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     Number.isFinite(parseDecimal(yAxisMax)) ? parseDecimal(yAxisMax) : "auto",
   ], [yAxisMax, yAxisMin]);
 
-  const addPoint = async (event: React.FormEvent) => {
+  const savePoint = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!cardId || !activeComponent) return;
     setSaving(true);
     setError("");
     try {
       const res = await fetch(`/api/eurolab/qc-cards/${cardId}`, {
-        method: "POST",
+        method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ ...form, component_card_id: activeComponent.id }),
+        body: JSON.stringify({ ...form, point_id: editingId, component_card_id: activeComponent.id }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Veri eklenemedi.");
+      if (!res.ok) throw new Error(json.error || (editingId ? "Veri güncellenemedi." : "Veri eklenemedi."));
       setCard(json);
+      setEditingId(null);
       setForm({ analyst: "", value: "", target_value: "", measured_at: "" });
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Veri eklenemedi."));
+      setError(getErrorMessage(err, editingId ? "Veri güncellenemedi." : "Veri eklenemedi."));
     } finally {
       setSaving(false);
     }
@@ -233,36 +269,18 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
 
   const startEdit = (point: QcPoint) => {
     setEditingId(point.id);
-    setEditForm({
-      label: point.label || "",
+    setForm({
       analyst: point.analyst || "",
       value: point.value == null ? "" : String(point.value),
-      recovery: String(point.recovery),
       target_value: point.target_value == null ? "" : String(point.target_value),
       measured_at: point.measured_at ? point.measured_at.slice(0, 10) : "",
     });
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
-  const updatePoint = async (pointId: number) => {
-    if (!cardId || !activeComponent) return;
-    setWorkingPointId(pointId);
-    setError("");
-    try {
-      const res = await fetch(`/api/eurolab/qc-cards/${cardId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ ...editForm, point_id: pointId, component_card_id: activeComponent.id }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Veri güncellenemedi.");
-      setCard(json);
-      setEditingId(null);
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, "Veri güncellenemedi."));
-    } finally {
-      setWorkingPointId(null);
-    }
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm({ analyst: "", value: "", target_value: "", measured_at: "" });
   };
 
   const deletePoint = async (pointId: number) => {
@@ -368,11 +386,11 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       </div>
 
       {card && activeComponent && (
-        <div className={styles.tableCard} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
+        <div ref={formRef} className={styles.tableCard} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
           <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border-light)" }}>
-            <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>Yeni Veri</h2>
+            <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>{editingId ? "Veri Güncelle" : "Yeni Veri"}</h2>
           </div>
-          <form onSubmit={addPoint} className={styles.modalBody} style={{ padding: 14 }}>
+          <form onSubmit={savePoint} className={styles.modalBody} style={{ padding: 14 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, alignItems: "end" }}>
               <div className={styles.formGroup}>
                 <label>Personel</label>
@@ -399,8 +417,13 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
               </div>
               <div className={styles.formGroup} style={{ justifyContent: "flex-end" }}>
                 <button className={styles.saveBtn} type="submit" disabled={saving}>
-                  {saving ? <span className={styles.loader} /> : <><Plus size={15} /> Ekle</>}
+                  {saving ? <span className={styles.loader} /> : <><Plus size={15} /> {editingId ? "Güncelle" : "Ekle"}</>}
                 </button>
+                {editingId && (
+                  <button className={styles.cancelBtn} type="button" onClick={cancelEdit} disabled={saving}>
+                    <X size={15} /> Vazgeç
+                  </button>
+                )}
               </div>
             </div>
           </form>
@@ -455,25 +478,12 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                     <td>
                       {!point.locked && (
                         <div className={styles.actionBtns}>
-                          {editingId === point.id ? (
-                            <>
-                              <button className={styles.editBtn} title="Kaydet" onClick={() => updatePoint(point.id)} disabled={workingPointId === point.id}>
-                                <Save size={14} />
-                              </button>
-                              <button className={styles.deleteBtn} title="Vazgeç" onClick={() => setEditingId(null)} disabled={workingPointId === point.id}>
-                                <X size={14} />
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button className={styles.editBtn} title="Düzenle" onClick={() => startEdit(point)} disabled={workingPointId === point.id}>
-                                <Pencil size={14} />
-                              </button>
-                              <button className={styles.deleteBtn} title="Sil" onClick={() => deletePoint(point.id)} disabled={workingPointId === point.id}>
-                                <Trash2 size={14} />
-                              </button>
-                            </>
-                          )}
+                          <button className={styles.editBtn} title="Düzenle" onClick={() => startEdit(point)} disabled={workingPointId === point.id}>
+                            <Pencil size={14} />
+                          </button>
+                          <button className={styles.deleteBtn} title="Sil" onClick={() => deletePoint(point.id)} disabled={workingPointId === point.id}>
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       )}
                     </td>
@@ -496,6 +506,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                 <tr>
                   <th style={{ width: 160 }}>Tarih</th>
                   <th style={{ width: 150 }}>İşlem</th>
+                  <th style={{ width: 150 }}>Kullanıcı</th>
                   <th style={{ width: 110 }}>Data No</th>
                   <th style={{ width: 130 }}>Hedef Değer</th>
                   <th style={{ width: 130 }}>Ölçülen Değer</th>
@@ -504,13 +515,14 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
               </thead>
               <tbody>
                 {auditRows.length === 0 ? (
-                  <tr><td colSpan={6}><div className={styles.empty}>İşlem izi bulunamadı.</div></td></tr>
+                  <tr><td colSpan={7}><div className={styles.empty}>İşlem izi bulunamadı.</div></td></tr>
                 ) : auditRows.map(log => {
                   const data = getAuditData(log);
                   return (
                     <tr key={log.id}>
                       <td className={styles.tdMono}>{formatDate(log.created_at)}</td>
                       <td>{auditLabel(log.action)}</td>
+                      <td>{log.actor_name || "-"}</td>
                       <td className={styles.tdMono}>{data.dataNo}</td>
                       <td className={styles.tdMono}>{formatNumber(data.targetValue)}</td>
                       <td className={styles.tdMono}>{formatNumber(data.measuredValue)}</td>
@@ -587,3 +599,4 @@ function getAuditData(log: QcAuditLog) {
 function auditDataNo(log: QcAuditLog) {
   return getAuditData(log).dataNo || Number.MAX_SAFE_INTEGER;
 }
+

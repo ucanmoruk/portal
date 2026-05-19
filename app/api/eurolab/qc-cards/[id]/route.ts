@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { hasEurolabDatabaseConfig } from "@/lib/db_eurolab";
 import { addQcCardPoint, deleteQcCardPoint, getQcCard, updateQcCardPoint } from "@/lib/eurolab_qc_cards";
 
@@ -53,6 +55,9 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function POST(request: Request, context: RouteContext) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
+
     if (!hasEurolabDatabaseConfig()) {
       return NextResponse.json({ error: "Eurolab veritabanı bağlantısı yok." }, { status: 400 });
     }
@@ -64,7 +69,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     if (!groupId || !cardId) return NextResponse.json({ error: "QC kart seçimi zorunludur." }, { status: 400 });
 
-    await addQcCardPoint(cardId, parsePointPayload(body));
+    await addQcCardPoint(cardId, parsePointPayload(body), session.user?.name || null);
 
     const card = await getQcCard(groupId);
     return NextResponse.json(card);
@@ -76,6 +81,9 @@ export async function POST(request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
+
     if (!hasEurolabDatabaseConfig()) {
       return NextResponse.json({ error: "Eurolab veritabanı bağlantısı yok." }, { status: 400 });
     }
@@ -89,7 +97,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!groupId || !cardId) return NextResponse.json({ error: "QC kart seçimi zorunludur." }, { status: 400 });
     if (!pointId) return NextResponse.json({ error: "Veri satırı seçimi zorunludur." }, { status: 400 });
 
-    await updateQcCardPoint(cardId, pointId, parsePointPayload(body));
+    await updateQcCardPoint(cardId, pointId, parsePointPayload(body), session.user?.name || null);
 
     const card = await getQcCard(groupId);
     return NextResponse.json(card);
@@ -101,6 +109,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
+
     if (!hasEurolabDatabaseConfig()) {
       return NextResponse.json({ error: "Eurolab veritabanı bağlantısı yok." }, { status: 400 });
     }
@@ -114,7 +125,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     if (!groupId || !cardId) return NextResponse.json({ error: "QC kart seçimi zorunludur." }, { status: 400 });
     if (!pointId) return NextResponse.json({ error: "Veri satırı seçimi zorunludur." }, { status: 400 });
 
-    await deleteQcCardPoint(cardId, pointId);
+    await deleteQcCardPoint(cardId, pointId, session.user?.name || null);
 
     const card = await getQcCard(groupId);
     return NextResponse.json(card);
