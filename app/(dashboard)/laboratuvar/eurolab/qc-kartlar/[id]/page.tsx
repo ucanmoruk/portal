@@ -272,6 +272,17 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     return Array.from(new Set(units));
   }, [activeComponent]);
 
+  const dataRows = useMemo(() => {
+    return [...(activeComponent?.points || [])].sort((left, right) => {
+      if (left.sequence_no !== right.sequence_no) return right.sequence_no - left.sequence_no;
+      return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+    });
+  }, [activeComponent]);
+
+  const pointById = useMemo(() => {
+    return new Map((activeComponent?.points || []).map(point => [point.id, point]));
+  }, [activeComponent]);
+
   const resetForm = () => {
     setForm({ analyst: "", value: "", target_value: "", unit: activeComponent?.unit || "mg/kg", measured_at: "" });
   };
@@ -285,6 +296,17 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
     });
   }, [activeComponent]);
+
+  const latestEditableLogIdByPoint = useMemo(() => {
+    const map = new Map<number, number>();
+    const newestFirst = [...auditRows].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
+    for (const log of newestFirst) {
+      if (!log.point_id || map.has(log.point_id)) continue;
+      const point = pointById.get(log.point_id);
+      if (point && !point.locked) map.set(log.point_id, log.id);
+    }
+    return map;
+  }, [auditRows, pointById]);
 
   const xDomain = useMemo<[number | "dataMin", number | "dataMax"]>(() => [
     Number.isFinite(parseDecimal(xAxisMin)) ? parseDecimal(xAxisMin) : "dataMin",
@@ -497,7 +519,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       {card && activeComponent && (
         <div className={styles.tableCard} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
           <div className={styles.tableWrapper} style={{ width: "100%", maxWidth: "100%", maxHeight: "52vh", overflow: "auto" }}>
-            <table className={styles.table} style={{ minWidth: 1040, fontSize: "0.72rem", tableLayout: "fixed" }}>
+            <table className={styles.table} style={{ minWidth: 980, fontSize: "0.72rem", tableLayout: "fixed" }}>
               <thead>
                 <tr>
                   <th style={{ width: 56, padding: "6px 8px" }}>Sıra No</th>
@@ -510,13 +532,12 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                   <th style={{ width: 88, padding: "6px 8px" }}>Tarih</th>
                   <th style={{ width: 120, padding: "6px 8px" }}>Personel</th>
                   <th style={{ width: 104, padding: "6px 8px" }}>Kaynak</th>
-                  <th style={{ width: 58, padding: "6px 8px" }}></th>
                 </tr>
               </thead>
               <tbody>
-                {activeComponent.points.length === 0 ? (
-                  <tr><td colSpan={11}><div className={styles.empty}>Veri bulunamadı.</div></td></tr>
-                ) : activeComponent.points.map(point => {
+                {dataRows.length === 0 ? (
+                  <tr><td colSpan={10}><div className={styles.empty}>Veri bulunamadı.</div></td></tr>
+                ) : dataRows.map(point => {
                   const pointUnit = point.unit || activeComponent.unit || null;
                   const pointLegalLimit = findRecoveryLimit(point.target_value, pointUnit);
                   const lowerLegalLimit = pointLegalLimit?.low ?? activeComponent.lower_legal_limit;
@@ -537,18 +558,6 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                           {pointSourceLabel(point)}
                         </span>
                       </td>
-                      <td>
-                        {!point.locked && (
-                          <div className={styles.actionBtns}>
-                            <button className={styles.editBtn} title="Düzenle" onClick={() => startEdit(point)} disabled={workingPointId === point.id}>
-                              <Pencil size={14} />
-                            </button>
-                            <button className={styles.deleteBtn} title="Sil" onClick={() => deletePoint(point.id)} disabled={workingPointId === point.id}>
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        )}
-                      </td>
                     </tr>
                   );
                 })}
@@ -565,7 +574,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
           </div>
           <div className={styles.tableWrapper}>
             <table className={styles.table}>
-              <thead>
+                            <thead>
                 <tr>
                   <th style={{ width: 160 }}>Tarih</th>
                   <th style={{ width: 150 }}>İşlem</th>
@@ -575,13 +584,16 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                   <th style={{ width: 90 }}>Birim</th>
                   <th style={{ width: 130 }}>Ölçülen Değer</th>
                   <th style={{ width: 150 }}>Geri Kazanım</th>
+                  <th style={{ width: 70 }}></th>
                 </tr>
               </thead>
               <tbody>
                 {auditRows.length === 0 ? (
-                  <tr><td colSpan={8}><div className={styles.empty}>İşlem izi bulunamadı.</div></td></tr>
+                  <tr><td colSpan={9}><div className={styles.empty}>İşlem izi bulunamadı.</div></td></tr>
                 ) : auditRows.map(log => {
                   const data = getAuditData(log);
+                  const editablePoint = log.point_id ? pointById.get(log.point_id) : null;
+                  const showActions = Boolean(editablePoint && !editablePoint.locked && latestEditableLogIdByPoint.get(editablePoint.id) === log.id);
                   return (
                     <tr key={log.id}>
                       <td className={styles.tdMono}>{formatDate(log.created_at)}</td>
@@ -592,6 +604,18 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                       <td className={styles.tdMono}>{data.unit || activeComponent.unit || "-"}</td>
                       <td className={styles.tdMono}>{formatNumber(data.measuredValue)}</td>
                       <td className={styles.tdMono}>{data.recovery == null ? "-" : `${formatNumber(data.recovery)}%`}</td>
+                      <td>
+                        {showActions && editablePoint && (
+                          <div className={styles.actionBtns}>
+                            <button className={styles.editBtn} title="Düzenle" onClick={() => startEdit(editablePoint)} disabled={workingPointId === editablePoint.id}>
+                              <Pencil size={14} />
+                            </button>
+                            <button className={styles.deleteBtn} title="Sil" onClick={() => deletePoint(editablePoint.id)} disabled={workingPointId === editablePoint.id}>
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
