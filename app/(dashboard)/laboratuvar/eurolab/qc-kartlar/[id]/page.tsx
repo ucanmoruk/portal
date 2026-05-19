@@ -119,6 +119,8 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   const [personnelOptions, setPersonnelOptions] = useState<string[]>([]);
   const [form, setForm] = useState({ analyst: "", value: "", target_value: "", measured_at: "" });
   const [editForm, setEditForm] = useState({ label: "", analyst: "", value: "", recovery: "", target_value: "", measured_at: "" });
+  const [chartWidth, setChartWidth] = useState(100);
+  const [chartHeight, setChartHeight] = useState(300);
 
   const loadCard = async (id: string) => {
     setLoading(true);
@@ -183,6 +185,16 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     const fromPoints = (activeComponent?.points || []).map(point => point.analyst || "").filter(Boolean);
     return Array.from(new Set([...personnelOptions, ...fromPoints])).sort((left, right) => left.localeCompare(right, "tr-TR"));
   }, [activeComponent, personnelOptions]);
+
+  const auditRows = useMemo(() => {
+    const logs = activeComponent?.audit_logs || [];
+    return [...logs].sort((left, right) => {
+      const leftNo = auditDataNo(left);
+      const rightNo = auditDataNo(right);
+      if (leftNo !== rightNo) return leftNo - rightNo;
+      return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+    });
+  }, [activeComponent]);
 
   const addPoint = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -265,7 +277,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   };
 
   return (
-    <div className={styles.page} style={{ maxWidth: "none", width: "100%", gap: 12 }}>
+    <div className={styles.page} style={{ gap: 12 }}>
       <div className={styles.pageHeader}>
         <div>
           <Link href="/laboratuvar/eurolab/qc-kartlar" className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline mb-2">
@@ -309,8 +321,20 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                 <Metric label="AUL / ÜUL" value={`${formatNumber(activeComponent.lower_warning_limit)} / ${formatNumber(activeComponent.upper_warning_limit)}%`} />
                 <Metric label="AKL / ÜKL" value={`${formatNumber(activeComponent.lower_control_limit)} / ${formatNumber(activeComponent.upper_control_limit)}%`} />
               </div>
-              <div style={{ width: "100%", height: "clamp(220px, 32vh, 300px)" }}>
-                <ResponsiveContainer>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "center", justifyContent: "flex-end", marginBottom: 8 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.78rem", color: "var(--color-text-secondary)" }}>
+                  X genişliği
+                  <input type="range" min={70} max={100} value={chartWidth} onChange={event => setChartWidth(Number(event.target.value))} />
+                  <span className={styles.tdMono}>{chartWidth}%</span>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.78rem", color: "var(--color-text-secondary)" }}>
+                  Y yüksekliği
+                  <input type="range" min={220} max={420} step={20} value={chartHeight} onChange={event => setChartHeight(Number(event.target.value))} />
+                  <span className={styles.tdMono}>{chartHeight}px</span>
+                </label>
+              </div>
+              <div style={{ width: `${chartWidth}%`, height: chartHeight, maxWidth: "100%", margin: "0 auto" }}>
+                <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData} margin={{ top: 12, right: 24, left: 0, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" />
                     <XAxis dataKey="no" tick={{ fontSize: 12 }} />
@@ -459,7 +483,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
 
       {card && activeComponent && (
         <div className={styles.tableCard}>
-          <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--color-border-light)" }}>
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border-light)" }}>
             <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>İşlem İzi</h2>
           </div>
           <div className={styles.tableWrapper}>
@@ -468,21 +492,28 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                 <tr>
                   <th style={{ width: 160 }}>Tarih</th>
                   <th style={{ width: 150 }}>İşlem</th>
-                  <th style={{ width: 120 }}>Satır</th>
-                  <th>Özet</th>
+                  <th style={{ width: 110 }}>Data No</th>
+                  <th style={{ width: 130 }}>Hedef Değer</th>
+                  <th style={{ width: 130 }}>Ölçülen Değer</th>
+                  <th style={{ width: 150 }}>Geri Kazanım</th>
                 </tr>
               </thead>
               <tbody>
-                {activeComponent.audit_logs.length === 0 ? (
-                  <tr><td colSpan={4}><div className={styles.empty}>İşlem izi bulunamadı.</div></td></tr>
-                ) : activeComponent.audit_logs.map(log => (
-                  <tr key={log.id}>
-                    <td className={styles.tdMono}>{formatDate(log.created_at)}</td>
-                    <td>{auditLabel(log.action)}</td>
-                    <td className={styles.tdMono}>{log.point_id || "-"}</td>
-                    <td className={styles.tdSecondary}>{auditSummary(log)}</td>
-                  </tr>
-                ))}
+                {auditRows.length === 0 ? (
+                  <tr><td colSpan={6}><div className={styles.empty}>İşlem izi bulunamadı.</div></td></tr>
+                ) : auditRows.map(log => {
+                  const data = getAuditData(log);
+                  return (
+                    <tr key={log.id}>
+                      <td className={styles.tdMono}>{formatDate(log.created_at)}</td>
+                      <td>{auditLabel(log.action)}</td>
+                      <td className={styles.tdMono}>{data.dataNo}</td>
+                      <td className={styles.tdMono}>{formatNumber(data.targetValue)}</td>
+                      <td className={styles.tdMono}>{formatNumber(data.measuredValue)}</td>
+                      <td className={styles.tdMono}>{data.recovery == null ? "-" : `${formatNumber(data.recovery)}%`}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -508,11 +539,15 @@ const auditLabel = (action: string) => {
   return action;
 };
 
-const auditSummary = (log: QcAuditLog) => {
-  const after = log.after_data || log.before_data || {};
-  const label = typeof after.label === "string" && after.label ? after.label : "Etiketsiz veri";
-  const target = typeof after.target_value === "number" ? formatNumber(after.target_value) : "-";
-  const measured = typeof after.value === "number" ? formatNumber(after.value) : "-";
-  const recovery = typeof after.recovery === "number" ? `${formatNumber(after.recovery)}%` : "-";
-  return `${label} · Hedef: ${target} · Ölçülen: ${measured} · Geri kazanım: ${recovery}`;
-};
+function getAuditData(log: QcAuditLog) {
+  const data = log.after_data || log.before_data || {};
+  const dataNo = typeof data.sequence_no === "number" ? data.sequence_no : log.point_id || 0;
+  const targetValue = typeof data.target_value === "number" ? data.target_value : null;
+  const measuredValue = typeof data.value === "number" ? data.value : null;
+  const recovery = typeof data.recovery === "number" ? data.recovery : null;
+  return { dataNo, targetValue, measuredValue, recovery };
+}
+
+function auditDataNo(log: QcAuditLog) {
+  return getAuditData(log).dataNo || Number.MAX_SAFE_INTEGER;
+}
