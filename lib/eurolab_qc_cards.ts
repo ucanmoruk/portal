@@ -558,8 +558,9 @@ export async function createRecoveryCardsFromValidation(validationId: number) {
     const target = parseNumber(componentData.target);
     const targetPpm = target * getPpmFactor(componentData.unit);
     const legalLimit = findRecoveryLimit(targetPpm);
-    const baselinePoints: Array<{ label: string; analyst: string; value: number; recovery: number }> = [];
-    const flowPoints: Array<{ label: string; analyst: string; value: number; recovery: number }> = [];
+    const pointUnit = componentData.unitLabel || componentData.unit || null;
+    const baselinePoints: Array<{ label: string; analyst: string; value: number; targetValue: number | null; unit: string | null; recovery: number }> = [];
+    const flowPoints: Array<{ label: string; analyst: string; value: number; targetValue: number | null; unit: string | null; recovery: number }> = [];
     const selectedAnalysts = analystNames.slice(0, 2);
 
     selectedAnalysts.forEach((analyst, analystIndex) => {
@@ -574,6 +575,8 @@ export async function createRecoveryCardsFromValidation(validationId: number) {
           label: `Sınır ${analyst} ${valueIndex + 1}`,
           analyst,
           value,
+          targetValue: Number.isFinite(target) ? target : null,
+          unit: pointUnit,
           recovery,
         });
       });
@@ -585,6 +588,8 @@ export async function createRecoveryCardsFromValidation(validationId: number) {
           label: `Takip ${analyst} 1`,
           analyst,
           value: flowValue,
+          targetValue: Number.isFinite(target) ? target : null,
+          unit: pointUnit,
           recovery: flowRecovery,
         });
       }
@@ -665,7 +670,7 @@ export async function createRecoveryCardsFromValidation(validationId: number) {
       lowerLegalLimit,
       upperLegalLimit,
       standardDeviation,
-      componentData.unitLabel || componentData.unit || null,
+      pointUnit,
       JSON.stringify({
         trueness: componentData,
         baselinePointCount: baselinePoints.length,
@@ -692,17 +697,17 @@ export async function createRecoveryCardsFromValidation(validationId: number) {
     for (const [index, point] of baselinePoints.entries()) {
       await query(`
         INSERT INTO eurolab_qc_card_points
-          (card_id, sequence_no, label, analyst, value, recovery, source, locked)
-        VALUES ($1, $2, $3, $4, $5, $6, 'VALIDATION_BASELINE', true)
-      `, [card.id, index + 1, point.label, point.analyst, point.value, point.recovery]);
+          (card_id, sequence_no, label, analyst, value, target_value, unit, recovery, source, locked)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'VALIDATION_BASELINE', true)
+      `, [card.id, index + 1, point.label, point.analyst, point.value, point.targetValue, point.unit, point.recovery]);
     }
 
     for (const [index, point] of flowPoints.entries()) {
       await query(`
         INSERT INTO eurolab_qc_card_points
-          (card_id, sequence_no, label, analyst, value, recovery, source, locked)
-        VALUES ($1, $2, $3, $4, $5, $6, 'VALIDATION_FLOW', true)
-      `, [card.id, baselinePoints.length + index + 1, point.label, point.analyst, point.value, point.recovery]);
+          (card_id, sequence_no, label, analyst, value, target_value, unit, recovery, source, locked)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'VALIDATION_FLOW', true)
+      `, [card.id, baselinePoints.length + index + 1, point.label, point.analyst, point.value, point.targetValue, point.unit, point.recovery]);
     }
 
     createdCards.push(card);

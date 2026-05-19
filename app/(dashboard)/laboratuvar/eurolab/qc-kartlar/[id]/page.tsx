@@ -114,6 +114,33 @@ const axisValueText = (value: number | null | undefined) =>
 
 const UNIT_OPTIONS = ["mg/kg", "mg/L", "ug/kg", "ug/L", "ng/L", "g/kg", "%"];
 
+const recoveryLimits = [
+  { concentration: 1000000, low: 98, high: 102 },
+  { concentration: 100000, low: 98, high: 102 },
+  { concentration: 10000, low: 97, high: 103 },
+  { concentration: 1000, low: 95, high: 105 },
+  { concentration: 100, low: 90, high: 107 },
+  { concentration: 10, low: 80, high: 110 },
+  { concentration: 1, low: 80, high: 110 },
+  { concentration: 0.1, low: 80, high: 110 },
+  { concentration: 0.01, low: 60, high: 115 },
+  { concentration: 0.001, low: 40, high: 120 },
+];
+
+const getPpmFactor = (unit?: string | null) => {
+  const normalized = (unit || "").toLowerCase().replace("µ", "u");
+  if (normalized === "ug/l" || normalized === "ug/kg") return 0.001;
+  if (normalized === "ng/l") return 0.000001;
+  if (normalized === "%") return 10000;
+  return 1;
+};
+
+const findRecoveryLimit = (targetValue: number | null | undefined, unit?: string | null) => {
+  if (typeof targetValue !== "number" || !Number.isFinite(targetValue) || targetValue <= 0) return null;
+  const targetPpm = targetValue * getPpmFactor(unit);
+  return recoveryLimits.find(limit => targetPpm >= limit.concentration) || recoveryLimits[recoveryLimits.length - 1];
+};
+
 export default function QcCardDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: cardId } = use(params);
   const [card, setCard] = useState<QcCard | null>(null);
@@ -225,6 +252,11 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     const target = parseDecimal(form.target_value);
     return Number.isFinite(value) && Number.isFinite(target) && target > 0 ? (value / target) * 100 : Number.NaN;
   }, [form.target_value, form.value]);
+
+  const formLegalLimit = useMemo(() => {
+    const target = parseDecimal(form.target_value);
+    return findRecoveryLimit(Number.isFinite(target) ? target : null, form.unit);
+  }, [form.target_value, form.unit]);
 
   const selectablePersonnel = useMemo(() => {
     const fromPoints = (activeComponent?.points || []).map(point => point.analyst || "").filter(Boolean);
@@ -443,6 +475,10 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                 <label>Geri Kazanım (%)</label>
                 <input value={Number.isFinite(formRecovery) ? formatNumber(formRecovery, 3) : ""} readOnly placeholder="Otomatik hesaplanır" />
               </div>
+              <div className={styles.formGroup}>
+                <label>Yasal Aralık (%)</label>
+                <input value={formLegalLimit ? `${formatNumber(formLegalLimit.low)} - ${formatNumber(formLegalLimit.high)}` : ""} readOnly placeholder="Otomatik" />
+              </div>
               <div className={styles.formGroup} style={{ justifyContent: "flex-end" }}>
                 <button className={styles.saveBtn} type="submit" disabled={saving}>
                   {saving ? <span className={styles.loader} /> : <><Plus size={15} /> {editingId ? "Güncelle" : "Ekle"}</>}
@@ -461,64 +497,61 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       {card && activeComponent && (
         <div className={styles.tableCard} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
           <div className={styles.tableWrapper} style={{ width: "100%", maxWidth: "100%", maxHeight: "52vh", overflow: "auto" }}>
-            <table className={styles.table} style={{ minWidth: 1130, fontSize: "0.72rem", tableLayout: "fixed" }}>
+            <table className={styles.table} style={{ minWidth: 1040, fontSize: "0.72rem", tableLayout: "fixed" }}>
               <thead>
                 <tr>
                   <th style={{ width: 56, padding: "6px 8px" }}>Sıra No</th>
-                  <th style={{ width: 76, padding: "6px 8px" }}>Değerler</th>
+                  <th style={{ width: 92, padding: "6px 8px" }}>Geri Kazanım</th>
+                  <th style={{ width: 92, padding: "6px 8px" }}>Ölçülen Değer</th>
+                  <th style={{ width: 92, padding: "6px 8px" }}>Hedef Değer</th>
                   <th style={{ width: 70, padding: "6px 8px" }}>Birim</th>
-                  <th style={{ width: 70, padding: "6px 8px" }}>Xort</th>
-                  <th style={{ width: 66, padding: "6px 8px" }}>SS</th>
-                  <th style={{ width: 86, padding: "6px 8px" }}>AUL</th>
-                  <th style={{ width: 86, padding: "6px 8px" }}>ÜUL</th>
-                  <th style={{ width: 86, padding: "6px 8px" }}>AKL</th>
-                  <th style={{ width: 86, padding: "6px 8px" }}>ÜKL</th>
                   <th style={{ width: 88, padding: "6px 8px" }}>Alt Yasal</th>
                   <th style={{ width: 88, padding: "6px 8px" }}>Üst Yasal</th>
                   <th style={{ width: 88, padding: "6px 8px" }}>Tarih</th>
-                  <th style={{ width: 110, padding: "6px 8px" }}>Personel</th>
-                  <th style={{ width: 96, padding: "6px 8px" }}>Kaynak</th>
+                  <th style={{ width: 120, padding: "6px 8px" }}>Personel</th>
+                  <th style={{ width: 104, padding: "6px 8px" }}>Kaynak</th>
                   <th style={{ width: 58, padding: "6px 8px" }}></th>
                 </tr>
               </thead>
               <tbody>
                 {activeComponent.points.length === 0 ? (
-                  <tr><td colSpan={15}><div className={styles.empty}>Veri bulunamadı.</div></td></tr>
-                ) : activeComponent.points.map(point => (
-                  <tr key={point.id}>
-                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{point.sequence_no}</td>
-                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{`${formatNumber(point.recovery)}%`}</td>
-                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{point.unit || activeComponent.unit || "-"}</td>
-                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.center_line)}</td>
-                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.standard_deviation, 4)}</td>
-                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.lower_warning_limit)}</td>
-                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.upper_warning_limit)}</td>
-                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.lower_control_limit)}</td>
-                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.upper_control_limit)}</td>
-                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.lower_legal_limit)}</td>
-                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.upper_legal_limit)}</td>
-                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatDate(point.measured_at || point.created_at)}</td>
-                    <td style={{ padding: "5px 8px" }}>{point.analyst || "-"}</td>
-                    <td>
-                      <span className={`${styles.badge} ${point.locked ? styles.badgeGray : styles.badgeGreen}`}>
-                        {pointSourceLabel(point)}
-                      </span>
-                    </td>
-                    
-                    <td>
-                      {!point.locked && (
-                        <div className={styles.actionBtns}>
-                          <button className={styles.editBtn} title="Düzenle" onClick={() => startEdit(point)} disabled={workingPointId === point.id}>
-                            <Pencil size={14} />
-                          </button>
-                          <button className={styles.deleteBtn} title="Sil" onClick={() => deletePoint(point.id)} disabled={workingPointId === point.id}>
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                  <tr><td colSpan={11}><div className={styles.empty}>Veri bulunamadı.</div></td></tr>
+                ) : activeComponent.points.map(point => {
+                  const pointUnit = point.unit || activeComponent.unit || null;
+                  const pointLegalLimit = findRecoveryLimit(point.target_value, pointUnit);
+                  const lowerLegalLimit = pointLegalLimit?.low ?? activeComponent.lower_legal_limit;
+                  const upperLegalLimit = pointLegalLimit?.high ?? activeComponent.upper_legal_limit;
+                  return (
+                    <tr key={point.id}>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{point.sequence_no}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{`${formatNumber(point.recovery)}%`}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(point.value, 4)}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(point.target_value, 4)}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{pointUnit || "-"}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(lowerLegalLimit)}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(upperLegalLimit)}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatDate(point.measured_at || point.created_at)}</td>
+                      <td style={{ padding: "5px 8px" }}>{point.analyst || "-"}</td>
+                      <td>
+                        <span className={`${styles.badge} ${point.locked ? styles.badgeGray : styles.badgeGreen}`}>
+                          {pointSourceLabel(point)}
+                        </span>
+                      </td>
+                      <td>
+                        {!point.locked && (
+                          <div className={styles.actionBtns}>
+                            <button className={styles.editBtn} title="Düzenle" onClick={() => startEdit(point)} disabled={workingPointId === point.id}>
+                              <Pencil size={14} />
+                            </button>
+                            <button className={styles.deleteBtn} title="Sil" onClick={() => deletePoint(point.id)} disabled={workingPointId === point.id}>
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
