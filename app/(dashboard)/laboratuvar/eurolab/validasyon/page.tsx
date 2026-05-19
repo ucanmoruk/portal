@@ -63,6 +63,14 @@ const formatDate = (date: string | null) => {
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
+const displayValidationCode = (row: ValidationRow) => `${row.method_code || row.code || `VAL-${row.id}`}-Ek.1`;
+
+const sortByValidationCode = (items: ValidationRow[]) =>
+  [...items].sort((left, right) => displayValidationCode(left).localeCompare(displayValidationCode(right), "tr-TR", {
+    numeric: true,
+    sensitivity: "base",
+  }));
+
 export default function ValidationDashboard() {
   const router = useRouter();
   const [rows, setRows] = useState<ValidationRow[]>([]);
@@ -86,7 +94,7 @@ export default function ValidationDashboard() {
         }
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Validasyon kayıtları alınamadı.");
-        if (alive) setRows(Array.isArray(json) ? json.filter(row => row.status !== "PASSIVE") : []);
+        if (alive) setRows(Array.isArray(json) ? sortByValidationCode(json.filter(row => row.status !== "PASSIVE")) : []);
       } catch (err: unknown) {
         if (alive) setError(getErrorMessage(err, "Validasyon kayıtları alınamadı."));
       } finally {
@@ -217,7 +225,7 @@ export default function ValidationDashboard() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th style={{ width: 110 }}>Kod</th>
+                <th style={{ width: 150 }}>Kod</th>
                 <th>Analiz adı</th>
                 <th style={{ width: 150 }}>Metot</th>
                 <th style={{ width: 150 }}>Tür</th>
@@ -247,7 +255,7 @@ export default function ValidationDashboard() {
                 <tr key={row.id}>
                   <td className={styles.tdMono}>
                     <Link className="text-blue-600 hover:underline font-semibold" href={`/laboratuvar/eurolab/validasyon/${row.id}`}>
-                      {row.code || `VAL-${row.id}`}
+                      {displayValidationCode(row)}
                     </Link>
                   </td>
                   <td className={styles.tdName}>{row.method_name || "—"}</td>
