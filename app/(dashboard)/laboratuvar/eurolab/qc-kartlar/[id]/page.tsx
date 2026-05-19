@@ -22,6 +22,7 @@ type QcPoint = {
   analyst: string | null;
   value: number | null;
   target_value: number | null;
+  unit: string | null;
   recovery: number;
   source: string;
   locked: boolean;
@@ -111,6 +112,8 @@ const parseDecimal = (value: string) => {
 const axisValueText = (value: number | null | undefined) =>
   typeof value === "number" && Number.isFinite(value) ? String(Number(value.toFixed(3))) : "";
 
+const UNIT_OPTIONS = ["mg/kg", "mg/L", "ug/kg", "ug/L", "ng/L", "g/kg", "%"];
+
 export default function QcCardDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: cardId } = use(params);
   const [card, setCard] = useState<QcCard | null>(null);
@@ -121,7 +124,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   const [workingPointId, setWorkingPointId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [personnelOptions, setPersonnelOptions] = useState<string[]>([]);
-  const [form, setForm] = useState({ analyst: "", value: "", target_value: "", measured_at: "" });
+  const [form, setForm] = useState({ analyst: "", value: "", target_value: "", unit: "mg/kg", measured_at: "" });
   const [xAxisMin, setXAxisMin] = useState("");
   const [xAxisMax, setXAxisMax] = useState("");
   const [yAxisMin, setYAxisMin] = useState("");
@@ -171,6 +174,11 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     if (!card) return null;
     return card.components.find(component => component.id === activeComponentId) || card.components[0] || null;
   }, [activeComponentId, card]);
+
+  useEffect(() => {
+    if (!activeComponent || editingId) return;
+    setForm(current => ({ ...current, unit: activeComponent.unit || current.unit || "mg/kg" }));
+  }, [activeComponent, editingId]);
 
   const axisStorageKey = activeComponent ? `eurolab-qc-axis:${activeComponent.id}` : "";
 
@@ -223,6 +231,19 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     return Array.from(new Set([...personnelOptions, ...fromPoints])).sort((left, right) => left.localeCompare(right, "tr-TR"));
   }, [activeComponent, personnelOptions]);
 
+  const selectableUnits = useMemo(() => {
+    const units = [
+      activeComponent?.unit || "",
+      ...UNIT_OPTIONS,
+      ...(activeComponent?.points || []).map(point => point.unit || ""),
+    ].filter(Boolean);
+    return Array.from(new Set(units));
+  }, [activeComponent]);
+
+  const resetForm = () => {
+    setForm({ analyst: "", value: "", target_value: "", unit: activeComponent?.unit || "mg/kg", measured_at: "" });
+  };
+
   const auditRows = useMemo(() => {
     const logs = activeComponent?.audit_logs || [];
     return [...logs].sort((left, right) => {
@@ -259,7 +280,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       if (!res.ok) throw new Error(json.error || (editingId ? "Veri güncellenemedi." : "Veri eklenemedi."));
       setCard(json);
       setEditingId(null);
-      setForm({ analyst: "", value: "", target_value: "", measured_at: "" });
+      resetForm();
     } catch (err: unknown) {
       setError(getErrorMessage(err, editingId ? "Veri güncellenemedi." : "Veri eklenemedi."));
     } finally {
@@ -273,6 +294,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       analyst: point.analyst || "",
       value: point.value == null ? "" : String(point.value),
       target_value: point.target_value == null ? "" : String(point.target_value),
+      unit: point.unit || activeComponent?.unit || "mg/kg",
       measured_at: point.measured_at ? point.measured_at.slice(0, 10) : "",
     });
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -280,7 +302,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
 
   const cancelEdit = () => {
     setEditingId(null);
-    setForm({ analyst: "", value: "", target_value: "", measured_at: "" });
+    resetForm();
   };
 
   const deletePoint = async (pointId: number) => {
@@ -412,6 +434,12 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                 <input value={form.target_value} onChange={event => setForm(current => ({ ...current, target_value: event.target.value }))} inputMode="decimal" required />
               </div>
               <div className={styles.formGroup}>
+                <label>Birim</label>
+                <select value={form.unit} onChange={event => setForm(current => ({ ...current, unit: event.target.value }))}>
+                  {selectableUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                </select>
+              </div>
+              <div className={styles.formGroup}>
                 <label>Geri Kazanım (%)</label>
                 <input value={Number.isFinite(formRecovery) ? formatNumber(formRecovery, 3) : ""} readOnly placeholder="Otomatik hesaplanır" />
               </div>
@@ -433,11 +461,12 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       {card && activeComponent && (
         <div className={styles.tableCard} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
           <div className={styles.tableWrapper} style={{ width: "100%", maxWidth: "100%", maxHeight: "52vh", overflow: "auto" }}>
-            <table className={styles.table} style={{ minWidth: 1080, fontSize: "0.72rem", tableLayout: "fixed" }}>
+            <table className={styles.table} style={{ minWidth: 1130, fontSize: "0.72rem", tableLayout: "fixed" }}>
               <thead>
                 <tr>
                   <th style={{ width: 56, padding: "6px 8px" }}>Sıra No</th>
                   <th style={{ width: 76, padding: "6px 8px" }}>Değerler</th>
+                  <th style={{ width: 70, padding: "6px 8px" }}>Birim</th>
                   <th style={{ width: 70, padding: "6px 8px" }}>Xort</th>
                   <th style={{ width: 66, padding: "6px 8px" }}>SS</th>
                   <th style={{ width: 86, padding: "6px 8px" }}>AUL</th>
@@ -454,11 +483,12 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
               </thead>
               <tbody>
                 {activeComponent.points.length === 0 ? (
-                  <tr><td colSpan={14}><div className={styles.empty}>Veri bulunamadı.</div></td></tr>
+                  <tr><td colSpan={15}><div className={styles.empty}>Veri bulunamadı.</div></td></tr>
                 ) : activeComponent.points.map(point => (
                   <tr key={point.id}>
                     <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{point.sequence_no}</td>
                     <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{`${formatNumber(point.recovery)}%`}</td>
+                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{point.unit || activeComponent.unit || "-"}</td>
                     <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.center_line)}</td>
                     <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.standard_deviation, 4)}</td>
                     <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.lower_warning_limit)}</td>
@@ -509,13 +539,14 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                   <th style={{ width: 150 }}>Kullanıcı</th>
                   <th style={{ width: 110 }}>Data No</th>
                   <th style={{ width: 130 }}>Hedef Değer</th>
+                  <th style={{ width: 90 }}>Birim</th>
                   <th style={{ width: 130 }}>Ölçülen Değer</th>
                   <th style={{ width: 150 }}>Geri Kazanım</th>
                 </tr>
               </thead>
               <tbody>
                 {auditRows.length === 0 ? (
-                  <tr><td colSpan={7}><div className={styles.empty}>İşlem izi bulunamadı.</div></td></tr>
+                  <tr><td colSpan={8}><div className={styles.empty}>İşlem izi bulunamadı.</div></td></tr>
                 ) : auditRows.map(log => {
                   const data = getAuditData(log);
                   return (
@@ -525,6 +556,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                       <td>{log.actor_name || "-"}</td>
                       <td className={styles.tdMono}>{data.dataNo}</td>
                       <td className={styles.tdMono}>{formatNumber(data.targetValue)}</td>
+                      <td className={styles.tdMono}>{data.unit || activeComponent.unit || "-"}</td>
                       <td className={styles.tdMono}>{formatNumber(data.measuredValue)}</td>
                       <td className={styles.tdMono}>{data.recovery == null ? "-" : `${formatNumber(data.recovery)}%`}</td>
                     </tr>
@@ -591,9 +623,10 @@ function getAuditData(log: QcAuditLog) {
   const data = log.after_data || log.before_data || {};
   const dataNo = typeof data.sequence_no === "number" ? data.sequence_no : log.point_id || 0;
   const targetValue = typeof data.target_value === "number" ? data.target_value : null;
+  const unit = typeof data.unit === "string" ? data.unit : null;
   const measuredValue = typeof data.value === "number" ? data.value : null;
   const recovery = typeof data.recovery === "number" ? data.recovery : null;
-  return { dataNo, targetValue, measuredValue, recovery };
+  return { dataNo, targetValue, unit, measuredValue, recovery };
 }
 
 function auditDataNo(log: QcAuditLog) {

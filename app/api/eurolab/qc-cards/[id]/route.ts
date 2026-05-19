@@ -31,6 +31,7 @@ const parsePointPayload = (body: Record<string, unknown>) => {
     analyst: String(body.analyst || "").trim(),
     value,
     target_value: targetValue,
+    unit: String(body.unit || "").trim() || null,
     recovery,
     measured_at: body.measured_at ? String(body.measured_at) : null,
   };

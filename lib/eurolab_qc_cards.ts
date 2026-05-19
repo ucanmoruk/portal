@@ -47,6 +47,7 @@ export type QcCardPoint = {
   analyst: string | null;
   value: number | null;
   target_value: number | null;
+  unit: string | null;
   recovery: number;
   source: string;
   locked: boolean;
@@ -182,6 +183,7 @@ export async function ensureQcCardSchema() {
       label VARCHAR(120),
       analyst VARCHAR(160),
       value NUMERIC,
+      unit VARCHAR(50),
       recovery NUMERIC NOT NULL,
       source VARCHAR(30) NOT NULL DEFAULT 'MANUAL',
       locked BOOLEAN NOT NULL DEFAULT false,
@@ -191,6 +193,7 @@ export async function ensureQcCardSchema() {
   `);
 
   await query(`ALTER TABLE eurolab_qc_card_points ADD COLUMN IF NOT EXISTS target_value NUMERIC;`);
+  await query(`ALTER TABLE eurolab_qc_card_points ADD COLUMN IF NOT EXISTS unit VARCHAR(50);`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS eurolab_qc_card_audit_logs (
@@ -321,6 +324,7 @@ export async function getQcCard(id: number): Promise<QcCardDetail | null> {
         analyst,
         value::float AS value,
         target_value::float AS target_value,
+        unit,
         recovery::float AS recovery,
         source,
         locked,
@@ -391,6 +395,7 @@ export async function getSingleQcCard(id: number): Promise<QcCardComponent | nul
       analyst,
       value::float AS value,
       target_value::float AS target_value,
+      unit,
       recovery::float AS recovery,
       source,
       locked,
@@ -415,7 +420,7 @@ export async function getSingleQcCard(id: number): Promise<QcCardComponent | nul
   };
 }
 
-export async function addQcCardPoint(cardId: number, input: { label?: string; analyst?: string; value?: number | null; target_value?: number | null; recovery: number; measured_at?: string | null }, actorName?: string | null) {
+export async function addQcCardPoint(cardId: number, input: { label?: string; analyst?: string; value?: number | null; target_value?: number | null; unit?: string | null; recovery: number; measured_at?: string | null }, actorName?: string | null) {
   await ensureQcCardSchema();
   const maxResult = await query(
     `SELECT COALESCE(MAX(sequence_no), 0) + 1 AS next_no FROM eurolab_qc_card_points WHERE card_id = $1`,
@@ -425,9 +430,9 @@ export async function addQcCardPoint(cardId: number, input: { label?: string; an
 
   const insertResult = await query(`
     INSERT INTO eurolab_qc_card_points
-      (card_id, sequence_no, label, analyst, value, target_value, recovery, source, locked, measured_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, 'MANUAL', false, $8)
-    RETURNING id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, recovery::float AS recovery, source, locked, measured_at, created_at
+      (card_id, sequence_no, label, analyst, value, target_value, unit, recovery, source, locked, measured_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'MANUAL', false, $9)
+    RETURNING id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, unit, recovery::float AS recovery, source, locked, measured_at, created_at
   `, [
     cardId,
     nextNo,
@@ -435,6 +440,7 @@ export async function addQcCardPoint(cardId: number, input: { label?: string; an
     input.analyst || null,
     input.value ?? null,
     input.target_value ?? null,
+    input.unit || null,
     input.recovery,
     input.measured_at || null,
   ]);
@@ -450,12 +456,12 @@ export async function addQcCardPoint(cardId: number, input: { label?: string; an
 export async function updateQcCardPoint(
   cardId: number,
   pointId: number,
-  input: { label?: string; analyst?: string; value?: number | null; target_value?: number | null; recovery: number; measured_at?: string | null },
+  input: { label?: string; analyst?: string; value?: number | null; target_value?: number | null; unit?: string | null; recovery: number; measured_at?: string | null },
   actorName?: string | null,
 ) {
   await ensureQcCardSchema();
   const beforeResult = await query(`
-    SELECT id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, recovery::float AS recovery, source, locked, measured_at, created_at
+    SELECT id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, unit, recovery::float AS recovery, source, locked, measured_at, created_at
     FROM eurolab_qc_card_points
     WHERE id = $1 AND card_id = $2
   `, [pointId, cardId]);
@@ -466,9 +472,9 @@ export async function updateQcCardPoint(
 
   const afterResult = await query(`
     UPDATE eurolab_qc_card_points
-    SET label = $3, analyst = $4, value = $5, target_value = $6, recovery = $7, measured_at = $8
+    SET label = $3, analyst = $4, value = $5, target_value = $6, unit = $7, recovery = $8, measured_at = $9
     WHERE id = $1 AND card_id = $2 AND locked = false
-    RETURNING id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, recovery::float AS recovery, source, locked, measured_at, created_at
+    RETURNING id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, unit, recovery::float AS recovery, source, locked, measured_at, created_at
   `, [
     pointId,
     cardId,
@@ -476,6 +482,7 @@ export async function updateQcCardPoint(
     input.analyst || null,
     input.value ?? null,
     input.target_value ?? null,
+    input.unit || null,
     input.recovery,
     input.measured_at || null,
   ]);
@@ -491,7 +498,7 @@ export async function updateQcCardPoint(
 export async function deleteQcCardPoint(cardId: number, pointId: number, actorName?: string | null) {
   await ensureQcCardSchema();
   const beforeResult = await query(`
-    SELECT id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, recovery::float AS recovery, source, locked, measured_at, created_at
+    SELECT id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, unit, recovery::float AS recovery, source, locked, measured_at, created_at
     FROM eurolab_qc_card_points
     WHERE id = $1 AND card_id = $2
   `, [pointId, cardId]);
