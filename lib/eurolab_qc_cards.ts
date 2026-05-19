@@ -26,6 +26,13 @@ export type QcCardComponent = {
   lower_limit: number;
   center_line: number;
   upper_limit: number;
+  lower_warning_limit: number;
+  upper_warning_limit: number;
+  lower_control_limit: number;
+  upper_control_limit: number;
+  lower_legal_limit: number | null;
+  upper_legal_limit: number | null;
+  standard_deviation: number | null;
   unit: string | null;
   created_at: string;
   updated_at: string;
@@ -39,6 +46,7 @@ export type QcCardPoint = {
   label: string;
   analyst: string | null;
   value: number | null;
+  target_value: number | null;
   recovery: number;
   source: string;
   locked: boolean;
@@ -72,6 +80,7 @@ type ComponentConfig = {
 
 type TruenessComponentData = {
   unit?: string;
+  unitLabel?: string;
   target?: string;
   analysts?: string[];
   rows?: string[][];
@@ -107,6 +116,34 @@ const normalizeRows = (value: unknown) =>
         .map(row => row.map(cell => String(cell ?? "")))
     : [];
 
+const recoveryLimits = [
+  { concentration: "1.000.000", low: 98, high: 102 },
+  { concentration: "100.000", low: 98, high: 102 },
+  { concentration: "10.000", low: 97, high: 103 },
+  { concentration: "1.000", low: 95, high: 105 },
+  { concentration: "100", low: 90, high: 107 },
+  { concentration: "10", low: 80, high: 110 },
+  { concentration: "1", low: 80, high: 110 },
+  { concentration: "0,1", low: 80, high: 110 },
+  { concentration: "0,01", low: 60, high: 115 },
+  { concentration: "0,001", low: 40, high: 120 },
+];
+
+const parseLimitConcentration = (value: string) => Number(value.replace(/\./g, "").replace(",", "."));
+
+const getPpmFactor = (unit?: string) => {
+  if (unit === "ug_L" || unit === "ug_kg") return 0.001;
+  if (unit === "ng_L") return 0.000001;
+  if (unit === "percent") return 10000;
+  return 1;
+};
+
+const findRecoveryLimit = (targetPpm: number) => {
+  if (!Number.isFinite(targetPpm) || targetPpm <= 0) return null;
+  const sortedLimits = [...recoveryLimits].sort((a, b) => parseLimitConcentration(b.concentration) - parseLimitConcentration(a.concentration));
+  return sortedLimits.find(limit => targetPpm >= parseLimitConcentration(limit.concentration)) || sortedLimits[sortedLimits.length - 1];
+};
+
 export async function ensureQcCardSchema() {
   await query(`
     CREATE TABLE IF NOT EXISTS eurolab_qc_cards (
@@ -129,6 +166,13 @@ export async function ensureQcCardSchema() {
     );
   `);
 
+  await query(`ALTER TABLE eurolab_qc_cards ADD COLUMN IF NOT EXISTS lower_warning_limit NUMERIC;`);
+  await query(`ALTER TABLE eurolab_qc_cards ADD COLUMN IF NOT EXISTS upper_warning_limit NUMERIC;`);
+  await query(`ALTER TABLE eurolab_qc_cards ADD COLUMN IF NOT EXISTS lower_control_limit NUMERIC;`);
+  await query(`ALTER TABLE eurolab_qc_cards ADD COLUMN IF NOT EXISTS upper_control_limit NUMERIC;`);
+  await query(`ALTER TABLE eurolab_qc_cards ADD COLUMN IF NOT EXISTS lower_legal_limit NUMERIC;`);
+  await query(`ALTER TABLE eurolab_qc_cards ADD COLUMN IF NOT EXISTS upper_legal_limit NUMERIC;`);
+  await query(`ALTER TABLE eurolab_qc_cards ADD COLUMN IF NOT EXISTS standard_deviation NUMERIC;`);
   await query(`
     CREATE TABLE IF NOT EXISTS eurolab_qc_card_points (
       id SERIAL PRIMARY KEY,
@@ -144,6 +188,8 @@ export async function ensureQcCardSchema() {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  await query(`ALTER TABLE eurolab_qc_card_points ADD COLUMN IF NOT EXISTS target_value NUMERIC;`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS eurolab_qc_card_audit_logs (
@@ -246,6 +292,13 @@ export async function getQcCard(id: number): Promise<QcCardDetail | null> {
       lower_limit::float AS lower_limit,
       center_line::float AS center_line,
       upper_limit::float AS upper_limit,
+      COALESCE(lower_warning_limit, lower_limit)::float AS lower_warning_limit,
+      COALESCE(upper_warning_limit, upper_limit)::float AS upper_warning_limit,
+      COALESCE(lower_control_limit, lower_limit)::float AS lower_control_limit,
+      COALESCE(upper_control_limit, upper_limit)::float AS upper_control_limit,
+      lower_legal_limit::float AS lower_legal_limit,
+      upper_legal_limit::float AS upper_legal_limit,
+      standard_deviation::float AS standard_deviation,
       unit,
       created_at,
       updated_at
@@ -264,6 +317,7 @@ export async function getQcCard(id: number): Promise<QcCardDetail | null> {
         COALESCE(label, '') AS label,
         analyst,
         value::float AS value,
+        target_value::float AS target_value,
         recovery::float AS recovery,
         source,
         locked,
@@ -309,6 +363,13 @@ export async function getSingleQcCard(id: number): Promise<QcCardComponent | nul
       lower_limit::float AS lower_limit,
       center_line::float AS center_line,
       upper_limit::float AS upper_limit,
+      COALESCE(lower_warning_limit, lower_limit)::float AS lower_warning_limit,
+      COALESCE(upper_warning_limit, upper_limit)::float AS upper_warning_limit,
+      COALESCE(lower_control_limit, lower_limit)::float AS lower_control_limit,
+      COALESCE(upper_control_limit, upper_limit)::float AS upper_control_limit,
+      lower_legal_limit::float AS lower_legal_limit,
+      upper_legal_limit::float AS upper_legal_limit,
+      standard_deviation::float AS standard_deviation,
       unit,
       created_at,
       updated_at
@@ -325,6 +386,7 @@ export async function getSingleQcCard(id: number): Promise<QcCardComponent | nul
       COALESCE(label, '') AS label,
       analyst,
       value::float AS value,
+      target_value::float AS target_value,
       recovery::float AS recovery,
       source,
       locked,
@@ -349,7 +411,7 @@ export async function getSingleQcCard(id: number): Promise<QcCardComponent | nul
   };
 }
 
-export async function addQcCardPoint(cardId: number, input: { label?: string; analyst?: string; value?: number | null; recovery: number; measured_at?: string | null }) {
+export async function addQcCardPoint(cardId: number, input: { label?: string; analyst?: string; value?: number | null; target_value?: number | null; recovery: number; measured_at?: string | null }) {
   await ensureQcCardSchema();
   const maxResult = await query(
     `SELECT COALESCE(MAX(sequence_no), 0) + 1 AS next_no FROM eurolab_qc_card_points WHERE card_id = $1`,
@@ -359,15 +421,16 @@ export async function addQcCardPoint(cardId: number, input: { label?: string; an
 
   const insertResult = await query(`
     INSERT INTO eurolab_qc_card_points
-      (card_id, sequence_no, label, analyst, value, recovery, source, locked, measured_at)
-    VALUES ($1, $2, $3, $4, $5, $6, 'MANUAL', false, $7)
-    RETURNING id, sequence_no, label, analyst, value::float AS value, recovery::float AS recovery, source, locked, measured_at, created_at
+      (card_id, sequence_no, label, analyst, value, target_value, recovery, source, locked, measured_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 'MANUAL', false, $8)
+    RETURNING id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, recovery::float AS recovery, source, locked, measured_at, created_at
   `, [
     cardId,
     nextNo,
     input.label || `Yeni Veri ${nextNo}`,
     input.analyst || null,
     input.value ?? null,
+    input.target_value ?? null,
     input.recovery,
     input.measured_at || null,
   ]);
@@ -383,11 +446,11 @@ export async function addQcCardPoint(cardId: number, input: { label?: string; an
 export async function updateQcCardPoint(
   cardId: number,
   pointId: number,
-  input: { label?: string; analyst?: string; value?: number | null; recovery: number; measured_at?: string | null },
+  input: { label?: string; analyst?: string; value?: number | null; target_value?: number | null; recovery: number; measured_at?: string | null },
 ) {
   await ensureQcCardSchema();
   const beforeResult = await query(`
-    SELECT id, sequence_no, label, analyst, value::float AS value, recovery::float AS recovery, source, locked, measured_at, created_at
+    SELECT id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, recovery::float AS recovery, source, locked, measured_at, created_at
     FROM eurolab_qc_card_points
     WHERE id = $1 AND card_id = $2
   `, [pointId, cardId]);
@@ -398,7 +461,7 @@ export async function updateQcCardPoint(
 
   const afterResult = await query(`
     UPDATE eurolab_qc_card_points
-    SET label = $3, analyst = $4, value = $5, recovery = $6, measured_at = $7
+    SET label = $3, analyst = $4, value = $5, target_value = $6, recovery = $7, measured_at = $8
     WHERE id = $1 AND card_id = $2 AND locked = false
     RETURNING id, sequence_no, label, analyst, value::float AS value, recovery::float AS recovery, source, locked, measured_at, created_at
   `, [
@@ -407,6 +470,7 @@ export async function updateQcCardPoint(
     input.label || `Veri ${before.sequence_no}`,
     input.analyst || null,
     input.value ?? null,
+    input.target_value ?? null,
     input.recovery,
     input.measured_at || null,
   ]);
@@ -422,7 +486,7 @@ export async function updateQcCardPoint(
 export async function deleteQcCardPoint(cardId: number, pointId: number) {
   await ensureQcCardSchema();
   const beforeResult = await query(`
-    SELECT id, sequence_no, label, analyst, value::float AS value, recovery::float AS recovery, source, locked, measured_at, created_at
+    SELECT id, sequence_no, label, analyst, value::float AS value, target_value::float AS target_value, recovery::float AS recovery, source, locked, measured_at, created_at
     FROM eurolab_qc_card_points
     WHERE id = $1 AND card_id = $2
   `, [pointId, cardId]);
@@ -439,7 +503,7 @@ export async function deleteQcCardPoint(cardId: number, pointId: number) {
   await query(`UPDATE eurolab_qc_cards SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [cardId]);
 }
 
-export async function createRangeCardsFromValidation(validationId: number) {
+export async function createRecoveryCardsFromValidation(validationId: number) {
   await ensureQcCardSchema();
 
   const validationResult = await query(`
@@ -480,39 +544,67 @@ export async function createRangeCardsFromValidation(validationId: number) {
       ? analysts
       : Array.from({ length: Math.max(1, rows[0]?.length || 1) }, (_, index) => `Personel ${index + 1}`);
     const target = parseNumber(componentData.target);
-    const sourcePoints: Array<{ label: string; analyst: string; value: number; recovery: number }> = [];
+    const targetPpm = target * getPpmFactor(componentData.unit);
+    const legalLimit = findRecoveryLimit(targetPpm);
+    const baselinePoints: Array<{ label: string; analyst: string; value: number; recovery: number }> = [];
+    const flowPoints: Array<{ label: string; analyst: string; value: number; recovery: number }> = [];
+    const selectedAnalysts = analystNames.slice(0, 2);
 
-    analystNames.forEach((analyst, analystIndex) => {
+    selectedAnalysts.forEach((analyst, analystIndex) => {
       const values = rows
         .map(row => parseNumber(row[analystIndex]))
-        .filter(Number.isFinite)
-        .slice(0, 7);
+        .filter(Number.isFinite);
 
-      values.forEach((value, valueIndex) => {
+      values.slice(0, 7).forEach((value, valueIndex) => {
         const recovery = Number.isFinite(target) && target > 0 ? (value / target) * 100 : value;
         if (!Number.isFinite(recovery)) return;
-        sourcePoints.push({
-          label: `${analyst} ${valueIndex + 1}`,
+        baselinePoints.push({
+          label: `Sınır ${analyst} ${valueIndex + 1}`,
           analyst,
           value,
           recovery,
         });
       });
+
+      const flowValue = values[7];
+      const flowRecovery = Number.isFinite(target) && target > 0 ? (flowValue / target) * 100 : flowValue;
+      if (Number.isFinite(flowRecovery)) {
+        flowPoints.push({
+          label: `Takip ${analyst} 1`,
+          analyst,
+          value: flowValue,
+          recovery: flowRecovery,
+        });
+      }
     });
 
-    if (sourcePoints.length === 0) continue;
+    if (baselinePoints.length === 0) continue;
 
-    const recoveries = sourcePoints.map(point => point.recovery);
+    const recoveries = baselinePoints.map(point => point.recovery);
     const centerLine = sampleMean(recoveries);
     const standardDeviation = sampleStandardDeviation(recoveries);
-    const lowerLimit = centerLine - (2 * standardDeviation);
-    const upperLimit = centerLine + (2 * standardDeviation);
+    const lowerWarningLimit = centerLine - (2 * standardDeviation);
+    const upperWarningLimit = centerLine + (2 * standardDeviation);
+    const lowerControlLimit = centerLine - (3 * standardDeviation);
+    const upperControlLimit = centerLine + (3 * standardDeviation);
+    const lowerLegalLimit = legalLimit?.low ?? null;
+    const upperLegalLimit = legalLimit?.high ?? null;
 
     const cardResult = await query(`
       INSERT INTO eurolab_qc_cards
-        (code, validation_id, validation_code, method_name, component_name, card_type, lower_limit, center_line, upper_limit, unit, source_data, metadata)
+        (
+          code, validation_id, validation_code, method_name, component_name, card_type,
+          lower_limit, center_line, upper_limit,
+          lower_warning_limit, upper_warning_limit, lower_control_limit, upper_control_limit,
+          lower_legal_limit, upper_legal_limit, standard_deviation,
+          unit, source_data, metadata
+        )
       VALUES (
-        $1, $2, $3, $4, $5, 'RANGE', $6, $7, $8, $9, $10::jsonb, $11::jsonb
+        $1, $2, $3, $4, $5, 'RECOVERY',
+        $6, $7, $8,
+        $6, $8, $9, $10,
+        $11, $12, $13,
+        $14, $15::jsonb, $16::jsonb
       )
       ON CONFLICT (validation_id, component_name, card_type)
       DO UPDATE SET
@@ -521,6 +613,13 @@ export async function createRangeCardsFromValidation(validationId: number) {
         lower_limit = EXCLUDED.lower_limit,
         center_line = EXCLUDED.center_line,
         upper_limit = EXCLUDED.upper_limit,
+        lower_warning_limit = EXCLUDED.lower_warning_limit,
+        upper_warning_limit = EXCLUDED.upper_warning_limit,
+        lower_control_limit = EXCLUDED.lower_control_limit,
+        upper_control_limit = EXCLUDED.upper_control_limit,
+        lower_legal_limit = EXCLUDED.lower_legal_limit,
+        upper_legal_limit = EXCLUDED.upper_legal_limit,
+        standard_deviation = EXCLUDED.standard_deviation,
         unit = EXCLUDED.unit,
         source_data = EXCLUDED.source_data,
         metadata = EXCLUDED.metadata,
@@ -530,45 +629,80 @@ export async function createRangeCardsFromValidation(validationId: number) {
         lower_limit::float AS lower_limit,
         center_line::float AS center_line,
         upper_limit::float AS upper_limit,
+        COALESCE(lower_warning_limit, lower_limit)::float AS lower_warning_limit,
+        COALESCE(upper_warning_limit, upper_limit)::float AS upper_warning_limit,
+        COALESCE(lower_control_limit, lower_limit)::float AS lower_control_limit,
+        COALESCE(upper_control_limit, upper_limit)::float AS upper_control_limit,
+        lower_legal_limit::float AS lower_legal_limit,
+        upper_legal_limit::float AS upper_legal_limit,
+        standard_deviation::float AS standard_deviation,
         unit,
         created_at,
         updated_at
     `, [
-      `QC-${validation.code}-${componentName}`.replace(/\s+/g, "-").slice(0, 60),
+      `QC-GK-${validation.code}-${componentName}`.replace(/\s+/g, "-").slice(0, 60),
       validation.id,
       validation.code,
       validation.method_name,
       componentName,
-      lowerLimit,
+      lowerWarningLimit,
       centerLine,
-      upperLimit,
-      componentData.unit || null,
-      JSON.stringify({ trueness: componentData, usedPointCount: sourcePoints.length }),
+      upperWarningLimit,
+      lowerControlLimit,
+      upperControlLimit,
+      lowerLegalLimit,
+      upperLegalLimit,
+      standardDeviation,
+      componentData.unitLabel || componentData.unit || null,
+      JSON.stringify({
+        trueness: componentData,
+        baselinePointCount: baselinePoints.length,
+        flowPointCount: flowPoints.length,
+      }),
       JSON.stringify({
         source: "TRUENESS",
-        pointRule: "first_7_per_analyst",
-        limitRule: "mean_plus_minus_2_sample_sd",
+        cardType: "RECOVERY",
+        pointRule: "first_7_per_first_2_analysts_for_limits_plus_next_1_each_for_flow",
+        limitRule: "mean_plus_minus_2_and_3_sample_sd",
         standardDeviation,
+        lowerWarningLimit,
+        upperWarningLimit,
+        lowerControlLimit,
+        upperControlLimit,
+        lowerLegalLimit,
+        upperLegalLimit,
       }),
     ]);
 
     const card = cardResult.rows[0] as QcCardComponent;
-    await query(`DELETE FROM eurolab_qc_card_points WHERE card_id = $1 AND source = 'VALIDATION'`, [card.id]);
+    await query(`DELETE FROM eurolab_qc_card_points WHERE card_id = $1 AND source IN ('VALIDATION', 'VALIDATION_BASELINE', 'VALIDATION_FLOW')`, [card.id]);
 
-    for (const [index, point] of sourcePoints.entries()) {
+    for (const [index, point] of baselinePoints.entries()) {
       await query(`
         INSERT INTO eurolab_qc_card_points
           (card_id, sequence_no, label, analyst, value, recovery, source, locked)
-        VALUES ($1, $2, $3, $4, $5, $6, 'VALIDATION', true)
+        VALUES ($1, $2, $3, $4, $5, $6, 'VALIDATION_BASELINE', true)
       `, [card.id, index + 1, point.label, point.analyst, point.value, point.recovery]);
+    }
+
+    for (const [index, point] of flowPoints.entries()) {
+      await query(`
+        INSERT INTO eurolab_qc_card_points
+          (card_id, sequence_no, label, analyst, value, recovery, source, locked)
+        VALUES ($1, $2, $3, $4, $5, $6, 'VALIDATION_FLOW', true)
+      `, [card.id, baselinePoints.length + index + 1, point.label, point.analyst, point.value, point.recovery]);
     }
 
     createdCards.push(card);
   }
 
   if (createdCards.length === 0) {
-    throw new Error("Range kartı için geri kazanım verisi bulunamadı.");
+    throw new Error("Geri kazanım kartı için validasyon geri kazanım verisi bulunamadı.");
   }
 
-  return findQcCardGroupByValidation(validationId, "RANGE");
+  return findQcCardGroupByValidation(validationId, "RECOVERY");
+}
+
+export async function createRangeCardsFromValidation(validationId: number) {
+  return createRecoveryCardsFromValidation(validationId);
 }

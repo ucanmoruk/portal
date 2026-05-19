@@ -91,6 +91,18 @@ interface InventoryItem {
     distribution_type?: string | null;
 }
 
+const DEFAULT_PARAMETER_NOTES: Record<string, string> = {
+    linearity: `Çalışma aralığını kapsayacak şekilde en az 5 farklı konsantrasyon seviyesi belirlenir.
+Korelasyon Katsayısı (R²) ≥ 0.995 (Birçok modern cihaz ve standart için ≥ 0.999 hedeflenir). Kalibrasyon eğrisindeki kalıntı (residual) hataları ±%10'dan sapmamalıdır.`,
+    lod: "10 tekrar çalışma yapılır. Ortalama ve standart sapma hesaplanır ve ortalamaya +3ss eklenerek LOD, +10ss eklenerek LOQ olarak hesaplanır.",
+    precision_repeatability: `Aynı gün, aynı analist, aynı cihaz, aynı parti reaktiflerle bir gerçek numune veya spike numunesi en az 6 kez (bağımsız tartım/ekstraksiyon ile) peş peşe analiz edilir.
+Elde edilen % Bağıl Standart Sapma (RSD), ISO standardının metodunda belirtilen Tekrarlanabilirlik (r) limitinden küçük olmalıdır.`,
+    trueness: "Bulunan sonuçlar ISO standardının kendi içinde verdiği % Geri Kazanım limitleri içinde olmalıdır. Standartta yoksa AOAC/Eurachem rehberine göre değerlendirilir.",
+    precision_reproducibility: `Farklı bir gün, farklı bir analist ile en az 6 bağımsız analiz yapılır.
+İki farklı gün/analist grubunun varyansları F-Testi ile karşılaştırılır (Fhesap < Ftablo olmalı).
+Genel % RSD, ISO standardında belirtilen (R) limitinden küçük olmalıdır.`,
+};
+
 const normalizeWizardParameters = (parameters: ValidationParameter[]) => {
     const merged = parameters.filter(parameter => parameter.id !== "accuracy").reduce<ValidationParameter[]>((acc, parameter) => {
         if (parameter.id === "loq") {
@@ -116,7 +128,7 @@ const normalizeWizardParameters = (parameters: ValidationParameter[]) => {
 const parametersForType = (type: MethodType) => normalizeWizardParameters(DEFAULT_PARAMETERS.map(param => ({
     ...param,
     isEnabled: type === "FULL_VALIDATION" ? true : param.requiredFor.includes(type),
-    note: "",
+    note: DEFAULT_PARAMETER_NOTES[param.id] || "",
 })));
 
 const escapeHtml = (value: string | number | null | undefined) => String(value ?? "")
@@ -163,6 +175,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
     const [deviceInventorySearch, setDeviceInventorySearch] = useState("");
     const [deviceInventory, setDeviceInventory] = useState<InventoryItem[]>([]);
     const [deviceInventoryLoading, setDeviceInventoryLoading] = useState(false);
+    const [selectedDeviceInventoryIds, setSelectedDeviceInventoryIds] = useState<number[]>([]);
 
     const [personnel, setPersonnel] = useState<Person[]>([]);
     const [personnelOptions, setPersonnelOptions] = useState<PersonnelOption[]>([]);
@@ -174,6 +187,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
     const [componentInventorySearch, setComponentInventorySearch] = useState("");
     const [componentInventory, setComponentInventory] = useState<InventoryItem[]>([]);
     const [componentInventoryLoading, setComponentInventoryLoading] = useState(false);
+    const [selectedComponentInventoryIds, setSelectedComponentInventoryIds] = useState<number[]>([]);
     const [selectorModal, setSelectorModal] = useState<"device" | "personnel" | "component" | null>(null);
     const [personnelSearch, setPersonnelSearch] = useState("");
 
@@ -437,26 +451,67 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
         return json as InventoryItem;
     };
 
+    const inventoryCodeKey = (value: string | null | undefined) => (value || "").trim().toLocaleLowerCase("tr-TR");
+
+    const deviceAlreadyAdded = (item: InventoryItem) => devices.some(device =>
+        device.inventoryId === item.id || inventoryCodeKey(device.code) === inventoryCodeKey(item.code),
+    );
+
+    const componentAlreadyAdded = (item: InventoryItem) => components.some(component =>
+        component.inventoryId === item.id || (component.code && inventoryCodeKey(component.code) === inventoryCodeKey(item.code)),
+    );
+
+    const mapInventoryToDevice = (item: InventoryItem): Device => ({
+        id: crypto.randomUUID(),
+        code: item.code,
+        name: item.name,
+        serialNo: item.serial_lot_no || "",
+        inventoryId: item.id,
+        intendedUse: item.intended_use,
+        unit: item.unit || "",
+        valueText: item.value_text || "",
+        uncertaintyComponent: item.uncertainty_component || "",
+        uncertaintyValue: item.uncertainty_value ?? "",
+        distributionType: item.distribution_type || "",
+    });
+
+    const mapInventoryToComponent = (item: InventoryItem): Component => ({
+        id: crypto.randomUUID(),
+        code: item.code,
+        name: item.name,
+        casNo: item.cas_no || "",
+        limit: item.limit_info || "",
+        inventoryId: item.id,
+        unit: item.unit || "",
+        valueText: item.value_text || "",
+        uncertaintyComponent: item.uncertainty_component || "",
+        uncertaintyValue: item.uncertainty_value ?? "",
+        distributionType: item.distribution_type || "",
+    });
+
     const addDeviceFromInventory = (item: InventoryItem) => {
-        if (devices.some(device => device.code.trim().toLocaleLowerCase("tr-TR") === item.code.trim().toLocaleLowerCase("tr-TR"))) return;
-        setDevices(current => [...current, {
-            id: crypto.randomUUID(),
-            code: item.code,
-            name: item.name,
-            serialNo: item.serial_lot_no || "",
-            inventoryId: item.id,
-            intendedUse: item.intended_use,
-            unit: item.unit || "",
-            valueText: item.value_text || "",
-            uncertaintyComponent: item.uncertainty_component || "",
-            uncertaintyValue: item.uncertainty_value ?? "",
-            distributionType: item.distribution_type || "",
-        }]);
+        setDevices(current => {
+            if (current.some(device => device.inventoryId === item.id || inventoryCodeKey(device.code) === inventoryCodeKey(item.code))) return current;
+            return [...current, mapInventoryToDevice(item)];
+        });
     };
 
-    const chooseDeviceFromInventory = (item: InventoryItem) => {
-        addDeviceFromInventory(item);
+    const addSelectedDevicesFromInventory = () => {
+        const selectedItems = deviceInventory.filter(item => selectedDeviceInventoryIds.includes(item.id));
+        setDevices(current => {
+            const existingIds = new Set(current.map(device => device.inventoryId).filter((id): id is number => typeof id === "number"));
+            const existingCodes = new Set(current.map(device => inventoryCodeKey(device.code)));
+            const additions = selectedItems
+                .filter(item => !existingIds.has(item.id) && !existingCodes.has(inventoryCodeKey(item.code)))
+                .map(mapInventoryToDevice);
+            return additions.length > 0 ? [...current, ...additions] : current;
+        });
+        setSelectedDeviceInventoryIds([]);
         setSelectorModal(null);
+    };
+
+    const toggleDeviceInventorySelection = (id: number) => {
+        setSelectedDeviceInventoryIds(current => current.includes(id) ? current.filter(itemId => itemId !== id) : [...current, id]);
     };
 
     const addDevice = async () => {
@@ -498,25 +553,37 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
     const removePerson = (id: string) => setPersonnel(personnel.filter(p => p.id !== id));
 
     const addComponentFromInventory = (item: InventoryItem) => {
-        if (components.some(component => component.code && component.code.trim().toLocaleLowerCase("tr-TR") === item.code.trim().toLocaleLowerCase("tr-TR"))) return;
-        setComponents(current => [...current, {
-            id: crypto.randomUUID(),
-            code: item.code,
-            name: item.name,
-            casNo: item.cas_no || "",
-            limit: item.limit_info || "",
-            inventoryId: item.id,
-            unit: item.unit || "",
-            valueText: item.value_text || "",
-            uncertaintyComponent: item.uncertainty_component || "",
-            uncertaintyValue: item.uncertainty_value ?? "",
-            distributionType: item.distribution_type || "",
-        }]);
+        setComponents(current => {
+            if (current.some(component => component.inventoryId === item.id || (component.code && inventoryCodeKey(component.code) === inventoryCodeKey(item.code)))) return current;
+            return [...current, mapInventoryToComponent(item)];
+        });
     };
 
-    const chooseComponentFromInventory = (item: InventoryItem) => {
-        addComponentFromInventory(item);
+    const addSelectedComponentsFromInventory = () => {
+        const selectedItems = componentInventory.filter(item => selectedComponentInventoryIds.includes(item.id));
+        setComponents(current => {
+            const existingIds = new Set(current.map(component => component.inventoryId).filter((id): id is number => typeof id === "number"));
+            const existingCodes = new Set(current.map(component => inventoryCodeKey(component.code)));
+            const additions = selectedItems
+                .filter(item => !existingIds.has(item.id) && !existingCodes.has(inventoryCodeKey(item.code)))
+                .map(mapInventoryToComponent);
+            return additions.length > 0 ? [...current, ...additions] : current;
+        });
+        setSelectedComponentInventoryIds([]);
         setSelectorModal(null);
+    };
+
+    const toggleComponentInventorySelection = (id: number) => {
+        setSelectedComponentInventoryIds(current => current.includes(id) ? current.filter(itemId => itemId !== id) : [...current, id]);
+    };
+
+    const openInventorySelector = (type: "device" | "component") => {
+        if (type === "device") {
+            setSelectedDeviceInventoryIds([]);
+        } else {
+            setSelectedComponentInventoryIds([]);
+        }
+        setSelectorModal(type);
     };
 
     const addComponent = async () => {
@@ -870,7 +937,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                     <div className={styles.selectorTitle}>Cihaz / ekipman seçimi</div>
                                     <div className={styles.selectorDescription}>Ana cihaz ve numune hazırlama ekipmanlarını aramalı seçim penceresinden ekleyin.</div>
                                 </div>
-                                <Button className={styles.primaryButton} onClick={() => setSelectorModal("device")}>
+                                <Button className={styles.primaryButton} onClick={() => openInventorySelector("device")}>
                                     <Monitor size={16} /> Envanterden Seç
                                 </Button>
                             </div>
@@ -973,7 +1040,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                     <div className={styles.selectorTitle}>Standart / komponent seçimi</div>
                                     <div className={styles.selectorDescription}>Standart envanterinden CAS no, limit ve belirsizlik bilgileriyle seçim yapın.</div>
                                 </div>
-                                <Button className={styles.primaryButton} onClick={() => setSelectorModal("component")}>
+                                <Button className={styles.primaryButton} onClick={() => openInventorySelector("component")}>
                                     <Beaker size={16} /> Standart Listesinden Seç
                                 </Button>
                             </div>
@@ -1128,7 +1195,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                     {selectorModal === "component" && "Standart / Komponent Seç"}
                                 </div>
                                 <div className={styles.selectorDescription}>
-                                    Listede arama yapıp ilgili kaydı seçin. Seçilen kayıt protokol listesine eklenir.
+                                    Listede arama yapıp ilgili kayıtları seçin. Seçilen kayıtlar protokol listesine eklenir.
                                 </div>
                             </div>
                             <Button variant="outline" className={styles.secondaryButton} onClick={() => setSelectorModal(null)}>Kapat</Button>
@@ -1142,6 +1209,12 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                     value={deviceInventorySearch}
                                     onChange={(event) => setDeviceInventorySearch(event.target.value)}
                                 />
+                                <div className={styles.modalActions}>
+                                    <span className={styles.selectionCount}>{selectedDeviceInventoryIds.length} kayıt seçildi</span>
+                                    <Button className={styles.primaryButton} onClick={addSelectedDevicesFromInventory} disabled={selectedDeviceInventoryIds.length === 0}>
+                                        Seçilenleri Ekle
+                                    </Button>
+                                </div>
                                 <div className={styles.modalTableShell}>
                                     <Table>
                                         <TableHeader>
@@ -1156,19 +1229,26 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                         <TableBody>
                                             {deviceInventoryLoading ? (
                                                 <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Envanter yükleniyor...</TableCell></TableRow>
-                                            ) : deviceInventory.length > 0 ? deviceInventory.map(item => (
+                                            ) : deviceInventory.length > 0 ? deviceInventory.map(item => {
+                                                const alreadyAdded = deviceAlreadyAdded(item);
+                                                return (
                                                 <TableRow key={item.id}>
                                                     <TableCell>{item.code}</TableCell>
                                                     <TableCell className="font-medium">{item.name}</TableCell>
                                                     <TableCell>{item.intended_use}</TableCell>
                                                     <TableCell>{item.serial_lot_no || "—"}</TableCell>
-                                                    <TableCell>
-                                                        <Button variant="outline" size="sm" className={styles.secondaryButton} onClick={() => chooseDeviceFromInventory(item)} disabled={devices.some(device => device.inventoryId === item.id || device.code === item.code)}>
-                                                            Seç
-                                                        </Button>
+                                                    <TableCell className={styles.checkboxCell}>
+                                                        <input
+                                                            type="checkbox"
+                                                            aria-label={`${item.code} seç`}
+                                                            checked={selectedDeviceInventoryIds.includes(item.id)}
+                                                            disabled={alreadyAdded}
+                                                            onChange={() => toggleDeviceInventorySelection(item.id)}
+                                                        />
                                                     </TableCell>
                                                 </TableRow>
-                                            )) : (
+                                                );
+                                            }) : (
                                                 <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Cihaz veya ekipman bulunamadı.</TableCell></TableRow>
                                             )}
                                         </TableBody>
@@ -1224,6 +1304,12 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                     value={componentInventorySearch}
                                     onChange={(event) => setComponentInventorySearch(event.target.value)}
                                 />
+                                <div className={styles.modalActions}>
+                                    <span className={styles.selectionCount}>{selectedComponentInventoryIds.length} kayıt seçildi</span>
+                                    <Button className={styles.primaryButton} onClick={addSelectedComponentsFromInventory} disabled={selectedComponentInventoryIds.length === 0}>
+                                        Seçilenleri Ekle
+                                    </Button>
+                                </div>
                                 <div className={styles.modalTableShell}>
                                     <Table>
                                         <TableHeader>
@@ -1238,19 +1324,26 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                         <TableBody>
                                             {componentInventoryLoading ? (
                                                 <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Standart listesi yükleniyor...</TableCell></TableRow>
-                                            ) : componentInventory.length > 0 ? componentInventory.map(item => (
+                                            ) : componentInventory.length > 0 ? componentInventory.map(item => {
+                                                const alreadyAdded = componentAlreadyAdded(item);
+                                                return (
                                                 <TableRow key={item.id}>
                                                     <TableCell>{item.code}</TableCell>
                                                     <TableCell className="font-medium">{item.name}</TableCell>
                                                     <TableCell>{item.cas_no || "—"}</TableCell>
                                                     <TableCell>{item.limit_info || "—"}</TableCell>
-                                                    <TableCell>
-                                                        <Button variant="outline" size="sm" className={styles.secondaryButton} onClick={() => chooseComponentFromInventory(item)} disabled={components.some(component => component.inventoryId === item.id || component.code === item.code)}>
-                                                            Seç
-                                                        </Button>
+                                                    <TableCell className={styles.checkboxCell}>
+                                                        <input
+                                                            type="checkbox"
+                                                            aria-label={`${item.code} seç`}
+                                                            checked={selectedComponentInventoryIds.includes(item.id)}
+                                                            disabled={alreadyAdded}
+                                                            onChange={() => toggleComponentInventorySelection(item.id)}
+                                                        />
                                                     </TableCell>
                                                 </TableRow>
-                                            )) : (
+                                                );
+                                            }) : (
                                                 <TableRow><TableCell colSpan={5} className={styles.emptyCell}>Standart envanteri bulunamadı.</TableCell></TableRow>
                                             )}
                                         </TableBody>

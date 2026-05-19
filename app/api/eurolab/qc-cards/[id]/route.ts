@@ -10,16 +10,25 @@ const parseOptionalNumber = (value: unknown) =>
   value === "" || value == null ? null : Number(String(value).replace(",", "."));
 
 const parsePointPayload = (body: Record<string, unknown>) => {
-  const recovery = Number(String(body.recovery ?? "").replace(",", "."));
+  const recoveryText = String(body.recovery ?? "").trim();
+  const explicitRecovery = recoveryText ? Number(recoveryText.replace(",", ".")) : Number.NaN;
   const value = parseOptionalNumber(body.value);
+  const targetValue = parseOptionalNumber(body.target_value);
+  const recovery = Number.isFinite(explicitRecovery)
+    ? explicitRecovery
+    : value !== null && targetValue !== null && targetValue > 0
+      ? (value / targetValue) * 100
+      : Number.NaN;
 
   if (!Number.isFinite(recovery)) throw new Error("Geri kazanım değeri zorunludur.");
   if (value !== null && !Number.isFinite(value)) throw new Error("Ölçüm değeri geçerli değil.");
+  if (targetValue !== null && !Number.isFinite(targetValue)) throw new Error("Hedef değer geçerli değil.");
 
   return {
     label: String(body.label || "").trim(),
     analyst: String(body.analyst || "").trim(),
     value,
+    target_value: targetValue,
     recovery,
     measured_at: body.measured_at ? String(body.measured_at) : null,
   };

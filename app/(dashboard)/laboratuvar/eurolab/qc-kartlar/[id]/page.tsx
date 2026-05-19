@@ -21,6 +21,7 @@ type QcPoint = {
   label: string;
   analyst: string | null;
   value: number | null;
+  target_value: number | null;
   recovery: number;
   source: string;
   locked: boolean;
@@ -39,6 +40,13 @@ type QcCardComponent = {
   lower_limit: number;
   center_line: number;
   upper_limit: number;
+  lower_warning_limit: number;
+  upper_warning_limit: number;
+  lower_control_limit: number;
+  upper_control_limit: number;
+  lower_legal_limit: number | null;
+  upper_legal_limit: number | null;
+  standard_deviation: number | null;
   unit: string | null;
   created_at: string;
   updated_at: string;
@@ -80,6 +88,25 @@ const formatDate = (date: string | null) =>
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
+const cardTypeLabel = (type: string) => {
+  if (type === "RECOVERY") return "Geri Kazanım Kart";
+  if (type === "AVERAGE") return "Ortalama Kart";
+  if (type === "RANGE") return "Range Kart";
+  return type;
+};
+
+const pointSourceLabel = (point: QcPoint) => {
+  if (point.source === "VALIDATION_BASELINE") return "Sınır";
+  if (point.source === "VALIDATION_FLOW") return "Validasyon Takip";
+  if (point.locked) return "Validasyon";
+  return "Manuel";
+};
+
+const parseDecimal = (value: string) => {
+  const parsed = Number(value.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+};
+
 export default function QcCardDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: cardId } = use(params);
   const [card, setCard] = useState<QcCard | null>(null);
@@ -89,8 +116,9 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   const [editingId, setEditingId] = useState<number | null>(null);
   const [workingPointId, setWorkingPointId] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ label: "", analyst: "", value: "", recovery: "", measured_at: "" });
-  const [editForm, setEditForm] = useState({ label: "", analyst: "", value: "", recovery: "", measured_at: "" });
+  const [personnelOptions, setPersonnelOptions] = useState<string[]>([]);
+  const [form, setForm] = useState({ analyst: "", value: "", target_value: "", measured_at: "" });
+  const [editForm, setEditForm] = useState({ label: "", analyst: "", value: "", recovery: "", target_value: "", measured_at: "" });
 
   const loadCard = async (id: string) => {
     setLoading(true);
@@ -114,13 +142,29 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     if (cardId) loadCard(cardId);
   }, [cardId]);
 
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/eurolab/personnel", { credentials: "same-origin" })
+      .then(res => res.ok ? res.json() : [])
+      .then((rows: Array<{ name?: string }>) => {
+        if (!alive) return;
+        setPersonnelOptions(rows.map(row => row.name || "").filter(Boolean));
+      })
+      .catch(() => {
+        if (alive) setPersonnelOptions([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const activeComponent = useMemo(() => {
     if (!card) return null;
     return card.components.find(component => component.id === activeComponentId) || card.components[0] || null;
   }, [activeComponentId, card]);
 
   const chartData = useMemo(() => {
-    return (activeComponent?.points || []).map(point => ({
+    return (activeComponent?.points || []).filter(point => point.source !== "VALIDATION_BASELINE").map(point => ({
       no: point.sequence_no,
       label: point.label || String(point.sequence_no),
       recovery: point.recovery,
@@ -128,6 +172,17 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       analyst: point.analyst || "-",
     }));
   }, [activeComponent]);
+
+  const formRecovery = useMemo(() => {
+    const value = parseDecimal(form.value);
+    const target = parseDecimal(form.target_value);
+    return Number.isFinite(value) && Number.isFinite(target) && target > 0 ? (value / target) * 100 : Number.NaN;
+  }, [form.target_value, form.value]);
+
+  const selectablePersonnel = useMemo(() => {
+    const fromPoints = (activeComponent?.points || []).map(point => point.analyst || "").filter(Boolean);
+    return Array.from(new Set([...personnelOptions, ...fromPoints])).sort((left, right) => left.localeCompare(right, "tr-TR"));
+  }, [activeComponent, personnelOptions]);
 
   const addPoint = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -144,7 +199,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Veri eklenemedi.");
       setCard(json);
-      setForm({ label: "", analyst: "", value: "", recovery: "", measured_at: "" });
+      setForm({ analyst: "", value: "", target_value: "", measured_at: "" });
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Veri eklenemedi."));
     } finally {
@@ -159,6 +214,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       analyst: point.analyst || "",
       value: point.value == null ? "" : String(point.value),
       recovery: String(point.recovery),
+      target_value: point.target_value == null ? "" : String(point.target_value),
       measured_at: point.measured_at ? point.measured_at.slice(0, 10) : "",
     });
   };
@@ -209,7 +265,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   };
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} style={{ maxWidth: "none", width: "100%", gap: 12 }}>
       <div className={styles.pageHeader}>
         <div>
           <Link href="/laboratuvar/eurolab/qc-kartlar" className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline mb-2">
@@ -217,7 +273,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
           </Link>
           <h1 className={styles.pageTitle}>{card?.code || "QC Kart"}</h1>
           <p className={styles.pageSubtitle}>
-            {card ? `${card.method_name || "-"} · ${card.component_count} alt bileşen · ${card.validation_code}` : "Kart yükleniyor..."}
+            {card ? `${cardTypeLabel(card.card_type)} · ${card.method_name || "-"} · ${card.component_count} alt bileşen · ${card.validation_code}` : "Kart yükleniyor..."}
           </p>
         </div>
       </div>
@@ -225,7 +281,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       {error && <div className={styles.errorBanner}>{error}</div>}
 
       <div className={styles.tableCard}>
-        <div style={{ padding: 20, borderBottom: "1px solid var(--color-border-light)" }}>
+        <div style={{ padding: 14, borderBottom: "1px solid var(--color-border-light)" }}>
           {loading ? (
             <div className={styles.skeleton} style={{ height: 280, width: "100%" }} />
           ) : card && activeComponent ? (
@@ -247,13 +303,13 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                   </button>
                 ))}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(120px, 1fr))", gap: 12, marginBottom: 18 }}>
-                <Metric label="Alt Limit" value={`${formatNumber(activeComponent.lower_limit)}%`} />
-                <Metric label="Orta Çizgi" value={`${formatNumber(activeComponent.center_line)}%`} />
-                <Metric label="Üst Limit" value={`${formatNumber(activeComponent.upper_limit)}%`} />
-                <Metric label="Veri" value={`${activeComponent.points.length} satır`} />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8, marginBottom: 10 }}>
+                <Metric label="Xort" value={`${formatNumber(activeComponent.center_line)}%`} />
+                <Metric label="SS" value={`${formatNumber(activeComponent.standard_deviation, 4)}%`} />
+                <Metric label="AUL / ÜUL" value={`${formatNumber(activeComponent.lower_warning_limit)} / ${formatNumber(activeComponent.upper_warning_limit)}%`} />
+                <Metric label="AKL / ÜKL" value={`${formatNumber(activeComponent.lower_control_limit)} / ${formatNumber(activeComponent.upper_control_limit)}%`} />
               </div>
-              <div style={{ width: "100%", height: 360 }}>
+              <div style={{ width: "100%", height: "clamp(220px, 32vh, 300px)" }}>
                 <ResponsiveContainer>
                   <LineChart data={chartData} margin={{ top: 12, right: 24, left: 0, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" />
@@ -263,9 +319,13 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                       formatter={(value: unknown) => [`${formatNumber(Number(value))}%`, "Geri kazanım"]}
                       labelFormatter={(_label: unknown, payload: ReadonlyArray<{ payload?: { label?: string } }>) => payload?.[0]?.payload?.label || ""}
                     />
-                    <ReferenceLine y={activeComponent.lower_limit} stroke="#ef4444" strokeDasharray="4 4" label="Alt" />
+                    <ReferenceLine y={activeComponent.lower_legal_limit ?? undefined} stroke="#9333ea" strokeDasharray="2 4" label="Alt Yasal" />
+                    <ReferenceLine y={activeComponent.upper_legal_limit ?? undefined} stroke="#9333ea" strokeDasharray="2 4" label="Üst Yasal" />
+                    <ReferenceLine y={activeComponent.lower_control_limit} stroke="#ef4444" strokeDasharray="4 4" label="AKL" />
+                    <ReferenceLine y={activeComponent.upper_control_limit} stroke="#ef4444" strokeDasharray="4 4" label="ÜKL" />
+                    <ReferenceLine y={activeComponent.lower_warning_limit} stroke="#f59e0b" strokeDasharray="4 4" label="AUL" />
                     <ReferenceLine y={activeComponent.center_line} stroke="#2563eb" strokeDasharray="4 4" label="Orta" />
-                    <ReferenceLine y={activeComponent.upper_limit} stroke="#ef4444" strokeDasharray="4 4" label="Üst" />
+                    <ReferenceLine y={activeComponent.upper_warning_limit} stroke="#f59e0b" strokeDasharray="4 4" label="ÜUL" />
                     <Line type="monotone" dataKey="recovery" stroke="#0f766e" strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -279,18 +339,17 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
 
       {card && activeComponent && (
         <div className={styles.tableCard}>
-          <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--color-border-light)" }}>
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border-light)" }}>
             <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>Yeni Veri</h2>
           </div>
-          <form onSubmit={addPoint} className={styles.modalBody}>
-            <div className={styles.formGrid3}>
-              <div className={styles.formGroup}>
-                <label>Etiket</label>
-                <input value={form.label} onChange={event => setForm(current => ({ ...current, label: event.target.value }))} placeholder="Örn. Kontrol 1" />
-              </div>
+          <form onSubmit={addPoint} className={styles.modalBody} style={{ padding: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, alignItems: "end" }}>
               <div className={styles.formGroup}>
                 <label>Personel</label>
-                <input value={form.analyst} onChange={event => setForm(current => ({ ...current, analyst: event.target.value }))} />
+                <select value={form.analyst} onChange={event => setForm(current => ({ ...current, analyst: event.target.value }))}>
+                  <option value="">Seçiniz</option>
+                  {selectablePersonnel.map(person => <option key={person} value={person}>{person}</option>)}
+                </select>
               </div>
               <div className={styles.formGroup}>
                 <label>Tarih</label>
@@ -298,11 +357,15 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
               </div>
               <div className={styles.formGroup}>
                 <label>Ölçüm Değeri</label>
-                <input value={form.value} onChange={event => setForm(current => ({ ...current, value: event.target.value }))} inputMode="decimal" />
+                <input value={form.value} onChange={event => setForm(current => ({ ...current, value: event.target.value }))} inputMode="decimal" required />
               </div>
               <div className={styles.formGroup}>
-                <label>Geri Kazanım (%) <span className={styles.required}>*</span></label>
-                <input value={form.recovery} onChange={event => setForm(current => ({ ...current, recovery: event.target.value }))} inputMode="decimal" required />
+                <label>Hedef Değer <span className={styles.required}>*</span></label>
+                <input value={form.target_value} onChange={event => setForm(current => ({ ...current, target_value: event.target.value }))} inputMode="decimal" required />
+              </div>
+              <div className={styles.formGroup}>
+                <label>Geri Kazanım (%)</label>
+                <input value={Number.isFinite(formRecovery) ? formatNumber(formRecovery, 3) : ""} readOnly placeholder="Otomatik hesaplanır" />
               </div>
               <div className={styles.formGroup} style={{ justifyContent: "flex-end" }}>
                 <button className={styles.saveBtn} type="submit" disabled={saving}>
@@ -316,56 +379,51 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
 
       {card && activeComponent && (
         <div className={styles.tableCard}>
-          <div className={styles.tableWrapper}>
+          <div className={styles.tableWrapper} style={{ maxHeight: "34vh", overflow: "auto" }}>
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th style={{ width: 80 }}>Sıra</th>
-                  <th>Etiket</th>
-                  <th style={{ width: 160 }}>Personel</th>
-                  <th style={{ width: 130 }}>Ölçüm</th>
-                  <th style={{ width: 150 }}>Geri Kazanım</th>
-                  <th style={{ width: 130 }}>Kaynak</th>
+                  <th style={{ width: 80 }}>Sıra No</th>
+                  <th style={{ width: 130 }}>Değerler</th>
+                  <th style={{ width: 110 }}>Xort</th>
+                  <th style={{ width: 110 }}>SS</th>
+                  <th style={{ width: 130 }}>AUL (Ort-2*ss)</th>
+                  <th style={{ width: 130 }}>ÜUL (Ort+2*ss)</th>
+                  <th style={{ width: 130 }}>AKL (Ort-3*s)</th>
+                  <th style={{ width: 130 }}>ÜKL (Ort+3*s)</th>
+                  <th style={{ width: 120 }}>Alt Yasal Limit</th>
+                  <th style={{ width: 120 }}>Üst Yasal Limit</th>
                   <th style={{ width: 130 }}>Tarih</th>
+                  <th style={{ width: 160 }}>Personel</th>
+                  <th style={{ width: 130 }}>Kaynak</th>
                   <th style={{ width: 96 }}></th>
                 </tr>
               </thead>
               <tbody>
                 {activeComponent.points.length === 0 ? (
-                  <tr><td colSpan={8}><div className={styles.empty}>Veri bulunamadı.</div></td></tr>
+                  <tr><td colSpan={14}><div className={styles.empty}>Veri bulunamadı.</div></td></tr>
                 ) : activeComponent.points.map(point => (
                   <tr key={point.id}>
                     <td className={styles.tdMono}>{point.sequence_no}</td>
-                    <td className={styles.tdName}>
-                      {editingId === point.id ? (
-                        <input style={inlineInputStyle} value={editForm.label} onChange={event => setEditForm(current => ({ ...current, label: event.target.value }))} />
-                      ) : point.label || "-"}
-                    </td>
-                    <td>
-                      {editingId === point.id ? (
-                        <input style={inlineInputStyle} value={editForm.analyst} onChange={event => setEditForm(current => ({ ...current, analyst: event.target.value }))} />
-                      ) : point.analyst || "-"}
-                    </td>
+                    <td className={styles.tdMono}>{`${formatNumber(point.recovery)}%`}</td>
+                    <td className={styles.tdMono}>{formatNumber(activeComponent.center_line)}</td>
+                    <td className={styles.tdMono}>{formatNumber(activeComponent.standard_deviation, 4)}</td>
+                    <td className={styles.tdMono}>{formatNumber(activeComponent.lower_warning_limit)}</td>
+                    <td className={styles.tdMono}>{formatNumber(activeComponent.upper_warning_limit)}</td>
+                    <td className={styles.tdMono}>{formatNumber(activeComponent.lower_control_limit)}</td>
+                    <td className={styles.tdMono}>{formatNumber(activeComponent.upper_control_limit)}</td>
+                    <td className={styles.tdMono}>{formatNumber(activeComponent.lower_legal_limit)}</td>
+                    <td className={styles.tdMono}>{formatNumber(activeComponent.upper_legal_limit)}</td>
                     <td className={styles.tdMono}>
-                      {editingId === point.id ? (
-                        <input style={inlineInputStyle} value={editForm.value} inputMode="decimal" onChange={event => setEditForm(current => ({ ...current, value: event.target.value }))} />
-                      ) : formatNumber(point.value)}
+                      {formatDate(point.measured_at || point.created_at)}
                     </td>
-                    <td className={styles.tdMono}>
-                      {editingId === point.id ? (
-                        <input style={inlineInputStyle} value={editForm.recovery} inputMode="decimal" onChange={event => setEditForm(current => ({ ...current, recovery: event.target.value }))} />
-                      ) : `${formatNumber(point.recovery)}%`}
-                    </td>
+                    <td>{point.analyst || "-"}</td>
                     <td>
                       <span className={`${styles.badge} ${point.locked ? styles.badgeGray : styles.badgeGreen}`}>
-                        {point.locked ? "Validasyon" : "Manuel"}
+                        {pointSourceLabel(point)}
                       </span>
                     </td>
-                    <td className={styles.tdMono}>
-                      {editingId === point.id ? (
-                        <input type="date" style={inlineInputStyle} value={editForm.measured_at} onChange={event => setEditForm(current => ({ ...current, measured_at: event.target.value }))} />
-                      ) : formatDate(point.measured_at || point.created_at)}
-                    </td>
+                    
                     <td>
                       {!point.locked && (
                         <div className={styles.actionBtns}>
@@ -443,16 +501,6 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-const inlineInputStyle: React.CSSProperties = {
-  width: "100%",
-  border: "1px solid var(--color-border)",
-  borderRadius: 6,
-  padding: "6px 8px",
-  fontSize: "0.82rem",
-  fontFamily: "inherit",
-  background: "var(--color-surface)",
-};
-
 const auditLabel = (action: string) => {
   if (action === "CREATE_POINT") return "Satır eklendi";
   if (action === "UPDATE_POINT") return "Satır düzenlendi";
@@ -463,6 +511,8 @@ const auditLabel = (action: string) => {
 const auditSummary = (log: QcAuditLog) => {
   const after = log.after_data || log.before_data || {};
   const label = typeof after.label === "string" && after.label ? after.label : "Etiketsiz veri";
-  const recovery = typeof after.recovery === "number" ? `${formatNumber(after.recovery)}%` : "";
-  return recovery ? `${label} · ${recovery}` : label;
+  const target = typeof after.target_value === "number" ? formatNumber(after.target_value) : "-";
+  const measured = typeof after.value === "number" ? formatNumber(after.value) : "-";
+  const recovery = typeof after.recovery === "number" ? `${formatNumber(after.recovery)}%` : "-";
+  return `${label} · Hedef: ${target} · Ölçülen: ${measured} · Geri kazanım: ${recovery}`;
 };

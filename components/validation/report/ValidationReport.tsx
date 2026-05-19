@@ -76,6 +76,76 @@ const appendixModuleOrder = [
     "MEASUREMENT_UNCERTAINTY",
 ];
 
+const statisticalBasisRows: Array<[string, string, string, string]> = [
+    [
+        "Doğrusallık / Kalibrasyon",
+        "En küçük kareler doğrusal regresyonu ile y = ax + b modeli kurulur. Korelasyon ve determinasyon katsayısı, kalibrasyonun çalışma aralığında kabul edilebilirliğini desteklemek için değerlendirilir.",
+        "a = Σ((xi - x̄)(yi - ȳ)) / Σ((xi - x̄)²); b = ȳ - a x̄; R² = 1 - SSres / SStot",
+        "Kalibrasyon noktaları çalışma aralığını temsil etmeli, artıklar ve R² değeri birlikte yorumlanmalıdır.",
+    ],
+    [
+        "LOD / LOQ",
+        "Kör, düşük seviye veya tekrarlı çalışma verilerinden standart sapma hesaplanır. Tespit ve tayin sınırları ortalama sinyale eklenen standart sapma katsayılarıyla belirlenir.",
+        "LOD = x̄ + 3s; LOQ = x̄ + 10s",
+        "x̄ tekrarların ortalaması, s standart sapmadır. Uygulamada kullanılan numune matriksi ve birim raporda korunur.",
+    ],
+    [
+        "Tekrarlanabilirlik",
+        "Aynı koşullarda elde edilen paralel sonuçların dağılımı ile ortalama, standart sapma, RSDr ve tekrarlanabilirlik limiti hesaplanır.",
+        "RSD% = (s / x̄) x 100; r = 2,83 x Sr",
+        "Sr tekrarlanabilirlik standart sapmasıdır. r limiti aynı laboratuvar ve kısa zaman aralığı koşulundaki farkların değerlendirilmesinde kullanılır.",
+    ],
+    [
+        "Tekrarüretilebilirlik",
+        "Farklı gün veya analist gruplarından gelen varyanslar karşılaştırılır; grup varyanslarının uyumu F testi ile değerlendirilir.",
+        "Fhesap = s1² / s2²; Fhesap < Fkritik ise varyanslar uyumlu kabul edilir",
+        "Büyük varyans paya alınır. Fkritik değer serbestlik derecesi ve seçilen güven düzeyine göre tablodan alınır.",
+    ],
+    [
+        "Gerçeklik / Geri Kazanım",
+        "Bilinen hedef değere göre ölçülen değerin yüzde geri kazanımı hesaplanır ve metot/rehber kabul aralığına göre değerlendirilir.",
+        "Geri Kazanım (%) = (Bulunan / Eklenen veya Hedef) x 100",
+        "Sertifikalı referans malzeme, spike numune veya bilinen konsantrasyonlu çalışma ile uygulanabilir.",
+    ],
+    [
+        "Standart Belirsizlik",
+        "Her belirsizlik bileşeni olasılık dağılımına göre standart belirsizliğe çevrilir. Sertifika, saflık, hacim, tartım, tekrarlanabilirlik ve kalibrasyon bileşenleri ayrı değerlendirilir.",
+        "Dikdörtgen dağılım: u = a / √3; üçgen dağılım: u = a / √6; normal dağılım: u = U / k",
+        "a yarı aralık, U sertifikadaki genişletilmiş belirsizlik, k kapsama faktörüdür.",
+    ],
+    [
+        "Birleşik ve Genişletilmiş Belirsizlik",
+        "Bağımsız standart belirsizlik bileşenleri kareleri toplamının karekökü ile birleştirilir; sonuç kapsama faktörü ile genişletilir.",
+        "uc = √(u1² + u2² + ... + un²); U = k x uc",
+        "Genellikle yaklaşık %95 güven düzeyi için k = 2 kullanılır; rapordaki k değeri çalışma kaydından alınır.",
+    ],
+    [
+        "Sonuçların Raporlanması",
+        "Analiz sonucu, ölçüm belirsizliği ve birim birlikte verilir. Belirsizlik, karar kuralı veya uygunluk değerlendirmesi varsa teknik yoruma dahil edilir.",
+        "Sonuç = x ± U birim",
+        "Yuvarlama, birim ve anlamlı basamaklar metodun ve laboratuvar prosedürünün gereklilikleriyle uyumlu olmalıdır.",
+    ],
+];
+
+const statisticalSources = [
+    {
+        label: "Eurachem Guide: The Fitness for Purpose of Analytical Methods, 2nd ed., 2014",
+        url: "https://www.eurachem.org/index.php/publications/pubarch/541-arch-gdmv2014",
+    },
+    {
+        label: "Eurachem/CITAC Guide: Quantifying Uncertainty in Analytical Measurement, 3rd ed., 2012",
+        url: "https://eurachem.org/index.php/publications/guides/quam",
+    },
+    {
+        label: "JCGM 100:2008, Evaluation of measurement data - Guide to the expression of uncertainty in measurement (GUM)",
+        url: "https://www.bipm.org/documents/20126/2071204/JCGM_100_2008_E.pdf",
+    },
+    {
+        label: "ISO/IEC 17025:2017, General requirements for the competence of testing and calibration laboratories",
+        url: "https://www.iso.org/standard/66912.html",
+    },
+];
+
 const formatDate = (value?: string | null) => {
     if (!value || value === "-") return "-";
     const [datePart] = String(value).split("T");
@@ -549,6 +619,19 @@ export function ValidationReport({ data }: ValidationReportProps) {
                 </Section>
             </div>
 
+            <div className="report-page report-appendix" data-page-number="3">
+                <ReportHeader
+                    title={reportTitle}
+                    documentNo={data.meta.documentNo || "K.SOP.16 / Ek-1"}
+                    publishDate={formatDate(data.meta.publishDate)}
+                    revisionNo={data.meta.revisionNo || "-"}
+                    revisionDate={formatDate(data.meta.revisionDate)}
+                />
+                <Section title="EK-2   HESAPLAMA YÖNTEMLERİ ve İSTATİSTİKSEL TEMEL">
+                    {renderStatisticalBasisAppendix()}
+                </Section>
+            </div>
+
             <style jsx global>{`
                 .validation-report-shell {
                     width: 100%;
@@ -718,6 +801,16 @@ export function ValidationReport({ data }: ValidationReportProps) {
                     margin: 4px 0 0;
                     font-size: 10px;
                     font-style: italic;
+                }
+                .report-source-list {
+                    margin: 6px 0 0;
+                    padding-left: 18px;
+                    font-size: 10px;
+                    line-height: 1.35;
+                }
+                .report-source-list li {
+                    margin-bottom: 4px;
+                    overflow-wrap: anywhere;
                 }
                 .report-signatures {
                     display: grid;
@@ -924,6 +1017,34 @@ function renderDataAppendix(moduleData: Record<string, Record<string, unknown>>,
     }
 
     return sections.length > 0 ? <div>{sections}</div> : <p className="report-copy">Ek data kaydı bulunamadı.</p>;
+}
+
+function renderStatisticalBasisAppendix() {
+    return (
+        <>
+            <p className="report-copy">
+                Bu ekte validasyon raporunda kullanılan temel istatistiksel yaklaşımlar, hesaplama mantığı ve formül özetleri verilmiştir. Hesaplamalar; metot validasyonu, ölçüm belirsizliği ve deney/kıyaslama laboratuvarları için kabul gören uluslararası rehberlerde tanımlanan prensiplere göre düzenlenmiştir.
+            </p>
+            <Table
+                headers={["Başlık", "Yöntem / Amaç", "Temel Formül", "Teknik Not"]}
+                rows={statisticalBasisRows}
+            />
+            <div className="report-subblock">
+                <h4>Kaynaklar</h4>
+                <ol className="report-source-list">
+                    {statisticalSources.map(source => (
+                        <li key={source.url}>
+                            {source.label}<br />
+                            <span>{source.url}</span>
+                        </li>
+                    ))}
+                </ol>
+            </div>
+            <p className="report-note">
+                Not: Bu bölüm genel teknik dayanak niteliğindedir. Kabul kriterleri ve özel hesaplama ayrıntıları, raporun ana gövdesindeki metot bilgileri ve Ek-1 validasyon data çıktısı ile birlikte değerlendirilir.
+            </p>
+        </>
+    );
 }
 
 function renderAppendixContent(moduleKey: string, value: unknown): React.ReactNode {

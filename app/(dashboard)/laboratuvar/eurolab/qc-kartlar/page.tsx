@@ -24,6 +24,13 @@ const formatDate = (date: string) =>
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
+const cardTypeLabel = (type: string) => {
+  if (type === "RECOVERY") return "Geri Kazanım";
+  if (type === "AVERAGE") return "Ortalama";
+  if (type === "RANGE") return "Range";
+  return type;
+};
+
 export default function QcCardsPage() {
   const [rows, setRows] = useState<QcCardRow[]>([]);
   const [search, setSearch] = useState("");
@@ -160,7 +167,7 @@ export default function QcCardsPage() {
                   <td className={styles.tdMono}>{row.validation_code}</td>
                   <td className={styles.tdName}>{row.method_name || "-"}</td>
                   <td>{row.component_count} bileşen · {row.component_names.slice(0, 3).join(", ")}{row.component_names.length > 3 ? "..." : ""}</td>
-                  <td>{row.card_type === "RANGE" ? "Range" : row.card_type}</td>
+                  <td>{cardTypeLabel(row.card_type)}</td>
                   <td className={styles.tdMono}>{formatDate(row.created_at)}</td>
                   <td className={styles.tdMono}>{formatDate(row.updated_at)}</td>
                   <td>

@@ -152,7 +152,7 @@ export default function ValidationDashboard() {
     }
   };
 
-  const createRangeCard = async (row: ValidationRow) => {
+  const createQcCard = async (row: ValidationRow, cardType: "AVERAGE" | "RECOVERY" | "RANGE") => {
     setCreatingQcId(row.id);
     setError("");
 
@@ -161,14 +161,14 @@ export default function ValidationDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ validation_id: row.id, card_type: "RANGE" }),
+        body: JSON.stringify({ validation_id: row.id, card_type: cardType }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Range kart oluşturulamadı.");
+      if (!res.ok) throw new Error(json.error || "QC kart oluşturulamadı.");
       setQcDialogRow(null);
       router.push(`/laboratuvar/eurolab/qc-kartlar/${json.id}`);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Range kart oluşturulamadı."));
+      setError(getErrorMessage(err, "QC kart oluşturulamadı."));
     } finally {
       setCreatingQcId(null);
     }
@@ -181,7 +181,7 @@ export default function ValidationDashboard() {
       const res = await fetch(`/api/eurolab/qc-cards?validation_id=${row.id}`, { credentials: "same-origin" });
       const json: QcCardGroupRow[] & { error?: string } = await res.json();
       if (!res.ok) throw new Error(json.error || "QC kart kontrol edilemedi.");
-      const existing = Array.isArray(json) ? json.find(card => card.card_type === "RANGE") || json[0] : null;
+      const existing = Array.isArray(json) ? json.find(card => card.card_type === "RECOVERY") || json[0] : null;
       if (existing) {
         router.push(`/laboratuvar/eurolab/qc-kartlar/${existing.id}`);
         return;
@@ -326,11 +326,14 @@ export default function ValidationDashboard() {
                 {qcDialogRow.code || `VAL-${qcDialogRow.id}`} validasyonu için kart tipini seçin.
               </p>
               <div style={{ display: "grid", gap: 10 }}>
-                <button className={styles.saveBtn} style={{ width: "100%", height: 42 }} onClick={() => createRangeCard(qcDialogRow)} disabled={creatingQcId === qcDialogRow.id}>
-                  {creatingQcId === qcDialogRow.id ? <span className={styles.loader} /> : "Range Kart"}
+                <button className={styles.cancelBtn} style={{ width: "100%", height: 42 }} onClick={() => createQcCard(qcDialogRow, "AVERAGE")} disabled={creatingQcId === qcDialogRow.id}>
+                  Ortalama Kart
                 </button>
-                <button className={styles.cancelBtn} style={{ width: "100%", height: 42 }} disabled title="Sonraki aşamada eklenecek">
-                  X Kart
+                <button className={styles.saveBtn} style={{ width: "100%", height: 42 }} onClick={() => createQcCard(qcDialogRow, "RECOVERY")} disabled={creatingQcId === qcDialogRow.id}>
+                  {creatingQcId === qcDialogRow.id ? <span className={styles.loader} /> : "Geri Kazanım Kart"}
+                </button>
+                <button className={styles.cancelBtn} style={{ width: "100%", height: 42 }} onClick={() => createQcCard(qcDialogRow, "RANGE")} disabled={creatingQcId === qcDialogRow.id}>
+                  Range Kart
                 </button>
               </div>
             </div>
