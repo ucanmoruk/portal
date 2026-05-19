@@ -8,6 +8,7 @@ export type QcCardListRow = {
   card_type: string;
   validation_id: number;
   validation_code: string;
+  method_code: string | null;
   method_name: string;
   component_count: number;
   component_names: string[];
@@ -218,13 +219,13 @@ export async function listQcCards(search = "", validationId?: number): Promise<Q
   if (search.trim()) {
     params.push(`%${search.trim()}%`);
     where += ` AND (
-      code ILIKE $1 OR validation_code ILIKE $1 OR method_name ILIKE $1 OR component_name ILIKE $1
+      c.code ILIKE $1 OR c.validation_code ILIKE $1 OR c.method_name ILIKE $1 OR c.component_name ILIKE $1 OR m.method_code ILIKE $1
     )`;
   }
 
   if (validationId) {
     params.push(validationId);
-    where += ` AND validation_id = $${params.length}`;
+    where += ` AND c.validation_id = $${params.length}`;
   }
 
   const res = await query(`
@@ -234,13 +235,21 @@ export async function listQcCards(search = "", validationId?: number): Promise<Q
       card_type,
       validation_id,
       validation_code,
+      MAX(method_code) AS method_code,
       MAX(method_name) AS method_name,
       COUNT(*)::int AS component_count,
       ARRAY_AGG(component_name ORDER BY component_name) AS component_names,
       MIN(created_at) AS created_at,
       MAX(updated_at) AS updated_at
-    FROM eurolab_qc_cards
-    WHERE ${where}
+    FROM (
+      SELECT
+        c.*,
+        m.method_code
+      FROM eurolab_qc_cards c
+      LEFT JOIN eurolab_validations v ON v.id = c.validation_id
+      LEFT JOIN eurolab_methods m ON m.id = v.method_id
+      WHERE ${where}
+    ) c
     GROUP BY validation_id, validation_code, card_type
     ORDER BY MAX(updated_at) DESC, MIN(id) DESC
   `, params);
@@ -251,6 +260,23 @@ export async function listQcCards(search = "", validationId?: number): Promise<Q
 export async function findQcCardGroupByValidation(validationId: number, cardType = "RANGE") {
   const rows = await listQcCards("", validationId);
   return rows.find(row => row.card_type === cardType) || null;
+}
+
+export async function deleteQcCardGroup(id: number) {
+  await ensureQcCardSchema();
+  const baseResult = await query(`
+    SELECT validation_id, card_type
+    FROM eurolab_qc_cards
+    WHERE id = $1
+  `, [id]);
+
+  if (baseResult.rowCount === 0) return false;
+  const base = baseResult.rows[0] as { validation_id: number; card_type: string };
+  await query(`
+    DELETE FROM eurolab_qc_cards
+    WHERE validation_id = $1 AND card_type = $2
+  `, [base.validation_id, base.card_type]);
+  return true;
 }
 
 export async function getQcCard(id: number): Promise<QcCardDetail | null> {
@@ -274,13 +300,19 @@ export async function getQcCard(id: number): Promise<QcCardDetail | null> {
       card_type,
       validation_id,
       validation_code,
+      MAX(method_code) AS method_code,
       MAX(method_name) AS method_name,
       COUNT(*)::int AS component_count,
       ARRAY_AGG(component_name ORDER BY component_name) AS component_names,
       MIN(created_at) AS created_at,
       MAX(updated_at) AS updated_at
-    FROM eurolab_qc_cards
-    WHERE validation_id = $1 AND card_type = $2
+    FROM (
+      SELECT c.*, m.method_code
+      FROM eurolab_qc_cards c
+      LEFT JOIN eurolab_validations v ON v.id = c.validation_id
+      LEFT JOIN eurolab_methods m ON m.id = v.method_id
+      WHERE c.validation_id = $1 AND c.card_type = $2
+    ) c
     GROUP BY validation_id, validation_code, card_type
   `, [base.validation_id, base.card_type]);
 

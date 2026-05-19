@@ -57,6 +57,7 @@ export async function GET() {
                 m.method_code,
                 m.name AS method_name,
                 m.technique,
+                m.personnel,
                 v.study_type,
                 v.status,
                 v.planned_start_date,
@@ -70,8 +71,9 @@ export async function GET() {
         `);
 
         return NextResponse.json(res.rows);
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Validasyon kayÄ±tlarÄ± alÄ±namadÄ±.";
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
 
@@ -124,7 +126,8 @@ export async function POST(request: Request) {
         }
 
         return NextResponse.json(res.rows[0]);
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Validasyon oluÅŸturulamadÄ±.";
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

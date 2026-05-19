@@ -13,17 +13,25 @@ interface ValidationRow {
   method_code: string;
   method_name: string;
   technique: string;
+  personnel?: unknown;
   study_type: string;
   status: string;
   planned_start_date: string | null;
   planned_end_date: string | null;
   study_date: string | null;
+  config?: {
+    personnel?: Array<{ name?: string }>;
+    moduleData?: {
+      PRECISION_REPRODUCIBILITY?: Record<string, { rows?: Array<{ date?: string }> }>;
+    };
+  };
 }
 
 type QcCardGroupRow = {
   id: number;
   card_type: string;
 };
+
 
 const statusLabel = (status: string) => {
   if (status === "NEW") return "Yeni";
@@ -64,6 +72,28 @@ const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
 const displayValidationCode = (row: ValidationRow) => `${row.method_code || row.code || `VAL-${row.id}`}-Ek.1`;
+
+const asStringArray = (value: unknown) =>
+  Array.isArray(value) ? value.map(item => String(item || "").trim()).filter(Boolean) : [];
+
+const authorizedPeople = (row: ValidationRow) => {
+  const methodPersonnel = asStringArray(row.personnel);
+  if (methodPersonnel.length > 0) return methodPersonnel;
+  return asStringArray(row.config?.personnel?.map(person => person.name));
+};
+
+const reproducibilityDateRange = (row: ValidationRow) => {
+  const moduleData = row.config?.moduleData?.PRECISION_REPRODUCIBILITY || {};
+  const dates = Object.values(moduleData)
+    .flatMap(component => Array.isArray(component?.rows) ? component.rows : [])
+    .map(item => item.date || "")
+    .filter(Boolean)
+    .sort();
+
+  if (dates.length > 0) return `${formatDate(dates[0])} - ${formatDate(dates[dates.length - 1])}`;
+  if (row.planned_start_date || row.planned_end_date) return `${formatDate(row.planned_start_date)} - ${formatDate(row.planned_end_date)}`;
+  return formatDate(row.study_date);
+};
 
 const sortByValidationCode = (items: ValidationRow[]) =>
   [...items].sort((left, right) => displayValidationCode(left).localeCompare(displayValidationCode(right), "tr-TR", {
@@ -229,8 +259,9 @@ export default function ValidationDashboard() {
                 <th>Analiz adı</th>
                 <th style={{ width: 150 }}>Metot</th>
                 <th style={{ width: 150 }}>Tür</th>
-                <th style={{ width: 150 }}>Durum</th>
+                <th style={{ width: 190 }}>Yetkili Kişiler</th>
                 <th style={{ width: 190 }}>Tarih</th>
+                <th style={{ width: 150 }}>Durum</th>
                 <th style={{ width: 154 }}></th>
               </tr>
             </thead>
@@ -238,14 +269,14 @@ export default function ValidationDashboard() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 7 }).map((__, j) => (
+                    {Array.from({ length: 8 }).map((__, j) => (
                       <td key={j}><div className={styles.skeleton} /></td>
                     ))}
                   </tr>
                 ))
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     <div className={styles.empty}>
                       <p>Validasyon kaydı bulunamadı.</p>
                     </div>
@@ -254,14 +285,24 @@ export default function ValidationDashboard() {
               ) : rows.map(row => (
                 <tr key={row.id}>
                   <td className={styles.tdMono}>
-                    <Link className="text-blue-600 hover:underline font-semibold" href={`/laboratuvar/eurolab/validasyon/${row.id}`}>
+                    <Link className="text-blue-600 hover:underline font-semibold" style={{
+                                                color: "var(--color-accent)",
+                                                fontWeight: 700,
+                                                textDecoration: "underline",
+                                                textUnderlineOffset: 3
+                                            }} href={`/laboratuvar/eurolab/validasyon/${row.id}`}>
                       {displayValidationCode(row)}
                     </Link>
                   </td>
                   <td className={styles.tdName}>{row.method_name || "—"}</td>
                   <td>{row.technique || row.method_code || "—"}</td>
                   <td>{typeLabel(row.study_type)}</td>
-                  <td>
+                  <td>{authorizedPeople(row).slice(0, 3).join(", ") || "-"}{authorizedPeople(row).length > 3 ? "..." : ""}</td>
+                  <td className={styles.tdMono}>
+                    {reproducibilityDateRange(row)}
+                  </td>
+                  
+                     <td>
                     <button
                       type="button"
                       onClick={() => row.status !== "PASSIVE" && updateStatus(row, nextStatus(row.status))}
@@ -273,11 +314,6 @@ export default function ValidationDashboard() {
                         {statusLabel(row.status)}
                       </Badge>
                     </button>
-                  </td>
-                  <td className={styles.tdMono}>
-                    {row.planned_start_date || row.planned_end_date
-                      ? `${formatDate(row.planned_start_date)} - ${formatDate(row.planned_end_date)}`
-                      : formatDate(row.study_date)}
                   </td>
                   <td>
                     <div className={styles.actionBtns}>

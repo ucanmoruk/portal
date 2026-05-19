@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasEurolabDatabaseConfig } from "@/lib/db_eurolab";
-import { createRecoveryCardsFromValidation, findQcCardGroupByValidation, listQcCards } from "@/lib/eurolab_qc_cards";
+import { createRecoveryCardsFromValidation, deleteQcCardGroup, findQcCardGroupByValidation, listQcCards } from "@/lib/eurolab_qc_cards";
 
 export async function GET(request: Request) {
   try {
@@ -44,6 +44,25 @@ export async function POST(request: Request) {
     return NextResponse.json(await createRecoveryCardsFromValidation(validationId));
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "QC kart oluşturulamadı.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    if (!hasEurolabDatabaseConfig()) {
+      return NextResponse.json({ error: "Eurolab veritabanÄ± baÄŸlantÄ±sÄ± yok." }, { status: 400 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = Number(searchParams.get("id") || "");
+    if (!id) return NextResponse.json({ error: "QC kart seÃ§imi zorunludur." }, { status: 400 });
+
+    const deleted = await deleteQcCardGroup(id);
+    if (!deleted) return NextResponse.json({ error: "QC kart bulunamadÄ±." }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "QC kart silinemedi.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

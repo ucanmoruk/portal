@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, Search } from "lucide-react";
+import { ExternalLink, Search, Trash2 } from "lucide-react";
 import styles from "@/app/styles/table.module.css";
 
 type QcCardRow = {
@@ -11,6 +11,7 @@ type QcCardRow = {
   card_type: string;
   validation_id: number;
   validation_code: string;
+  method_code: string | null;
   method_name: string;
   component_count: number;
   component_names: string[];
@@ -38,6 +39,7 @@ export default function QcCardsPage() {
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -68,6 +70,30 @@ export default function QcCardsPage() {
   useEffect(() => {
     setPage(1);
   }, [search, pageSize]);
+
+  const deleteCard = async (row: QcCardRow) => {
+    const confirmed = window.confirm(`${row.code} QC kartÄ± silinsin mi?`);
+    if (!confirmed) return;
+
+    const previousRows = rows;
+    setDeletingId(row.id);
+    setRows(current => current.filter(item => item.id !== row.id));
+    setError("");
+
+    try {
+      const res = await fetch(`/api/eurolab/qc-cards?id=${row.id}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "QC kart silinemedi.");
+    } catch (err: unknown) {
+      setRows(previousRows);
+      setError(getErrorMessage(err, "QC kart silinemedi."));
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -132,11 +158,11 @@ export default function QcCardsPage() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th style={{ width: 150 }}>Kart No</th>
-                <th style={{ width: 120 }}>Validasyon</th>
-                <th>Metot</th>
-                <th style={{ width: 220 }}>Alt Bileşenler</th>
-                <th style={{ width: 90 }}>Tip</th>
+                <th style={{ width: 130 }}>Kart No</th>
+                <th style={{ width: 100 }}>Analiz Kodu</th>
+                <th style={{ width: 220 }}>Analiz Adı</th>
+                <th style={{ width: 100 }}>Alt Bileşenler</th>
+                <th style={{ width: 120 }}>Tip</th>
                 <th style={{ width: 120 }}>Oluşturma</th>
                 <th style={{ width: 120 }}>Güncelleme</th>
                 <th style={{ width: 60 }}></th>
@@ -160,22 +186,32 @@ export default function QcCardsPage() {
               ) : pagedRows.map(row => (
                 <tr key={row.id}>
                   <td className={styles.tdMono}>
-                    <Link className="text-blue-600 hover:underline font-semibold" href={`/laboratuvar/eurolab/qc-kartlar/${row.id}`}>
+                    <Link className="text-blue-600 hover:underline font-semibold" style={{
+                                                color: "var(--color-accent)",
+                                                fontWeight: 700,
+                                                textDecoration: "underline",
+                                                textUnderlineOffset: 3
+                                            }} href={`/laboratuvar/eurolab/qc-kartlar/${row.id}`}>
                       {row.code}
                     </Link>
                   </td>
-                  <td className={styles.tdMono}>{row.validation_code}</td>
+                  <td className={styles.tdMono}>{row.method_code || row.validation_code}</td>
                   <td className={styles.tdName}>{row.method_name || "-"}</td>
-                  <td>{row.component_count} bileşen · {row.component_names.slice(0, 3).join(", ")}{row.component_names.length > 3 ? "..." : ""}</td>
+                  <td>{row.component_count} bileşen</td>
                   <td>{cardTypeLabel(row.card_type)}</td>
                   <td className={styles.tdMono}>{formatDate(row.created_at)}</td>
                   <td className={styles.tdMono}>{formatDate(row.updated_at)}</td>
                   <td>
-                    <Link href={`/laboratuvar/eurolab/qc-kartlar/${row.id}`}>
-                      <button className={styles.editBtn} title="QC karta gir">
-                        <ExternalLink size={14} />
+                    <div className={styles.actionBtns}>
+                      <Link href={`/laboratuvar/eurolab/qc-kartlar/${row.id}`}>
+                        <button className={styles.editBtn} title="QC karta gir">
+                          <ExternalLink size={14} />
+                        </button>
+                      </Link>
+                      <button className={styles.deleteBtn} onClick={() => deleteCard(row)} disabled={deletingId === row.id} title="QC kartÄ± sil">
+                        {deletingId === row.id ? <span className={styles.loader} style={{ width: 13, height: 13 }} /> : <Trash2 size={14} />}
                       </button>
-                    </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
