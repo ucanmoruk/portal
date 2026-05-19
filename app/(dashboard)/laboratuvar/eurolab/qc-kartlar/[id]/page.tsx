@@ -119,8 +119,10 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   const [personnelOptions, setPersonnelOptions] = useState<string[]>([]);
   const [form, setForm] = useState({ analyst: "", value: "", target_value: "", measured_at: "" });
   const [editForm, setEditForm] = useState({ label: "", analyst: "", value: "", recovery: "", target_value: "", measured_at: "" });
-  const [chartWidth, setChartWidth] = useState(100);
-  const [chartHeight, setChartHeight] = useState(300);
+  const [xAxisMin, setXAxisMin] = useState("");
+  const [xAxisMax, setXAxisMax] = useState("");
+  const [yAxisMin, setYAxisMin] = useState("");
+  const [yAxisMax, setYAxisMax] = useState("");
 
   const loadCard = async (id: string) => {
     setLoading(true);
@@ -195,6 +197,16 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
     });
   }, [activeComponent]);
+
+  const xDomain = useMemo<[number | "dataMin", number | "dataMax"]>(() => [
+    Number.isFinite(parseDecimal(xAxisMin)) ? parseDecimal(xAxisMin) : "dataMin",
+    Number.isFinite(parseDecimal(xAxisMax)) ? parseDecimal(xAxisMax) : "dataMax",
+  ], [xAxisMax, xAxisMin]);
+
+  const yDomain = useMemo<[number | "auto", number | "auto"]>(() => [
+    Number.isFinite(parseDecimal(yAxisMin)) ? parseDecimal(yAxisMin) : "auto",
+    Number.isFinite(parseDecimal(yAxisMax)) ? parseDecimal(yAxisMax) : "auto",
+  ], [yAxisMax, yAxisMin]);
 
   const addPoint = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -277,7 +289,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   };
 
   return (
-    <div className={styles.page} style={{ gap: 12 }}>
+    <div className={styles.page} style={{ width: "100%", maxWidth: 1300, minWidth: 0, overflowX: "hidden", gap: 12 }}>
       <div className={styles.pageHeader}>
         <div>
           <Link href="/laboratuvar/eurolab/qc-kartlar" className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline mb-2">
@@ -292,7 +304,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
 
       {error && <div className={styles.errorBanner}>{error}</div>}
 
-      <div className={styles.tableCard}>
+      <div className={styles.tableCard} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
         <div style={{ padding: 14, borderBottom: "1px solid var(--color-border-light)" }}>
           {loading ? (
             <div className={styles.skeleton} style={{ height: 280, width: "100%" }} />
@@ -321,24 +333,18 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                 <Metric label="AUL / ÜUL" value={`${formatNumber(activeComponent.lower_warning_limit)} / ${formatNumber(activeComponent.upper_warning_limit)}%`} />
                 <Metric label="AKL / ÜKL" value={`${formatNumber(activeComponent.lower_control_limit)} / ${formatNumber(activeComponent.upper_control_limit)}%`} />
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "center", justifyContent: "flex-end", marginBottom: 8 }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.78rem", color: "var(--color-text-secondary)" }}>
-                  X genişliği
-                  <input type="range" min={70} max={100} value={chartWidth} onChange={event => setChartWidth(Number(event.target.value))} />
-                  <span className={styles.tdMono}>{chartWidth}%</span>
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.78rem", color: "var(--color-text-secondary)" }}>
-                  Y yüksekliği
-                  <input type="range" min={220} max={420} step={20} value={chartHeight} onChange={event => setChartHeight(Number(event.target.value))} />
-                  <span className={styles.tdMono}>{chartHeight}px</span>
-                </label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(115px, 1fr))", gap: 8, alignItems: "end", marginBottom: 8 }}>
+                <AxisInput label="X Min" value={xAxisMin} onChange={setXAxisMin} placeholder="Oto" />
+                <AxisInput label="X Max" value={xAxisMax} onChange={setXAxisMax} placeholder="Oto" />
+                <AxisInput label="Y Min" value={yAxisMin} onChange={setYAxisMin} placeholder="Örn. 60" />
+                <AxisInput label="Y Max" value={yAxisMax} onChange={setYAxisMax} placeholder="Örn. 140" />
               </div>
-              <div style={{ width: `${chartWidth}%`, height: chartHeight, maxWidth: "100%", margin: "0 auto" }}>
+              <div style={{ width: "100%", height: 285, maxWidth: "100%", margin: "0 auto" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData} margin={{ top: 12, right: 24, left: 0, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-light)" />
-                    <XAxis dataKey="no" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} domain={["auto", "auto"]} />
+                    <XAxis dataKey="no" type="number" domain={xDomain} allowDataOverflow tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} domain={yDomain} allowDataOverflow />
                     <Tooltip
                       formatter={(value: unknown) => [`${formatNumber(Number(value))}%`, "Geri kazanım"]}
                       labelFormatter={(_label: unknown, payload: ReadonlyArray<{ payload?: { label?: string } }>) => payload?.[0]?.payload?.label || ""}
@@ -362,7 +368,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       </div>
 
       {card && activeComponent && (
-        <div className={styles.tableCard}>
+        <div className={styles.tableCard} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
           <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border-light)" }}>
             <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>Yeni Veri</h2>
           </div>
@@ -402,25 +408,25 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       )}
 
       {card && activeComponent && (
-        <div className={styles.tableCard}>
-          <div className={styles.tableWrapper} style={{ maxHeight: "34vh", overflow: "auto" }}>
-            <table className={styles.table}>
+        <div className={styles.tableCard} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
+          <div className={styles.tableWrapper} style={{ width: "100%", maxWidth: "100%", maxHeight: "52vh", overflow: "auto" }}>
+            <table className={styles.table} style={{ minWidth: 1080, fontSize: "0.72rem", tableLayout: "fixed" }}>
               <thead>
                 <tr>
-                  <th style={{ width: 80 }}>Sıra No</th>
-                  <th style={{ width: 130 }}>Değerler</th>
-                  <th style={{ width: 110 }}>Xort</th>
-                  <th style={{ width: 110 }}>SS</th>
-                  <th style={{ width: 130 }}>AUL (Ort-2*ss)</th>
-                  <th style={{ width: 130 }}>ÜUL (Ort+2*ss)</th>
-                  <th style={{ width: 130 }}>AKL (Ort-3*s)</th>
-                  <th style={{ width: 130 }}>ÜKL (Ort+3*s)</th>
-                  <th style={{ width: 120 }}>Alt Yasal Limit</th>
-                  <th style={{ width: 120 }}>Üst Yasal Limit</th>
-                  <th style={{ width: 130 }}>Tarih</th>
-                  <th style={{ width: 160 }}>Personel</th>
-                  <th style={{ width: 130 }}>Kaynak</th>
-                  <th style={{ width: 96 }}></th>
+                  <th style={{ width: 56, padding: "6px 8px" }}>Sıra No</th>
+                  <th style={{ width: 76, padding: "6px 8px" }}>Değerler</th>
+                  <th style={{ width: 70, padding: "6px 8px" }}>Xort</th>
+                  <th style={{ width: 66, padding: "6px 8px" }}>SS</th>
+                  <th style={{ width: 86, padding: "6px 8px" }}>AUL</th>
+                  <th style={{ width: 86, padding: "6px 8px" }}>ÜUL</th>
+                  <th style={{ width: 86, padding: "6px 8px" }}>AKL</th>
+                  <th style={{ width: 86, padding: "6px 8px" }}>ÜKL</th>
+                  <th style={{ width: 88, padding: "6px 8px" }}>Alt Yasal</th>
+                  <th style={{ width: 88, padding: "6px 8px" }}>Üst Yasal</th>
+                  <th style={{ width: 88, padding: "6px 8px" }}>Tarih</th>
+                  <th style={{ width: 110, padding: "6px 8px" }}>Personel</th>
+                  <th style={{ width: 96, padding: "6px 8px" }}>Kaynak</th>
+                  <th style={{ width: 58, padding: "6px 8px" }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -428,20 +434,18 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                   <tr><td colSpan={14}><div className={styles.empty}>Veri bulunamadı.</div></td></tr>
                 ) : activeComponent.points.map(point => (
                   <tr key={point.id}>
-                    <td className={styles.tdMono}>{point.sequence_no}</td>
-                    <td className={styles.tdMono}>{`${formatNumber(point.recovery)}%`}</td>
-                    <td className={styles.tdMono}>{formatNumber(activeComponent.center_line)}</td>
-                    <td className={styles.tdMono}>{formatNumber(activeComponent.standard_deviation, 4)}</td>
-                    <td className={styles.tdMono}>{formatNumber(activeComponent.lower_warning_limit)}</td>
-                    <td className={styles.tdMono}>{formatNumber(activeComponent.upper_warning_limit)}</td>
-                    <td className={styles.tdMono}>{formatNumber(activeComponent.lower_control_limit)}</td>
-                    <td className={styles.tdMono}>{formatNumber(activeComponent.upper_control_limit)}</td>
-                    <td className={styles.tdMono}>{formatNumber(activeComponent.lower_legal_limit)}</td>
-                    <td className={styles.tdMono}>{formatNumber(activeComponent.upper_legal_limit)}</td>
-                    <td className={styles.tdMono}>
-                      {formatDate(point.measured_at || point.created_at)}
-                    </td>
-                    <td>{point.analyst || "-"}</td>
+                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{point.sequence_no}</td>
+                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{`${formatNumber(point.recovery)}%`}</td>
+                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.center_line)}</td>
+                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.standard_deviation, 4)}</td>
+                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.lower_warning_limit)}</td>
+                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.upper_warning_limit)}</td>
+                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.lower_control_limit)}</td>
+                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.upper_control_limit)}</td>
+                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.lower_legal_limit)}</td>
+                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(activeComponent.upper_legal_limit)}</td>
+                    <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatDate(point.measured_at || point.created_at)}</td>
+                    <td style={{ padding: "5px 8px" }}>{point.analyst || "-"}</td>
                     <td>
                       <span className={`${styles.badge} ${point.locked ? styles.badgeGray : styles.badgeGreen}`}>
                         {pointSourceLabel(point)}
@@ -482,7 +486,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
       )}
 
       {card && activeComponent && (
-        <div className={styles.tableCard}>
+        <div className={styles.tableCard} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
           <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border-light)" }}>
             <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>İşlem İzi</h2>
           </div>
@@ -529,6 +533,38 @@ function Metric({ label, value }: { label: string; value: string }) {
       <div style={{ fontSize: "0.74rem", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: "1rem", fontWeight: 650, color: "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>{value}</div>
     </div>
+  );
+}
+
+function AxisInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.72rem", color: "var(--color-text-secondary)" }}>
+      {label}
+      <input
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        inputMode="decimal"
+        placeholder={placeholder}
+        style={{
+          height: 30,
+          border: "1px solid var(--color-border)",
+          borderRadius: 6,
+          padding: "4px 8px",
+          fontSize: "0.78rem",
+          fontFamily: "inherit",
+        }}
+      />
+    </label>
   );
 }
 
