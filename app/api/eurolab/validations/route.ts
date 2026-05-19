@@ -1,6 +1,33 @@
 import { NextResponse } from "next/server";
 import { hasEurolabDatabaseConfig, query } from "@/lib/db_eurolab";
 import { createLocalValidation, listLocalValidations } from "@/lib/eurolab_local_validations";
+import { sanitizeMethodPersonnel } from "@/lib/eurolab_methods";
+
+const sanitizeValidationConfig = (config: unknown) => {
+    if (!config || typeof config !== "object" || Array.isArray(config)) return config;
+
+    const record = config as Record<string, unknown>;
+    const personnel = Array.isArray(record.personnel)
+        ? record.personnel.filter(person => {
+            const name = person && typeof person === "object" && "name" in person
+                ? String((person as { name?: unknown }).name || "")
+                : String(person || "");
+            return sanitizeMethodPersonnel([name]).length > 0;
+        })
+        : record.personnel;
+
+    return {
+        ...record,
+        personnel,
+    };
+};
+
+const sanitizeValidationRows = <T extends { personnel?: unknown; config?: unknown }>(rows: T[]) =>
+    rows.map(row => ({
+        ...row,
+        personnel: sanitizeMethodPersonnel(row.personnel),
+        config: sanitizeValidationConfig(row.config),
+    }));
 
 async function ensureValidationSchema() {
     await query(`
@@ -43,7 +70,7 @@ async function ensureValidationSchema() {
 export async function GET() {
     try {
         if (!hasEurolabDatabaseConfig()) {
-            return NextResponse.json(await listLocalValidations());
+            return NextResponse.json(sanitizeValidationRows(await listLocalValidations()));
         }
 
         await ensureValidationSchema();
@@ -70,7 +97,7 @@ export async function GET() {
             ORDER BY COALESCE(v.planned_start_date, v.study_date) DESC, v.id DESC
         `);
 
-        return NextResponse.json(res.rows);
+        return NextResponse.json(sanitizeValidationRows(res.rows));
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Validasyon kayÄ±tlarÄ± alÄ±namadÄ±.";
         return NextResponse.json({ error: message }, { status: 500 });
