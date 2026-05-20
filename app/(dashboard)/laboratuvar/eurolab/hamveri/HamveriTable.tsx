@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Edit, Eye, Printer } from "lucide-react";
+import { Edit, Eye, FileText, Printer } from "lucide-react";
 import styles from "@/app/styles/table.module.css";
 
 interface RawdataRow {
@@ -107,6 +107,10 @@ export default function HamveriTable() {
             <option value={50}>50</option>
             <option value={100}>100</option>
           </select>
+          <Link className={styles.cancelBtn} href="/laboratuvar/eurolab/hamveri/talimatlar">
+            <FileText size={16} />
+            Talimat PDFleri
+          </Link>
           <Link className={styles.addBtn} href="/laboratuvar/eurolab/hamveri/yeni">
             <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
               <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />

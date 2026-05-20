@@ -61,6 +61,7 @@ export const MENU_TREE: MenuItem[] = [
       { key: "eurolab.validasyon",         label: "Validasyon",          href: "/laboratuvar/eurolab/validasyon" },
       { key: "eurolab.qc-kartlar",         label: "QC Kartlar",          href: "/laboratuvar/eurolab/qc-kartlar" },
       { key: "eurolab.hamveri",            label: "Hamveri",             href: "/laboratuvar/eurolab/hamveri" },
+      { key: "eurolab.hamveri-talimatlar", label: "Hamveri Talimatları", href: "/laboratuvar/eurolab/hamveri/talimatlar" },
       { key: "eurolab.olcum-belirsizligi", label: "Ölçüm Belirsizliği", href: "/laboratuvar/eurolab/olcum-belirsizligi" },
       { key: "eurolab.raporlar",           label: "Raporlar",            href: "/laboratuvar/eurolab/raporlar" },
     ],

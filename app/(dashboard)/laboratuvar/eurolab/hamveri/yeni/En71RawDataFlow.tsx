@@ -36,6 +36,13 @@ interface RawdataDetail {
   };
 }
 
+type InstructionRow = {
+  id: number;
+  clause: string;
+  method: string;
+  title: string | null;
+};
+
 const steps: Array<{ key: StepKey; label: string; icon: React.ReactNode }> = [
   { key: "identity", label: "Kimliklendirme", icon: <PackageSearch className="h-4 w-4" /> },
   { key: "age", label: "Yaş Seçimi", icon: <Users className="h-4 w-4" /> },
@@ -308,6 +315,8 @@ const standardTestOptions: TestRow[] = [
   return a.title.localeCompare(b.title, "tr");
 });
 
+export const en71StandardTestOptions = standardTestOptions;
+
 interface FormState {
   reportNo: string;
   productName: string;
@@ -350,6 +359,9 @@ const decisionClass = (decision: TestDecision) => {
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
+const instructionKey = (clause: string, method: string) =>
+  `${clause.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr-TR")}||${method.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr-TR")}`;
+
 export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
   const router = useRouter();
   const [activeStep, setActiveStep] = useState<StepKey>("identity");
@@ -363,6 +375,28 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
   const [saving, setSaving] = useState(false);
   const [loadingRecord, setLoadingRecord] = useState(Boolean(rawdataId));
   const [saveError, setSaveError] = useState("");
+  const [instructionMap, setInstructionMap] = useState<Record<string, InstructionRow>>({});
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadInstructions() {
+      try {
+        const response = await fetch("/api/eurolab/rawdata-instructions?standard=EN%2071-1%3A2026", { credentials: "same-origin" });
+        const json: InstructionRow[] & { error?: string } = await response.json();
+        if (!response.ok) throw new Error(json.error || "Analiz talimatları alınamadı.");
+        if (!alive) return;
+        setInstructionMap(Object.fromEntries((Array.isArray(json) ? json : []).map(row => [instructionKey(row.clause, row.method), row])));
+      } catch {
+        if (alive) setInstructionMap({});
+      }
+    }
+
+    loadInstructions();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!rawdataId) return;
@@ -717,7 +751,7 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
                   </button>
                 </div>
                 <ManualTestCard form={manualTestForm} setForm={setManualTestForm} onAdd={addManualTest} tests={standardTestOptions} />
-                <TestTable tests={selectedTests} onRemoveManual={removeManualTest} />
+                <TestTable tests={selectedTests} instructions={instructionMap} onRemoveManual={removeManualTest} />
               </div>
             )}
 
@@ -755,8 +789,8 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
                             <div className="font-semibold text-slate-900">{row.title}</div>
                             <div className="mt-1 text-xs text-slate-500">{row.source} - {row.group}</div>
                           </td>
-                          <td className="px-4 py-4 align-top text-slate-700">{row.clause}</td>
-                          <td className="px-4 py-4 align-top text-slate-700">{row.method}</td>
+                          <td className="px-4 py-4 align-top text-slate-700"><InstructionLink test={row} value={row.clause} instructions={instructionMap} /></td>
+                          <td className="px-4 py-4 align-top text-slate-700"><InstructionLink test={row} value={row.method} instructions={instructionMap} /></td>
                           <td className="px-4 py-4 align-top">
                             <input className="field-input h-9 min-w-[140px]" value={row.record.measuredValue} onChange={event => updateRecord(row.id, { measuredValue: event.target.value })} placeholder="82 dB / 0,32 Nm" />
                           </td>
@@ -969,7 +1003,24 @@ function ManualTestCard({
   );
 }
 
-function TestTable({ tests, onRemoveManual }: { tests: TestRow[]; onRemoveManual: (testId: string) => void }) {
+function InstructionLink({ test, value, instructions }: { test: Pick<TestRow, "clause" | "method">; value: string; instructions: Record<string, InstructionRow> }) {
+  const instruction = instructions[instructionKey(test.clause, test.method)];
+  if (!instruction) return <span>{value}</span>;
+
+  return (
+    <a
+      href={`/api/eurolab/rawdata-instructions/${instruction.id}/file`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex rounded-md bg-blue-50 px-2 py-1 font-bold text-blue-700 underline underline-offset-2 hover:bg-blue-100 hover:text-blue-800"
+      title={instruction.title || "Analiz talimatı PDF"}
+    >
+      {value}
+    </a>
+  );
+}
+
+function TestTable({ tests, instructions, onRemoveManual }: { tests: TestRow[]; instructions: Record<string, InstructionRow>; onRemoveManual: (testId: string) => void }) {
   return (
     <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white" style={{ padding: "10px" }}>
       <table className="w-full min-w-[760px] border-collapse text-sm sm:min-w-[920px] lg:min-w-[1050px]">
@@ -1001,8 +1052,8 @@ function TestTable({ tests, onRemoveManual }: { tests: TestRow[]; onRemoveManual
                 <div className="font-semibold leading-6 text-slate-900">{test.title}</div>
                 <div className="mt-1 text-[0.78rem] leading-5 text-slate-500">{test.group}</div>
               </td>
-              <td className="px-4 py-4 align-top text-slate-700">{test.clause}</td>
-              <td className="px-4 py-4 align-top text-slate-700">{test.method}</td>
+              <td className="px-4 py-4 align-top text-slate-700"><InstructionLink test={test} value={test.clause} instructions={instructions} /></td>
+              <td className="px-4 py-4 align-top text-slate-700"><InstructionLink test={test} value={test.method} instructions={instructions} /></td>
               <td className="px-4 py-4 align-top text-[0.82rem] leading-6 text-slate-500">{test.reason}</td>
               <td className="px-4 py-4 align-top text-right">
                 {test.source === "Harici" && (

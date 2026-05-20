@@ -46,14 +46,25 @@ type RawdataDetail = {
   updated_at: string | null;
 };
 
+type InstructionRow = {
+  id: number;
+  clause: string;
+  method: string;
+  title: string | null;
+};
+
 const formatDate = (date: string | null) =>
   date ? new Date(date).toLocaleDateString("tr-TR") : "-";
 
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
+const instructionKey = (clause: string, method: string) =>
+  `${clause.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr-TR")}||${method.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr-TR")}`;
+
 export default function RawdataPrintView({ id }: { id: string }) {
   const [data, setData] = useState<RawdataDetail | null>(null);
+  const [instructionMap, setInstructionMap] = useState<Record<string, InstructionRow>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -80,6 +91,27 @@ export default function RawdataPrintView({ id }: { id: string }) {
       alive = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadInstructions() {
+      try {
+        const response = await fetch("/api/eurolab/rawdata-instructions?standard=EN%2071-1%3A2026", { credentials: "same-origin" });
+        const json: InstructionRow[] & { error?: string } = await response.json();
+        if (!response.ok) throw new Error(json.error || "Analiz talimatları alınamadı.");
+        if (!alive) return;
+        setInstructionMap(Object.fromEntries((Array.isArray(json) ? json : []).map(row => [instructionKey(row.clause, row.method), row])));
+      } catch {
+        if (alive) setInstructionMap({});
+      }
+    }
+
+    loadInstructions();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const tests = data?.test_data?.selectedTests || [];
   const records = data?.test_data?.records || {};
@@ -163,8 +195,8 @@ export default function RawdataPrintView({ id }: { id: string }) {
                         <div className={styles.tdName}>{test.title}</div>
                         <div className={styles.tdSecondary}>{test.source} - {test.group}</div>
                       </td>
-                      <td>{test.clause}</td>
-                      <td>{test.method}</td>
+                      <td><InstructionLink test={test} value={test.clause} instructions={instructionMap} /></td>
+                      <td><InstructionLink test={test} value={test.method} instructions={instructionMap} /></td>
                       <td>{record.measuredValue || "-"}</td>
                       <td>{record.decision}</td>
                       <td>{record.observation || "-"}</td>
@@ -177,6 +209,23 @@ export default function RawdataPrintView({ id }: { id: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+function InstructionLink({ test, value, instructions }: { test: Pick<TestRow, "clause" | "method">; value: string; instructions: Record<string, InstructionRow> }) {
+  const instruction = instructions[instructionKey(test.clause, test.method)];
+  if (!instruction) return <span>{value}</span>;
+
+  return (
+    <a
+      href={`/api/eurolab/rawdata-instructions/${instruction.id}/file`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-800 print:text-slate-900 print:no-underline"
+      title={instruction.title || "Analiz talimatı PDF"}
+    >
+      {value}
+    </a>
   );
 }
 

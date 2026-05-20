@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db_eurolab";
+import { ensureEurolabRawdataInstructionsTable } from "@/lib/eurolab_rawdata_instructions_schema";
 
 // GET /api/eurolab/setup -> Veritabanını günceller / kurur
 export async function GET() {
@@ -73,9 +74,12 @@ export async function GET() {
             END $$;
         `);
 
+        await ensureEurolabRawdataInstructionsTable();
+
         return NextResponse.json({ message: "Eurolab veritabanı başarıyla güncellendi." });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Eurolab Setup Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = error instanceof Error ? error.message : "Eurolab veritabanı güncellenemedi.";
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

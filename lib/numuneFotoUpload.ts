@@ -30,6 +30,18 @@ export async function uploadNumuneFotoToFtp(opts: {
   originalFilename: string;
   raporNo: string;
 }): Promise<{ pathForDb: string }> {
+  return uploadNumuneFileToFtp({
+    buffer: opts.buffer,
+    originalFilename: opts.originalFilename,
+    prefix: opts.raporNo || "numune",
+  });
+}
+
+export async function uploadNumuneFileToFtp(opts: {
+  buffer: Buffer;
+  originalFilename: string;
+  prefix: string;
+}): Promise<{ pathForDb: string }> {
   const host = process.env.NUMUNE_FTP_HOST!.trim();
   const user = process.env.NUMUNE_FTP_USER!.trim();
   const password = process.env.NUMUNE_FTP_PASSWORD!;
@@ -39,7 +51,7 @@ export async function uploadNumuneFotoToFtp(opts: {
     ""
   );
 
-  const rapor = safeFileSegment(opts.raporNo || "numune");
+  const rapor = safeFileSegment(opts.prefix || "numune");
   const orig = path.basename(opts.originalFilename || "foto.jpg");
   const yenisim = `${rapor} - ${safeFileSegment(orig)}`;
 
