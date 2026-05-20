@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, ClipboardCheck, ListChecks, PackageSearch, Ruler, Shapes, Users } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronDown, ClipboardCheck, ListChecks, PackageSearch, Ruler, Search, Shapes, Users, X } from "lucide-react";
+import HamveriPrintReport from "./HamveriPrintReport";
 
 type StepKey = "identity" | "age" | "type" | "tests" | "records";
 type AgeGroup = "under36" | "over36" | "";
@@ -529,9 +530,6 @@ const instructionKey = (value: string) =>
 const extractClauseNumbers = (value: string) =>
   (value.match(instructionNumberPattern) || []).map(item => item.trim());
 
-const extractMethodIds = (value: string) =>
-  Array.from(new Set((value.match(/\b8(?:\.\d+)?\b/g) || []).map(item => `Madde ${item}`)));
-
 export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
   const router = useRouter();
   const [activeStep, setActiveStep] = useState<StepKey>("identity");
@@ -640,13 +638,7 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
   }, [rawdataId]);
 
   const activeIndex = steps.findIndex(step => step.key === activeStep);
-  const selectedTests = useMemo(() => {
-    const conditional = testCatalog.filter(test => test.when(form));
-    const deduped = new Map<string, TestRow>();
-    [...baseTests, ...conditional].forEach(test => deduped.set(test.id, test));
-    manualTests.forEach(test => deduped.set(test.id, test));
-    return Array.from(deduped.values());
-  }, [form, manualTests]);
+  const selectedTests = useMemo(() => manualTests, [manualTests]);
 
   const activeRequirementVisuals = useMemo(() => {
     const clauses = Array.from(new Set(selectedTests.flatMap(test => extractClauseNumbers(test.clause)).filter(clause => clause.startsWith("4."))));
@@ -797,7 +789,8 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
   };
 
   return (
-    <div className="space-y-5">
+    <>
+    <div className="space-y-5 hamveri-screen">
       {loadingRecord && (
         <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-600">
           Hamveri kaydı yükleniyor...
@@ -952,7 +945,7 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
 
             {activeStep === "tests" && (
               <div className="space-y-6">
-                <PanelTitle title="4. Kademe: Dinamik Test Listesi" subtitle="Yaş, malzeme, kullanım amacı ve oyuncak tipine göre testler zorunlu veya koşullu olarak listelenir." />
+                <PanelTitle title="4. Kademe: Test Listesi" subtitle="EN 71-1 kataloğundan uygulanacak testleri seçerek listeye ekleyin. Tüm seçimler manuel yapılır." />
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50" style={{ padding: "14px 16px", margin: "10px 0 10px 0" }}>
                   <div>
                     <div className="text-sm font-extrabold text-slate-900" >Gereklilik kontrol görseli</div>
@@ -1098,8 +1091,42 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
         }
       `}</style>
     </div>
+
+    <HamveriPrintReport
+      reportNo={form.reportNo}
+      productName={form.productName}
+      brand={form.brand}
+      standard="EN 71-1:2026"
+      ageGroupLabel={form.ageGroup === "under36" ? "0 - 36 Ay" : form.ageGroup === "over36" ? "36 Ay ve Üzeri" : "-"}
+      criticalAges={[
+        form.criticalAges.under10 ? "10 ay altı" : "",
+        form.criticalAges.under18 ? "18 ay altı" : "",
+        form.criticalAges.under8 ? "8 yaş altı" : "",
+      ].filter(Boolean)}
+      purpose={form.purpose}
+      status={testStatus}
+      materials={form.materials}
+      toyTypes={toyTypeOptions.filter(option => form.toyTypes[option.key]).map(option => option.label)}
+      notes={form.notes}
+      stats={stats}
+      rows={selectedTests.map(test => ({
+        id: test.id,
+        title: test.title,
+        source: test.source,
+        group: test.group,
+        clause: test.clause,
+        method: test.method,
+        measuredValue: (records[test.id]?.measuredValue) || "",
+        decision: records[test.id]?.decision || "Bekliyor",
+      }))}
+    />
+    </>
   );
 }
+
+
+// Print rapor şablonu için: ./HamveriPrintReport.tsx
+
 
 function PanelTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
@@ -1157,17 +1184,15 @@ function ManualTestCard({
   onAdd: () => void;
   tests: TestRow[];
 }) {
-  const [methodPickerOpen, setMethodPickerOpen] = useState(false);
   const selected = tests.find(test => test.id === form.selectedId);
   const chosenMethodLabel = form.methodIds.length > 0 ? formatMethodIds(form.methodIds) : selected?.method || "-";
   const showMethodPicker = Boolean(selected && selected.clause !== "EN 71-2");
 
   const handleRequirementChange = (selectedId: string) => {
-    const nextSelected = tests.find(test => test.id === selectedId);
     setForm(current => ({
       ...current,
       selectedId,
-      methodIds: nextSelected ? extractMethodIds(nextSelected.method) : [],
+      methodIds: [],
     }));
   };
 
@@ -1233,65 +1258,18 @@ function ManualTestCard({
           </div>
         )}
         {showMethodPicker && (
-          <div className="rounded-lg border border-slate-200 bg-white" style={{ marginTop: "10px", padding: "12px" }}>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-[0.74rem] font-extrabold uppercase tracking-wide text-slate-500">Uygulanacak Madde 8 yöntemleri</div>
-                <div className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-slate-700">{chosenMethodLabel}</div>
-              </div>
-              <button
-                type="button"
-                className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100"
-                onClick={() => setMethodPickerOpen(true)}
-              >
-                Yöntem Seç
-              </button>
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm" style={{ marginTop: "12px", padding: "18px 20px" }}>
+            <div className="text-[0.74rem] font-extrabold uppercase tracking-wide text-slate-500" style={{ marginBottom: "10px" }}>
+              Uygulanacak Madde 8 yöntemleri
             </div>
+            <MethodMultiSelect
+              methodIds={form.methodIds}
+              onToggle={toggleMethod}
+              onClear={() => setForm(current => ({ ...current, methodIds: [] }))}
+            />
           </div>
         )}
       </div>
-
-      {methodPickerOpen && showMethodPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
-          <div className="max-h-[86vh] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl">
-            <div className="border-b border-slate-200 px-5 py-4">
-              <h4 className="text-base font-extrabold text-slate-900">Uygulanacak Madde 8 yöntemleri</h4>
-              <p className="mt-1 text-sm leading-5 text-slate-500">Seçilen gereklilik için ham veri çalışmasında uygulanacak deney metotlarını işaretleyin.</p>
-            </div>
-            <div className="max-h-[58vh] overflow-y-auto px-5 py-4">
-              <div className="grid gap-2 sm:grid-cols-2">
-                {en71MethodOptions.map(method => (
-                  <label key={method.id} className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 hover:border-blue-200 hover:bg-blue-50">
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-3.5 w-3.5 shrink-0 accent-blue-600"
-                      checked={form.methodIds.includes(method.id)}
-                      onChange={() => toggleMethod(method.id)}
-                    />
-                    <span>{method.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-4">
-              <button
-                type="button"
-                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                onClick={() => setForm(current => ({ ...current, methodIds: [] }))}
-              >
-                Seçimleri Temizle
-              </button>
-              <button
-                type="button"
-                className="rounded-full bg-blue-600 px-5 py-2 text-xs font-bold text-white hover:bg-blue-700"
-                onClick={() => setMethodPickerOpen(false)}
-              >
-                Tamam
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {selected && (
         <div className="grid gap-3 rounded-xl border border-blue-100 bg-blue-50 text-[0.84rem] leading-5 text-slate-700 md:grid-cols-3" style={{ marginTop: "5px", padding: "12px 14px" }}>
@@ -1306,6 +1284,169 @@ function ManualTestCard({
           <div>
             <div className="text-[0.72rem] font-bold uppercase tracking-wide text-blue-700">Grup</div>
             <div className="mt-1 font-semibold text-slate-900">{selected.group}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MethodMultiSelect({
+  methodIds,
+  onToggle,
+  onClear,
+}: {
+  methodIds: string[];
+  onToggle: (methodId: string) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  const normalizedQuery = query.trim().toLocaleLowerCase("tr-TR");
+  const filteredMethods = normalizedQuery
+    ? en71MethodOptions.filter(method => method.label.toLocaleLowerCase("tr-TR").includes(normalizedQuery))
+    : en71MethodOptions;
+
+  return (
+    <div ref={containerRef} className="relative">
+      {methodIds.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {methodIds.map(methodId => (
+            <span
+              key={methodId}
+              className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[0.72rem] font-bold text-blue-700"
+            >
+              {methodId}
+              <button
+                type="button"
+                aria-label={`${methodId} yöntemini kaldır`}
+                className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-500 hover:bg-blue-100 hover:text-blue-800"
+                onClick={() => onToggle(methodId)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className={`flex w-full items-center justify-between gap-3 rounded-lg border bg-white text-left transition focus:outline-none focus:ring-4 ${
+          open
+            ? "border-blue-500 ring-blue-100"
+            : "border-slate-300 hover:border-blue-300"
+        }`}
+        style={{ padding: "11px 14px" }}
+        onClick={() => setOpen(prev => !prev)}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <ListChecks className="h-4 w-4 shrink-0 text-blue-600" />
+          <span className="truncate text-sm font-semibold text-slate-800">
+            {methodIds.length > 0
+              ? `${methodIds.length} yöntem seçili — eklemek/çıkarmak için tıklayın`
+              : "Yöntem seçmek için tıklayın"}
+          </span>
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+          <div className="border-b border-slate-200" style={{ padding: "12px 14px" }}>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                placeholder="Yöntem ara (ör. 8.10, küçük parça)"
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                style={{ paddingLeft: "40px", paddingRight: "14px" }}
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="max-h-[320px] overflow-y-auto" role="listbox" aria-multiselectable="true">
+            {filteredMethods.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
+                <Search className="h-5 w-5 text-slate-300" />
+                <div className="text-sm font-semibold text-slate-600">Eşleşen yöntem yok</div>
+                <div className="text-xs text-slate-500">Aramayı değiştirin veya temizleyin.</div>
+              </div>
+            ) : (
+              filteredMethods.map(method => {
+                const checked = methodIds.includes(method.id);
+                return (
+                  <label
+                    key={method.id}
+                    role="option"
+                    aria-selected={checked}
+                    className={`flex cursor-pointer items-center gap-3 border-b border-slate-100 transition last:border-b-0 ${
+                      checked ? "bg-blue-50/70" : "hover:bg-slate-50"
+                    }`}
+                    style={{ padding: "10px 14px" }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 shrink-0 accent-blue-600"
+                      checked={checked}
+                      onChange={() => onToggle(method.id)}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-[0.82rem] font-semibold text-slate-800">
+                      {method.label}
+                    </span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50" style={{ padding: "12px 16px" }}>
+            <span className="text-xs font-semibold text-slate-600">
+              {methodIds.length} seçili · {filteredMethods.length} sonuç
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ padding: "8px 18px" }}
+                onClick={onClear}
+                disabled={methodIds.length === 0}
+              >
+                Temizle
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 text-xs font-bold text-white hover:bg-blue-700"
+                style={{ padding: "8px 20px" }}
+                onClick={() => setOpen(false)}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Kapat
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1348,28 +1489,22 @@ function TestTable({ tests, instructions, onRemoveManual }: { tests: TestRow[]; 
       <table className="w-full min-w-[760px] border-collapse text-sm sm:min-w-[920px] lg:min-w-[1050px]">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50 text-left text-[0.76rem] font-bold uppercase leading-5 tracking-wide text-slate-500">
-            <th className="px-4 py-4" style={{ width: 120 }}>Öncelik</th>
-            <th className="px-4 py-4" style={{ width: 280 }}>Test</th>
-            <th className="px-4 py-4" style={{ width: 130 }}>Madde</th>
-            <th className="px-4 py-4" style={{ width: 150 }}>Yöntem</th>
-            <th className="px-4 py-4">Tetiklenme Nedeni</th>
+            <th className="px-4 py-4" style={{ width: 300 }}>Test</th>
+            <th className="px-4 py-4" style={{ width: 140 }}>Madde</th>
+            <th className="px-4 py-4" style={{ width: 260 }}>Yöntem</th>
+            <th className="px-4 py-4">Ekleme Nedeni</th>
             <th className="px-4 py-4 text-right" style={{ width: 90 }}>İşlem</th>
           </tr>
         </thead>
         <tbody>
-          {tests.map(test => (
-            <tr key={test.id} className="border-b border-slate-100 text-sm leading-6 last:border-b-0">
-              <td className="px-4 py-4 align-top">
-                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                  test.source === "Zorunlu"
-                    ? "bg-blue-50 text-blue-700"
-                    : test.source === "Harici"
-                      ? "bg-purple-50 text-purple-700"
-                      : "bg-amber-50 text-amber-700"
-                }`}>
-                  {test.source}
-                </span>
+          {tests.length === 0 ? (
+            <tr>
+              <td colSpan={5} className="px-4 py-10 text-center text-sm italic text-slate-500">
+                Henüz test eklenmedi. Yukarıdaki katalogdan seçim yapıp &quot;Gereklilik Ekle&quot; diyerek listeye ekleyin.
               </td>
+            </tr>
+          ) : tests.map(test => (
+            <tr key={test.id} className="border-b border-slate-100 text-sm leading-6 last:border-b-0">
               <td className="px-4 py-4 align-top">
                 <div className="font-semibold leading-6 text-slate-900">{test.title}</div>
                 <div className="mt-1 text-[0.78rem] leading-5 text-slate-500">{test.group}</div>

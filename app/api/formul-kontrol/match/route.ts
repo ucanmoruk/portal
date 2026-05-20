@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       const cosingResult = await pool.request()
         .input("name", normalizedName)
         .query(`
-          SELECT TOP 1 ID, INCIName, Cas, EC, Functions, Regulation, Link
+          SELECT TOP 1 ID, INCIName, Cas, EC, Functions, Kategori, Regulation, Link
           FROM rCosing
           WHERE INCIName = @name OR Cas = @name
         `);
@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
         Cas: cosing.Cas || null,
         Ec: cosing.EC || null,
         Functions: cosing.Functions || null,
+        Kategori: cosing.Kategori || null,
         Regulation: cosing.Regulation || null,
         Link: cosing.Link || null,
         Maks: yonetmelik.Maks || null,

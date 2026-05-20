@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
       .input("urunId", urunId)
       .query(`
         SELECT f.UrunID, f.HammaddeID, f.INCIName, f.Miktar, f.DaP, f.Noael,
-               c.Cas, c.EC, c.Functions, c.Regulation, c.Link
+               c.Cas, c.EC, c.Functions, c.Kategori, c.Regulation, c.Link
         FROM rUGDFormul f
         LEFT JOIN rCosing c ON c.ID = f.HammaddeID
         WHERE f.UrunID = @urunId

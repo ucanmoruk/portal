@@ -8,6 +8,7 @@ type IngredientRow = {
   Cas?: string | null;
   Ec?: string | null;
   Functions?: string | null;
+  Kategori?: string | null;
   Regulation?: string | null;
   YonetmelikNo?: string | null;
   YonetmelikUrunTipi?: string | null;
@@ -229,7 +230,7 @@ function fmtSED(value: number) {
 
 function fmtMOS(value: number | null) {
   if (value === null) return empty;
-  return value >= 10000 ? "&gt;10000" : value.toFixed(1);
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 function hasMeaningfulValue(value: unknown) {
@@ -302,8 +303,7 @@ function formulaRows(rows: IngredientRow[], a: number, copy: typeof reportCopy[R
 }
 
 function preservativeRows(rows: IngredientRow[], copy: typeof reportCopy[ReportLanguage]) {
-  const filtered = rows.filter((row) => text(row.Regulation).toLocaleLowerCase("tr-TR").includes("v"));
-  const source = filtered.length ? filtered : rows;
+  const source = rows.filter((row) => text(row.Functions).toLocaleUpperCase("tr-TR").includes("PRESER"));
   if (!source.length) return `<tr><td colspan="7" class="muted">${esc(copy.preservativeEmpty)}</td></tr>`;
 
   return source.map((row) => {
@@ -324,11 +324,7 @@ function preservativeRows(rows: IngredientRow[], copy: typeof reportCopy[ReportL
 }
 
 function allergenRows(rows: IngredientRow[], a: number, copy: typeof reportCopy[ReportLanguage]) {
-  const filtered = rows.filter((row) => {
-    const haystack = `${text(row.Functions)} ${text(row.Regulation)} ${text(row.INCIName)}`.toLocaleLowerCase("tr-TR");
-    return haystack.includes("fragrance") || haystack.includes("parfum") || haystack.includes("aroma") || haystack.includes("allergen");
-  });
-  const source = filtered.length ? filtered : rows;
+  const source = rows.filter((row) => text(row.Kategori).toLocaleLowerCase("tr-TR") === "alerjen");
   if (!source.length) return `<tr><td colspan="8" class="muted">${esc(copy.allergenEmpty)}</td></tr>`;
 
   return source.map((row) => {
@@ -513,21 +509,38 @@ export function renderUgdReportHtml(input: UGDReportInput) {
     ${screenHeader}
     <h2>${esc(copy.toc)}</h2>
     <div class="part-title">${esc(copy.partA)}</div>
-    <p>A.1. Kozmetik ürünün kantitatif ve kalitatif bileşimi</p>
-    <p>A.2. Kozmetik ürünün fiziksel/kimyasal özellikleri ve stabilitesi</p>
-    <p>A.3. Mikrobiyolojik kalite</p>
-    <p>A.4. Safsızlıklar, kalıntılar, ambalaj materyali hakkında bilgi</p>
-    <p>A.5. Normal ve makul olarak öngörülebilir kullanım</p>
-    <p>A.6. Kozmetik ürüne maruziyet</p>
-    <p>A.7. Formülde yer alan maddelere maruziyet değerlendirmesi</p>
-    <p>A.8. Formülde yer alan maddelerin toksikolojik profili</p>
-    <p>A.9. İstenmeyen etkiler ve ciddi istenmeyen etkiler</p>
-    <p>A.10. Kozmetik ürün bilgisi</p>
-    <div class="part-title">${esc(copy.partB)}</div>
-    <p>B.1. Değerlendirme sonucu</p>
-    <p>B.2. Etikette yer alan uyarılar ve kullanım talimatları</p>
-    <p>B.3. Gerekçelendirme</p>
-    <p>B.4. Güvenlilik değerlendirme sorumlusu ile ilgili bilgiler ve Kısım B’nin onaylanması</p>
+   <p>KISIM A - KOZMETİK ÜRÜN GÜVENLİLİK BİLGİLERİ</p>
+<p>A.1. Kozmetik ürünün kantitatif ve kalitatif bileşimi</p>
+<p>A.2. Kozmetik ürünün fiziksel/kimyasal özellikleri ve stabilitesi</p>
+<p>a. Maddelerin veya karışımların fiziksel/kimyasal özellikleri</p>
+<p>b. Bitmiş kozmetik ürünün fiziksel ve kimyasal özellikleri</p>
+<p>c. Kozmetik ürünün stabilitesi</p>
+<p>1) Stabilite testinde kullanılan ürünün bileşiminin piyasada fiilen bulunan ürünle aynı olduğunun kanıtı.</p>
+<p>2) Koruyucu etkinlik çalışmalarının sonuçları, örneğin; tarama-zorlama testi (challenge test)</p>
+<p>3) Uygulanabilir olduğunda, açıldıktan sonra kullanım süresi ve gerekçesi.</p>
+<p>A.3. Mikrobiyolojik kalite</p>
+<p>a. Maddelerin ve karışımların mikrobiyolojik kalitesi</p>
+<p>b. Bitmiş kozmetik ürünün mikrobiyolojik kalitesi</p>
+<p>4) Safsızlıklar, kalıntılar, ambalaj materyali hakkında bilgi</p>
+<p>a. Maddeler ve karışımların saflığı</p>
+<p>b. Yasaklı madde kalıntılarının teknik olarak kaçınılmazlığının kanıtı</p>
+<p>c. Ambalaj materyalinin ilgili özellikleri</p>
+<p>A.5. Normal ve makul olarak öngörülebilir kullanım</p>
+<p>A.6. ​​Kozmetik ürüne maruziyet</p>
+<p>A.7. Formülde yer alan maddelere maruziyet değerlendirmesi</p>
+<p>A.8. Formülde yer alan maddelerin toksikolojik profili</p>
+<p>a) Güvenlilik değerlendirmesinin bir parçası olarak toksikolojik profili ilgilendiren genel hususlar</p>
+<p>b) Tüm ilgili toksikolojik bitiş noktaları için maddelerin toksikolojik profilleri</p>
+<p>c) Bütün belirgin absorbsiyon yollarının değerlendirilmesi</p>
+<p>A.9. İstenmeyen etkiler ve ciddi istenmeyen etkiler</p>
+<p>A.10. Kozmetik ürün bilgisi</p>
+
+<p>KISIM B - KOZMETİK ÜRÜN GÜVENLİLİK DEĞERLENDİRMESİ</p>
+
+<p>B.1. Değerlendirme sonucu</p>
+<p>B.2. Etikette yer alan uyarılar ve kullanım talimatları</p>
+<p>B.3. Gerekçelendirme</p>
+<p>B.4. Güvenlilik değerlendirme sorumlusu ile ilgili bilgiler ve Kısım B’nin onaylanması</p>
   </section>
 
   <section>

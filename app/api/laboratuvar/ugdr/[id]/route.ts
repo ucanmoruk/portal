@@ -131,6 +131,9 @@ export async function GET(
       ? `SELECT n.*, f.Ad AS FirmaAd,
            t.UrunTipi AS UGDTip_UrunTipi,
            t.UygulamaBolgesi,
+           t.UygulamaBolgesiEn,
+           t.Siklik,
+           t.SiklikEn,
            t.ADegeri
          FROM NKR n
          LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
@@ -139,6 +142,9 @@ export async function GET(
       : `SELECT n.*, f.Ad AS FirmaAd,
            CAST(NULL AS nvarchar(500)) AS UGDTip_UrunTipi,
            CAST(NULL AS nvarchar(500)) AS UygulamaBolgesi,
+           CAST(NULL AS nvarchar(500)) AS UygulamaBolgesiEn,
+           CAST(NULL AS nvarchar(500)) AS Siklik,
+           CAST(NULL AS nvarchar(500)) AS SiklikEn,
            CAST(NULL AS nvarchar(200)) AS ADegeri
          FROM NKR n
          LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
@@ -172,6 +178,9 @@ export async function GET(
       Tip1: pickField(n, "Tur") || pickField(n, "Urun_Tipi") || "Durulanmayan",
       Tip2: ugdCol ? pickField(n, ugdCol) : null,
       Uygulama: pickField(n, "UygulamaBolgesi") || "",
+      UygulamaBolgesiEn: pickField(n, "UygulamaBolgesiEn") || "",
+      Siklik: pickField(n, "Siklik") || "",
+      SiklikEn: pickField(n, "SiklikEn") || "",
       Hedef: pickField(n, "Hedef_Grup") || "Yetiskinler",
       A: pickField(n, "ADegeri") || "",
       RaporDurum: "Tamamlandi",

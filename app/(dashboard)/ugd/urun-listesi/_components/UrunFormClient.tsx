@@ -58,7 +58,7 @@ function fmtSED(v: number): string {
 }
 function fmtMOS(v: number | null): string {
   if (v === null) return "—";
-  return v >= 10000 ? ">10000" : v.toFixed(1);
+  return Number.isInteger(v) ? String(v) : v.toFixed(2);
 }
 
 // ── Fiziksel/Kimyasal kompakt tablo (module-level) ───────────────────────────
@@ -998,17 +998,14 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
           .then(r => r.ok ? r.json() : null)
           .catch(() => null);
         if (saved?.item?.bodyHtml) {
-          setEditorHead(saved.item.headHtml || "");
-          if (Array.isArray(saved.item.sections) && saved.item.sections.length === 6) {
+          const savedSections = Array.isArray(saved.item.sections) ? saved.item.sections : [];
+          const hasSplitContent = savedSections.length === 6 && savedSections.filter((section: any) => String(section?.html || "").trim()).length > 1;
+          if (hasSplitContent) {
+            setEditorHead(saved.item.headHtml || "");
             setEditorSections(saved.item.sections);
-          } else {
-            setEditorSections(prev => prev.map((section, index) => ({
-              ...section,
-              html: index === 0 ? saved.item.bodyHtml : "",
-            })));
+            setEditorSaveStatus(saved.item.createdAt ? `Son kayıt yüklendi: ${new Date(saved.item.createdAt).toLocaleString("tr-TR")}` : "Son kayıt yüklendi.");
+            return;
           }
-          setEditorSaveStatus(saved.item.createdAt ? `Son kayıt yüklendi: ${new Date(saved.item.createdAt).toLocaleString("tr-TR")}` : "Son kayıt yüklendi.");
-          return;
         }
       }
 
@@ -1048,26 +1045,26 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         const h2 = el?.matches("h2") ? el : el?.querySelector("h2");
         const t = (h2?.textContent || "").toLocaleUpperCase("tr-TR");
 
-        if (t.includes("KISIM B")) {
+        if (t.includes("KISIM B") || t.includes("PART B") || t.includes("B. COSMETIC PRODUCT SAFETY ASSESSMENT")) {
           active = 1; // 748-883
           pushNode(active, node);
           return;
         }
 
-        if (t.includes("EK-1") || t.includes("EK 1") || t.includes("EK-2") || t.includes("EK 2") || t.includes("EK-3") || t.includes("EK 3") || t.includes("KAYNAKLAR")) {
-          if (t.includes("EK-1") || t.includes("EK 1")) active = 2;
-          else if (t.includes("EK-2") || t.includes("EK 2")) active = 3;
-          else if (t.includes("EK-3") || t.includes("EK 3")) active = 4;
-          else if (t.includes("KAYNAKLAR")) active = 5;
+        if (t.includes("EK-1") || t.includes("EK 1") || t.includes("ANNEX-1") || t.includes("ANNEX 1") || t.includes("EK-2") || t.includes("EK 2") || t.includes("ANNEX-2") || t.includes("ANNEX 2") || t.includes("EK-3") || t.includes("EK 3") || t.includes("ANNEX-3") || t.includes("ANNEX 3") || t.includes("KAYNAKLAR") || t.includes("REFERENCES")) {
+          if (t.includes("EK-1") || t.includes("EK 1") || t.includes("ANNEX-1") || t.includes("ANNEX 1")) active = 2;
+          else if (t.includes("EK-2") || t.includes("EK 2") || t.includes("ANNEX-2") || t.includes("ANNEX 2")) active = 3;
+          else if (t.includes("EK-3") || t.includes("EK 3") || t.includes("ANNEX-3") || t.includes("ANNEX 3")) active = 4;
+          else if (t.includes("KAYNAKLAR") || t.includes("REFERENCES")) active = 5;
           const innerNodes = Array.from(el?.childNodes || [node]);
           innerNodes.forEach((innerNode) => {
             const innerEl = innerNode.nodeType === Node.ELEMENT_NODE ? (innerNode as Element) : null;
             const innerText = (innerNode.textContent || "").toLocaleUpperCase("tr-TR");
             if (innerEl?.tagName.toUpperCase() === "H2") {
-              if (innerText.includes("EK-1") || innerText.includes("EK 1")) active = 2; // 884-905
-              else if (innerText.includes("EK-2") || innerText.includes("EK 2")) active = 3; // 906-912
-              else if (innerText.includes("EK-3") || innerText.includes("EK 3")) active = 4; // 913-915
-              else if (innerText.includes("KAYNAKLAR")) active = 5; // 916-son
+              if (innerText.includes("EK-1") || innerText.includes("EK 1") || innerText.includes("ANNEX-1") || innerText.includes("ANNEX 1")) active = 2; // 884-905
+              else if (innerText.includes("EK-2") || innerText.includes("EK 2") || innerText.includes("ANNEX-2") || innerText.includes("ANNEX 2")) active = 3; // 906-912
+              else if (innerText.includes("EK-3") || innerText.includes("EK 3") || innerText.includes("ANNEX-3") || innerText.includes("ANNEX 3")) active = 4; // 913-915
+              else if (innerText.includes("KAYNAKLAR") || innerText.includes("REFERENCES")) active = 5; // 916-son
             }
             pushNode(active, innerNode);
           });

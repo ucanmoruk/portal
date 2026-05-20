@@ -8,6 +8,7 @@ type IngredientRow = {
   Cas?: string | null;
   Ec?: string | null;
   Functions?: string | null;
+  Kategori?: string | null;
   Regulation?: string | null;
   YonetmelikNo?: string | null;
   YonetmelikUrunTipi?: string | null;
@@ -77,9 +78,21 @@ function pickLanguage(value: unknown): ReportLanguage {
   return value === "en" ? "en" : "tr";
 }
 
+function translateEnglishTerms(value: unknown) {
+  const source = text(value);
+  if (!source) return source;
+  return source
+    .replaceAll("Durulanmayan", "Leave-on")
+    .replaceAll("Durulanan", "Rinse off")
+    .replaceAll("Yetişkinler", "Adult")
+    .replaceAll("yetişkin", "adult")
+    .replaceAll("Çocuklar", "Kids")
+    .replaceAll("çocuklar", "kids");
+}
+
 function localizedField(form: Record<string, unknown>, field: string, language: ReportLanguage, fallback = "") {
   if (language === "en") {
-    return text(form[`${field}En`], text(form[field], fallback));
+    return translateEnglishTerms(text(form[`${field}En`], text(form[field], fallback)));
   }
   return text(form[field], fallback);
 }
@@ -229,7 +242,7 @@ function fmtSED(value: number) {
 
 function fmtMOS(value: number | null) {
   if (value === null) return empty;
-  return value >= 10000 ? "&gt;10000" : value.toFixed(1);
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 function hasMeaningfulValue(value: unknown) {
@@ -257,17 +270,30 @@ function exposureValue(value: unknown, label: string) {
   return text(line?.split(":").slice(1).join(":"), empty);
 }
 
+function optionalExposureValue(value: unknown, label: string) {
+  const result = exposureValue(value, label);
+  return result === empty ? "" : result;
+}
+
 function imageBlock(dataUrl: unknown, caption: string) {
   const src = text(dataUrl);
   if (!src.startsWith("data:image/")) return "";
   return `<figure class="image-block"><img src="${esc(src)}" alt="${esc(caption)}"><figcaption>${esc(caption)}</figcaption></figure>`;
 }
 
+function rawHtml(value: string) {
+  return { __rawHtml: value };
+}
+
+function isRawHtml(value: unknown): value is { __rawHtml: string } {
+  return typeof value === "object" && value !== null && "__rawHtml" in value;
+}
+
 function infoTable(rows: [string, unknown][]) {
   return `<table class="kv">${rows.map(([label, value]) => `
     <tr>
       <th>${esc(label)}</th>
-      <td>${nl2br(value, empty)}</td>
+      <td>${isRawHtml(value) ? value.__rawHtml : nl2br(value, empty)}</td>
     </tr>`).join("")}
   </table>`;
 }
@@ -302,8 +328,7 @@ function formulaRows(rows: IngredientRow[], a: number, copy: typeof reportCopy[R
 }
 
 function preservativeRows(rows: IngredientRow[], copy: typeof reportCopy[ReportLanguage]) {
-  const filtered = rows.filter((row) => text(row.Regulation).toLocaleLowerCase("tr-TR").includes("v"));
-  const source = filtered.length ? filtered : rows;
+  const source = rows.filter((row) => text(row.Functions).toLocaleUpperCase("tr-TR").includes("PRESER"));
   if (!source.length) return `<tr><td colspan="7" class="muted">${esc(copy.preservativeEmpty)}</td></tr>`;
 
   return source.map((row) => {
@@ -324,11 +349,7 @@ function preservativeRows(rows: IngredientRow[], copy: typeof reportCopy[ReportL
 }
 
 function allergenRows(rows: IngredientRow[], a: number, copy: typeof reportCopy[ReportLanguage]) {
-  const filtered = rows.filter((row) => {
-    const haystack = `${text(row.Functions)} ${text(row.Regulation)} ${text(row.INCIName)}`.toLocaleLowerCase("tr-TR");
-    return haystack.includes("fragrance") || haystack.includes("parfum") || haystack.includes("aroma") || haystack.includes("allergen");
-  });
-  const source = filtered.length ? filtered : rows;
+  const source = rows.filter((row) => text(row.Kategori).toLocaleLowerCase("tr-TR") === "alerjen");
   if (!source.length) return `<tr><td colspan="8" class="muted">${esc(copy.allergenEmpty)}</td></tr>`;
 
   return source.map((row) => {
@@ -389,12 +410,33 @@ export function renderUgdReportHtmlEn(input: UGDReportInput) {
   const copy = mergeReportCopy(language, profile);
   const a = parseFloat(text(f.A, "0").replace(",", ".")) || 0;
   const maruziyet = localizedField(f, "MaruziyetAciklama", language);
+  const maruziyetTr = text(f.MaruziyetAciklama);
+  const maruziyetEn = text(f.MaruziyetAciklamaEn, maruziyet);
   const productName = localizedField(f, "Urun", language, empty);
   const useText = localizedField(f, "Kullanim", language, empty);
   const warningsText = localizedField(f, "Uyarilar", language, empty);
   const evaluatorName = localizedField(f, "SorumluAd", language, empty);
   const evaluatorAddress = localizedField(f, "SorumluAdres", language, empty);
   const evaluatorQualification = localizedField(f, "SorumluKanit", language, empty);
+  const productTypeEn = translateEnglishTerms(
+    optionalExposureValue(maruziyetEn, "Product type") || f.Tip1,
+  );
+  const applicationAreaEn = translateEnglishTerms(
+    optionalExposureValue(maruziyetEn, "Application area")
+      || f.UygulamaBolgesiEn
+      || f.UygulamaBolgesi
+      || f.Uygulama,
+  );
+  const contactFrequencyEn = translateEnglishTerms(
+    optionalExposureValue(maruziyetEn, "Contact duration and frequency of use")
+      || f.SiklikEn
+      || f.Siklik
+      || optionalExposureValue(maruziyetTr, "Temas süresi ve uygulama sıklığı"),
+  );
+  const targetUsersEn = translateEnglishTerms(
+    optionalExposureValue(maruziyetEn, "Targeted or exposed person(s)") || f.Hedef,
+  );
+  const signatureImageSrc = text(f.SignatureImageUrl || f.ImzaGorselUrl, "https://placehold.co/320x120/ffffff/111827?text=Signature");
   const title = `UGD_Rapor_${text(f.RaporNo, "rapor")}`;
   const reportHeader = `
     <div class="report-header">
@@ -458,7 +500,8 @@ export function renderUgdReportHtmlEn(input: UGDReportInput) {
     .image-block { box-sizing: border-box; max-width: 100%; margin: 10px 0; overflow: hidden; text-align: center; page-break-inside: avoid; }
     .image-block img { width: auto; height: auto; max-width: 100%; max-height: 150mm; display: block; margin: 0 auto; object-fit: contain; border: 1px solid #d1d5db; }
     .image-block figcaption { margin-top: 4px; color: #6b7280; font-size: 8.5pt; }
-    .signature { height: 34mm; border-bottom: 1px solid #111827; width: 70mm; margin-top: 16px; }
+    .signature { min-height: 34mm; width: 70mm; margin-top: 16px; border-bottom: 1px solid #111827; }
+    .signature img { max-width: 70mm; max-height: 28mm; object-fit: contain; display: block; }
     .print-actions { position: fixed; top: 12px; right: 12px; z-index: 20; }
     .print-actions button { padding: 8px 12px; border: 1px solid #1f4788; border-radius: 6px; background: #1f4788; color: white; font-weight: 700; cursor: pointer; }
     @media screen {
@@ -552,9 +595,9 @@ export function renderUgdReportHtmlEn(input: UGDReportInput) {
       [copy.productName, productName],
       [copy.barcode, f.Barkod],
       [copy.nominalAmount, f.Miktar],
-      [copy.productType, f.Tip1],
-      [copy.applicationArea, f.Uygulama],
-      [copy.targetUsers, f.Hedef],
+      [copy.productType, translateEnglishTerms(f.Tip1)],
+      [copy.applicationArea, applicationAreaEn],
+      [copy.targetUsers, translateEnglishTerms(f.Hedef)],
     ])}
 
      <h3>${esc(copy.supplier)}</h3>
@@ -573,16 +616,16 @@ export function renderUgdReportHtmlEn(input: UGDReportInput) {
     <p>Physical and chemical properties of substances or mixtures are detailed in Annex-3.</p>
     <div style="font-weight: bold;">b. Physical/chemical characteristics of the cosmetic product</div>
     ${infoTable([
-      [copy.appearance, localizedField(f, "Appearance", language)],
-      [copy.color, localizedField(f, "Colour", language)],
-      [copy.odor, localizedField(f, "Odor", language)],
-      ["pH", localizedField(f, "pH", language, text(f.pH))],
-      [copy.boilingPoint, localizedField(f, "Boiling Point", language)],
-      [copy.meltingPoint, localizedField(f, "Melting Point", language)],
-      [copy.density, localizedField(f, "Density", language)],
-      [copy.viscosity, localizedField(f, "Viscosity", language)],
-      [copy.waterSolubility, localizedField(f, "Solubility in water", language)],
-      [copy.otherSolubility, localizedField(f, "Solubility in other solvents and oils", language)],
+      [copy.appearance, localizedField(f, "Gorunum", language, "N/A")],
+      [copy.color, localizedField(f, "Renk", language, "N/A")],
+      [copy.odor, localizedField(f, "Koku", language, "N/A")],
+      ["pH", localizedField(f, "PH", language, "N/A")],
+      [copy.boilingPoint, localizedField(f, "Kaynama", language, "N/A")],
+      [copy.meltingPoint, localizedField(f, "Erime", language, "N/A")],
+      [copy.density, localizedField(f, "Yogunluk", language, "N/A")],
+      [copy.viscosity, localizedField(f, "Viskozite", language, "N/A")],
+      [copy.waterSolubility, localizedField(f, "SudaCozunebilirlik", language, "N/A")],
+      [copy.otherSolubility, localizedField(f, "DigerCozunebilirlik", language, "N/A")],
     ])}
 
     <div style="page-break-after: always;"></div> 
@@ -599,7 +642,7 @@ export function renderUgdReportHtmlEn(input: UGDReportInput) {
 <div style="font-weight: bold; margin-bottom: 2px">(2) The results of the preservative efficacy study, Challenge Test</div>	
 <p>The test involves the preparation of appropriate microorganisms at specific inoculum levels and the enumeration of microorganisms in the sample by inoculating the sample containing microorganisms at specific time intervals. The adequacy of the preservative properties of the product is determined by determining whether a significant decrease or increase in microorganisms is observed at 7, 14 and 28 days under the test conditions.
 According to the test results, the manufacturer guarantees the efficacy of the preservation of this product experimentially by carrying out challenge test.
-See Annex - Challenge Test Report
+See Annex - Challenge Test Report       
 
    <p>${nl2br(f.KoruyucuEtkinlik)}</p>
     ${imageBlock(f.KoruyucuEtkinlikGorsel, copy.challengeImage)}
@@ -704,13 +747,13 @@ The relevant properties of the packaging material should be taken into account, 
 
     <h3>A.6. Exposure to Cosmetic Product</h3>
     ${infoTable([
-      ["Product type:", f.Tip1],
-      ["Application areas:", f.Uygulama],
-      ["Products applied to the skin contact area (cm²)", exposureValue(maruziyet, "Uygulanan ürünün deriye temas ettiği alan")],
-      ["The amount of applied product (g)", exposureValue(maruziyet, "Uygulanan ürünün miktarı")],
-      ["Applied contact time and frequency of administration of the product", exposureValue(maruziyet, "Temas süresi ve uygulama sıklığı")],
+      ["Product type:", productTypeEn],
+      ["Application areas:", applicationAreaEn],
+      ["Products applied to the skin contact area (cm\u00b2)", optionalExposureValue(maruziyetEn, "Skin contact surface area") || exposureValue(maruziyetTr, "Uygulanan \u00fcr\u00fcn\u00fcn deriye temas etti\u011fi alan")],
+      ["The amount of applied product (g)", optionalExposureValue(maruziyetEn, "Amount of product applied") || exposureValue(maruziyetTr, "Uygulanan \u00fcr\u00fcn\u00fcn miktar\u0131")],
+      ["Applied contact time and frequency of administration of the product", contactFrequencyEn],
       ["Normal and reasonable routes of exposure", "Dermal absorption"],
-      ["Target people", f.Hedef],
+      ["Target people", targetUsersEn],
       ["A Value", f.A],
     ])}
 
@@ -910,55 +953,58 @@ Other documents in the Information File of the product are listed below:
       [copy.evaluator, "Dilsun KARABULUT SEFER \n OZECO GROUP ULUSLARARASI DANIŞMANLIK TİCARET LİMİTED ŞİRKETİ \n Şehit Osman Avcı, Malazgirt 1071. Cad. No:49 A İç Kapı No:13, 06820 Eryaman/Ankara +90 (850) 308 33 51 / +90 533 450 69 05"],
       [copy.qualification, "Gazi University Faculty Of Engineering And Architecture/ Chemical Engineer (Diploma no: 2267)\n See Annex \n– Qualification of Safety Assessor \n– University Diploma \n–University Diploma Supplement"],
       [copy.reportDate, todayByLanguage(language)],
-      [copy.signature, '<div class="signature"></div>']
+      [copy.signature, rawHtml(`<div class="signature"><img src="${esc(signatureImageSrc)}" alt="Signature"></div>`)]
     ])}
     
   </section>
 
   <section class="page-break">
     ${screenHeader}
-    <h2>EK-1 KOZMETİK ÜRÜNÜN FORMÜLASYON ve DEĞERLENDİRMESİ</h2>
+    <h2>ANNEX-1 COSMETIC PRODUCT FORMULATION and EVALUATION</h2>
     <table class="compact">
-      <thead><tr><th>Bileşen</th><th>CAS No</th><th>EC No</th><th>Fonksiyon</th><th>Yönetmelik</th><th>C (%)</th><th>A</th><th>Dap</th><th>SED</th><th>NO(A)EL</th><th>MOS</th><th>Değerlendirme</th></tr></thead>
+      <thead><tr><th>COMPONENT</th><th>CAS No</th><th>EC No</th><th>FUNCTION</th><th>REGULATION</th><th>C (%)</th><th>A</th><th>Dap</th><th>SED</th><th>NO(A)EL</th><th>MOS</th><th>EVALUATION</th></tr></thead>
       <tbody>${formulaRows(formulResults, a, copy)}</tbody>
     </table>
-    <h3>Üründe Kullanılan Koruyucu Bileşenler</h3>
+    <h3>Preservative Substance Used in Product:</h3>
     <table class="compact">
-      <thead><tr><th>INCI Name</th><th>CAS Number</th><th>Bitmiş Üründeki Max Konsantrasyon (%)</th><th>A (Koruyucular İçin)</th><th>SED</th><th>NO(A)EL</th><th>MOS</th></tr></thead>
+      <thead><tr><th>INCI Name</th><th>CAS Number</th><th>Max Concentration in Final Product (%)</th><th>A value (for preservatives)</th><th>SED</th><th>NO(A)EL</th><th>MOS</th></tr></thead>
       <tbody>${preservativeRows(formulResults, copy)}</tbody>
     </table>
-    <h3>Alerjen Bileşenlerin Bilgisi</h3>
+    <h3>ALLERGEN CONTENT OF THE PRODUCT</h3>
     <table class="compact">
-      <thead><tr><th>INCI Name</th><th>CAS Number</th><th>EINECS/ELICS Numbers</th><th>Konsantrasyon (%)</th><th>A</th><th>SED</th><th>NO(A)EL</th><th>MOS</th></tr></thead>
+      <thead><tr><th>INCI Name</th><th>CAS Number</th><th>EINECS/ELICS Numbers</th><th>Concentration (%)</th><th>A</th><th>SED</th><th>NO(A)EL</th><th>MOS</th></tr></thead>
       <tbody>${allergenRows(formulResults, a, copy)}</tbody>
     </table>
-<p class="muted">*C: Konsantrasyon. Üst değer üzerinden değerlendirmeye alınmıştır. </p>
-<p class="muted">*N/A: Hammaddenin NOAEL değerine ulaşılamadığından MoS hesabı yapılamamıştır. Hammadde yasaklı ürünler listesinde değildir ve limit dahilinde kullanılmıştır. Dolayısıyla uygun olarak değerlendirilmiştir.</p>
-<p class="muted">*UYGUN: MoS> 100 olduğundan bu hammaddenin bu konsantrasyonda bu ürün içinde kullanımı güvenlidir.</p>
-    <div style="page-break-after: always;"></div>
+<p class="muted">*C: Concentration. Evaluated over the upper value.  </p>
+<p class="muted">*The A value for preservative ingredients was also calculated and evaluated as 269 in addition to the A value of the product.</p>
+<p class="muted">*N/A: MoS calculation could not be made because the NOAEL of the raw material could not be reached. The raw material is not on the banned products list and was used within the limit. 
+<p class="muted">Therefore, it was evaluated as appropriate.
+<p class="muted">*N.E. Not Evaluated because of there is no A value.
+<p class="muted">*SUITABLE: Since MoS > 100, it is safe to use this raw material at this concentration in this product. 
 
-    <h2>EK-2 KOZMETİK YÖNETMELİK EKLERİNE UYGUNLUK KONTROLÜ</h2>
+  <div style="page-break-after: always;"></div>
+
+    <h2>ANNEX-2 CONFORMITY CONTROL TO THE ANNEXES OF THE COSMETIC REGULATION</h2>
     <table class="compact">
-      <thead><tr><th>Ek No</th><th>Maddenin INCI Adı</th><th>Ürün Tipi, Vücut Bölgeleri</th><th>Kullanıma Hazır Ürünlerdeki Maksimum Konsantrasyon</th><th>Diğer</th><th>Etiket Üzerinde Belirtilmesi Gereken Kullanma Talimatı ve Tedbirler</th><th>Bitmiş Üründeki Konsantrasyonu</th><th>Değerlendirme</th></tr></thead>
+      <thead><tr><th>Annex No</th><th>INCI Name</th><th>Product Type, Body Regions</th><th>Ready to Use Products Maximum Concentration</th><th>Others</th><th>Indication on the Label Required Instructions for Use and Measures</th><th>Finished Product Concentration</th><th>Evaluation</th></tr></thead>
       <tbody>${regulationRows(formulResults, copy)}</tbody>
     </table>
 <div style="page-break-after: always;"></div>
 
-    <h2>EK-3 BİLEŞENLERİN FİZİKOKİMYASAL VE TOKSİKOLOJİK ÖZELLİKLERİ</h2>
+    <h2>ANNEX-3 PHYSICOCHEMICAL AND TOXICOLOGICAL PROPERTIES OF THE COMPONENTS</h2>
     ${ingredientProfiles(formulResults, copy)}
 <div style="page-break-after: always;"></div>
-    <h2>KAYNAKLAR</h2>
+    <h2>REFERENCES</h2>
     <ol>
-      <li>Regulation (EC) No 1223/2009 of the European Parliament and of the Council on cosmetic products</li>
-      <li>The SCCS's Notes of Guidance for the Testing of Cosmetic Ingredients and Their Safety Evaluation 12th Revision</li>
-      <li>5324 sayılı Kozmetik Kanunu</li>
-      <li>Kozmetik Ürünlerde Güvenlik Değerlendirmesine İlişkin Kılavuz</li>
-      <li>Kozmetik Yönetmeliğinde Değişiklik Yapılmasına Dair Yönetmelik ve Ekleri</li>
-      <li>Kozmetik Ürünlerin Stabilitesine ve Açıldıktan Sonra Kullanım Süresine İlişkin Kılavuz</li>
-      <li>Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz</li>
-      <li>Kozmetik Ürünlerde Güvenlilik Değerlendirmesi ve Güvenlilik Değerlendiricisi Hakkında Kılavuz</li>
-      <li>Üretici Tarafından Ciddi İstenmeyen Etkinin Kuruma Bildirilmesine İlişkin Kılavuz</li>
-      <li>Kozmetik Ürünlerin Etiketlenmesinde Dikkat Edilmesi Gerekenler Hakkında Kılavuz</li>
+      <li>Cosmetics Regulation No. 25823, 23 May 2025</li>
+      <li>The SCCS's Notes Of Guidance For The Testing Of Cosmetic Ingredients And Their Safety Evaluation 12th Revision</li>
+      <li>Guidelines on Annex I to Regulation (EC) No 1223/2009 of the European Parliament and of the Council on cosmetic products</li>
+      <li>Guide on Things to Consider in Labeling Cosmetic Products</li>
+      <li>Guidelines for Safety Assessment in Cosmetic Products</li>
+      <li>Guideline on Notification of Serious Undesirable Effects (Cie) by the Manufacturer to the Authority</li>
+      <li>Guidelines on the Stability of Cosmetic Products and Duration of Use After Opening</li>
+      <li>Guide on Microbiological Control of Cosmetic Products</li>
+      <li>Guideline on Safety Assessment and Safety Assessor in Cosmetic Products</li>
     </ol>
 
   </section>

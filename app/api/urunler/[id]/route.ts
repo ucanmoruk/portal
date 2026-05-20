@@ -79,8 +79,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       .query(`
         SELECT l.ID, l.Tarih, l.RaporNo, l.Versiyon, l.FirmaID,
                l.Barkod, l.Urun, l.UrunEn, l.Miktar, l.Tip1, l.Tip2,
-               l.Uygulama, l.Hedef, l.A, l.RaporDurum
+               l.Uygulama, l.Hedef, l.A, l.RaporDurum,
+               g.UygulamaBolgesi, g.UygulamaBolgesiEn, g.Siklik, g.SiklikEn
         FROM rUGDListe l
+        LEFT JOIN rUGDTip g ON NULLIF(l.Tip2, '')::int = g.ID
         WHERE l.ID = @id AND l.Durum = 'Aktif'
       `);
 

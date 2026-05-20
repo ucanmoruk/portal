@@ -39,7 +39,7 @@ export async function GET(
       .input("nkrId", nkrId)
       .query(`
         SELECT f.NKRID AS UrunID, f.HammaddeID, f.INCIName, f.Miktar, f.DaP, f.Noael,
-               c.Cas, c.EC, c.Functions, c.Regulation, c.Link
+               c.Cas, c.EC, c.Functions, c.Kategori, c.Regulation, c.Link
         FROM NKR_Formul f
         LEFT JOIN rCosing c ON c.ID = f.HammaddeID
         WHERE f.NKRID = @nkrId
