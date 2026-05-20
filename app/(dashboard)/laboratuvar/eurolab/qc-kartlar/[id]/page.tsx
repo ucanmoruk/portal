@@ -522,7 +522,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
             <table className={styles.table} style={{ minWidth: 980, fontSize: "0.72rem", tableLayout: "fixed" }}>
               <thead>
                 <tr>
-                  <th style={{ width: 56, padding: "6px 8px" }}>Sıra No</th>
+                  <th style={{ width: 56, padding: "12px 8px" }}>Sıra No</th>
                   <th style={{ width: 92, padding: "6px 8px" }}>Geri Kazanım</th>
                   <th style={{ width: 92, padding: "6px 8px" }}>Ölçülen Değer</th>
                   <th style={{ width: 92, padding: "6px 8px" }}>Hedef Değer</th>
@@ -581,7 +581,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
                   <th style={{ width: 150 }}>Kullanıcı</th>
                   <th style={{ width: 110 }}>Data No</th>
                   <th style={{ width: 130 }}>Hedef Değer</th>
-                  <th style={{ width: 90 }}>Birim</th>
+                  <th style={{ width: 120 }}>Birim</th>
                   <th style={{ width: 130 }}>Ölçülen Değer</th>
                   <th style={{ width: 150 }}>Geri Kazanım</th>
                   <th style={{ width: 70 }}></th>

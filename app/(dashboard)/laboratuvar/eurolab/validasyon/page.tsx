@@ -255,14 +255,14 @@ export default function ValidationDashboard() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th style={{ width: 150 }}>Kod</th>
-                <th>Analiz adı</th>
-                <th style={{ width: 150 }}>Metot</th>
+                <th style={{ width: 180 }}>Kod</th>
+                <th style={{ width: 350 }}>Analiz adı</th>
+                <th style={{ width: 200 }}>Metot</th>
                 <th style={{ width: 150 }}>Tür</th>
-                <th style={{ width: 190 }}>Yetkili Kişiler</th>
-                <th style={{ width: 190 }}>Tarih</th>
-                <th style={{ width: 150 }}>Durum</th>
-                <th style={{ width: 154 }}></th>
+                <th style={{ width: 200 }}>Yetkili Kişiler</th>
+                <th style={{ width: 120 }}>Tarih</th>
+                <th style={{ width: 70 }}>Durum</th>
+                <th style={{ width: 80 }}></th>
               </tr>
             </thead>
             <tbody>
