@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasEurolabDatabaseConfig, query } from "@/lib/db_eurolab";
-import { ensureEurolabRawdataInstructionsTable } from "@/lib/eurolab_rawdata_instructions_schema";
+import { ensureEurolabRawdataRequirementVisualsTable } from "@/lib/eurolab_rawdata_requirement_visuals_schema";
 import { isNumuneFtpConfigured, uploadNumuneFileToFtp } from "@/lib/numuneFotoUpload";
 
 const normalizeText = (value: unknown) => String(value || "").trim();
@@ -10,9 +10,7 @@ const getErrorMessage = (error: unknown, fallback: string) =>
 const selectColumns = `
   id,
   standard,
-  test_id,
   clause,
-  method,
   title,
   file_name,
   mime_type,
@@ -28,50 +26,34 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Eurolab veritabanı bağlantısı eksik." }, { status: 500 });
     }
 
-    await ensureEurolabRawdataInstructionsTable();
+    await ensureEurolabRawdataRequirementVisualsTable();
 
     const { searchParams } = new URL(request.url);
     const standard = normalizeText(searchParams.get("standard")) || "EN 71-1:2026";
     const clause = normalizeText(searchParams.get("clause"));
-    const method = normalizeText(searchParams.get("method"));
-
-    if (clause && method) {
-      const result = await query(`
-        SELECT ${selectColumns}
-        FROM eurolab_rawdata_instructions
-        WHERE standard = $1
-          AND lower(regexp_replace(clause, '\\s+', ' ', 'g')) = lower(regexp_replace($2, '\\s+', ' ', 'g'))
-          AND lower(regexp_replace(method, '\\s+', ' ', 'g')) = lower(regexp_replace($3, '\\s+', ' ', 'g'))
-        ORDER BY updated_at DESC, id DESC
-        LIMIT 1
-      `, [standard, clause, method]);
-
-      return NextResponse.json(result.rows[0] || null);
-    }
 
     if (clause) {
       const result = await query(`
         SELECT ${selectColumns}
-        FROM eurolab_rawdata_instructions
+        FROM eurolab_rawdata_requirement_visuals
         WHERE standard = $1
           AND lower(regexp_replace(clause, '\\s+', ' ', 'g')) = lower(regexp_replace($2, '\\s+', ' ', 'g'))
         ORDER BY updated_at DESC, id DESC
         LIMIT 1
       `, [standard, clause]);
-
       return NextResponse.json(result.rows[0] || null);
     }
 
     const result = await query(`
       SELECT ${selectColumns}
-      FROM eurolab_rawdata_instructions
+      FROM eurolab_rawdata_requirement_visuals
       WHERE standard = $1
-      ORDER BY clause ASC, method ASC, updated_at DESC
+      ORDER BY clause ASC, updated_at DESC
     `, [standard]);
 
     return NextResponse.json(result.rows);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error, "Analiz talimatları alınamadı.") }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error, "Gereklilik görselleri alınamadı.") }, { status: 500 });
   }
 }
 
@@ -81,15 +63,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Eurolab veritabanı bağlantısı eksik." }, { status: 500 });
     }
 
-    await ensureEurolabRawdataInstructionsTable();
+    await ensureEurolabRawdataRequirementVisualsTable();
 
     const formData = await request.formData();
     const file = formData.get("file");
     const standard = normalizeText(formData.get("standard")) || "EN 71-1:2026";
-    const testId = normalizeText(formData.get("test_id")) || null;
     const clause = normalizeText(formData.get("clause"));
-    const method = normalizeText(formData.get("method")) || "Madde bazlı";
-    const title = normalizeText(formData.get("title")) || null;
+    const title = normalizeText(formData.get("title")) || `Madde ${clause} gereklilik kontrol görseli`;
 
     if (!clause) {
       return NextResponse.json({ error: "Madde seçimi zorunludur." }, { status: 400 });
@@ -108,23 +88,21 @@ export async function POST(request: Request) {
     let fileUrl: string | null = null;
 
     if (isNumuneFtpConfigured()) {
-      const safePrefix = `Hamveri Talimat ${standard} ${clause}`;
       const uploaded = await uploadNumuneFileToFtp({
         buffer,
-        originalFilename: file.name || "analiz-talimati.pdf",
-        prefix: safePrefix,
+        originalFilename: file.name || "gereklilik-kontrol-gorseli.pdf",
+        prefix: `Hamveri Gereklilik ${standard} ${clause}`,
       });
       fileUrl = uploaded.pathForDb;
     }
 
     const result = await query(`
-      INSERT INTO eurolab_rawdata_instructions (
-        standard, test_id, clause, method, title, file_name, mime_type, file_size, file_url, file_data
+      INSERT INTO eurolab_rawdata_requirement_visuals (
+        standard, clause, title, file_name, mime_type, file_size, file_url, file_data
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT (standard, clause, method)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (standard, clause)
       DO UPDATE SET
-        test_id = EXCLUDED.test_id,
         title = EXCLUDED.title,
         file_name = EXCLUDED.file_name,
         mime_type = EXCLUDED.mime_type,
@@ -133,10 +111,10 @@ export async function POST(request: Request) {
         file_data = EXCLUDED.file_data,
         updated_at = CURRENT_TIMESTAMP
       RETURNING ${selectColumns}
-    `, [standard, testId, clause, method, title, file.name || "analiz-talimati.pdf", mimeType, buffer.length, fileUrl, buffer]);
+    `, [standard, clause, title, file.name || "gereklilik-kontrol-gorseli.pdf", mimeType, buffer.length, fileUrl, buffer]);
 
     return NextResponse.json(result.rows[0]);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error, "Analiz talimatı kaydedilemedi.") }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error, "Gereklilik görseli kaydedilemedi.") }, { status: 500 });
   }
 }

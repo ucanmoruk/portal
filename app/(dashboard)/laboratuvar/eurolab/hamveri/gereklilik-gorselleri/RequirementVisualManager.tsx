@@ -1,28 +1,19 @@
 "use client";
 
-import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Trash2, UploadCloud } from "lucide-react";
 import styles from "@/app/styles/table.module.css";
-import { en71StandardTestOptions } from "../yeni/En71RawDataFlow";
 
-type InstructionRow = {
+type VisualRow = {
   id: number;
   standard: string;
-  test_id: string | null;
   clause: string;
-  method: string;
   title: string | null;
   file_name: string;
   file_size: number;
   file_url: string | null;
   updated_at: string | null;
-};
-
-type ClauseOption = {
-  value: string;
-  label: string;
-  relatedTests: string[];
 };
 
 const emptyForm = {
@@ -31,63 +22,7 @@ const emptyForm = {
   title: "",
 };
 
-const numberPattern = /\d+(?:\.\d+)*/g;
-
-const range = (prefix: number, start: number, end: number) =>
-  Array.from({ length: end - start + 1 }, (_, index) => `${prefix}.${start + index}`);
-
-const standardClauseNumbers = [
-  ...range(4, 1, 23),
-  ...range(5, 1, 9),
-  "6",
-  ...range(7, 1, 16),
-  ...range(8, 1, 41),
-];
-
-const normalizeClause = (value: string) => {
-  const number = value.match(numberPattern)?.[0] || value;
-  return number.trim();
-};
-
-const clauseSort = (left: string, right: string) => {
-  const leftParts = left.split(".").map(part => Number(part));
-  const rightParts = right.split(".").map(part => Number(part));
-  const length = Math.max(leftParts.length, rightParts.length);
-  for (let index = 0; index < length; index += 1) {
-    const diff = (leftParts[index] || 0) - (rightParts[index] || 0);
-    if (diff !== 0) return diff;
-  }
-  return left.localeCompare(right, "tr-TR", { numeric: true });
-};
-
-const buildClauseOptions = (): ClauseOption[] => {
-  const map = new Map<string, Set<string>>();
-
-  standardClauseNumbers.forEach(clause => {
-    if (!map.has(clause)) map.set(clause, new Set<string>());
-  });
-
-  en71StandardTestOptions.forEach(test => {
-    [test.clause, test.method].forEach(value => {
-      const matches = value.match(numberPattern) || [];
-      matches.forEach(match => {
-        const key = normalizeClause(match);
-        if (!map.has(key)) map.set(key, new Set<string>());
-        map.get(key)?.add(test.title);
-      });
-    });
-  });
-
-  return Array.from(map.entries())
-    .sort(([left], [right]) => clauseSort(left, right))
-    .map(([value, related]) => ({
-      value,
-      label: `Madde ${value}`,
-      relatedTests: Array.from(related),
-    }));
-};
-
-const clauseOptions = buildClauseOptions();
+const clauseOptions = Array.from({ length: 23 }, (_, index) => `4.${index + 1}`);
 
 const formatDate = (date: string | null) =>
   date ? new Date(date).toLocaleDateString("tr-TR") : "-";
@@ -101,8 +36,8 @@ const formatSize = (size: number) => {
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
-export default function RawdataInstructionManager() {
-  const [rows, setRows] = useState<InstructionRow[]>([]);
+export default function RequirementVisualManager() {
+  const [rows, setRows] = useState<VisualRow[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,21 +46,16 @@ export default function RawdataInstructionManager() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const selectedClause = useMemo(
-    () => clauseOptions.find(option => option.value === form.clause),
-    [form.clause],
-  );
-
   const fetchRows = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/eurolab/rawdata-instructions?standard=${encodeURIComponent(form.standard)}`, { credentials: "same-origin" });
-      const json: InstructionRow[] & { error?: string } = await res.json();
-      if (!res.ok) throw new Error(json.error || "Talimat listesi alınamadı.");
+      const res = await fetch(`/api/eurolab/rawdata-requirement-visuals?standard=${encodeURIComponent(form.standard)}`, { credentials: "same-origin" });
+      const json: VisualRow[] & { error?: string } = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gereklilik görselleri alınamadı.");
       setRows(Array.isArray(json) ? json : []);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Talimat listesi alınamadı."));
+      setError(getErrorMessage(err, "Gereklilik görselleri alınamadı."));
     } finally {
       setLoading(false);
     }
@@ -136,11 +66,10 @@ export default function RawdataInstructionManager() {
   }, [fetchRows]);
 
   const handleClauseChange = (clause: string) => {
-    const option = clauseOptions.find(item => item.value === clause);
     setForm(current => ({
       ...current,
       clause,
-      title: option ? option.label : "",
+      title: clause ? `Madde ${clause} gereklilik kontrol görseli` : "",
     }));
   };
 
@@ -165,49 +94,47 @@ export default function RawdataInstructionManager() {
     try {
       const body = new FormData();
       body.append("standard", form.standard);
-      body.append("test_id", "");
       body.append("clause", form.clause);
-      body.append("method", "Madde bazlı");
-      body.append("title", form.title || `Madde ${form.clause}`);
+      body.append("title", form.title || `Madde ${form.clause} gereklilik kontrol görseli`);
       body.append("file", file);
 
-      const res = await fetch("/api/eurolab/rawdata-instructions", {
+      const res = await fetch("/api/eurolab/rawdata-requirement-visuals", {
         method: "POST",
         body,
         credentials: "same-origin",
       });
-      const json: InstructionRow & { error?: string } = await res.json();
-      if (!res.ok) throw new Error(json.error || "Talimat PDF kaydedilemedi.");
+      const json: VisualRow & { error?: string } = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gereklilik görseli kaydedilemedi.");
 
-      setMessage("Talimat PDF kaydedildi ve maddeyle eşleştirildi.");
+      setMessage("Gereklilik görseli kaydedildi ve maddeyle eşleştirildi.");
       setForm(emptyForm);
       setFile(null);
-      const input = document.getElementById("instruction-pdf-file") as HTMLInputElement | null;
+      const input = document.getElementById("requirement-visual-file") as HTMLInputElement | null;
       if (input) input.value = "";
       fetchRows();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Talimat PDF kaydedilemedi."));
+      setError(getErrorMessage(err, "Gereklilik görseli kaydedilemedi."));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (row: InstructionRow) => {
-    if (!window.confirm(`${row.clause} eşleştirmesi silinsin mi?`)) return;
+  const handleDelete = async (row: VisualRow) => {
+    if (!window.confirm(`Madde ${row.clause} gereklilik görseli silinsin mi?`)) return;
     setDeletingId(row.id);
     setError("");
     setMessage("");
     try {
-      const res = await fetch(`/api/eurolab/rawdata-instructions/${row.id}`, {
+      const res = await fetch(`/api/eurolab/rawdata-requirement-visuals/${row.id}`, {
         method: "DELETE",
         credentials: "same-origin",
       });
       const json: { error?: string } = await res.json();
-      if (!res.ok) throw new Error(json.error || "Talimat silinemedi.");
-      setMessage("Talimat eşleştirmesi silindi.");
+      if (!res.ok) throw new Error(json.error || "Gereklilik görseli silinemedi.");
+      setMessage("Gereklilik görseli silindi.");
       fetchRows();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Talimat silinemedi."));
+      setError(getErrorMessage(err, "Gereklilik görseli silinemedi."));
     } finally {
       setDeletingId(null);
     }
@@ -222,39 +149,28 @@ export default function RawdataInstructionManager() {
       </div>
 
       <form onSubmit={handleSubmit} className={styles.tableCard} style={{ padding: 18 }}>
-        <div className="grid gap-4 lg:grid-cols-[1fr_2fr_1.4fr]">
+        <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr_1.4fr]">
           <label className="block">
             <span className="mb-2 block text-[0.72rem] font-bold uppercase tracking-wide text-slate-500">Standart</span>
             <input className="field-input" value={form.standard} onChange={event => setForm(current => ({ ...current, standard: event.target.value }))} />
           </label>
           <label className="block">
-            <span className="mb-2 block text-[0.72rem] font-bold uppercase tracking-wide text-slate-500">Madde</span>
+            <span className="mb-2 block text-[0.72rem] font-bold uppercase tracking-wide text-slate-500">Madde 4</span>
             <select className="field-input" value={form.clause} onChange={event => handleClauseChange(event.target.value)} required>
               <option value="">Madde seçin</option>
-              {clauseOptions.map(option => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+              {clauseOptions.map(clause => (
+                <option key={clause} value={clause}>Madde {clause}</option>
               ))}
             </select>
           </label>
           <label className="block">
             <span className="mb-2 block text-[0.72rem] font-bold uppercase tracking-wide text-slate-500">PDF</span>
-            <input id="instruction-pdf-file" className="field-input" type="file" accept="application/pdf,.pdf" onChange={handleFile} required />
+            <input id="requirement-visual-file" className="field-input" type="file" accept="application/pdf,.pdf" onChange={handleFile} required />
           </label>
         </div>
-
-        {selectedClause && (
-          <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 text-sm text-slate-700" style={{ padding: "10px 12px" }}>
-            <strong>{selectedClause.label}</strong>
-            <span className="ml-2 text-slate-500">
-              İlgili testler: {selectedClause.relatedTests.slice(0, 4).join(", ")}
-              {selectedClause.relatedTests.length > 4 ? "..." : ""}
-            </span>
-          </div>
-        )}
-
         <label className="mt-4 block">
           <span className="mb-2 block text-[0.72rem] font-bold uppercase tracking-wide text-slate-500">Başlık / Açıklama</span>
-          <input className="field-input" value={form.title} onChange={event => setForm(current => ({ ...current, title: event.target.value }))} placeholder="Örn. Madde 4.1 analiz talimatı" />
+          <input className="field-input" value={form.title} onChange={event => setForm(current => ({ ...current, title: event.target.value }))} placeholder="Örn. Madde 4.1 karar akışı" />
         </label>
 
         {error && <div className={styles.errorBar} style={{ marginTop: 14 }}>{error}</div>}
@@ -287,16 +203,13 @@ export default function RawdataInstructionManager() {
                   <tr key={index}>{Array.from({ length: 7 }).map((__, cell) => <td key={cell}><div className={styles.skeleton} /></td>)}</tr>
                 ))
               ) : rows.length === 0 ? (
-                <tr><td colSpan={7}><div className={styles.empty}>Henüz PDF talimat eşleştirmesi yok.</div></td></tr>
+                <tr><td colSpan={7}><div className={styles.empty}>Henüz gereklilik görseli eşleştirmesi yok.</div></td></tr>
               ) : rows.map(row => (
                 <tr key={row.id}>
-                  <td className={styles.tdMono}>Madde {normalizeClause(row.clause)}</td>
+                  <td className={styles.tdMono}>Madde {row.clause}</td>
+                  <td className={styles.tdName}>{row.title || "-"}</td>
                   <td>
-                    <div className={styles.tdName}>{row.title || "-"}</div>
-                    {row.test_id && <div className={styles.tdSecondary}>{row.test_id}</div>}
-                  </td>
-                  <td>
-                    <a className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline" href={`/api/eurolab/rawdata-instructions/${row.id}/file`} target="_blank" rel="noopener noreferrer">
+                    <a className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline" href={`/api/eurolab/rawdata-requirement-visuals/${row.id}/file`} target="_blank" rel="noopener noreferrer">
                       {row.file_name} <ExternalLink size={13} />
                     </a>
                   </td>

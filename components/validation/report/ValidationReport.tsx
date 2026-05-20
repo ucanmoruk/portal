@@ -851,34 +851,166 @@ export function ValidationReport({ data }: ValidationReportProps) {
                     line-height: 1.25;
                 }
                 @media print {
-                    @page { size: A4; margin: 7mm; }
+                    @page { size: A4; margin: 6mm; }
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
                     html,
                     body {
                         width: 210mm;
                         margin: 0 !important;
                         padding: 0 !important;
                         background: white !important;
+                        overflow: visible !important;
                     }
-                    nav, aside, header, .no-print { display: none !important; }
+                    nav, aside, header, footer, .no-print { display: none !important; }
                     .validation-report-shell {
-                        width: 196mm;
-                        margin: 0 auto !important;
+                        width: 198mm !important;
+                        max-width: 198mm !important;
+                        margin: 0 !important;
                         padding: 0 !important;
+                        color: #111827 !important;
+                        font-size: 9.2px !important;
+                        line-height: 1.18 !important;
                     }
                     .report-page {
-                        width: 196mm;
-                        min-height: 283mm;
-                        margin: 0 auto !important;
-                        padding: 0 0 9mm;
-                        box-shadow: none;
+                        width: 198mm !important;
+                        max-width: 198mm !important;
+                        min-height: 285mm;
+                        margin: 0 !important;
+                        padding: 0 0 8mm !important;
+                        box-shadow: none !important;
                         page-break-after: always;
+                        break-after: page;
+                        overflow: visible !important;
+                        font-size: 9.2px !important;
+                        line-height: 1.18 !important;
                     }
                     .report-page::after {
                         right: 0;
-                        bottom: 0;
+                        bottom: 1.5mm;
+                        font-size: 8px;
                     }
                     .report-page:last-of-type {
                         page-break-after: auto;
+                        break-after: auto;
+                    }
+                    .report-header {
+                        grid-template-columns: 35mm 1fr 48mm;
+                        min-height: 22mm;
+                    }
+                    .report-logo-slot {
+                        padding: 3mm;
+                    }
+                    .report-logo-slot img {
+                        max-height: 18mm;
+                    }
+                    .report-doc-table td,
+                    .report-meta-table td {
+                        padding: 2px 4px;
+                    }
+                    .report-doc-label,
+                    .report-meta-label {
+                        width: 23mm;
+                    }
+                    .report-title-box {
+                        padding: 5px 8px;
+                    }
+                    .report-title-box h1 {
+                        font-size: 13px;
+                        line-height: 1.18;
+                    }
+                    .report-purpose {
+                        margin: 6px 0 8px;
+                        font-size: 9.2px;
+                    }
+                    .report-section {
+                        margin-top: 7px;
+                        break-inside: auto;
+                        page-break-inside: auto;
+                    }
+                    .report-section-title {
+                        margin-bottom: 3px;
+                        font-size: 9.8px;
+                        line-height: 1.18;
+                    }
+                    .report-copy {
+                        margin-bottom: 4px;
+                        font-size: 9.2px;
+                        line-height: 1.2;
+                    }
+                    .report-two-column {
+                        gap: 6px;
+                    }
+                    .report-table {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        table-layout: fixed !important;
+                        font-size: 8.4px !important;
+                        line-height: 1.15 !important;
+                        page-break-inside: auto;
+                    }
+                    .report-table thead {
+                        display: table-header-group;
+                    }
+                    .report-table tr {
+                        page-break-inside: avoid;
+                        break-inside: avoid;
+                    }
+                    .report-table th,
+                    .report-table td {
+                        padding: 2px 3px !important;
+                        overflow-wrap: anywhere !important;
+                        word-break: break-word !important;
+                    }
+                    .report-block {
+                        margin-top: 5px;
+                        break-inside: auto;
+                        page-break-inside: auto;
+                    }
+                    .report-block-title {
+                        margin-bottom: 2px;
+                        font-size: 9.4px;
+                    }
+                    .report-subblock {
+                        margin-top: 4px;
+                        break-inside: auto;
+                        page-break-inside: auto;
+                    }
+                    .report-subblock h4 {
+                        margin-bottom: 2px;
+                        font-size: 9px;
+                    }
+                    .report-note,
+                    .report-source-list,
+                    .report-signature-role {
+                        font-size: 8.4px;
+                    }
+                    .report-source-list {
+                        margin-top: 4px;
+                        padding-left: 12px;
+                        line-height: 1.2;
+                    }
+                    .report-signatures {
+                        gap: 7px;
+                        margin-top: 12mm;
+                    }
+                    .report-signature {
+                        min-height: 20mm;
+                        padding-top: 3px;
+                    }
+                    .report-signature-title {
+                        margin-bottom: 10mm;
+                    }
+                    .report-end {
+                        margin-top: 7mm;
+                    }
+                    .report-pre {
+                        font-size: 8px;
+                        line-height: 1.15;
+                        white-space: pre-wrap;
+                        overflow-wrap: anywhere;
                     }
                 }
             `}</style>

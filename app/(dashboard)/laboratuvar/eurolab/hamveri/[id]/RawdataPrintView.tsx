@@ -59,8 +59,10 @@ const formatDate = (date: string | null) =>
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
-const instructionKey = (clause: string, method: string) =>
-  `${clause.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr-TR")}||${method.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr-TR")}`;
+const instructionNumberPattern = /\d+(?:\.\d+)*/g;
+
+const instructionKey = (value: string) =>
+  (value.match(instructionNumberPattern)?.[0] || value).trim().toLocaleLowerCase("tr-TR");
 
 export default function RawdataPrintView({ id }: { id: string }) {
   const [data, setData] = useState<RawdataDetail | null>(null);
@@ -101,7 +103,13 @@ export default function RawdataPrintView({ id }: { id: string }) {
         const json: InstructionRow[] & { error?: string } = await response.json();
         if (!response.ok) throw new Error(json.error || "Analiz talimatları alınamadı.");
         if (!alive) return;
-        setInstructionMap(Object.fromEntries((Array.isArray(json) ? json : []).map(row => [instructionKey(row.clause, row.method), row])));
+        const entries = (Array.isArray(json) ? json : []).flatMap(row => {
+          const keys = new Set<string>([instructionKey(row.clause)]);
+          const methodKey = instructionKey(row.method);
+          if (methodKey && methodKey !== "madde bazlı") keys.add(methodKey);
+          return Array.from(keys).map(key => [key, row] as const);
+        });
+        setInstructionMap(Object.fromEntries(entries));
       } catch {
         if (alive) setInstructionMap({});
       }
@@ -179,14 +187,13 @@ export default function RawdataPrintView({ id }: { id: string }) {
                   <th>Test</th>
                   <th style={{ width: 120 }}>Madde</th>
                   <th style={{ width: 150 }}>Yöntem</th>
-                  <th style={{ width: 150 }}>Ölçülen Değer</th>
+                  <th style={{ width: 180 }}>Açıklama</th>
                   <th style={{ width: 110 }}>Karar</th>
-                  <th>Hata Gözlemi</th>
                 </tr>
               </thead>
               <tbody>
                 {tests.length === 0 ? (
-                  <tr><td colSpan={6}><div className={styles.empty}>Test kaydı bulunamadı.</div></td></tr>
+                  <tr><td colSpan={5}><div className={styles.empty}>Test kaydı bulunamadı.</div></td></tr>
                 ) : tests.map(test => {
                   const record = records[test.id] || { measuredValue: "", decision: "Bekliyor", observation: "" };
                   return (
@@ -195,11 +202,10 @@ export default function RawdataPrintView({ id }: { id: string }) {
                         <div className={styles.tdName}>{test.title}</div>
                         <div className={styles.tdSecondary}>{test.source} - {test.group}</div>
                       </td>
-                      <td><InstructionLink test={test} value={test.clause} instructions={instructionMap} /></td>
-                      <td><InstructionLink test={test} value={test.method} instructions={instructionMap} /></td>
+                      <td><InstructionLink value={test.clause} instructions={instructionMap} /></td>
+                      <td><InstructionLink value={test.method} instructions={instructionMap} /></td>
                       <td>{record.measuredValue || "-"}</td>
                       <td>{record.decision}</td>
-                      <td>{record.observation || "-"}</td>
                     </tr>
                   );
                 })}
@@ -212,21 +218,33 @@ export default function RawdataPrintView({ id }: { id: string }) {
   );
 }
 
-function InstructionLink({ test, value, instructions }: { test: Pick<TestRow, "clause" | "method">; value: string; instructions: Record<string, InstructionRow> }) {
-  const instruction = instructions[instructionKey(test.clause, test.method)];
-  if (!instruction) return <span>{value}</span>;
+function InstructionLink({ value, instructions }: { value: string; instructions: Record<string, InstructionRow> }) {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
 
-  return (
-    <a
-      href={`/api/eurolab/rawdata-instructions/${instruction.id}/file`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-800 print:text-slate-900 print:no-underline"
-      title={instruction.title || "Analiz talimatı PDF"}
-    >
-      {value}
-    </a>
-  );
+  for (const match of value.matchAll(instructionNumberPattern)) {
+    const number = match[0];
+    const index = match.index || 0;
+    if (index > lastIndex) parts.push(value.slice(lastIndex, index));
+
+    const instruction = instructions[instructionKey(number)];
+    parts.push(instruction ? (
+      <a
+        key={`${number}-${index}`}
+        href={`/api/eurolab/rawdata-instructions/${instruction.id}/file`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-800 print:text-slate-900 print:no-underline"
+        title={instruction.title || "Analiz talimatı PDF"}
+      >
+        {number}
+      </a>
+    ) : number);
+    lastIndex = index + number.length;
+  }
+
+  if (lastIndex < value.length) parts.push(value.slice(lastIndex));
+  return <span>{parts.length ? parts : value}</span>;
 }
 
 function Info({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {

@@ -43,6 +43,12 @@ type InstructionRow = {
   title: string | null;
 };
 
+type RequirementVisualRow = {
+  id: number;
+  clause: string;
+  title: string | null;
+};
+
 const steps: Array<{ key: StepKey; label: string; icon: React.ReactNode }> = [
   { key: "identity", label: "Kimliklendirme", icon: <PackageSearch className="h-4 w-4" /> },
   { key: "age", label: "Yaş Seçimi", icon: <Users className="h-4 w-4" /> },
@@ -359,8 +365,13 @@ const decisionClass = (decision: TestDecision) => {
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
-const instructionKey = (clause: string, method: string) =>
-  `${clause.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr-TR")}||${method.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr-TR")}`;
+const instructionNumberPattern = /\d+(?:\.\d+)*/g;
+
+const instructionKey = (value: string) =>
+  (value.match(instructionNumberPattern)?.[0] || value).trim().toLocaleLowerCase("tr-TR");
+
+const extractClauseNumbers = (value: string) =>
+  (value.match(instructionNumberPattern) || []).map(item => item.trim());
 
 export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
   const router = useRouter();
@@ -376,6 +387,8 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
   const [loadingRecord, setLoadingRecord] = useState(Boolean(rawdataId));
   const [saveError, setSaveError] = useState("");
   const [instructionMap, setInstructionMap] = useState<Record<string, InstructionRow>>({});
+  const [requirementVisuals, setRequirementVisuals] = useState<Record<string, RequirementVisualRow>>({});
+  const [visualDialogOpen, setVisualDialogOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -386,13 +399,40 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
         const json: InstructionRow[] & { error?: string } = await response.json();
         if (!response.ok) throw new Error(json.error || "Analiz talimatları alınamadı.");
         if (!alive) return;
-        setInstructionMap(Object.fromEntries((Array.isArray(json) ? json : []).map(row => [instructionKey(row.clause, row.method), row])));
+        const entries = (Array.isArray(json) ? json : []).flatMap(row => {
+          const keys = new Set<string>([instructionKey(row.clause)]);
+          const methodKey = instructionKey(row.method);
+          if (methodKey && methodKey !== "madde bazlı") keys.add(methodKey);
+          return Array.from(keys).map(key => [key, row] as const);
+        });
+        setInstructionMap(Object.fromEntries(entries));
       } catch {
         if (alive) setInstructionMap({});
       }
     }
 
     loadInstructions();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadRequirementVisuals() {
+      try {
+        const response = await fetch("/api/eurolab/rawdata-requirement-visuals?standard=EN%2071-1%3A2026", { credentials: "same-origin" });
+        const json: RequirementVisualRow[] & { error?: string } = await response.json();
+        if (!response.ok) throw new Error(json.error || "Gereklilik görselleri alınamadı.");
+        if (!alive) return;
+        setRequirementVisuals(Object.fromEntries((Array.isArray(json) ? json : []).map(row => [instructionKey(row.clause), row])));
+      } catch {
+        if (alive) setRequirementVisuals({});
+      }
+    }
+
+    loadRequirementVisuals();
     return () => {
       alive = false;
     };
@@ -447,6 +487,14 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
     manualTests.forEach(test => deduped.set(test.id, test));
     return Array.from(deduped.values());
   }, [form, manualTests]);
+
+  const activeRequirementVisuals = useMemo(() => {
+    const clauses = Array.from(new Set(selectedTests.flatMap(test => extractClauseNumbers(test.clause)).filter(clause => clause.startsWith("4."))));
+    const rows = clauses
+      .map(clause => requirementVisuals[instructionKey(clause)])
+      .filter((row): row is RequirementVisualRow => Boolean(row));
+    return Array.from(new Map(rows.map(row => [row.id, row])).values());
+  }, [selectedTests, requirementVisuals]);
 
   const recordRows = useMemo(() => (
     selectedTests.map(test => ({
@@ -744,12 +792,34 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50" style={{ padding: "14px 16px", margin: "10px 0 10px 0" }}>
                   <div>
                     <div className="text-sm font-extrabold text-slate-900" >Gereklilik kontrol görseli</div>
-                    <div className="mt-1 text-xs leading-5 text-slate-500">Seçilen oyuncak tipine göre ikinci kontrol görseli burada açılacak.</div>
+                    <div className="mt-1 text-xs leading-5 text-slate-500">
+                      Seçilen Madde 4 gereklilikleri için eşleşen {activeRequirementVisuals.length} karar akışı PDFi var.
+                    </div>
                   </div>
-                  <button type="button" className="rounded-full border border-blue-200 bg-white text-sm font-semibold text-blue-700 hover:bg-blue-50" style={{ padding: "9px 16px" }}>
-                    Görseli Göster
+                  <button type="button" className="rounded-full border border-blue-200 bg-white text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50" style={{ padding: "9px 16px" }} onClick={() => setVisualDialogOpen(current => !current)} disabled={activeRequirementVisuals.length === 0}>
+                    {visualDialogOpen ? "Görselleri Gizle" : "Görseli Göster"}
                   </button>
                 </div>
+                {visualDialogOpen && (
+                  <div className="grid gap-3 rounded-xl border border-blue-100 bg-white" style={{ padding: "12px", margin: "10px 0" }}>
+                    {activeRequirementVisuals.map(visual => (
+                      <a
+                        key={visual.id}
+                        href={`/api/eurolab/rawdata-requirement-visuals/${visual.id}/file`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between gap-3 rounded-lg border border-blue-100 bg-blue-50 text-blue-800 hover:bg-blue-100"
+                        style={{ padding: "11px 13px" }}
+                      >
+                        <span>
+                          <span className="block text-sm font-extrabold">Madde {visual.clause}</span>
+                          <span className="mt-1 block text-xs text-slate-600">{visual.title || "Gereklilik kontrol görseli"}</span>
+                        </span>
+                        <span className="text-sm font-bold">PDF Aç</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
                 <ManualTestCard form={manualTestForm} setForm={setManualTestForm} onAdd={addManualTest} tests={standardTestOptions} />
                 <TestTable tests={selectedTests} instructions={instructionMap} onRemoveManual={removeManualTest} />
               </div>
@@ -777,9 +847,8 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
                         <th className="px-4 py-3">Test</th>
                         <th className="px-4 py-3">Madde</th>
                         <th className="px-4 py-3">Yöntem</th>
-                        <th className="px-4 py-3">Ölçülen Değer</th>
+                        <th className="px-4 py-3">Açıklama</th>
                         <th className="px-4 py-3">Karar</th>
-                        <th className="px-4 py-3">Hata Gözlemi</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -789,10 +858,10 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
                             <div className="font-semibold text-slate-900">{row.title}</div>
                             <div className="mt-1 text-xs text-slate-500">{row.source} - {row.group}</div>
                           </td>
-                          <td className="px-4 py-4 align-top text-slate-700"><InstructionLink test={row} value={row.clause} instructions={instructionMap} /></td>
-                          <td className="px-4 py-4 align-top text-slate-700"><InstructionLink test={row} value={row.method} instructions={instructionMap} /></td>
+                          <td className="px-4 py-4 align-top text-slate-700"><InstructionLink value={row.clause} instructions={instructionMap} /></td>
+                          <td className="px-4 py-4 align-top text-slate-700"><InstructionLink value={row.method} instructions={instructionMap} /></td>
                           <td className="px-4 py-4 align-top">
-                            <input className="field-input h-9 min-w-[140px]" value={row.record.measuredValue} onChange={event => updateRecord(row.id, { measuredValue: event.target.value })} placeholder="82 dB / 0,32 Nm" />
+                            <input className="field-input h-9 min-w-[260px]" value={row.record.measuredValue} onChange={event => updateRecord(row.id, { measuredValue: event.target.value })} placeholder="Kontrol açıklaması veya gözlem notu" />
                           </td>
                           <td className="px-4 py-4 align-top">
                             <select className={`field-input h-9 min-w-[110px] font-semibold ${decisionClass(row.record.decision)}`} value={row.record.decision} onChange={event => updateRecord(row.id, { decision: event.target.value as TestDecision })}>
@@ -801,9 +870,6 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
                               <option>Kaldı</option>
                               <option>N/A</option>
                             </select>
-                          </td>
-                          <td className="px-4 py-4 align-top">
-                            <input className="field-input h-9 min-w-[220px]" value={row.record.observation} onChange={event => updateRecord(row.id, { observation: event.target.value })} placeholder="Kırılma, keskin uç oluşumu..." />
                           </td>
                         </tr>
                       ))}
@@ -1003,21 +1069,33 @@ function ManualTestCard({
   );
 }
 
-function InstructionLink({ test, value, instructions }: { test: Pick<TestRow, "clause" | "method">; value: string; instructions: Record<string, InstructionRow> }) {
-  const instruction = instructions[instructionKey(test.clause, test.method)];
-  if (!instruction) return <span>{value}</span>;
+function InstructionLink({ value, instructions }: { value: string; instructions: Record<string, InstructionRow> }) {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
 
-  return (
-    <a
-      href={`/api/eurolab/rawdata-instructions/${instruction.id}/file`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex rounded-md bg-blue-50 px-2 py-1 font-bold text-blue-700 underline underline-offset-2 hover:bg-blue-100 hover:text-blue-800"
-      title={instruction.title || "Analiz talimatı PDF"}
-    >
-      {value}
-    </a>
-  );
+  for (const match of value.matchAll(instructionNumberPattern)) {
+    const number = match[0];
+    const index = match.index || 0;
+    if (index > lastIndex) parts.push(value.slice(lastIndex, index));
+
+    const instruction = instructions[instructionKey(number)];
+    parts.push(instruction ? (
+      <a
+        key={`${number}-${index}`}
+        href={`/api/eurolab/rawdata-instructions/${instruction.id}/file`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex rounded-md bg-blue-50 px-2 py-1 font-bold text-blue-700 underline underline-offset-2 hover:bg-blue-100 hover:text-blue-800"
+        title={instruction.title || "Analiz talimatı PDF"}
+      >
+        {number}
+      </a>
+    ) : number);
+    lastIndex = index + number.length;
+  }
+
+  if (lastIndex < value.length) parts.push(value.slice(lastIndex));
+  return <span className="inline-flex flex-wrap items-center gap-1">{parts.length ? parts : value}</span>;
 }
 
 function TestTable({ tests, instructions, onRemoveManual }: { tests: TestRow[]; instructions: Record<string, InstructionRow>; onRemoveManual: (testId: string) => void }) {
@@ -1052,8 +1130,8 @@ function TestTable({ tests, instructions, onRemoveManual }: { tests: TestRow[]; 
                 <div className="font-semibold leading-6 text-slate-900">{test.title}</div>
                 <div className="mt-1 text-[0.78rem] leading-5 text-slate-500">{test.group}</div>
               </td>
-              <td className="px-4 py-4 align-top text-slate-700"><InstructionLink test={test} value={test.clause} instructions={instructions} /></td>
-              <td className="px-4 py-4 align-top text-slate-700"><InstructionLink test={test} value={test.method} instructions={instructions} /></td>
+              <td className="px-4 py-4 align-top text-slate-700"><InstructionLink value={test.clause} instructions={instructions} /></td>
+              <td className="px-4 py-4 align-top text-slate-700"><InstructionLink value={test.method} instructions={instructions} /></td>
               <td className="px-4 py-4 align-top text-[0.82rem] leading-6 text-slate-500">{test.reason}</td>
               <td className="px-4 py-4 align-top text-right">
                 {test.source === "Harici" && (

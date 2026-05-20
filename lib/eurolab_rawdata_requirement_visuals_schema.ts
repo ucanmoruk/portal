@@ -1,0 +1,39 @@
+import { query } from "@/lib/db_eurolab";
+
+export async function ensureEurolabRawdataRequirementVisualsTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS eurolab_rawdata_requirement_visuals (
+      id SERIAL PRIMARY KEY,
+      standard VARCHAR(120) NOT NULL DEFAULT 'EN 71-1:2026',
+      clause TEXT NOT NULL,
+      title TEXT,
+      file_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL DEFAULT 'application/pdf',
+      file_size INTEGER NOT NULL DEFAULT 0,
+      file_url TEXT,
+      file_data BYTEA NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (standard, clause)
+    );
+  `);
+
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='eurolab_rawdata_requirement_visuals' AND column_name='file_url'
+      ) THEN
+        ALTER TABLE eurolab_rawdata_requirement_visuals ADD COLUMN file_url TEXT;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='eurolab_rawdata_requirement_visuals' AND column_name='file_data'
+      ) THEN
+        ALTER TABLE eurolab_rawdata_requirement_visuals ADD COLUMN file_data BYTEA;
+      END IF;
+    END $$;
+  `);
+}
