@@ -49,6 +49,12 @@ type RequirementVisualRow = {
   title: string | null;
 };
 
+type ManualTestFormState = {
+  selectedId: string;
+  methodIds: string[];
+  reason: string;
+};
+
 const steps: Array<{ key: StepKey; label: string; icon: React.ReactNode }> = [
   { key: "identity", label: "Kimliklendirme", icon: <PackageSearch className="h-4 w-4" /> },
   { key: "age", label: "Yaş Seçimi", icon: <Users className="h-4 w-4" /> },
@@ -294,7 +300,156 @@ const testCatalog: Array<TestRow & { when: (state: FormState) => boolean }> = [
     reason: "Katlanır, kayan veya yaylı mekanizmalarda sıkışma ve ani kapanma riski değerlendirilir.",
     when: state => state.toyTypes.moving,
   },
+  {
+    id: "en71-2-flammability-textile",
+    source: "Koşullu",
+    group: "EN 71-2",
+    title: "Alevlenebilirlik değerlendirmesi",
+    clause: "EN 71-2",
+    method: "EN 71-2",
+    reason: "Tekstil, peluş veya giyilebilir malzeme içeren oyuncaklarda alevlenebilirlik değerlendirmesi eklenir.",
+    when: state => state.materials.includes("Tekstil") || state.toyTypes.soft || state.purpose === "Kostüm / giyilebilir",
+  },
 ];
+
+const en71RequirementTitles: Array<{ clause: string; title: string }> = [
+  { clause: "4", title: "Genel gereklilikler" },
+  { clause: "4.1", title: "Malzeme temizli\u011fi" },
+  { clause: "4.2", title: "Montaj" },
+  { clause: "4.3", title: "Esnek plastik tabaka" },
+  { clause: "4.4", title: "Oyuncak torbalar\u0131" },
+  { clause: "4.5", title: "Cam" },
+  { clause: "4.6", title: "Geni\u015fleyen malzemeler" },
+  { clause: "4.7", title: "Kenarlar" },
+  { clause: "4.8", title: "U\u00e7lar ve metalik teller" },
+  { clause: "4.9", title: "\u00c7\u0131k\u0131nt\u0131l\u0131 par\u00e7alar" },
+  { clause: "4.10", title: "Birbirine kar\u015f\u0131 hareket eden par\u00e7alar" },
+  { clause: "4.10.1", title: "Katlanan ve kayan mekanizmalar" },
+  { clause: "4.10.2", title: "Tahrik mekanizmalar\u0131" },
+  { clause: "4.10.3", title: "Mente\u015feler" },
+  { clause: "4.10.4", title: "Yaylar" },
+  { clause: "4.11", title: "A\u011f\u0131zla etkinle\u015ftirilen ve a\u011fza al\u0131nmas\u0131 ama\u00e7lanan oyuncaklar" },
+  { clause: "4.12", title: "Balonlar" },
+  { clause: "4.13", title: "U\u00e7urtma ve di\u011fer u\u00e7an oyuncaklar\u0131n kordonlar\u0131" },
+  { clause: "4.14", title: "Kapal\u0131 hacimler / mahfazalar" },
+  { clause: "4.14.1", title: "\u0130\u00e7ine girilebilen oyuncaklar" },
+  { clause: "4.14.2", title: "Maskeler ve baretler" },
+  { clause: "4.15", title: "\u00c7ocu\u011fun a\u011f\u0131rl\u0131\u011f\u0131n\u0131 ta\u015f\u0131mas\u0131 ama\u00e7lanan oyuncaklar" },
+  { clause: "4.16", title: "A\u011f\u0131r, hareketsiz oyuncaklar" },
+  { clause: "4.17", title: "Mermili (f\u0131rlatmal\u0131) oyuncaklar" },
+  { clause: "4.18", title: "Su oyuncaklar\u0131 ve \u015fi\u015firilebilir oyuncaklar" },
+  { clause: "4.19", title: "Oyuncaklar i\u00e7in \u00f6zel tapa/kaps\u00fcl (percussion caps)" },
+  { clause: "4.20", title: "Akustik" },
+  { clause: "4.21", title: "Elektriksel olmayan \u0131s\u0131 kayna\u011f\u0131 i\u00e7eren oyuncaklar" },
+  { clause: "4.22", title: "K\u00fc\u00e7\u00fck toplar" },
+  { clause: "4.23", title: "M\u0131knat\u0131slar" },
+  { clause: "4.24", title: "Yoyo toplar\u0131" },
+  { clause: "4.25", title: "Yiyece\u011fe ba\u011fl\u0131 oyuncaklar" },
+  { clause: "4.26", title: "Oyuncak kost\u00fcmler (k\u0131l\u0131k de\u011fi\u015ftirme)" },
+  { clause: "4.27", title: "U\u00e7an oyuncaklar" },
+  { clause: "4.28", title: "Yiyecek taklidi oyuncaklar" },
+  { clause: "5", title: "36 aydan k\u00fc\u00e7\u00fck \u00e7ocuklar i\u00e7in oyuncaklar" },
+  { clause: "5.1", title: "Genel gereklilikler" },
+  { clause: "5.2", title: "Yumu\u015fak dolgulu oyuncaklar ve par\u00e7alar\u0131" },
+  { clause: "5.3", title: "Plastik tabaka" },
+  { clause: "5.4", title: "Oyuncaklardaki kordonlar, zincirler ve elektrik kablolar\u0131" },
+  { clause: "5.5", title: "S\u0131v\u0131yla doldurulmu\u015f oyuncaklar" },
+  { clause: "5.6", title: "Elektrikle \u00e7al\u0131\u015fan binilebilir oyuncaklarda h\u0131z s\u0131n\u0131rlamas\u0131" },
+  { clause: "5.7", title: "Cam ve porselen" },
+  { clause: "5.8", title: "Belirli oyuncaklar\u0131n \u015fekil ve boyutu" },
+  { clause: "5.9", title: "Monofilament liflerden olu\u015fan oyuncaklar" },
+  { clause: "5.10", title: "K\u00fc\u00e7\u00fck toplar" },
+  { clause: "5.11", title: "Oyun heykelleri" },
+  { clause: "5.12", title: "Yar\u0131m k\u00fcresel oyuncaklar" },
+  { clause: "5.13", title: "Vantuzlar" },
+  { clause: "5.14", title: "Boyun \u00e7evresine tak\u0131lan kay\u0131\u015flar" },
+  { clause: "5.15", title: "\u00c7ekme kordonlu k\u0131zaklar" },
+  { clause: "6", title: "Ambalaj" },
+  { clause: "7", title: "Uyar\u0131lar, i\u015faretlemeler ve kullan\u0131m talimatlar\u0131" },
+  { clause: "7.1", title: "Genel" },
+  { clause: "7.2", title: "36 aydan k\u00fc\u00e7\u00fckler i\u00e7in olmayan oyuncaklar" },
+  { clause: "7.3", title: "Lateks balonlar" },
+  { clause: "7.4", title: "Su oyuncaklar\u0131" },
+  { clause: "7.5", title: "Fonksiyonel oyuncaklar" },
+  { clause: "7.6", title: "Tehlikeli keskin fonksiyonel kenarlar ve u\u00e7lar" },
+  { clause: "7.7", title: "Mermili oyuncaklar" },
+  { clause: "7.8", title: "Taklit koruyucu maske ve baretler" },
+  { clause: "7.9", title: "Oyuncak u\u00e7urtmalar" },
+  { clause: "7.10", title: "Be\u015fik/karyola/puset \u00fczerine gerilen oyuncaklar" },
+  { clause: "7.11", title: "S\u0131v\u0131 dolu di\u015f ka\u015f\u0131y\u0131c\u0131lar" },
+  { clause: "7.12", title: "Oyuncaklar i\u00e7in \u00f6zel tapa/kaps\u00fcl" },
+  { clause: "7.13", title: "Akustik" },
+  { clause: "7.14", title: "\u00c7ocu\u011fun a\u011f\u0131rl\u0131\u011f\u0131n\u0131 ta\u015f\u0131yan oyuncaklar" },
+  { clause: "7.15", title: "Monofilament lifli oyuncaklar" },
+  { clause: "7.16", title: "Manyetik/elektriksel deney setleri" },
+  { clause: "7.17", title: "300 mm'yi a\u015fan elektrik kablolu oyuncaklar" },
+  { clause: "7.18", title: "18-36 ay aras\u0131 i\u00e7in kordon/zincirli oyuncaklar" },
+  { clause: "7.19", title: "Be\u015fik/karyola/pusete tak\u0131lan oyuncaklar" },
+  { clause: "7.20", title: "\u00c7ekme kordonlu k\u0131zaklar" },
+  { clause: "7.21", title: "U\u00e7an oyuncaklar" },
+  { clause: "7.22", title: "Do\u011fa\u00e7lama (ge\u00e7ici) mermiler" },
+];
+
+const en71MethodOptions = [
+  { id: "Madde 8.1", label: "Madde 8.1 - Deney i\u00e7in genel gereklilikler" },
+  { id: "Madde 8.2", label: "Madde 8.2 - K\u00fc\u00e7\u00fck par\u00e7a silindiri" },
+  { id: "Madde 8.3", label: "Madde 8.3 - Tork (burulma) deneyi" },
+  { id: "Madde 8.4", label: "Madde 8.4 - Germe (\u00e7ekme) deneyi" },
+  { id: "Madde 8.5", label: "Madde 8.5 - D\u00fc\u015f\u00fcrme deneyi" },
+  { id: "Madde 8.6", label: "Madde 8.6 - Devrilme deneyi" },
+  { id: "Madde 8.7", label: "Madde 8.7 - \u00c7arpma (darbe) deneyi" },
+  { id: "Madde 8.8", label: "Madde 8.8 - S\u0131k\u0131\u015ft\u0131rma deneyi" },
+  { id: "Madde 8.9", label: "Madde 8.9 - Islatma deneyi" },
+  { id: "Madde 8.10", label: "Madde 8.10 - Par\u00e7a/komponentin eri\u015filebilirli\u011fi" },
+  { id: "Madde 8.11", label: "Madde 8.11 - Kenarlar\u0131n keskinli\u011fi" },
+  { id: "Madde 8.12", label: "Madde 8.12 - U\u00e7lar\u0131n keskinli\u011fi" },
+  { id: "Madde 8.13", label: "Madde 8.13 - Metalik tellerin esnekli\u011fi" },
+  { id: "Madde 8.14", label: "Madde 8.14 - Geni\u015fleyen malzemeler" },
+  { id: "Madde 8.15", label: "Madde 8.15 - S\u0131v\u0131 dolu oyuncaklar\u0131n s\u0131zd\u0131rmas\u0131" },
+  { id: "Madde 8.16", label: "Madde 8.16 - Belirli oyuncaklar\u0131n geometrik \u015fekli" },
+  { id: "Madde 8.17", label: "Madde 8.17 - A\u011f\u0131zla etkinle\u015ftirilen oyuncaklar\u0131n dayan\u0131kl\u0131l\u0131\u011f\u0131" },
+  { id: "Madde 8.18", label: "Madde 8.18 - Katlanan veya kayan mekanizmalar" },
+  { id: "Madde 8.19", label: "Madde 8.19 - Kordonlar\u0131n elektriksel direnci" },
+  { id: "Madde 8.20", label: "Madde 8.20 - Kordonlar\u0131n enine kesit boyutu" },
+  { id: "Madde 8.21", label: "Madde 8.21 - \u00c7ocu\u011fun a\u011f\u0131rl\u0131\u011f\u0131n\u0131 ta\u015f\u0131yan oyuncaklar" },
+  { id: "Madde 8.22", label: "Madde 8.22 - Kararl\u0131l\u0131k, a\u011f\u0131r hareketsiz oyuncaklar" },
+  { id: "Madde 8.23", label: "Madde 8.23 - Mermilerin kinetik enerjisi ve kinetik enerji yo\u011funlu\u011fu" },
+  { id: "Madde 8.24", label: "Madde 8.24 - Plastik tabaka" },
+  { id: "Madde 8.25", label: "Madde 8.25 - Emisyon ses bas\u0131nc\u0131 seviyelerinin tayini (akustik)" },
+  { id: "Madde 8.26", label: "Madde 8.26 - S\u0131cakl\u0131k art\u0131\u015flar\u0131n\u0131n \u00f6l\u00e7\u00fcm\u00fc" },
+  { id: "Madde 8.27", label: "Madde 8.27 - Oyuncak sand\u0131k kapaklar\u0131" },
+  { id: "Madde 8.28", label: "Madde 8.28 - K\u00fc\u00e7\u00fck toplar ve vantuz deneyi" },
+  { id: "Madde 8.29", label: "Madde 8.29 - Oyun heykelleri deneyi" },
+  { id: "Madde 8.30", label: "Madde 8.30 - M\u0131knat\u0131slar i\u00e7in germe deneyi" },
+  { id: "Madde 8.31", label: "Madde 8.31 - Manyetik ak\u0131 indeksi" },
+  { id: "Madde 8.32", label: "Madde 8.32 - Kordon ve zincirlerin \u00e7evre uzunlu\u011fu" },
+  { id: "Madde 8.33", label: "Madde 8.33 - Yoyo toplar\u0131 \u00f6l\u00e7\u00fcmleri" },
+  { id: "Madde 8.34", label: "Madde 8.34 - Kopma \u00f6zelli\u011fi ayr\u0131lma deneyi" },
+  { id: "Madde 8.35", label: "Madde 8.35 - Kendili\u011finden geri \u00e7ekilen kordonlar" },
+  { id: "Madde 8.36", label: "Madde 8.36 - Kordon, zincir ve elektrik kablolar\u0131n\u0131n uzunlu\u011fu" },
+  { id: "Madde 8.37", label: "Madde 8.37 - \u0130ki kordon/zincirin dolanma potansiyeli de\u011ferlendirmesi" },
+  { id: "Madde 8.38", label: "Madde 8.38 - Mermi menzilinin tayini" },
+  { id: "Madde 8.39", label: "Madde 8.39 - Mermi ve u\u00e7an oyuncaklar\u0131n \u00f6n k\u0131s\u0131mlar\u0131n\u0131n de\u011ferlendirmesi" },
+  { id: "Madde 8.40", label: "Madde 8.40 - Vantuzlu mermilerin uzunlu\u011fu" },
+  { id: "Madde 8.41", label: "Madde 8.41 - Mermilerin duvara \u00e7arpma deneyi" },
+  { id: "Madde 8.42", label: "Madde 8.42 - \u0130\u00e7ine girilebilen oyuncaklar i\u00e7in ka\u00e7\u0131\u015f kuvveti" },
+  { id: "Madde 8.43", label: "Madde 8.43 - Havaland\u0131rma a\u00e7\u0131kl\u0131klar\u0131n\u0131n kombinasyonlar\u0131" },
+];
+
+const methodLabelById = new Map(en71MethodOptions.map(option => [option.id, option.label]));
+
+const formatMethodIds = (methodIds: string[]) =>
+  methodIds.map(method => methodLabelById.get(method) || method).join(" / ");
+
+const en71FullClauseOptions: TestRow[] = en71RequirementTitles.map(({ clause, title }) => ({
+  id: "en71-1-clause-" + clause.replace(/\./g, "-"),
+  source: "Harici",
+  group: clause === "6" || clause.startsWith("7") ? "Genel De\u011ferlendirme" : "EN 71-1 Gereklilik",
+  title,
+  clause: "Madde " + clause,
+  method: "Madde 8 y\u00f6ntemleri se\u00e7ilecek",
+  reason: "Manuel olarak eklenen EN 71-1 gereklilik kontrol\u00fc.",
+}));
 
 const standardTestOptions: TestRow[] = [
   ...baseTests,
@@ -307,6 +462,7 @@ const standardTestOptions: TestRow[] = [
     method: test.method,
     reason: test.reason,
   })),
+  ...en71FullClauseOptions.filter(option => ![...baseTests, ...testCatalog].some(test => test.clause === option.clause)),
 ].sort((a, b) => {
   const getParts = (clause: string) => (clause.match(/\d+(?:\.\d+)*/)?.[0] || "999")
     .split(".")
@@ -373,14 +529,18 @@ const instructionKey = (value: string) =>
 const extractClauseNumbers = (value: string) =>
   (value.match(instructionNumberPattern) || []).map(item => item.trim());
 
+const extractMethodIds = (value: string) =>
+  Array.from(new Set((value.match(/\b8(?:\.\d+)?\b/g) || []).map(item => `Madde ${item}`)));
+
 export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
   const router = useRouter();
   const [activeStep, setActiveStep] = useState<StepKey>("identity");
   const [form, setForm] = useState<FormState>(emptyState);
   const [records, setRecords] = useState<Record<string, RecordRow>>({});
   const [manualTests, setManualTests] = useState<TestRow[]>([]);
-  const [manualTestForm, setManualTestForm] = useState({
+  const [manualTestForm, setManualTestForm] = useState<ManualTestFormState>({
     selectedId: "",
+    methodIds: [],
     reason: "",
   });
   const [saving, setSaving] = useState(false);
@@ -563,8 +723,12 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
       reason: manualTestForm.reason.trim() || selected.reason,
     };
 
-    setManualTests(current => [...current, test]);
-    setManualTestForm({ selectedId: "", reason: "" });
+    const selectedMethods = manualTestForm.methodIds.length > 0
+      ? formatMethodIds(manualTestForm.methodIds)
+      : selected.method;
+
+    setManualTests(current => [...current, { ...test, method: selectedMethods }]);
+    setManualTestForm({ selectedId: "", methodIds: [], reason: "" });
   };
 
   const removeManualTest = (testId: string) => {
@@ -988,22 +1152,43 @@ function ManualTestCard({
   onAdd,
   tests,
 }: {
-  form: { selectedId: string; reason: string };
-  setForm: React.Dispatch<React.SetStateAction<{ selectedId: string; reason: string }>>;
+  form: ManualTestFormState;
+  setForm: React.Dispatch<React.SetStateAction<ManualTestFormState>>;
   onAdd: () => void;
   tests: TestRow[];
 }) {
+  const [methodPickerOpen, setMethodPickerOpen] = useState(false);
   const selected = tests.find(test => test.id === form.selectedId);
+  const chosenMethodLabel = form.methodIds.length > 0 ? formatMethodIds(form.methodIds) : selected?.method || "-";
+  const showMethodPicker = Boolean(selected && selected.clause !== "EN 71-2");
+
+  const handleRequirementChange = (selectedId: string) => {
+    const nextSelected = tests.find(test => test.id === selectedId);
+    setForm(current => ({
+      ...current,
+      selectedId,
+      methodIds: nextSelected ? extractMethodIds(nextSelected.method) : [],
+    }));
+  };
+
+  const toggleMethod = (methodId: string) => {
+    setForm(current => ({
+      ...current,
+      methodIds: current.methodIds.includes(methodId)
+        ? current.methodIds.filter(item => item !== methodId)
+        : [...current.methodIds, methodId],
+    }));
+  };
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm" style={{ padding: "18px", marginBottom: "10px" }}>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-[0.95rem] font-extrabold leading-6 text-slate-900">Harici Test Ekle</h3>
+          <h3 className="text-[0.95rem] font-extrabold leading-6 text-slate-900">Harici Gereklilik Ekle</h3>
           <p className="text-[0.82rem] leading-5 text-slate-500">Risk görülen durumlarda EN 71-1 kataloğundan ek kontrol seçin.</p>
         </div>
         <button type="button" className="rounded-full bg-blue-600 text-sm font-semibold leading-5 text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50" style={{ padding: "10px 20px" }} onClick={onAdd} disabled={!form.selectedId}>
-          Test Ekle
+          Gereklilik Ekle
         </button>
       </div>
 
@@ -1019,7 +1204,7 @@ function ManualTestCard({
                 aria-label="EN 71-1 test seçimi"
                 className="h-11 w-full cursor-pointer appearance-none rounded-lg border-0 bg-transparent py-0 pl-3 pr-12 text-sm font-semibold text-slate-900 outline-none"
                 value={form.selectedId}
-                onChange={event => setForm(current => ({ ...current, selectedId: event.target.value }))}
+                onChange={event => handleRequirementChange(event.target.value)}
               >
                 <option value="">EN 71-1 test kataloğundan seçin</option>
                 {tests.map(test => (
@@ -1047,7 +1232,66 @@ function ManualTestCard({
             Seçim yapıldığında madde, yöntem ve test grubu burada özetlenecek.
           </div>
         )}
+        {showMethodPicker && (
+          <div className="rounded-lg border border-slate-200 bg-white" style={{ marginTop: "10px", padding: "12px" }}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-[0.74rem] font-extrabold uppercase tracking-wide text-slate-500">Uygulanacak Madde 8 yöntemleri</div>
+                <div className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-slate-700">{chosenMethodLabel}</div>
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                onClick={() => setMethodPickerOpen(true)}
+              >
+                Yöntem Seç
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {methodPickerOpen && showMethodPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
+          <div className="max-h-[86vh] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h4 className="text-base font-extrabold text-slate-900">Uygulanacak Madde 8 yöntemleri</h4>
+              <p className="mt-1 text-sm leading-5 text-slate-500">Seçilen gereklilik için ham veri çalışmasında uygulanacak deney metotlarını işaretleyin.</p>
+            </div>
+            <div className="max-h-[58vh] overflow-y-auto px-5 py-4">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {en71MethodOptions.map(method => (
+                  <label key={method.id} className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 hover:border-blue-200 hover:bg-blue-50">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-3.5 w-3.5 shrink-0 accent-blue-600"
+                      checked={form.methodIds.includes(method.id)}
+                      onChange={() => toggleMethod(method.id)}
+                    />
+                    <span>{method.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                onClick={() => setForm(current => ({ ...current, methodIds: [] }))}
+              >
+                Seçimleri Temizle
+              </button>
+              <button
+                type="button"
+                className="rounded-full bg-blue-600 px-5 py-2 text-xs font-bold text-white hover:bg-blue-700"
+                onClick={() => setMethodPickerOpen(false)}
+              >
+                Tamam
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selected && (
         <div className="grid gap-3 rounded-xl border border-blue-100 bg-blue-50 text-[0.84rem] leading-5 text-slate-700 md:grid-cols-3" style={{ marginTop: "5px", padding: "12px 14px" }}>
@@ -1057,7 +1301,7 @@ function ManualTestCard({
           </div>
           <div>
             <div className="text-[0.72rem] font-bold uppercase tracking-wide text-blue-700">Yöntem</div>
-            <div className="mt-1 font-semibold text-slate-900">{selected.method}</div>
+            <div className="mt-1 font-semibold text-slate-900">{chosenMethodLabel}</div>
           </div>
           <div>
             <div className="text-[0.72rem] font-bold uppercase tracking-wide text-blue-700">Grup</div>
