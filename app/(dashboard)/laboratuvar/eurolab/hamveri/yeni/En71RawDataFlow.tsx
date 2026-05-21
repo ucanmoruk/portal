@@ -335,6 +335,8 @@ const en71RequirementTitles: Array<{ clause: string; title: string }> = [
   { clause: "4.14", title: "Kapal\u0131 hacimler / mahfazalar" },
   { clause: "4.14.1", title: "\u0130\u00e7ine girilebilen oyuncaklar" },
   { clause: "4.14.2", title: "Maskeler ve baretler" },
+  { clause: "4.14.3", title: "Y\u00fcz\u00fc kaplayan sert malzemeler" },
+  { clause: "4.14.4", title: "Taklit koruyucu maskeler ve kasklar" },
   { clause: "4.15", title: "\u00c7ocu\u011fun a\u011f\u0131rl\u0131\u011f\u0131n\u0131 ta\u015f\u0131mas\u0131 ama\u00e7lanan oyuncaklar" },
   { clause: "4.16", title: "A\u011f\u0131r, hareketsiz oyuncaklar" },
   { clause: "4.17", title: "Mermili (f\u0131rlatmal\u0131) oyuncaklar" },
@@ -452,6 +454,12 @@ const en71FullClauseOptions: TestRow[] = en71RequirementTitles.map(({ clause, ti
   reason: "Manuel olarak eklenen EN 71-1 gereklilik kontrol\u00fc.",
 }));
 
+const hiddenManualTestClauses = new Set([
+  "Madde 4.3 / 4.4 / 6",
+  "Madde 4.5 / 5.7",
+  "Madde 5.4 / 4.13",
+]);
+
 const standardTestOptions: TestRow[] = [
   ...baseTests,
   ...testCatalog.map(test => ({
@@ -464,7 +472,7 @@ const standardTestOptions: TestRow[] = [
     reason: test.reason,
   })),
   ...en71FullClauseOptions.filter(option => ![...baseTests, ...testCatalog].some(test => test.clause === option.clause)),
-].sort((a, b) => {
+].filter(test => !hiddenManualTestClauses.has(test.clause)).sort((a, b) => {
   const getParts = (clause: string) => (clause.match(/\d+(?:\.\d+)*/)?.[0] || "999")
     .split(".")
     .map(part => Number(part));
