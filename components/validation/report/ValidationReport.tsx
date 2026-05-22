@@ -467,13 +467,15 @@ export const getMatrixLevelRows = (data: ReportData, moduleData: Record<string, 
             const levelRecord = asRecord(level);
             const matrixRaw = String(levelRecord.matrix ?? "").trim();
             const targetRaw = String(levelRecord.target ?? "").trim();
-            // Tüm alanlar boşsa atla (boş satır oluşturma)
-            if (!matrixRaw && !targetRaw && !unitRaw) return;
+            // Matriks AÇIKÇA girilmemişse satırı atla (data.meta.matrix
+            // fallback yok — kullanıcının yazmadığı 'Ayakkabı' gibi method
+            // genel matriksi tabloya sızmasın).
+            if (!matrixRaw) return;
             const key = `${matrixRaw.toLocaleLowerCase("tr-TR")}|${targetRaw.toLocaleLowerCase("tr-TR")}|${unitRaw.toLocaleLowerCase("tr-TR")}`;
             if (seen.has(key)) return;
             seen.add(key);
             rows.push([
-                matrixRaw || data.meta.matrix || "-",
+                matrixRaw,
                 targetRaw || "-",
                 unitRaw || "-",
             ]);
