@@ -697,24 +697,40 @@ function renderAuditData(moduleKey: string, value: unknown, data: ReportData): R
     if (moduleKey === "MEASUREMENT_UNCERTAINTY") {
         const rows = Array.isArray(record.rows) ? record.rows : [];
         if (rows.length === 0) return <p className="vr2-empty">Bileşen verisi kaydedilmemiş.</p>;
-        // Ölçüm Belirsizliği bütçesi — MU formundaki tablonun aynısı, tüm sütunlar
-        // dahil olmak üzere Toplam (uc) ve Genişletilmiş (U) belirsizlikler.
+        // Ölçüm Belirsizliği bütçesi — MU formundaki tablonun aynı 8 sütunu.
+        // "Toplam Numune Hazırlama" = RSS(samplePreparation + standardUncertainty)
+        // MU formundaki totalSamplePreparation alanından doğrudan okunur; eski
+        // kayıtlar için fallback olarak iki bileşenden RSS hesaplanır.
+        //
+        // Tüm sayı sütunları "vr2-num" class'ı ile tabular-nums + nowrap görüntülenir
+        // (alt satıra kaymaz, tablo responsive kalır — print sırasında da sığar).
+        const fmt = (value: unknown) => (
+            <span className="vr2-num">{numberValue(value, 4)}</span>
+        );
+        const rssTwo = (a: unknown, b: unknown) => {
+            const av = Number(a), bv = Number(b);
+            const finite = [av, bv].filter(Number.isFinite);
+            if (finite.length === 0) return Number.NaN;
+            return Math.sqrt(finite.reduce((sum, n) => sum + n * n, 0));
+        };
         return (
             <DataTable
-                headers={["Etken", "Lineerite", "Tekr.", "Tekr.Ürt.", "Geri Kz.", "Num. Hzr.", "Standart", "uc (Toplam)", "U (Geniş.)"]}
-                columnWidths={["14%", "9%", "9%", "10%", "9%", "10%", "10%", "14%", "15%"]}
+                headers={["Etken", "Lineerite", "Tekr.", "Tekr.Ürt.", "Geri Kz.", "Toplam Num. Hzr.", "uc (Toplam)", "U (Geniş.)"]}
+                columnWidths={["18%", "10%", "10%", "11%", "10%", "15%", "12%", "14%"]}
                 rows={rows.map(row => {
                     const r = asRecord(row);
+                    // Önce kayıtlı totalSamplePreparation kullan, yoksa hesapla
+                    const savedTotal = Number(r.totalSamplePreparation);
+                    const total = Number.isFinite(savedTotal) ? savedTotal : rssTwo(r.samplePreparation, r.standardUncertainty);
                     return [
                         textValue(r.component),
-                        numberValue(r.linearity, 5),
-                        numberValue(r.repeatability, 5),
-                        numberValue(r.reproducibility, 5),
-                        numberValue(r.trueness, 5),
-                        numberValue(r.samplePreparation, 5),
-                        numberValue(r.standardUncertainty, 5),
-                        numberValue(r.combinedStandardUncertainty, 5),
-                        numberValue(r.expandedUncertainty, 5),
+                        fmt(r.linearity),
+                        fmt(r.repeatability),
+                        fmt(r.reproducibility),
+                        fmt(r.trueness),
+                        fmt(total),
+                        fmt(r.combinedStandardUncertainty),
+                        fmt(r.expandedUncertainty),
                     ];
                 })}
             />
@@ -1762,6 +1778,13 @@ function ReportStyles() {
             .vr2-table tbody tr:nth-child(even) td {
                 background: #f8fafc;
             }
+            /* Sayısal hücreler — alt satıra kaymasınlar (responsive tablo) */
+            .vr2-num {
+                white-space: nowrap;
+                font-variant-numeric: tabular-nums;
+                font-feature-settings: "tnum";
+                font-size: 0.96em;
+            }
             .vr2-table-kv td {
                 font-size: 12px;
             }
@@ -2113,6 +2136,12 @@ function ReportStyles() {
                 }
                 .vr2-table th { font-size: 11px; }
                 .vr2-table-kv td { font-size: 11px; }
+                /* Print modunda sayısal hücreler sıkışık ama tek satır */
+                .vr2-num {
+                    white-space: nowrap;
+                    font-variant-numeric: tabular-nums;
+                    font-size: 10px;
+                }
 
                 /* ── Audit blokları (Ek-1) ───────────────────────────────────── */
                 .vr2-audit-block {
