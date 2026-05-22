@@ -167,6 +167,10 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
     const [reportRevisionNo, setReportRevisionNo] = useState("");
     const [reportRevisionDate, setReportRevisionDate] = useState("");
     const [saving, setSaving] = useState(false);
+    // Validasyon ölçüm verileri (LINEARITY, LOD_LOQ, ... vs.). Wizard bu veriyi
+    // göstermez/düzenlemez ama save sırasında EXPLICIT olarak geri yazılır ki
+    // PUT endpoint merge mantığı değişse bile veri kaybı olmasın.
+    const [existingModuleData, setExistingModuleData] = useState<Record<string, Record<string, unknown>>>({});
     const [saveError, setSaveError] = useState("");
     const [loadingValidation, setLoadingValidation] = useState(false);
 
@@ -327,6 +331,12 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                 setPlannedStartDate(json.planned_start_date ? String(json.planned_start_date).slice(0, 10) : "");
                 setPlannedEndDate(json.planned_end_date ? String(json.planned_end_date).slice(0, 10) : "");
                 setDescription(json.config?.description || "");
+                // Ölçüm verilerini state'te tut (kaybetmemek için save'de geri yazılır)
+                setExistingModuleData(
+                    json.config?.moduleData && typeof json.config.moduleData === "object"
+                        ? json.config.moduleData as Record<string, Record<string, unknown>>
+                        : {},
+                );
                 setReportPublishDate(json.config?.publishDate || "");
                 setReportRevisionNo(json.config?.revisionNo || "");
                 setReportRevisionDate(json.config?.revisionDate || "");
@@ -779,6 +789,11 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                         devices,
                         personnel,
                         components,
+                        // CRITICAL: Validasyon ölçüm verilerini (LINEARITY/LOD/REPEATABILITY/
+                        // TRUENESS/REPRODUCIBILITY/SAMPLE_PREPARATION/MEASUREMENT_UNCERTAINTY)
+                        // explicit olarak geri yaz. Bu sayede protokolde cihaz/komponent
+                        // ekleyip çıkardığında validasyon datan asla kaybolmaz.
+                        moduleData: existingModuleData,
                     },
                 }),
             });
