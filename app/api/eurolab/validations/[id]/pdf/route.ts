@@ -235,6 +235,29 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         // Sayfa tamamen yüklensin (data fetch'leri dahil) — sabit bekleme + opsiyonel network idle
         await delay(3500);
 
+        // PDF'e basmadan önce dashboard chrome elementlerini DOM'dan kaldır.
+        // CSS kuralları @media print + emulation altında tutarsız davranabiliyor;
+        // doğrudan removeChild en garantili yol. nav/aside/header + report-disı
+        // her şey çıkarılır, sadece rapor içeriği kalır.
+        await send("Runtime.evaluate", {
+            expression: `
+                (function() {
+                    // Header / Sidebar / Nav elementlerini sil
+                    document.querySelectorAll('header, aside, nav, [role="banner"]').forEach(el => el.remove());
+                    // Body ve direkt çocukların üst boşluk/marjlarını sıfırla
+                    document.documentElement.style.margin = '0';
+                    document.documentElement.style.padding = '0';
+                    document.body.style.margin = '0';
+                    document.body.style.padding = '0';
+                    document.body.style.background = '#ffffff';
+                    return 'OK';
+                })();
+            `,
+            returnByValue: true,
+        }, sessionId);
+        // DOM manipülasyonu sonrası React'in yeniden render etmesi için kısa bekleme
+        await delay(300);
+
         const pdfResult = await send<{ data: string }>("Page.printToPDF", {
             printBackground: true,
             preferCSSPageSize: true,
