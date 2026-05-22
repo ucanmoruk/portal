@@ -65,12 +65,16 @@ interface RecalculateResult {
     newRsd?: number;
 }
 
+// LABORATUVAR POLİTİKASI: pCount = 3 zorunlu (her seviye 3 ölçüm ortalaması).
+const LAB_REPLICATE_COUNT = 3;
+
 // Lineerite statistics objesini in-place günceller. true dönerse veriler değişti.
 function recalculateLinearity(record: Record<string, unknown>): RecalculateResult {
     const stats = record.statistics as LinearityStatistics | undefined;
     if (!stats || typeof stats !== "object") return { changed: false };
 
-    const pCount = Math.max(1, asNumber(stats.p) || 1);
+    // Kayıtlı p ne olursa olsun lab politikası gereği 3 kullanılır.
+    const pCount = LAB_REPLICATE_COUNT;
     // Önceki kayıtlarda n = points.length (level başına 1 entry varsayımıyla)
     // veya n = nLevels (yeni format). Her durumda nLevels = orijinal level sayısı.
     let nLevels = asNumber(stats.nLevels);
@@ -114,8 +118,10 @@ function recalculateLinearity(record: Record<string, unknown>): RecalculateResul
         : Number.NaN;
 
     // Güncellemeyi uygula
+    stats.p = pCount;                  // Lab politikası: hep 3
     stats.n = effectiveN;
     stats.nLevels = nLevels;
+    stats.inverseP = 1 / pCount;
     stats.inverseN = 1 / effectiveN;
     stats.uncertaintyFactor = uncertaintyFactor;
     if (Number.isFinite(uCo)) stats.uCo = uCo;

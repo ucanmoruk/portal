@@ -326,16 +326,17 @@ Doğrusal çalışma aralığında korelasyon sabiti (R²) 0,995'den büyük old
             return acc + Math.pow(p.y - predicted, 2);
         }, 0);
         const standardDeviation = Math.sqrt(residualSumSquares / Math.max(n - 2, 1));
-        const pCount = Math.max(1, replicates);
         // ─────────────────────────────────────────────────────────────────────
-        // EFFECTIVE N (kullanıcı isteği — laboratuvar konvansiyonu):
-        // Kalibrasyon noktası başına p tekrar yapıldığı varsayımıyla, belirsizlik
-        // formülünde "n" yerine n × p kullanılır. Örn. p=3, n=5 → effectiveN=15.
-        // Bu sayede ortalama-area girilen verilerle hesaplanan u_c değeri
-        // gerçekçi olur (önceki formül n=5 → çok yüksek u çıkıyordu).
-        //
-        // Slope/intercept/R² hesaplamaları DEĞİŞMEZ (regresyonun girdi sayısı n).
-        // Sadece uncertaintyFactor ve istatistiklerde gösterilen n alanı değişir.
+        // LABORATUVAR POLİTİKASI: Her seviye 3 ölçümün ortalaması olarak girilir.
+        // Form'daki "Tekrar Sayısı" (replicates) alanı sadece KAÇ SÜTUN gösterileceğini
+        // kontrol eder (UI ile ilgili). Belirsizlik hesabında pCount HER ZAMAN 3
+        // kullanılır (lab konvansiyonu). Eğer ileride farklılaşırsa bu sabiti değiştir.
+        const LAB_REPLICATE_COUNT = 3;
+        const pCount = LAB_REPLICATE_COUNT;
+        // ─────────────────────────────────────────────────────────────────────
+        // EFFECTIVE N: Belirsizlik formülünde n yerine n × p kullanılır.
+        // Örn. p=3, n=5 → effectiveN=15. p=3, n=7 → effectiveN=21.
+        // Slope/intercept/R² hesaplamaları DEĞİŞMEZ (regresyon girdi sayısı n).
         const effectiveN = n * pCount;
         // ─────────────────────────────────────────────────────────────────────
         const co = Math.max(...points.map(p => p.x));
