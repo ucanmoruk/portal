@@ -338,26 +338,36 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
             )}
 
             {!pdfMode && (
-                <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-                    <Link href="/laboratuvar/eurolab/validasyon" className={styles.cancelBtn}>
+                <div className="flex flex-nowrap items-center justify-between gap-3 print:hidden">
+                    <Link
+                        href="/laboratuvar/eurolab/validasyon"
+                        className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-slate-300 bg-white text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                        style={{ padding: "8px 16px" }}
+                    >
                         <ArrowLeft size={15} /> Listeye dön
                     </Link>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="inline-flex flex-nowrap items-stretch overflow-hidden rounded-full border border-blue-200 bg-white shadow-sm">
                         <a
                             href={pdfUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={styles.cancelBtn}
+                            className="inline-flex items-center gap-2 whitespace-nowrap border-r border-blue-200 bg-blue-50 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
                             aria-disabled={!reportData}
-                            style={!reportData ? { pointerEvents: "none", opacity: 0.5 } : undefined}
+                            style={{
+                                padding: "9px 18px",
+                                ...(!reportData ? { pointerEvents: "none", opacity: 0.5 } : {}),
+                            }}
                         >
-                            <FileText size={15} /> PDF&apos;i Aç (Önizleme)
+                            <FileText size={15} /> PDF Önizleme
                         </a>
                         <a
                             href={`${pdfUrl}?download=1`}
-                            className={styles.addBtn}
+                            className="inline-flex items-center gap-2 whitespace-nowrap bg-blue-600 text-sm font-bold text-white transition hover:bg-blue-700"
                             aria-disabled={!reportData}
-                            style={!reportData ? { pointerEvents: "none", opacity: 0.5 } : undefined}
+                            style={{
+                                padding: "9px 20px",
+                                ...(!reportData ? { pointerEvents: "none", opacity: 0.5 } : {}),
+                            }}
                         >
                             <Download size={15} /> PDF İndir
                         </a>

@@ -12,7 +12,8 @@ import { PrecisionRepeatabilityForm } from "@/components/validation/modules/Prec
 import { PrecisionReproducibilityForm } from "@/components/validation/modules/PrecisionReproducibilityForm";
 import { SamplePreparationUncertaintyForm } from "@/components/validation/modules/SamplePreparationUncertaintyForm";
 import { TruenessStudyForm } from "@/components/validation/modules/TruenessStudyForm";
-import { ValidationReport, ReportData } from "@/components/validation/report/ValidationReport";
+import type { ReportData } from "@/components/validation/report/ValidationReport";
+import { ValidationReportV2 as ValidationReport } from "@/components/validation/report/ValidationReportV2";
 import { sortValidationParameters } from "@/types/validation";
 import { FileText, Printer } from "lucide-react";
 import styles from "@/app/styles/table.module.css";
