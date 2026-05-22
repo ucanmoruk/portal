@@ -474,10 +474,10 @@ Elde edilen sonuçlar incelendiğinde, her bir test örneği ve paralel örnekte
                                         return (
                                             <TableRow key={`${levelKey}-diff-row-${rowIndex}`}>
                                                 <TableCell className="py-1 text-xs" style={{padding:"3px"}}>{rowIndex + 1}</TableCell>
-                                                {analysts.map(analyst => {
+                                                {analysts.map((analyst, analystIndex) => {
                                                     const diffResult = getDiffResult(analyst, rowIndex);
                                                     return (
-                                                        <Fragment key={`${levelKey}-${analyst}-${rowIndex}-diff-result`}>
+                                                        <Fragment key={`${levelKey}-r${rowIndex}-a${analystIndex}-diff`}>
                                                             <TableCell className="border-l border-slate-200 py-1 text-xs font-semibold" style={{paddingLeft:"10px"}}>{formatValue(diffResult.diff)}</TableCell>
                                                             <TableCell className={`py-1 text-xs font-bold ${diffResult.hasStatus ? (diffResult.isSuitable ? "text-green-700" : "text-red-700") : "text-slate-400"}`}>
                                                                 {diffResult.hasStatus ? (diffResult.isSuitable ? "Uygun" : "Uygun Değil") : "-"}
@@ -497,8 +497,8 @@ Elde edilen sonuçlar incelendiğinde, her bir test örneği ve paralel örnekte
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead className="h-8 text-center text-xs font-bold">İstatistik</TableHead>
-                                        {analysts.map(analyst => (
-                                            <TableHead key={`${levelKey}-${analyst}-stat-head`} className="h-8 text-center text-xs font-bold">{analyst}</TableHead>
+                                        {analysts.map((analyst, analystIndex) => (
+                                            <TableHead key={`${levelKey}-stat-head-${analystIndex}`} className="h-8 text-center text-xs font-bold">{analyst}</TableHead>
                                         ))}
                                     </TableRow>
                                 </TableHeader>
@@ -506,8 +506,8 @@ Elde edilen sonuçlar incelendiğinde, her bir test örneği ve paralel örnekte
                                     {statRows.map(([label, key]) => (
                                         <TableRow key={`${levelKey}-stat-${label}`}>
                                             <TableCell className="py-1 text-xs font-semibold text-slate-600" style={{padding:"3px"}}>{label}</TableCell>
-                                            {analysts.map(analyst => (
-                                                <TableCell key={`${levelKey}-${analyst}-${key}`} className="py-1 text-center text-xs text-slate-900">
+                                            {analysts.map((analyst, analystIndex) => (
+                                                <TableCell key={`${levelKey}-${key}-a${analystIndex}`} className="py-1 text-center text-xs text-slate-900">
                                                     {formatValue(calculated.analystStats[analyst]?.[key])}
                                                 </TableCell>
                                             ))}
