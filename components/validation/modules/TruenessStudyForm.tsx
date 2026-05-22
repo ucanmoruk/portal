@@ -303,6 +303,10 @@ export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analis
 
     const saveToReport = (component: string) => {
         if (!onReportDataChange) return;
+        const results = buildResults(component);
+        // Ölçüm Belirsizliği bütçesi için gerekli üst-düzey istatistikleri
+        // (uBias, standardUncertainty, ortalama geri kazanım vs.) data'ya da kaydet.
+        const stats = calculateTruenessStats(results);
         onReportDataChange({
             type: "TRUENESS",
             component,
@@ -314,7 +318,12 @@ export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analis
                 notes: notes[component] || "",
                 analysts,
                 rows: getGrid(component),
-                results: buildResults(component)
+                results,
+                // MU formu data.standardUncertainty / data.uBias şeklinde okuyor:
+                standardUncertainty: stats.standardUncertainty,
+                uBias: stats.uBias,
+                recoveryMean: stats.recoveryMean,
+                recoveryMeanPercent: stats.recoveryMeanPercent,
             }
         });
         alert(`${component} gerçeklik verileri rapora eklendi!`);

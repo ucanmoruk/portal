@@ -53,6 +53,7 @@ type InventoryRow = {
     id: number;
     code: string;
     name: string;
+    serial_lot_no?: string | null;
     cas_no: string | null;
     limit_info: string | null;
     unit: string | null;
@@ -98,31 +99,63 @@ function enrichPersonnelRoles(personnel: ReportPerson[], directory: PersonnelDir
     });
 }
 
+// Envanter satırını cihaz/standart adına/koduna göre eşler.
+// `intendedUseFilter` ile arama belirli kullanım amaçlarıyla sınırlanır.
+function findInventoryMatch(
+    item: { code?: string; name: string },
+    inventoryRows: InventoryRow[],
+    intendedUseFilter?: string[],
+) {
+    const normalizedCode = item.code ? normalizeName(item.code) : "";
+    const normalizedName = normalizeName(item.name);
+    return inventoryRows.find(row => {
+        if (intendedUseFilter && !intendedUseFilter.includes(row.intended_use)) return false;
+        const rowCode = normalizeName(row.code || "");
+        const rowName = normalizeName(row.name || "");
+        if (normalizedCode && rowCode === normalizedCode) return true;
+        if (rowName === normalizedName) return true;
+        if (rowName && normalizedName && (rowName.includes(normalizedName) || normalizedName.includes(rowName))) return true;
+        return false;
+    });
+}
+
+// Bileşenler (Etken Madde Listesi) — envanterden HER YÜKLEMEDE güncel CAS No /
+// limit / birim / belirsizlik değerleri çekilir. Envanter eşleşmesi varsa
+// onun değerleri öncelikli, yoksa kayıtlı snapshot kullanılır.
 function enrichComponentsFromInventory(
     components: Array<{ code?: string; name: string; casNo?: string; limit?: string; unit?: string; uncertaintyValue?: string | number | null; uncertainty_value?: string | number | null }>,
     inventoryRows: InventoryRow[],
 ) {
     return components.map(component => {
-        const configuredCasNo = component.casNo && component.casNo !== "-" ? component.casNo : "";
-        const configuredLimit = component.limit && component.limit !== "-" ? component.limit : "";
-        const configuredUnit = component.unit && component.unit !== "-" ? component.unit : "";
-        const normalizedCode = component.code ? normalizeName(component.code) : "";
-        const normalizedComponentName = normalizeName(component.name);
-        const match = inventoryRows.find(row => {
-            if (row.intended_use !== "Standart") return false;
-            const rowCode = normalizeName(row.code || "");
-            const rowName = normalizeName(row.name || "");
-            return Boolean(normalizedCode && rowCode === normalizedCode)
-                || rowName === normalizedComponentName
-                || Boolean(rowName && (rowName.includes(normalizedComponentName) || normalizedComponentName.includes(rowName)));
-        });
-
+        const savedCasNo = component.casNo && component.casNo !== "-" ? component.casNo : "";
+        const savedLimit = component.limit && component.limit !== "-" ? component.limit : "";
+        const savedUnit = component.unit && component.unit !== "-" ? component.unit : "";
+        const match = findInventoryMatch(component, inventoryRows, ["Standart"]);
+        // Öncelik: envanter > kayıtlı snapshot > boş
         return {
             ...component,
-            casNo: configuredCasNo || match?.cas_no || "",
-            limit: configuredLimit || match?.limit_info || "",
-            unit: configuredUnit || match?.unit || "",
-            uncertaintyValue: component.uncertaintyValue ?? component.uncertainty_value ?? match?.uncertainty_value ?? null,
+            casNo: match?.cas_no || savedCasNo || "",
+            limit: match?.limit_info || savedLimit || "",
+            unit: match?.unit || savedUnit || "",
+            uncertaintyValue: match?.uncertainty_value ?? component.uncertaintyValue ?? component.uncertainty_value ?? null,
+        };
+    });
+}
+
+// Cihaz / ekipman — envanterden HER YÜKLEMEDE güncel Seri No / birim çekilir.
+function enrichDevicesFromInventory(
+    devices: Array<{ code?: string; name: string; serialNo?: string; intendedUse?: string; unit?: string }>,
+    inventoryRows: InventoryRow[],
+) {
+    return devices.map(device => {
+        const savedSerialNo = device.serialNo && device.serialNo !== "-" ? device.serialNo : "";
+        const savedUnit = device.unit && device.unit !== "-" ? device.unit : "";
+        // Cihazlar "Ana Cihaz" veya "Numune Hazırlama" tipi olabilir
+        const match = findInventoryMatch(device, inventoryRows, ["Ana Cihaz", "Numune Hazırlama"]);
+        return {
+            ...device,
+            serialNo: match?.serial_lot_no || savedSerialNo || "",
+            unit: match?.unit || savedUnit || "",
         };
     });
 }
@@ -225,10 +258,20 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
 
         async function loadInventoryRows() {
             try {
+                // Hem komponentleri (Standart) hem cihazları (Ana Cihaz / Numune Hazırlama)
+                // envanterden çekmek için her ikisinin de kod/isim'ini arama listesine ekle.
+                // Bonus: boş ("") aramayla envanterin ilk 200 kaydını da alarak tam liste
+                // kapsamasını arttır.
                 const components = validation?.config?.components || [];
-                const searches = ["", ...components.flatMap(component => [component.name, component.code || ""]).filter(Boolean)];
+                const devices = validation?.config?.devices || [];
+                const searches = Array.from(new Set<string>([
+                    "", // tüm envanter (ilk 200)
+                    ...components.flatMap(c => [c.name, c.code || ""]),
+                    ...devices.flatMap(d => [d.name, d.code || ""]),
+                ].filter(Boolean)));
+
                 const responses = await Promise.all(searches.map(async search => {
-                    const params = new URLSearchParams({ search, page: "1", pageSize: "100" });
+                    const params = new URLSearchParams({ search, page: "1", pageSize: "200" });
                     const response = await fetch(`/api/eurolab/inventory?${params.toString()}`, { credentials: "same-origin" });
                     const json: { rows?: InventoryRow[] } = await response.json();
                     return response.ok && Array.isArray(json.rows) ? json.rows : [];
@@ -255,6 +298,8 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
             ? validation.personnel.map(name => ({ name, role: "Validasyona katılan personel" }))
             : [];
         const components = enrichComponentsFromInventory(config.components || [], inventoryRows);
+        // Cihazların Seri No / birim alanları her rapor render'ında envanterden çekilir.
+        const devices = enrichDevicesFromInventory(config.devices || [], inventoryRows);
         const moduleData = config.moduleData || {};
         const reproducibilityDates = getReproducibilityDateRange(moduleData);
         const personnel = enrichPersonnelRoles(
@@ -264,7 +309,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
 
         return {
             description: config.description,
-            devices: config.devices || [],
+            devices,
             personnel,
             components,
             parameters: config.parameters || [],

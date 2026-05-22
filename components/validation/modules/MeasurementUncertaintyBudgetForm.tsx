@@ -113,13 +113,24 @@ const getLinearityUncertainty = (data: any) => {
 };
 
 const getRepeatabilityUncertainty = (data: any) => {
+    // Düzey bazlı tekrarlanabilirlik: her düzey ayrı bir konsantrasyon rejimini
+    // temsil ettiği için RSS-birleştirmek anlamlı değil. Konservatif yaklaşımla
+    // MAKSİMUM düzey pooledRsd değeri alınır (worst-case kabul edilir).
     const levelValues = Array.isArray(data?.levels)
-        ? data.levels.map((level: any) => firstFinite(level?.pooledRsd, level?.result?.pooledRsd))
+        ? data.levels
+            .map((level: any) => firstFinite(level?.pooledRsd, level?.result?.pooledRsd))
+            .filter((v: number) => Number.isFinite(v))
         : [];
-    const byLevel = rss(levelValues);
-    if (Number.isFinite(byLevel)) return byLevel;
+    if (levelValues.length > 0) {
+        return Math.max(...levelValues);
+    }
 
-    return rss(collectRecursiveNumbersByKey(data, ["pooledRsd", "rsdPool", "rsdr"]));
+    // Fallback: recursively scanned pooledRsd değerlerinin MAKSİMUMU
+    const recursive = collectRecursiveNumbersByKey(data, ["pooledRsd", "rsdPool", "rsdr"]);
+    if (recursive.length > 0) {
+        return Math.max(...recursive);
+    }
+    return Number.NaN;
 };
 
 const getReproducibilityUncertainty = (data: any) => {
@@ -255,6 +266,16 @@ export function MeasurementUncertaintyBudgetForm({
                 <p className="text-left text-[0.78rem] leading-5 text-[var(--color-text-tertiary)] sm:max-w-[48%] sm:text-right">
                     Her alt bileşen için modüllerden gelen belirsizlikleri birleştirerek genişletilmiş belirsizliği hesaplayın.
                 </p>
+            </div>
+
+            <div className="border-b border-amber-200 bg-amber-50 text-[0.78rem] leading-5 text-amber-900" style={{ padding: "10px 16px" }}>
+                <strong>Not:</strong> Aşağıdaki sütunlar otomatik hesaplanır.{" "}
+                Modüllerde değer kaydedilmemişse o sütun <strong>0</strong> görünür.
+                <ul className="mt-1 list-disc pl-5">
+                    <li><strong>Tekrarlanabilirlik:</strong> Düzeylerin pooled RSD değerlerinin <strong>maksimumu</strong> alınır (worst case).</li>
+                    <li><strong>Geri Kazanım (u<sub>Bias</sub>):</strong> Gerçeklik tabında <em>Rapora Aktar</em> demediyseniz boş olur.</li>
+                    <li><strong>Standart Belirsizliği:</strong> Numune Hazırlama tabında bileşene karşılık gelen standart kaydedilmiş olmalı (isim/kod eşleşmesi).</li>
+                </ul>
             </div>
 
             <div className="space-y-5" style={{ padding: "16px" }}>

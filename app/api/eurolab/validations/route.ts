@@ -125,20 +125,40 @@ export async function POST(request: Request) {
 
         await ensureValidationSchema();
 
+        // Validasyon kodu: metoda göre üretilir, örn. "K.SOP.01-Ek.1", "K.SOP.01-Ek.2"...
+        // Aynı metoda ait kaç validasyon varsa Ek numarası onun bir sonrası olur.
+        // Metodun method_code'u yoksa eski VAL-YYYY-NNN formatına düşülür.
         const res = await query(`
+            WITH chosen AS (
+                SELECT m.id AS method_id, m.method_code, m.name
+                FROM eurolab_methods m WHERE m.id = $1
+            ), next_ek AS (
+                SELECT COALESCE(MAX(
+                    CASE
+                        WHEN v.code ~ '-Ek\\.[0-9]+$'
+                        THEN (regexp_replace(v.code, '^.*-Ek\\.([0-9]+)$', '\\1'))::int
+                        ELSE 0
+                    END
+                ), 0) + 1 AS next_no
+                FROM eurolab_validations v
+                JOIN chosen c ON c.method_id = v.method_id
+            )
             INSERT INTO eurolab_validations
                 (code, title, method_id, study_type, status, planned_start_date, planned_end_date, config)
             SELECT
-                'VAL-' || EXTRACT(YEAR FROM CURRENT_DATE)::text || '-' || LPAD(nextval('eurolab_validation_code_seq')::text, 3, '0'),
-                m.name || ' Validasyonu',
-                m.id,
+                CASE
+                    WHEN NULLIF(TRIM(c.method_code), '') IS NOT NULL
+                        THEN TRIM(c.method_code) || '-Ek.' || (SELECT next_no::text FROM next_ek)
+                    ELSE 'VAL-' || EXTRACT(YEAR FROM CURRENT_DATE)::text || '-' || LPAD(nextval('eurolab_validation_code_seq')::text, 3, '0')
+                END,
+                c.name || ' Validasyonu',
+                c.method_id,
                 $2,
                 'NEW',
                 $3,
                 $4,
                 $5::jsonb
-            FROM eurolab_methods m
-            WHERE m.id = $1
+            FROM chosen c
             RETURNING *
         `, [
             Number(method_id),

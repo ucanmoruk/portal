@@ -75,7 +75,23 @@ export async function createLocalValidation(input: {
     if (!method) throw new Error("Seçilen metot bulunamadı.");
 
     const nextId = Math.max(0, ...validations.map(v => v.id)) + 1;
-    const code = `VAL-${new Date().getFullYear()}-${String(nextId).padStart(3, "0")}`;
+    // Validasyon kodu: metoda göre "method_code-Ek.X" formatında. Aynı metoda ait
+    // var olan validasyonların Ek numaralarının bir fazlası alınır.
+    const methodCode = String(method.method_code || "").trim();
+    let code: string;
+    if (methodCode) {
+        const ekPattern = new RegExp(`^${methodCode.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}-Ek\\.(\\d+)$`, "i");
+        const maxEk = validations
+            .filter(v => v.method_id === method.id)
+            .map(v => {
+                const match = String(v.code || "").match(ekPattern);
+                return match ? parseInt(match[1], 10) : 0;
+            })
+            .reduce((max, n) => Math.max(max, n), 0);
+        code = `${methodCode}-Ek.${maxEk + 1}`;
+    } else {
+        code = `VAL-${new Date().getFullYear()}-${String(nextId).padStart(3, "0")}`;
+    }
     const validation: EurolabValidation = {
         id: nextId,
         code,
