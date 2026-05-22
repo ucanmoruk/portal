@@ -190,6 +190,86 @@ function deriveDocumentNo(
     return savedCode || "K.SOP.16 / Ek-1";
 }
 
+// Komponent ismi alias eşleştirme — "Formaldehit (FA)" ↔ "FA" ↔ "Formaldehit"
+function normalizeComponentText(value: unknown) {
+    return String(value || "").trim().toLocaleLowerCase("tr-TR");
+}
+
+function componentAliases(value: unknown): string[] {
+    const text = String(value || "");
+    const set = new Set<string>([normalizeComponentText(text)]);
+    for (const match of text.matchAll(/\(([^)]+)\)/g)) {
+        set.add(normalizeComponentText(match[1]));
+    }
+    // Parantezsiz kısmı da ekle
+    const noParen = text.replace(/\s*\([^)]*\)\s*/g, "").trim();
+    if (noParen) set.add(normalizeComponentText(noParen));
+    return Array.from(set).filter(Boolean);
+}
+
+function componentNamesMatch(left: unknown, right: unknown): boolean {
+    const leftAliases = componentAliases(left);
+    const rightAliases = componentAliases(right);
+    for (const l of leftAliases) {
+        if (!l) continue;
+        for (const r of rightAliases) {
+            if (!r) continue;
+            if (l === r) return true;
+            // Kısa alias eşleşmesi: ikisi de en az 3 karakter ve biri diğerini içeriyor
+            if (l.length >= 3 && r.length >= 3 && (l.includes(r) || r.includes(l))) return true;
+        }
+    }
+    return false;
+}
+
+// MU formunun kaydettiği summary rows'tan komponent bazlı bridge bilgilerini çıkarır.
+// Section 3 (Gen. Bel. U) ve Section 4 (raporlama birimi) bu fonksiyondan beslenir.
+function buildMuBridgeMap(moduleData: Record<string, Record<string, unknown>>) {
+    const map = new Map<string, { expandedUncertainty?: number; combinedStandardUncertainty?: number }>();
+    const summary = moduleData?.MEASUREMENT_UNCERTAINTY?.summary as { rows?: unknown[] } | undefined;
+    const rows = Array.isArray(summary?.rows) ? summary!.rows : [];
+    rows.forEach(row => {
+        if (!row || typeof row !== "object") return;
+        const r = row as Record<string, unknown>;
+        const componentName = String(r.component || "").trim();
+        if (!componentName) return;
+        const expanded = Number(r.expandedUncertainty);
+        const combined = Number(r.combinedStandardUncertainty);
+        map.set(componentName, {
+            expandedUncertainty: Number.isFinite(expanded) ? expanded : undefined,
+            combinedStandardUncertainty: Number.isFinite(combined) ? combined : undefined,
+        });
+    });
+    return map;
+}
+
+function findMuRowForComponent(
+    componentName: string,
+    muMap: Map<string, { expandedUncertainty?: number; combinedStandardUncertainty?: number }>,
+) {
+    // Önce tam isim, sonra alias eşleştirme
+    const direct = muMap.get(componentName);
+    if (direct) return direct;
+    for (const [key, value] of muMap.entries()) {
+        if (componentNamesMatch(key, componentName)) return value;
+    }
+    return undefined;
+}
+
+// LOD/LOQ modülünden ilk geçen birimi alır.
+// Section 4 (Raporlama) bölümünde "Raporlama Birimi" olarak kullanılır.
+function pickLodLoqUnit(moduleData: Record<string, Record<string, unknown>>): string {
+    const lodSection = moduleData?.LOD_LOQ;
+    if (!lodSection || typeof lodSection !== "object") return "";
+    for (const entry of Object.values(lodSection)) {
+        if (!entry || typeof entry !== "object") continue;
+        const r = entry as Record<string, unknown>;
+        const candidate = r.unitLabel ?? r.unit;
+        if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+    }
+    return "";
+}
+
 function getReproducibilityDateRange(moduleData: Record<string, Record<string, unknown>>) {
     const reproducibility = moduleData.PRECISION_REPRODUCIBILITY;
     const dates: string[] = [];
@@ -327,10 +407,21 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
         const fallbackPersonnel = Array.isArray(validation.personnel)
             ? validation.personnel.map(name => ({ name, role: "Validasyona katılan personel" }))
             : [];
-        const components = enrichComponentsFromInventory(config.components || [], inventoryRows);
+        const enrichedComponents = enrichComponentsFromInventory(config.components || [], inventoryRows);
         // Cihazların Seri No / birim alanları her rapor render'ında envanterden çekilir.
         const devices = enrichDevicesFromInventory(config.devices || [], inventoryRows);
         const moduleData = config.moduleData || {};
+        // MU formunun kaydettiği summary'den her komponentin expanded uncertainty (U)
+        // değerini bridge edip components üzerine yaz. Böylece V1'in
+        // getExpandedUncertaintyValue ilk kontrolünde bunu okur ve doğru U gözükür.
+        const muMap = buildMuBridgeMap(moduleData);
+        const components = enrichedComponents.map(c => {
+            const muRow = findMuRowForComponent(c.name, muMap);
+            if (muRow?.expandedUncertainty !== undefined) {
+                return { ...c, uncertaintyValue: muRow.expandedUncertainty };
+            }
+            return c;
+        });
         const reproducibilityDates = getReproducibilityDateRange(moduleData);
         const personnel = enrichPersonnelRoles(
             configuredPersonnel.length > 0 ? configuredPersonnel : fallbackPersonnel,
@@ -360,7 +451,15 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                 publishDate: docPublishDate,
                 revisionNo: docRevisionNo || "-",
                 revisionDate: docRevisionDate || "-",
-                reportingUnit: config.reportingUnit || components.find(component => component.unit)?.unit || "",
+                // Raporlama birimi öncelik sırası:
+                //   1. config.reportingUnit (kullanıcı manuel set ettiyse)
+                //   2. LOD/LOQ modülünden ilk geçen birim (kullanıcının isteği)
+                //   3. component.unit
+                //   4. ""
+                reportingUnit: config.reportingUnit
+                    || pickLodLoqUnit(moduleData)
+                    || components.find(component => component.unit)?.unit
+                    || "",
                 conclusion: config.conclusion,
                 date: new Date().toLocaleDateString("tr-TR"),
                 analyst: personnel[0]?.name || "Analist",

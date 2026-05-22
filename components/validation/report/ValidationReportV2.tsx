@@ -687,9 +687,12 @@ function renderAuditData(moduleKey: string, value: unknown, data: ReportData): R
     if (moduleKey === "MEASUREMENT_UNCERTAINTY") {
         const rows = Array.isArray(record.rows) ? record.rows : [];
         if (rows.length === 0) return <p className="vr2-empty">Bileşen verisi kaydedilmemiş.</p>;
+        // Ölçüm Belirsizliği bütçesi — MU formundaki tablonun aynısı, tüm sütunlar
+        // dahil olmak üzere Toplam (uc) ve Genişletilmiş (U) belirsizlikler.
         return (
             <DataTable
-                headers={["Etken", "Lineerite", "Tekr.", "Tekr.Ürt.", "Geri Kz.", "Num. Hzr.", "Standart"]}
+                headers={["Etken", "Lineerite", "Tekr.", "Tekr.Ürt.", "Geri Kz.", "Num. Hzr.", "Standart", "uc (Toplam)", "U (Geniş.)"]}
+                columnWidths={["14%", "9%", "9%", "10%", "9%", "10%", "10%", "14%", "15%"]}
                 rows={rows.map(row => {
                     const r = asRecord(row);
                     return [
@@ -700,6 +703,8 @@ function renderAuditData(moduleKey: string, value: unknown, data: ReportData): R
                         numberValue(r.trueness, 5),
                         numberValue(r.samplePreparation, 5),
                         numberValue(r.standardUncertainty, 5),
+                        numberValue(r.combinedStandardUncertainty, 5),
+                        numberValue(r.expandedUncertainty, 5),
                     ];
                 })}
             />
