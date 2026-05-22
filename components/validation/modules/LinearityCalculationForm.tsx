@@ -338,11 +338,18 @@ Doğrusal çalışma aralığında korelasyon sabiti (R²) 0,995'den büyük old
             rows: points.map((p, index) => {
                 const predicted = slope * p.x + intercept;
                 const xi = calculatedXiValues[index];
+                // ÖNEMLİ: x ve y alanları kullanıcının girdiği ORİJİNAL değerleri
+                // tutmalı (rapor "Konsantrasyon (x) / Cihaz Yanıtı (y)" sütunlarını
+                // buradan okuyor). xi (regresyondan türetilen x) ve yPredicted
+                // (regresyon hattındaki y) ayrı alanlarda saklanır, istatistiksel
+                // hesaplamalarda kullanılır.
                 return {
-                    x: xi,
+                    x: p.x,                                  // orijinal konsantrasyon
+                    y: p.y,                                  // orijinal cihaz yanıtı
+                    xi,                                       // regresyondan türetilmiş x
+                    yPredicted: predicted,                    // regresyon hattındaki y
                     xDelta: xi - xMean,
                     xDeltaSquared: Math.pow(xi - xMean, 2),
-                    y: predicted,
                     yResidual: predicted - p.y,
                     yResidualSquared: Math.pow(predicted - p.y, 2)
                 };

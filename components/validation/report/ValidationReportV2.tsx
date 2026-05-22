@@ -454,23 +454,14 @@ function renderAuditData(moduleKey: string, value: unknown, data: ReportData): R
     }
 
     if (moduleKey === "LINEARITY") {
-        // Önce statistics.rows (regresyon işlemli, x ve y açık) — sonra ham rows (level/conc/response)
-        const statRows = Array.isArray(asRecord(record.statistics).rows) ? asRecord(record.statistics).rows as unknown[] : [];
+        // ÖNEMLİ: Önce HAM rows (LinearityPoint formatı — level/concentrations/responses)
+        // okunur. Bu, kullanıcının formda girdiği orijinal değerlerdir.
+        //
+        // statistics.rows fallback olarak kullanılır AMA bazı eski kayıtlarda
+        // statistics.rows[].x ve .y alanları regresyondan türetilmiş değerler
+        // (xi ve yPredicted) ile karıştırılmıştı (form bug fix öncesi). Bu yüzden
+        // önce ham rows tercih ediliyor — orijinal kullanıcı verisi her zaman doğru.
 
-        if (statRows.length > 0) {
-            return (
-                <DataTable
-                    headers={["Sıra", "Konsantrasyon (x)", "Cihaz Yanıtı (y)", "Birim"]}
-                    columnWidths={["12%", "32%", "32%", "24%"]}
-                    rows={statRows.map((row, i) => {
-                        const r = asRecord(row);
-                        return [i + 1, numberValue(r.x, 5), numberValue(r.y, 5), unitLabel(record.unit)];
-                    })}
-                />
-            );
-        }
-
-        // Ham LinearityPoint formatından düzleştir
         const rawRows = Array.isArray(record.rows) ? record.rows : [];
         const flat: Array<Array<React.ReactNode>> = [];
         rawRows.forEach(point => {
@@ -487,14 +478,33 @@ function renderAuditData(moduleKey: string, value: unknown, data: ReportData): R
             }
         });
 
-        if (flat.length === 0) return <p className="vr2-empty">Doğrusallık ölçüm verisi kaydedilmemiş.</p>;
-        return (
-            <DataTable
-                headers={["Düzey", "Tekrar", "Konsantrasyon (x)", "Cihaz Yanıtı (y)", "Birim"]}
-                columnWidths={["14%", "12%", "26%", "26%", "22%"]}
-                rows={flat}
-            />
-        );
+        if (flat.length > 0) {
+            return (
+                <DataTable
+                    headers={["Düzey", "Tekrar", "Konsantrasyon (x)", "Cihaz Yanıtı (y)", "Birim"]}
+                    columnWidths={["14%", "12%", "26%", "26%", "22%"]}
+                    rows={flat}
+                />
+            );
+        }
+
+        // Ham veri yoksa statistics.rows'a düş — yeni form bug fix sonrası
+        // statistics.rows[].x ve .y orijinal değerleri tutar.
+        const statRows = Array.isArray(asRecord(record.statistics).rows) ? asRecord(record.statistics).rows as unknown[] : [];
+        if (statRows.length > 0) {
+            return (
+                <DataTable
+                    headers={["Sıra", "Konsantrasyon (x)", "Cihaz Yanıtı (y)", "Birim"]}
+                    columnWidths={["12%", "32%", "32%", "24%"]}
+                    rows={statRows.map((row, i) => {
+                        const r = asRecord(row);
+                        return [i + 1, numberValue(r.x, 5), numberValue(r.y, 5), unitLabel(record.unit)];
+                    })}
+                />
+            );
+        }
+
+        return <p className="vr2-empty">Doğrusallık ölçüm verisi kaydedilmemiş.</p>;
     }
 
     if (moduleKey === "PRECISION_REPEATABILITY") {
@@ -1154,7 +1164,10 @@ function getReportingExample(
     fallbackUnit: string,
 ) {
     const component = data.components?.[0]?.name || "etken madde";
-    const componentUnit = data.components?.[0]?.unit || fallbackUnit || "birim";
+    // Birim: kullanıcı isteği — LOD/LOQ çalışmasındaki birim (rapor sayfası bunu
+    // meta.reportingUnit üzerinden zaten priority sırası ile veriyor). Bu yüzden
+    // fallbackUnit ÖNCELİKLİ, component.unit sonra.
+    const componentUnit = unitLabel(fallbackUnit) || unitLabel(data.components?.[0]?.unit) || "birim";
     const uncertainty = data.components?.[0]
         ? getExpandedUncertaintyValue(data.components[0], moduleData, data.components.length === 1)
         : "-";
