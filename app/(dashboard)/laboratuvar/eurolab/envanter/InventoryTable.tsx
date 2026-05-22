@@ -80,6 +80,7 @@ export default function InventoryTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [intendedUseFilter, setIntendedUseFilter] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [modalOpen, setModalOpen] = useState(false);
@@ -109,6 +110,7 @@ export default function InventoryTable() {
         page: String(page),
         pageSize: String(pageSize),
       });
+      if (intendedUseFilter) params.set("intendedUse", intendedUseFilter);
       const res = await fetch(`/api/eurolab/inventory?${params.toString()}`, { credentials: "same-origin" });
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
@@ -123,7 +125,7 @@ export default function InventoryTable() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search]);
+  }, [intendedUseFilter, page, pageSize, search]);
 
   useEffect(() => {
     fetchData();
@@ -131,7 +133,7 @@ export default function InventoryTable() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, pageSize]);
+  }, [intendedUseFilter, search, pageSize]);
 
   const openAdd = () => {
     setForm(emptyForm);
@@ -293,6 +295,17 @@ export default function InventoryTable() {
               </button>
             )}
           </div>
+          <select
+            className={styles.pageSizeSelect}
+            value={intendedUseFilter}
+            onChange={e => setIntendedUseFilter(e.target.value)}
+            title="Kullanım amacına göre filtrele"
+          >
+            <option value="">Tüm kullanım amaçları</option>
+            {intendedUseOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
         </div>
 
         <div className={styles.toolbarRight}>

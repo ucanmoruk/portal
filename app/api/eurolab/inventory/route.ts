@@ -11,6 +11,12 @@ const normalizeNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Beklenmeyen bir hata oluştu.";
+
+const getErrorCode = (error: unknown) =>
+  typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+
 export async function GET(request: Request) {
   try {
     if (!hasEurolabDatabaseConfig()) {
@@ -21,6 +27,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim() || "";
+    const intendedUse = searchParams.get("intendedUse")?.trim() || "";
     const page = Math.max(1, Number(searchParams.get("page")) || 1);
     const requestedPageSize = Number(searchParams.get("pageSize")) || 20;
     const pageSize = PAGE_SIZE_OPTIONS.has(requestedPageSize) ? requestedPageSize : 20;
@@ -29,6 +36,7 @@ export async function GET(request: Request) {
 
     const where = `
       WHERE status = 'Active'
+      AND ($3 = '' OR intended_use = $3)
       AND (
         $1 = ''
         OR code ILIKE $2
@@ -44,7 +52,7 @@ export async function GET(request: Request) {
       )
     `;
 
-    const countRes = await query(`SELECT COUNT(*)::int AS total FROM eurolab_inventory ${where}`, [search, searchValue]);
+    const countRes = await query(`SELECT COUNT(*)::int AS total FROM eurolab_inventory ${where}`, [search, searchValue, intendedUse]);
     const dataRes = await query(`
       SELECT
         id,
@@ -65,8 +73,8 @@ export async function GET(request: Request) {
       FROM eurolab_inventory
       ${where}
       ORDER BY code ASC, name ASC
-      LIMIT $3 OFFSET $4
-    `, [search, searchValue, pageSize, offset]);
+      LIMIT $4 OFFSET $5
+    `, [search, searchValue, intendedUse, pageSize, offset]);
 
     return NextResponse.json({
       rows: dataRes.rows,
@@ -74,9 +82,9 @@ export async function GET(request: Request) {
       page,
       pageSize,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Eurolab Inventory GET Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -140,9 +148,9 @@ export async function POST(request: Request) {
     ]);
 
     return NextResponse.json(res.rows[0]);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Eurolab Inventory POST Error:", error);
-    const message = error.code === "23505" ? "Bu kod ile kayıtlı bir envanter kalemi zaten var." : error.message;
+    const message = getErrorCode(error) === "23505" ? "Bu kod ile kayıtlı bir envanter kalemi zaten var." : getErrorMessage(error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
