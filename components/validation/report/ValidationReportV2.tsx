@@ -114,12 +114,6 @@ export function ValidationReportV2({ data, printable = false }: ValidationReport
                 <button onClick={() => window.print()} className="vr2-print-button no-print">Yazdır</button>
             )}
 
-            {/* Print sırasında her sayfanın üstünde tekrar eden başlık.
-                Ekranda gizli; sadece @media print'te konumlanıp her fiziksel sayfada görünür. */}
-            <div className="vr2-running-header" aria-hidden="true">
-                <ReportHeader title={reportTitle} meta={data.meta} />
-            </div>
-
             <ReportPage pageNumber={1}>
                 <ReportHeader title={reportTitle} meta={data.meta} />
 
@@ -1595,8 +1589,6 @@ function ReportStyles() {
                 border-radius: 4px;
                 cursor: pointer;
             }
-            /* Ekranda gizli — yalnızca print sırasında üst marja yerleşip her sayfada tekrarlanır */
-            .vr2-running-header { display: none; }
             .vr2-page {
                 position: relative;
                 box-sizing: border-box;
@@ -1936,12 +1928,10 @@ function ReportStyles() {
             }
 
             @media print {
-                /* ── A4 + üst marj running-header'ı barındırır + sayfa no ───── */
+                /* ── A4 + tarayıcı otomatik sayfa numarası ──────────────────── */
                 @page {
                     size: A4;
-                    /* top × right × bottom × left
-                       Üst 36mm: running-header (logo + başlık + doküman no kutusu) için. */
-                    margin: 16mm 12mm 14mm 12mm;
+                    margin: 12mm 12mm 14mm 12mm;
                     @bottom-right {
                         content: "Sayfa " counter(page) " / " counter(pages);
                         font-family: Tahoma, Arial, Helvetica, sans-serif;
@@ -1949,39 +1939,6 @@ function ReportStyles() {
                         color: #475569;
                     }
                 }
-
-                /* ── Her sayfanın üstünde tekrar eden başlık ──────────────────
-                   position: fixed Chrome'da sayfa kutusunun (210mm × 297mm)
-                   tamamına göre konumlanır. left:0/right:0 ile fiziksel sayfa
-                   kenarlarına yaslanır; padding-left/right içeride 12mm boşluk
-                   bırakarak @page yatay marjları ile birebir aynı genişliği verir. */
-                .vr2-running-header {
-                    display: block !important;
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    background: #ffffff !important;
-                    z-index: 9999;
-                    padding: 6mm 12mm 0 12mm;
-                    box-sizing: border-box;
-                }
-                .vr2-running-header .vr2-header {
-                    margin-bottom: 0 !important;
-                    min-height: 30mm;
-                }
-                .vr2-running-header .vr2-header-logo img {
-                    max-height: 18mm;
-                }
-                .vr2-running-header .vr2-header-title h1 {
-                    font-size: 13px;
-                }
-                .vr2-running-header .vr2-header-meta table {
-                    font-size: 10.5px;
-                }
-                /* Her ReportPage'in başındaki inline header'ı print sırasında gizle —
-                   running-header zaten her sayfada üstte. */
-                .vr2-page > .vr2-header { display: none !important; }
 
                 /* ── Renkleri ve gri zemini kaldır, tüm ataları beyaza zorla ── */
                 * {
