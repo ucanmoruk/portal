@@ -38,6 +38,7 @@ interface ComponentBudgetRow {
     trueness: number;
     samplePreparation: number;
     standardUncertainty: number;
+    totalSamplePreparation: number;
     combinedStandardUncertainty: number;
     expandedUncertainty: number;
 }
@@ -134,6 +135,13 @@ const getComponentRecord = (moduleSection: unknown, component: string) => {
         isComponentKey(key) && namesMatch(key, component)
     ));
     return matched?.[1];
+};
+
+const getComponentOrSingleRecord = (moduleSection: unknown, component: string) => {
+    const matched = getComponentRecord(moduleSection, component);
+    if (matched) return matched;
+    const entries = Object.entries(asRecord(moduleSection)).filter(([key]) => isComponentKey(key));
+    return entries.length === 1 ? entries[0][1] : undefined;
 };
 
 const isComponentKey = (key: string) => {
@@ -325,17 +333,17 @@ const buildBudgetRows = (
 
     return components.map(component => {
         const linearity = getLinearityUncertainty(getComponentRecord(moduleData.LINEARITY, component));
-        const repeatability = getRepeatabilityUncertainty(getComponentRecord(moduleData.PRECISION_REPEATABILITY, component));
+        const repeatability = getRepeatabilityUncertainty(getComponentOrSingleRecord(moduleData.PRECISION_REPEATABILITY, component));
         const reproducibility = getReproducibilityUncertainty(getComponentRecord(moduleData.PRECISION_REPRODUCIBILITY, component));
         const trueness = getTruenessUncertainty(getComponentRecord(moduleData.TRUENESS, component));
         const standardUncertainty = getStandardUncertainty(component, sample, configuredComponents);
+        const totalSamplePreparation = rss([samplePreparation, standardUncertainty]);
         const combinedStandardUncertainty = rss([
             linearity,
             repeatability,
             reproducibility,
             trueness,
-            samplePreparation,
-            standardUncertainty,
+            totalSamplePreparation,
         ]);
 
         return {
@@ -346,6 +354,7 @@ const buildBudgetRows = (
             trueness,
             samplePreparation,
             standardUncertainty,
+            totalSamplePreparation,
             combinedStandardUncertainty,
             expandedUncertainty: Number.isFinite(combinedStandardUncertainty)
                 ? combinedStandardUncertainty * COVERAGE_FACTOR
@@ -360,8 +369,7 @@ const getContributionRows = (row: ComponentBudgetRow) => {
         { label: "Tekrarlanabilirlik", value: row.repeatability, color: chartColors[1] },
         { label: "Tekrarüretilebilirlik", value: row.reproducibility, color: chartColors[2] },
         { label: "Geri Kazanım", value: row.trueness, color: chartColors[3] },
-        { label: "Numune Hazırlama", value: row.samplePreparation, color: chartColors[4] },
-        { label: "Standart Belirsizliği", value: row.standardUncertainty, color: chartColors[5] },
+        { label: "Toplam Numune Hazırlama", value: row.totalSamplePreparation, color: chartColors[4] },
     ];
     const totalSquare = sources.reduce((sum, source) => (
         Number.isFinite(source.value) ? sum + Math.pow(source.value, 2) : sum
@@ -431,7 +439,7 @@ export function MeasurementUncertaintyBudgetForm({
                 <ul className="mt-1 list-disc pl-5">
                     <li><strong>Tekrarlanabilirlik:</strong> Düzeylerin pooled RSD değerlerinin <strong>maksimumu</strong> alınır (worst case).</li>
                     <li><strong>Geri Kazanım (u<sub>Bias</sub>):</strong> Gerçeklik tabındaki standart belirsizlik alınır; eski kayıtlarda bu alan yoksa geri kazanım verilerinden yeniden hesaplanır.</li>
-                    <li><strong>Standart Belirsizliği:</strong> Numune Hazırlama tabında bileşene karşılık gelen standart kaydedilmiş olmalı (isim/kod eşleşmesi).</li>
+                    <li><strong>Toplam Numune Hazırlama:</strong> Numune hazırlama cihaz/hacim belirsizlikleri ile standart/saflık belirsizliği RSS ile birleştirilir.</li>
                 </ul>
             </div>
 
@@ -475,21 +483,20 @@ export function MeasurementUncertaintyBudgetForm({
                         <Table className="w-full table-fixed">
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="whitespace-normal break-words px-2 py-2 text-left text-[0.68rem] leading-4" style={{ width: "11%" }}>Alt Bileşen</TableHead>
-                                    <TableHead className={compactHeadClass} style={{ width: "9%" }}>Lineerite</TableHead>
+                                    <TableHead className="whitespace-normal break-words px-2 py-2 text-left text-[0.68rem] leading-4" style={{ width: "13%" }}>Alt Bileşen</TableHead>
+                                    <TableHead className={compactHeadClass} style={{ width: "10%" }}>Lineerite</TableHead>
                                     <TableHead className={compactHeadClass} style={{ width: "14%" }}>Tekrarlanabilirlik<br />Düzey Belirsizlikleri</TableHead>
-                                    <TableHead className={compactHeadClass} style={{ width: "12%" }}>Tekrarüretilebilirlik</TableHead>
-                                    <TableHead className={compactHeadClass} style={{ width: "10%" }}>Geri<br />Kazanım</TableHead>
-                                    <TableHead className={compactHeadClass} style={{ width: "11%" }}>Numune<br />Hazırlama</TableHead>
-                                    <TableHead className={compactHeadClass} style={{ width: "11%" }}>Standart<br />Belirsizliği</TableHead>
-                                    <TableHead className={compactHeadClass} style={{ width: "10%" }}>Toplam<br />Belirsizlik</TableHead>
-                                    <TableHead className={compactHeadClass} style={{ width: "12%" }}>Genişletilmiş<br />Belirsizlik</TableHead>
+                                    <TableHead className={compactHeadClass} style={{ width: "13%" }}>Tekrarüretilebilirlik</TableHead>
+                                    <TableHead className={compactHeadClass} style={{ width: "11%" }}>Geri<br />Kazanım</TableHead>
+                                    <TableHead className={compactHeadClass} style={{ width: "14%" }}>Toplam Numune<br />Hazırlama</TableHead>
+                                    <TableHead className={compactHeadClass} style={{ width: "12%" }}>Toplam<br />Belirsizlik</TableHead>
+                                    <TableHead className={compactHeadClass} style={{ width: "13%" }}>Genişletilmiş<br />Belirsizlik</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {budgetRows.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={9} className="py-8 text-center text-sm text-slate-500">
+                                        <TableCell colSpan={8} className="py-8 text-center text-sm text-slate-500">
                                             Henüz bütçeye aktarılacak alt bileşen verisi yok. Önce ilgili validasyon modüllerinde hesaplayıp kaydedin.
                                         </TableCell>
                                     </TableRow>
@@ -500,8 +507,7 @@ export function MeasurementUncertaintyBudgetForm({
                                         <TableCell className={compactCellClass}>{formatNumber(row.repeatability)}</TableCell>
                                         <TableCell className={compactCellClass}>{formatNumber(row.reproducibility)}</TableCell>
                                         <TableCell className={compactCellClass}>{formatNumber(row.trueness)}</TableCell>
-                                        <TableCell className={compactCellClass}>{formatNumber(row.samplePreparation)}</TableCell>
-                                        <TableCell className={compactCellClass}>{formatNumber(row.standardUncertainty)}</TableCell>
+                                        <TableCell className={compactCellClass}>{formatNumber(row.totalSamplePreparation)}</TableCell>
                                         <TableCell className={`${compactCellClass} font-bold text-slate-900`}>{formatNumber(row.combinedStandardUncertainty)}</TableCell>
                                         <TableCell className={`${compactCellClass} font-bold text-blue-700`}>{formatNumber(row.expandedUncertainty)}</TableCell>
                                     </TableRow>
