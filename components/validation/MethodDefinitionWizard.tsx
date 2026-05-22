@@ -846,20 +846,9 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                                 </div>
                             </div>
 
-                            <div className={styles.dateGrid}>
-                                <div className={styles.field}>
-                                    <Label htmlFor="report-publish-date" className={styles.label}>Validasyon raporu yayın tarihi</Label>
-                                    <input id="report-publish-date" type="date" className={styles.input} value={reportPublishDate} onChange={event => setReportPublishDate(event.target.value)} />
-                                </div>
-                                <div className={styles.field}>
-                                    <Label htmlFor="report-revision-no" className={styles.label}>Revizyon no</Label>
-                                    <input id="report-revision-no" className={styles.input} value={reportRevisionNo} onChange={event => setReportRevisionNo(event.target.value)} placeholder="Örn: 00" />
-                                </div>
-                                <div className={styles.field}>
-                                    <Label htmlFor="report-revision-date" className={styles.label}>Revizyon tarihi</Label>
-                                    <input id="report-revision-date" type="date" className={styles.input} value={reportRevisionDate} onChange={event => setReportRevisionDate(event.target.value)} />
-                                </div>
-                            </div>
+                            {/* "Validasyon raporu yayın tarihi / Revizyon no / Revizyon tarihi"
+                                alanları rapor sayfasına (Rapor Bilgileri kartı) taşındı.
+                                State'ler save payload'ında okunmaya devam ediyor — geriye dönük uyumluluk için. */}
 
                             <div className={styles.field}>
                                 <Label htmlFor="method-desc" className={styles.label}>Açıklama</Label>

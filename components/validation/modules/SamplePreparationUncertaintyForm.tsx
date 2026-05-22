@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Calculator, FlaskConical, Save } from "lucide-react";
+import { Calculator, FlaskConical, RefreshCw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -137,6 +137,9 @@ export function SamplePreparationUncertaintyForm({
     const [chemicalRows, setChemicalRows] = useState<ChemicalRows>(() => buildInitialChemicalRows(components, initialData.chemicalRows || {}));
     const [notes, setNotes] = useState(() => initialData.notes || "");
     const [calculatedAt, setCalculatedAt] = useState("");
+    // Envanterden güncelle butonu durum bilgisi
+    const [refreshing, setRefreshing] = useState(false);
+    const [refreshStatus, setRefreshStatus] = useState<{ kind: "idle" | "ok" | "error"; text: string }>({ kind: "idle", text: "" });
 
     const getVolumeRow = (key: string, item?: ProtocolDevice) => volumeRows[key] || {
         value: defaultValue(item?.valueText),
@@ -268,6 +271,105 @@ export function SamplePreparationUncertaintyForm({
             data: buildPayload(),
         });
         alert("Numune hazırlama belirsizlik verileri kaydedildi.");
+    };
+
+    // ──────────────────────────────────────────────────────────────────────
+    // ENVANTERDEN GÜNCELLE
+    // Numune hazırlama cihazları ve standartlar için envanter listesinden
+    // güncel belirsizlik değerlerini (uncertainty_value) çekip ilgili
+    // satırlara uygular. Eşleşme: kod veya isim üzerinden.
+    // ──────────────────────────────────────────────────────────────────────
+    const normalizeText = (value: string) => value.trim().toLocaleLowerCase("tr-TR").replace(/\s+/g, " ");
+
+    const matchesInventory = (item: { code?: string; name: string }, row: { code: string | null; name: string | null }) => {
+        const itemCode = normalizeText(item.code || "");
+        const itemName = normalizeText(item.name || "");
+        const rowCode = normalizeText(row.code || "");
+        const rowName = normalizeText(row.name || "");
+        if (itemCode && rowCode && itemCode === rowCode) return true;
+        if (itemName && rowName) {
+            if (itemName === rowName) return true;
+            if (rowName.includes(itemName) || itemName.includes(rowName)) return true;
+        }
+        return false;
+    };
+
+    const refreshFromInventory = async () => {
+        setRefreshing(true);
+        setRefreshStatus({ kind: "idle", text: "" });
+        try {
+            const searches = new Set<string>();
+            preparationDevices.forEach(d => {
+                if (d.code) searches.add(d.code);
+                if (d.name) searches.add(d.name);
+            });
+            standards.forEach(c => {
+                if (c.code) searches.add(c.code);
+                if (c.name) searches.add(c.name);
+            });
+            // Boş arama ile de bir kez getir (envanter listesi küçükse hepsini al)
+            if (searches.size === 0) searches.add("");
+
+            const responses = await Promise.all(Array.from(searches).map(async search => {
+                const params = new URLSearchParams({ search, page: "1", pageSize: "200" });
+                const res = await fetch(`/api/eurolab/inventory?${params.toString()}`, { credentials: "same-origin" });
+                if (!res.ok) return [];
+                const json = await res.json();
+                return Array.isArray(json?.rows) ? json.rows : [];
+            }));
+            const inventoryMap = new Map<number, { id: number; code: string | null; name: string | null; uncertainty_value: string | number | null }>();
+            responses.flat().forEach((row: { id: number; code: string | null; name: string | null; uncertainty_value?: string | number | null }) => {
+                inventoryMap.set(row.id, {
+                    id: row.id,
+                    code: row.code ?? null,
+                    name: row.name ?? null,
+                    uncertainty_value: row.uncertainty_value ?? null,
+                });
+            });
+            const inventoryRows = Array.from(inventoryMap.values());
+
+            let updatedCount = 0;
+            const nextVolumeRows = { ...volumeRows };
+            preparationDevices.forEach(device => {
+                const match = inventoryRows.find(row => matchesInventory(device, row));
+                const value = match?.uncertainty_value;
+                if (value !== null && value !== undefined && String(value).trim() !== "") {
+                    const key = device.id || device.code || device.name;
+                    nextVolumeRows[key] = {
+                        ...(nextVolumeRows[key] || { value: "", uncertainty: "" }),
+                        uncertainty: String(value),
+                    };
+                    updatedCount += 1;
+                }
+            });
+            setVolumeRows(nextVolumeRows);
+
+            const nextChemicalRows = { ...chemicalRows };
+            standards.forEach(component => {
+                const match = inventoryRows.find(row => matchesInventory(component, row));
+                const value = match?.uncertainty_value;
+                if (value !== null && value !== undefined && String(value).trim() !== "") {
+                    const key = component.id || component.code || component.name;
+                    nextChemicalRows[key] = {
+                        ...(nextChemicalRows[key] || { purity: "", impurity: "" }),
+                        impurity: String(value),
+                    };
+                    updatedCount += 1;
+                }
+            });
+            setChemicalRows(nextChemicalRows);
+
+            if (updatedCount === 0) {
+                setRefreshStatus({ kind: "ok", text: "Envanterde güncel belirsizlik değeri bulunamadı. Kayıtlar değiştirilmedi." });
+            } else {
+                setRefreshStatus({ kind: "ok", text: `${updatedCount} kalem envanterden güncellendi. Değişiklikleri kalıcı yapmak için "Kaydet" e bas.` });
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Envanter güncellemesi başarısız oldu.";
+            setRefreshStatus({ kind: "error", text: message });
+        } finally {
+            setRefreshing(false);
+        }
     };
 
     const calculateModule = () => {
@@ -446,10 +548,25 @@ export function SamplePreparationUncertaintyForm({
                     </div>
                 </section>
 
-                <div className="flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
+                <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                    {refreshStatus.kind === "ok" && (
+                        <span className="text-xs font-semibold text-green-700">✓ {refreshStatus.text}</span>
+                    )}
+                    {refreshStatus.kind === "error" && (
+                        <span className="text-xs font-semibold text-red-700">✗ {refreshStatus.text}</span>
+                    )}
                     {calculatedAt && (
                         <span className="text-xs text-slate-500">Son hesaplama: {calculatedAt}</span>
                     )}
+                    <Button
+                        className="bg-amber-600 hover:bg-amber-700 disabled:opacity-60"
+                        style={{ padding: "10px 16px" }}
+                        onClick={refreshFromInventory}
+                        disabled={refreshing}
+                    >
+                        <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                        {refreshing ? "Güncelleniyor..." : "Envanterden Güncelle"}
+                    </Button>
                     <Button className="bg-blue-600 hover:bg-blue-700" style={{ padding: "10px 16px" }} onClick={calculateModule}>
                         <Calculator className="mr-2 h-4 w-4" /> Hesapla
                     </Button>

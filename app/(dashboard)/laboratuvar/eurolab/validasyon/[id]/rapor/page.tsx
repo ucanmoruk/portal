@@ -162,7 +162,11 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
     const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    // Revizyonlar — config'ten yüklenir, kullanıcı düzenler, "Kaydet" ile geri yazılır.
+    // Rapor başlık bilgileri (Yayın Tarihi / Revizyon No / Revizyon Tarihi)
+    // ve Revizyon kayıtları — config'ten yüklenir, kullanıcı düzenler, "Kaydet" ile yazılır.
+    const [docPublishDate, setDocPublishDate] = useState("");
+    const [docRevisionNo, setDocRevisionNo] = useState("");
+    const [docRevisionDate, setDocRevisionDate] = useState("");
     const [revisions, setRevisions] = useState<ReportRevision[]>([]);
     const [savingRevisions, setSavingRevisions] = useState(false);
     const [revisionsStatus, setRevisionsStatus] = useState<{ kind: "idle" | "ok" | "error"; text: string }>({ kind: "idle", text: "" });
@@ -180,6 +184,9 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                 if (alive) {
                     setValidation(json);
                     setRevisions(Array.isArray(json.config?.revisions) ? json.config!.revisions! : []);
+                    setDocPublishDate(json.config?.publishDate || "");
+                    setDocRevisionNo(json.config?.revisionNo || "");
+                    setDocRevisionDate(json.config?.revisionDate || "");
                 }
             } catch (err: unknown) {
                 if (alive) setError(getErrorMessage(err, "Validasyon raporu alınamadı."));
@@ -274,16 +281,17 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                 plannedStartDate: reproducibilityDates.start || validation.planned_start_date,
                 plannedEndDate: reproducibilityDates.end || validation.planned_end_date,
                 documentNo: config.documentNo || "K.SOP.16 / Ek-1",
-                publishDate: config.publishDate || "",
-                revisionNo: config.revisionNo || "-",
-                revisionDate: config.revisionDate || "-",
+                // Lokal state, config'ten yüklenip kullanıcı düzenleyebilir.
+                publishDate: docPublishDate,
+                revisionNo: docRevisionNo || "-",
+                revisionDate: docRevisionDate || "-",
                 reportingUnit: config.reportingUnit || components.find(component => component.unit)?.unit || "",
                 conclusion: config.conclusion,
                 date: new Date().toLocaleDateString("tr-TR"),
                 analyst: personnel[0]?.name || "Analist",
             },
         };
-    }, [validation, personnelDirectory, inventoryRows, revisions]);
+    }, [validation, personnelDirectory, inventoryRows, revisions, docPublishDate, docRevisionNo, docRevisionDate]);
 
     // ─── Revisions handlers ─────────────────────────────────────────────────
     const addRevision = () => {
@@ -300,13 +308,20 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
         setRevisions(prev => prev.map((r, i) => i === index ? { ...r, [field]: value } : r));
         setRevisionsStatus({ kind: "idle", text: "" });
     };
+    // Rapor başlık bilgileri + revizyon kayıtlarını birlikte kaydeder.
     const saveRevisions = async () => {
         if (!validation) return;
         setSavingRevisions(true);
         setRevisionsStatus({ kind: "idle", text: "" });
         try {
             const currentConfig = validation.config || {};
-            const nextConfig = { ...currentConfig, revisions };
+            const nextConfig = {
+                ...currentConfig,
+                publishDate: docPublishDate,
+                revisionNo: docRevisionNo,
+                revisionDate: docRevisionDate,
+                revisions,
+            };
             const res = await fetch(`/api/eurolab/validations/${validation.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
@@ -314,15 +329,16 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                 body: JSON.stringify({ config: nextConfig }),
             });
             const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((typeof json === "object" && json && "error" in json ? String(json.error) : "") || "Revizyonlar kaydedilemedi.");
+            if (!res.ok) throw new Error((typeof json === "object" && json && "error" in json ? String(json.error) : "") || "Rapor bilgileri kaydedilemedi.");
             setValidation(current => current ? { ...current, config: nextConfig } : current);
-            setRevisionsStatus({ kind: "ok", text: "Revizyonlar kaydedildi." });
+            setRevisionsStatus({ kind: "ok", text: "Rapor bilgileri ve revizyonlar kaydedildi." });
         } catch (err: unknown) {
-            setRevisionsStatus({ kind: "error", text: err instanceof Error ? err.message : "Revizyonlar kaydedilemedi." });
+            setRevisionsStatus({ kind: "error", text: err instanceof Error ? err.message : "Rapor bilgileri kaydedilemedi." });
         } finally {
             setSavingRevisions(false);
         }
     };
+    const markDirty = () => setRevisionsStatus({ kind: "idle", text: "" });
 
     const pdfUrl = `/api/eurolab/validations/${id}/pdf`;
 
@@ -338,7 +354,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
             )}
 
             {!pdfMode && (
-                <div className="flex flex-nowrap items-center justify-between gap-3 print:hidden">
+                <div className="flex flex-nowrap items-center justify-between gap-3 print:hidden" style={{marginBottom: "10px"}}>
                     <Link
                         href="/laboratuvar/eurolab/validasyon"
                         className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-slate-300 bg-white text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
@@ -378,6 +394,60 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
             {error && <div className={styles.errorBar}>{error}</div>}
             {loading && <div className={styles.tableCard} style={{ padding: 20 }}>Validasyon raporu yükleniyor...</div>}
 
+            {/* Rapor başlık bilgileri kartı — yayın tarihi, revizyon no, revizyon tarihi */}
+            {!pdfMode && reportData && (
+                <div
+                    className="print:hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                    style={{ padding: "18px 20px" }}
+                >
+                    <div style={{ marginBottom: "10px" }}>
+                        <h3 className="text-base font-extrabold text-slate-900">Rapor Başlık Bilgileri</h3>
+                        <p className="text-xs text-slate-500" style={{ marginTop: "2px" }}>
+                            Rapor üst başlığında ve PDF&apos;te görünen doküman bilgileri. Aşağıdaki Revizyon Kayıtları kartındaki &quot;Kaydet&quot; butonu hepsini birlikte kaydeder.
+                        </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                        <label className="block">
+                            <span className="block text-[0.72rem] font-bold uppercase tracking-wide text-slate-500" style={{ marginBottom: "4px" }}>
+                                Validasyon Raporu Yayın Tarihi
+                            </span>
+                            <input
+                                type="date"
+                                value={docPublishDate}
+                                onChange={e => { setDocPublishDate(e.target.value); markDirty(); }}
+                                className="w-full rounded border border-slate-300 bg-white text-sm outline-none focus:border-blue-500"
+                                style={{ padding: "7px 10px" }}
+                            />
+                        </label>
+                        <label className="block">
+                            <span className="block text-[0.72rem] font-bold uppercase tracking-wide text-slate-500" style={{ marginBottom: "4px" }}>
+                                Revizyon No
+                            </span>
+                            <input
+                                type="text"
+                                value={docRevisionNo}
+                                onChange={e => { setDocRevisionNo(e.target.value); markDirty(); }}
+                                placeholder="Örn. 00"
+                                className="w-full rounded border border-slate-300 bg-white text-sm outline-none focus:border-blue-500"
+                                style={{ padding: "7px 10px" }}
+                            />
+                        </label>
+                        <label className="block">
+                            <span className="block text-[0.72rem] font-bold uppercase tracking-wide text-slate-500" style={{ marginBottom: "4px" }}>
+                                Revizyon Tarihi
+                            </span>
+                            <input
+                                type="date"
+                                value={docRevisionDate}
+                                onChange={e => { setDocRevisionDate(e.target.value); markDirty(); }}
+                                className="w-full rounded border border-slate-300 bg-white text-sm outline-none focus:border-blue-500"
+                                style={{ padding: "7px 10px" }}
+                            />
+                        </label>
+                    </div>
+                </div>
+            )}
+
             {!pdfMode && reportData && (
                 <div
                     className="print:hidden rounded-xl border border-slate-200 bg-white shadow-sm"
@@ -387,7 +457,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                         <div>
                             <h3 className="text-base font-extrabold text-slate-900">Revizyon Kayıtları</h3>
                             <p className="text-xs text-slate-500" style={{ marginTop: "2px" }}>
-                                Rapor üzerinde yapılan revizyonları buradan ekleyebilirsin. Kaydet butonuna bastıktan sonra rapor (ve PDF) güncellenir.
+                                Rapor üzerinde yapılan revizyonları buradan ekleyebilirsin. Kaydet butonuna bastıktan sonra rapor başlık bilgileri (yayın/revizyon tarihleri) ile birlikte rapor ve PDF güncellenir.
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
