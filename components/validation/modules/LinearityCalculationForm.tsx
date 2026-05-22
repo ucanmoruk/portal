@@ -327,10 +327,21 @@ Doğrusal çalışma aralığında korelasyon sabiti (R²) 0,995'den büyük old
         }, 0);
         const standardDeviation = Math.sqrt(residualSumSquares / Math.max(n - 2, 1));
         const pCount = Math.max(1, replicates);
+        // ─────────────────────────────────────────────────────────────────────
+        // EFFECTIVE N (kullanıcı isteği — laboratuvar konvansiyonu):
+        // Kalibrasyon noktası başına p tekrar yapıldığı varsayımıyla, belirsizlik
+        // formülünde "n" yerine n × p kullanılır. Örn. p=3, n=5 → effectiveN=15.
+        // Bu sayede ortalama-area girilen verilerle hesaplanan u_c değeri
+        // gerçekçi olur (önceki formül n=5 → çok yüksek u çıkıyordu).
+        //
+        // Slope/intercept/R² hesaplamaları DEĞİŞMEZ (regresyonun girdi sayısı n).
+        // Sadece uncertaintyFactor ve istatistiklerde gösterilen n alanı değişir.
+        const effectiveN = n * pCount;
+        // ─────────────────────────────────────────────────────────────────────
         const co = Math.max(...points.map(p => p.x));
         const cort = xMean;
         const coDeltaOverSxx = sxx === 0 ? Number.NaN : Math.pow(co - cort, 2) / sxx;
-        const uncertaintyFactor = Math.sqrt((1 / pCount) + (1 / n) + (Number.isFinite(coDeltaOverSxx) ? coDeltaOverSxx : 0));
+        const uncertaintyFactor = Math.sqrt((1 / pCount) + (1 / effectiveN) + (Number.isFinite(coDeltaOverSxx) ? coDeltaOverSxx : 0));
         const sOverB1 = slope === 0 ? Number.NaN : standardDeviation / slope;
         const uCo = sOverB1 * uncertaintyFactor;
         const rsdUCo = co === 0 ? Number.NaN : Math.abs((uCo / co) * 100);
@@ -360,9 +371,12 @@ Doğrusal çalışma aralığında korelasyon sabiti (R²) 0,995'den büyük old
             co,
             cort,
             p: pCount,
-            n,
+            // İstatistik özetinde n alanı effectiveN gösterir (p × n_levels).
+            // nLevels alanı orijinal seviye sayısını saklar (debug/iz için).
+            n: effectiveN,
+            nLevels: n,
             inverseP: 1 / pCount,
-            inverseN: 1 / n,
+            inverseN: 1 / effectiveN,
             sOverB1,
             sxx,
             coDeltaOverSxx,
