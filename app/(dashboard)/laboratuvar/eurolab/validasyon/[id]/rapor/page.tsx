@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Download, FileText } from "lucide-react";
-import type { ReportData } from "@/components/validation/report/ValidationReport";
+import { ArrowLeft, Download, FileText, Plus, Save, Trash2 } from "lucide-react";
+import type { ReportData, ReportRevision } from "@/components/validation/report/ValidationReport";
 import { ValidationReportV2 as ValidationReport } from "@/components/validation/report/ValidationReportV2";
 // Geri dönmek için yukarıdaki iki satırı yorum yapıp aşağıdakini açın:
 // import { ValidationReport, type ReportData } from "@/components/validation/report/ValidationReport";
@@ -38,6 +38,7 @@ type ValidationDetail = {
         components?: Array<{ code?: string; name: string; casNo?: string; limit?: string; unit?: string; uncertaintyValue?: string | number | null; uncertainty_value?: string | number | null }>;
         parameters?: Array<{ id: string; name: string; isEnabled: boolean; note?: string }>;
         moduleData?: Record<string, Record<string, unknown>>;
+        revisions?: ReportRevision[];
     };
 };
 
@@ -161,6 +162,10 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
     const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    // Revizyonlar — config'ten yüklenir, kullanıcı düzenler, "Kaydet" ile geri yazılır.
+    const [revisions, setRevisions] = useState<ReportRevision[]>([]);
+    const [savingRevisions, setSavingRevisions] = useState(false);
+    const [revisionsStatus, setRevisionsStatus] = useState<{ kind: "idle" | "ok" | "error"; text: string }>({ kind: "idle", text: "" });
 
     useEffect(() => {
         let alive = true;
@@ -172,7 +177,10 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                 const response = await fetch(`/api/eurolab/validations/${id}`, { credentials: "same-origin" });
                 const json: ValidationDetail & { error?: string } = await response.json();
                 if (!response.ok) throw new Error(json.error || "Validasyon raporu alınamadı.");
-                if (alive) setValidation(json);
+                if (alive) {
+                    setValidation(json);
+                    setRevisions(Array.isArray(json.config?.revisions) ? json.config!.revisions! : []);
+                }
             } catch (err: unknown) {
                 if (alive) setError(getErrorMessage(err, "Validasyon raporu alınamadı."));
             } finally {
@@ -254,6 +262,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
             components,
             parameters: config.parameters || [],
             moduleData,
+            revisions,
             meta: {
                 title: stripValidationSuffix(validation.title || validation.method_name || "Validasyon Raporu"),
                 id: validation.code || String(validation.id),
@@ -274,7 +283,46 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                 analyst: personnel[0]?.name || "Analist",
             },
         };
-    }, [validation, personnelDirectory, inventoryRows]);
+    }, [validation, personnelDirectory, inventoryRows, revisions]);
+
+    // ─── Revisions handlers ─────────────────────────────────────────────────
+    const addRevision = () => {
+        const today = new Date().toISOString().slice(0, 10).split("-").reverse().join("-"); // dd-MM-YYYY
+        const nextNo = String(revisions.length + 1).padStart(2, "0");
+        setRevisions(prev => [...prev, { revNo: nextNo, date: today, clause: "", reason: "", by: "" }]);
+        setRevisionsStatus({ kind: "idle", text: "" });
+    };
+    const removeRevision = (index: number) => {
+        setRevisions(prev => prev.filter((_, i) => i !== index));
+        setRevisionsStatus({ kind: "idle", text: "" });
+    };
+    const updateRevision = (index: number, field: keyof ReportRevision, value: string) => {
+        setRevisions(prev => prev.map((r, i) => i === index ? { ...r, [field]: value } : r));
+        setRevisionsStatus({ kind: "idle", text: "" });
+    };
+    const saveRevisions = async () => {
+        if (!validation) return;
+        setSavingRevisions(true);
+        setRevisionsStatus({ kind: "idle", text: "" });
+        try {
+            const currentConfig = validation.config || {};
+            const nextConfig = { ...currentConfig, revisions };
+            const res = await fetch(`/api/eurolab/validations/${validation.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ config: nextConfig }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((typeof json === "object" && json && "error" in json ? String(json.error) : "") || "Revizyonlar kaydedilemedi.");
+            setValidation(current => current ? { ...current, config: nextConfig } : current);
+            setRevisionsStatus({ kind: "ok", text: "Revizyonlar kaydedildi." });
+        } catch (err: unknown) {
+            setRevisionsStatus({ kind: "error", text: err instanceof Error ? err.message : "Revizyonlar kaydedilemedi." });
+        } finally {
+            setSavingRevisions(false);
+        }
+    };
 
     const pdfUrl = `/api/eurolab/validations/${id}/pdf`;
 
@@ -310,6 +358,130 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
 
             {error && <div className={styles.errorBar}>{error}</div>}
             {loading && <div className={styles.tableCard} style={{ padding: 20 }}>Validasyon raporu yükleniyor...</div>}
+
+            {!pdfMode && reportData && (
+                <div
+                    className="print:hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                    style={{ padding: "18px 20px" }}
+                >
+                    <div className="flex flex-wrap items-center justify-between gap-3" style={{ marginBottom: "12px" }}>
+                        <div>
+                            <h3 className="text-base font-extrabold text-slate-900">Revizyon Kayıtları</h3>
+                            <p className="text-xs text-slate-500" style={{ marginTop: "2px" }}>
+                                Rapor üzerinde yapılan revizyonları buradan ekleyebilirsin. Kaydet butonuna bastıktan sonra rapor (ve PDF) güncellenir.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {revisionsStatus.kind === "ok" && (
+                                <span className="text-xs font-semibold text-green-700">✓ {revisionsStatus.text}</span>
+                            )}
+                            {revisionsStatus.kind === "error" && (
+                                <span className="text-xs font-semibold text-red-700">✗ {revisionsStatus.text}</span>
+                            )}
+                            <button
+                                type="button"
+                                onClick={addRevision}
+                                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                style={{ padding: "8px 14px" }}
+                            >
+                                <Plus size={14} /> Yeni Revizyon
+                            </button>
+                            <button
+                                type="button"
+                                onClick={saveRevisions}
+                                disabled={savingRevisions}
+                                className="inline-flex items-center gap-2 rounded-md bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                                style={{ padding: "8px 16px" }}
+                            >
+                                <Save size={14} /> {savingRevisions ? "Kaydediliyor..." : "Kaydet"}
+                            </button>
+                        </div>
+                    </div>
+
+                    {revisions.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 text-center text-sm italic text-slate-500" style={{ padding: "16px" }}>
+                            Henüz revizyon kaydı yok. &quot;Yeni Revizyon&quot; ile satır ekleyebilirsin.
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse text-sm">
+                                <thead>
+                                    <tr className="bg-slate-100 text-left text-[0.72rem] font-bold uppercase tracking-wide text-slate-600">
+                                        <th className="border border-slate-200" style={{ padding: "8px 10px", width: "10%" }}>Rev. No</th>
+                                        <th className="border border-slate-200" style={{ padding: "8px 10px", width: "15%" }}>Tarih</th>
+                                        <th className="border border-slate-200" style={{ padding: "8px 10px", width: "20%" }}>Madde</th>
+                                        <th className="border border-slate-200" style={{ padding: "8px 10px" }}>Sebep</th>
+                                        <th className="border border-slate-200" style={{ padding: "8px 10px", width: "18%" }}>Yapan</th>
+                                        <th className="border border-slate-200" style={{ padding: "8px 10px", width: "60px" }}>İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {revisions.map((rev, i) => (
+                                        <tr key={i}>
+                                            <td className="border border-slate-200" style={{ padding: "4px" }}>
+                                                <input
+                                                    value={rev.revNo}
+                                                    onChange={e => updateRevision(i, "revNo", e.target.value)}
+                                                    placeholder="01"
+                                                    className="w-full rounded border border-slate-200 bg-white text-sm outline-none focus:border-blue-500"
+                                                    style={{ padding: "6px 8px" }}
+                                                />
+                                            </td>
+                                            <td className="border border-slate-200" style={{ padding: "4px" }}>
+                                                <input
+                                                    value={rev.date}
+                                                    onChange={e => updateRevision(i, "date", e.target.value)}
+                                                    placeholder="dd-MM-yyyy"
+                                                    className="w-full rounded border border-slate-200 bg-white text-sm outline-none focus:border-blue-500"
+                                                    style={{ padding: "6px 8px" }}
+                                                />
+                                            </td>
+                                            <td className="border border-slate-200" style={{ padding: "4px" }}>
+                                                <input
+                                                    value={rev.clause}
+                                                    onChange={e => updateRevision(i, "clause", e.target.value)}
+                                                    placeholder="Revize edilen madde/bölüm"
+                                                    className="w-full rounded border border-slate-200 bg-white text-sm outline-none focus:border-blue-500"
+                                                    style={{ padding: "6px 8px" }}
+                                                />
+                                            </td>
+                                            <td className="border border-slate-200" style={{ padding: "4px" }}>
+                                                <input
+                                                    value={rev.reason}
+                                                    onChange={e => updateRevision(i, "reason", e.target.value)}
+                                                    placeholder="Revizyon açıklaması"
+                                                    className="w-full rounded border border-slate-200 bg-white text-sm outline-none focus:border-blue-500"
+                                                    style={{ padding: "6px 8px" }}
+                                                />
+                                            </td>
+                                            <td className="border border-slate-200" style={{ padding: "4px" }}>
+                                                <input
+                                                    value={rev.by}
+                                                    onChange={e => updateRevision(i, "by", e.target.value)}
+                                                    placeholder="Adı Soyadı"
+                                                    className="w-full rounded border border-slate-200 bg-white text-sm outline-none focus:border-blue-500"
+                                                    style={{ padding: "6px 8px" }}
+                                                />
+                                            </td>
+                                            <td className="border border-slate-200 text-center" style={{ padding: "4px" }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeRevision(i)}
+                                                    aria-label="Satırı sil"
+                                                    className="inline-flex h-8 w-8 items-center justify-center rounded text-red-600 hover:bg-red-50"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {reportData && <ValidationReport data={reportData} printable={pdfMode} />}
         </div>
     );

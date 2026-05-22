@@ -214,8 +214,14 @@ export function ValidationReportV2({ data, printable = false }: ValidationReport
                 <Section title="6. REVİZYONLAR">
                     <DataTable
                         headers={["Rev. No", "Tarih", "Madde", "Sebep", "Yapan"]}
-                        columnWidths={["10%", "20%", "20%", "40%", "20%"]}
-                        rows={[]}
+                        columnWidths={["10%", "15%", "20%", "35%", "20%"]}
+                        rows={(data.revisions || []).map(rev => [
+                            rev.revNo || "-",
+                            rev.date || "-",
+                            rev.clause || "-",
+                            rev.reason || "-",
+                            rev.by || "-",
+                        ])}
                         empty="Revizyon kaydı bulunamadı."
                     />
                 </Section>
@@ -1261,7 +1267,9 @@ function DataTable({
                 </colgroup>
             )}
             <thead>
-                <tr>{headers.map(h => <th key={h}>{h}</th>)}</tr>
+                {/* key={i} kullanıyoruz çünkü başlık metinleri aynı olabilir
+                    (ör. aynı analist iki sütunda — duplicate key uyarısına yol açar). */}
+                <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}</tr>
             </thead>
             <tbody>
                 {rows.length > 0 ? rows.map((row, i) => (

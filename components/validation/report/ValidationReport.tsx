@@ -14,6 +14,13 @@ type ReportComponent = {
     uncertainty_value?: string | number | null;
 };
 type ReportParameter = { id: string; name: string; isEnabled: boolean; note?: string };
+export type ReportRevision = {
+    revNo: string;
+    date: string;
+    clause: string;
+    reason: string;
+    by: string;
+};
 const REPORT_LOGO_SRC = "https://placehold.co/220x90/ffffff/111827?text=LOGO";
 
 export interface ReportData {
@@ -41,6 +48,7 @@ export interface ReportData {
     personnel?: ReportPerson[];
     components?: ReportComponent[];
     parameters?: ReportParameter[];
+    revisions?: ReportRevision[];
     lodData?: {
         components: Array<{ name: string; lod: number; loq: number; unit: string; mean: number; stdDev: number }>;
         notes?: string;
