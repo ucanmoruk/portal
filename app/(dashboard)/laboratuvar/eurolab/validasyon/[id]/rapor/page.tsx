@@ -2,8 +2,12 @@
 
 import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Printer } from "lucide-react";
-import { ValidationReport, ReportData } from "@/components/validation/report/ValidationReport";
+import { useSearchParams } from "next/navigation";
+import { ArrowLeft, Download, FileText } from "lucide-react";
+import type { ReportData } from "@/components/validation/report/ValidationReport";
+import { ValidationReportV2 as ValidationReport } from "@/components/validation/report/ValidationReportV2";
+// Geri dönmek için yukarıdaki iki satırı yorum yapıp aşağıdakini açın:
+// import { ValidationReport, type ReportData } from "@/components/validation/report/ValidationReport";
 import styles from "@/app/styles/table.module.css";
 
 type ValidationDetail = {
@@ -148,6 +152,10 @@ function getReproducibilityDateRange(moduleData: Record<string, Record<string, u
 
 export default function ValidationReportPrintPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
+    const searchParams = useSearchParams();
+    // pdfMode=1 → bu sayfa PDF üretimi için chromium tarafından yükleniyor;
+    // butonları gizle, sadece raporu göster.
+    const pdfMode = searchParams.get("pdfMode") === "1";
     const [validation, setValidation] = useState<ValidationDetail | null>(null);
     const [personnelDirectory, setPersonnelDirectory] = useState<PersonnelDirectoryRow[]>([]);
     const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([]);
@@ -268,20 +276,41 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
         };
     }, [validation, personnelDirectory, inventoryRows]);
 
+    const pdfUrl = `/api/eurolab/validations/${id}/pdf`;
+
     return (
         <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-                <Link href="/laboratuvar/eurolab/validasyon" className={styles.cancelBtn}>
-                    <ArrowLeft size={15} /> Listeye dön
-                </Link>
-                <button className={styles.addBtn} onClick={() => window.print()} disabled={!reportData}>
-                    <Printer size={15} /> Yazdır
-                </button>
-            </div>
+            {!pdfMode && (
+                <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+                    <Link href="/laboratuvar/eurolab/validasyon" className={styles.cancelBtn}>
+                        <ArrowLeft size={15} /> Listeye dön
+                    </Link>
+                    <div className="flex flex-wrap gap-2">
+                        <a
+                            href={pdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={styles.cancelBtn}
+                            aria-disabled={!reportData}
+                            style={!reportData ? { pointerEvents: "none", opacity: 0.5 } : undefined}
+                        >
+                            <FileText size={15} /> PDF&apos;i Aç (Önizleme)
+                        </a>
+                        <a
+                            href={`${pdfUrl}?download=1`}
+                            className={styles.addBtn}
+                            aria-disabled={!reportData}
+                            style={!reportData ? { pointerEvents: "none", opacity: 0.5 } : undefined}
+                        >
+                            <Download size={15} /> PDF İndir
+                        </a>
+                    </div>
+                </div>
+            )}
 
             {error && <div className={styles.errorBar}>{error}</div>}
             {loading && <div className={styles.tableCard} style={{ padding: 20 }}>Validasyon raporu yükleniyor...</div>}
-            {reportData && <ValidationReport data={reportData} />}
+            {reportData && <ValidationReport data={reportData} printable={pdfMode} />}
         </div>
     );
 }

@@ -146,14 +146,14 @@ const statisticalSources = [
     },
 ];
 
-const formatDate = (value?: string | null) => {
+export const formatDate = (value?: string | null) => {
     if (!value || value === "-") return "-";
     const [datePart] = String(value).split("T");
     const parts = datePart.split("-");
     if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
     return new Date(value).toLocaleDateString("tr-TR").replace(/\./g, "-");
 };
-const parseNumeric = (value: unknown) => {
+export const parseNumeric = (value: unknown) => {
     if (value === null || value === undefined || value === "") return Number.NaN;
     const text = String(value).trim();
     const numericMatch = text.match(/-?\d+(?:[.,]\d+)?/);
@@ -161,9 +161,9 @@ const parseNumeric = (value: unknown) => {
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : Number.NaN;
 };
-const numberValue = (value: unknown, digits = 4) => Number.isFinite(parseNumeric(value)) ? parseNumeric(value).toFixed(digits) : "-";
-const methodTitle = (value: string) => value.replace(/\s+Validasyonu\s*$/i, "").trim();
-const unitLabel = (unit?: unknown) => {
+export const numberValue = (value: unknown, digits = 4) => Number.isFinite(parseNumeric(value)) ? parseNumeric(value).toFixed(digits) : "-";
+export const methodTitle = (value: string) => value.replace(/\s+Validasyonu\s*$/i, "").trim();
+export const unitLabel = (unit?: unknown) => {
     const value = String(unit || "").trim();
     const labels: Record<string, string> = {
         mg_L: "mg/L",
@@ -177,14 +177,14 @@ const unitLabel = (unit?: unknown) => {
     return labels[value] || value.replace("_", "/");
 };
 
-const textValue = (value: unknown): React.ReactNode => {
+export const textValue = (value: unknown): React.ReactNode => {
     if (value === null || value === undefined || value === "") return "-";
     if (React.isValidElement(value)) return value;
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
     return JSON.stringify(value);
 };
 
-const asRecord = (value: unknown): Record<string, unknown> =>
+export const asRecord = (value: unknown): Record<string, unknown> =>
     value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
 const normalizeReportName = (value: string) =>
@@ -196,7 +196,7 @@ const namesMatch = (left: string, right: string) => {
     return Boolean(a && b && (a === b || a.includes(b) || b.includes(a)));
 };
 
-const getComponentRecord = (moduleData: Record<string, Record<string, unknown>>, moduleKey: string, componentName: string) => {
+export const getComponentRecord = (moduleData: Record<string, Record<string, unknown>>, moduleKey: string, componentName: string) => {
     const moduleRecord = moduleData[moduleKey] || {};
     const exact = moduleRecord[componentName];
     if (exact) return asRecord(exact);
@@ -204,28 +204,46 @@ const getComponentRecord = (moduleData: Record<string, Record<string, unknown>>,
     return asRecord(matched?.[1]);
 };
 
-const formatLinearityRange = (range: unknown, unit: unknown) => {
+export const formatLinearityRange = (range: unknown, unit: unknown) => {
     const rangeText = String(range || "").trim();
     const label = unitLabel(unit);
     if (!rangeText) return "-";
     if (!label) return rangeText;
-    const withoutTrailingUnit = rangeText.replace(/\s+(mg|ug|µg|ng|ppm|ppb|ppt|%)\s*$/i, "");
-    return `${withoutTrailingUnit} ${label}`;
+
+    // Aralık metni zaten birimi içeriyor olabilir (form "<min> - <max> <unit>" formatında üretir
+    // ve unit kodu mg_L, ug_kg, µg/L, mg/L, %, vb. olabilir). Birimin tekrarlanmaması için
+    // sondaki birim parçasını sağlam bir regex ile temizleyip tek birim ekliyoruz.
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const unitPatterns = [
+        // Doğrudan label (örn. "mg/L")
+        new RegExp("\\s*" + escapedLabel + "\\s*$", "i"),
+        // Genel birim sonekleri: birim/birim, mg/kg, µg/L, ng/L, ppm/ppb/ppt, %
+        /\s*(?:m?g|µg|ug|ng|ppm|ppb|ppt)\s*\/\s*(?:m?l|l|kg|g|m\^?3|m³)\s*$/i,
+        /\s*(?:m?g|µg|ug|ng|ppm|ppb|ppt)\s*$/i,
+        /\s*%\s*$/,
+        /\s*Absorbans\s*$/i,
+    ];
+    let cleaned = rangeText;
+    for (const pattern of unitPatterns) {
+        cleaned = cleaned.replace(pattern, "");
+    }
+    cleaned = cleaned.trim();
+    return cleaned ? `${cleaned} ${label}` : label;
 };
 
-const getLinearityRange = (componentName: string, data: ReportData, moduleData: Record<string, Record<string, unknown>>) => {
+export const getLinearityRange = (componentName: string, data: ReportData, moduleData: Record<string, Record<string, unknown>>) => {
     const linearity = getComponentRecord(moduleData, "LINEARITY", componentName);
     const fromReport = data.linearityData?.components.find(component => component.name === componentName)?.range;
     return formatLinearityRange(linearity.range || fromReport, linearity.unit);
 };
 
-const getLodLoqValue = (componentName: string, field: "lod" | "loq", data: ReportData, moduleData: Record<string, Record<string, unknown>>) => {
+export const getLodLoqValue = (componentName: string, field: "lod" | "loq", data: ReportData, moduleData: Record<string, Record<string, unknown>>) => {
     const fromReport = data.lodData?.components.find(component => component.name === componentName)?.[field];
     if (Number.isFinite(Number(fromReport))) return numberValue(fromReport, 3);
     return numberValue(getComponentRecord(moduleData, "LOD_LOQ", componentName)[field], 3);
 };
 
-const getRecoveryValue = (componentName: string, moduleData: Record<string, Record<string, unknown>>) => {
+export const getRecoveryValue = (componentName: string, moduleData: Record<string, Record<string, unknown>>) => {
     const trueness = getComponentRecord(moduleData, "TRUENESS", componentName);
     const resultRecords = asRecord(trueness.results);
     const recoveries = Object.values(resultRecords).flatMap(result => {
@@ -391,7 +409,7 @@ const getStandardUncertainty = (componentName: string, sample: Record<string, un
         }));
 };
 
-const calculateExpandedUncertainty = (componentName: string, moduleData: Record<string, Record<string, unknown>>) => {
+export const calculateExpandedUncertainty = (componentName: string, moduleData: Record<string, Record<string, unknown>>) => {
     const sample = asRecord(moduleData.SAMPLE_PREPARATION?.summary);
     const combined = rss([
         getLinearityUncertainty(getComponentRecord(moduleData, "LINEARITY", componentName)),
@@ -404,7 +422,7 @@ const calculateExpandedUncertainty = (componentName: string, moduleData: Record<
     return Number.isFinite(combined) ? combined * 2 : Number.NaN;
 };
 
-const getExpandedUncertaintyValue = (
+export const getExpandedUncertaintyValue = (
     component: ReportComponent,
     moduleData: Record<string, Record<string, unknown>>,
     allowSingleFallback = false,
@@ -425,7 +443,7 @@ const getExpandedUncertaintyValue = (
     return "-";
 };
 
-const getMatrixLevelRows = (data: ReportData, moduleData: Record<string, Record<string, unknown>>) => {
+export const getMatrixLevelRows = (data: ReportData, moduleData: Record<string, Record<string, unknown>>) => {
     const repeatability = moduleData.PRECISION_REPEATABILITY || {};
     const rows = Object.entries(repeatability).flatMap(([, value]) => {
         const record = asRecord(value);
@@ -446,7 +464,7 @@ const getMatrixLevelRows = (data: ReportData, moduleData: Record<string, Record<
     return (data.components || []).map(component => [data.meta.matrix, component.limit, component.unit]);
 };
 
-const getReproducibilityDateRange = (moduleData: Record<string, Record<string, unknown>>) => {
+export const getReproducibilityDateRange = (moduleData: Record<string, Record<string, unknown>>) => {
     const dates = Object.values(moduleData.PRECISION_REPRODUCIBILITY || {}).flatMap(value => {
         const rows = asRecord(value).rows;
         if (!Array.isArray(rows)) return [];
@@ -459,7 +477,7 @@ const getReproducibilityDateRange = (moduleData: Record<string, Record<string, u
     };
 };
 
-const getValidationSummaryRows = (data: ReportData, moduleData: Record<string, Record<string, unknown>>) =>
+export const getValidationSummaryRows = (data: ReportData, moduleData: Record<string, Record<string, unknown>>) =>
     (data.components || []).map(component => [
         component.name,
         getLinearityRange(component.name, data, moduleData),
@@ -521,7 +539,7 @@ export function ValidationReport({ data }: ValidationReportProps) {
                 <Section title="Validasyona Katılan Personeller">
                     <div >
                         <Table
-                            headers={["Adı Soyadı", "Görevi"]}
+                            headers={["Adı Soyadı", "Görevi"]} 
                             rows={(data.personnel || []).map(person => [person.name, person.role])}
                             empty="Personel kaydı bulunamadı."
                         />
