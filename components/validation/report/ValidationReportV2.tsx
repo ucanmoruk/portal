@@ -222,7 +222,6 @@ export function ValidationReportV2({ data, printable = false }: ValidationReport
 
                 <SignatureBlock analyst={data.meta.analyst} />
                 <div className="vr2-end">* Rapor Sonu *</div>
-                <br></br>
                 <div className="vr2-copy" style={{fontSize:"12px", color:"#848484" , textAlign: "center"}} >Elektronik ortamda alınan çıktılar kontrolsüz kopya olarak işlem görür.</div>
             </ReportPage>
 
@@ -2076,15 +2075,24 @@ function ReportStyles() {
                     break-after: avoid;
                     page-break-after: avoid;
                 }
+                /* Kartlar büyük olunca (ör. Doğrusallık VERİLER — çok satırlı tablo)
+                   tek parça kalmaya zorlanırsa Chrome alta itip büyük beyaz boşluk
+                   bırakıyor. break-inside: auto ile karta izin veriyoruz; iç tablo
+                   satırları zaten .vr2-table tr { break-inside: avoid } ile korunuyor. */
                 .vr2-audit-card {
                     margin-top: 2.5mm;
-                    break-inside: avoid;
-                    page-break-inside: avoid;
+                    break-inside: auto;
+                    page-break-inside: auto;
+                }
+                .vr2-audit-card-title {
+                    break-after: avoid;
+                    page-break-after: avoid;
+                    font-size: 10px;
+                    padding: 1mm 2.5mm;
                 }
                 .vr2-audit-index { font-size: 12px; padding: 1mm 2.5mm; }
                 .vr2-audit-title { font-size: 12px; }
                 .vr2-audit-component { font-size: 11px; }
-                .vr2-audit-card-title { font-size: 10px; padding: 1mm 2.5mm; }
 
                 /* ── Formül kutusu ───────────────────────────────────────────── */
                 .vr2-formula {
