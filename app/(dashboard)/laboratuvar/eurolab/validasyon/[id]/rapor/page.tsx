@@ -280,7 +280,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                 studyType: validation.study_type || "",
                 plannedStartDate: reproducibilityDates.start || validation.planned_start_date,
                 plannedEndDate: reproducibilityDates.end || validation.planned_end_date,
-                documentNo: config.documentNo || "K.SOP.16 / Ek-1",
+                documentNo: validation.code || config.documentNo || "K.SOP.16 / Ek-1",
                 // Lokal state, config'ten yüklenip kullanıcı düzenleyebilir.
                 publishDate: docPublishDate,
                 revisionNo: docRevisionNo || "-",

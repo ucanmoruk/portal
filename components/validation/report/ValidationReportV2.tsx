@@ -1211,7 +1211,7 @@ function ReportHeader({ title, meta }: { title: string; meta: ReportData["meta"]
             <div className="vr2-header-meta">
                 <table>
                     <tbody>
-                        <tr><td className="vr2-header-label">Doküman No</td><td>{meta.documentNo || "K.SOP.16 / Ek-1"}</td></tr>
+                        <tr><td className="vr2-header-label">Doküman No</td><td>{meta.documentNo || meta.id || "-"}</td></tr>
                         <tr><td className="vr2-header-label">Yayın Tarihi</td><td>{formatDate(meta.publishDate)}</td></tr>
                         <tr><td className="vr2-header-label">Revizyon No</td><td>{meta.revisionNo || "-"}</td></tr>
                         <tr><td className="vr2-header-label">Revizyon Tarihi</td><td>{formatDate(meta.revisionDate)}</td></tr>

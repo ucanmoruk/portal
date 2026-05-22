@@ -261,7 +261,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                         studyType: json.study_type || "",
                         plannedStartDate: json.planned_start_date,
                         plannedEndDate: json.planned_end_date,
-                        documentNo: json.config?.documentNo || "K.SOP.16 / Ek-1",
+                        documentNo: json.code || json.config?.documentNo || "K.SOP.16 / Ek-1",
                         publishDate: json.config?.publishDate || "",
                         revisionNo: json.config?.revisionNo || "-",
                         revisionDate: json.config?.revisionDate || "-",

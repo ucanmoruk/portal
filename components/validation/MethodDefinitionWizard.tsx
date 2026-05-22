@@ -290,10 +290,16 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                     return optionName === personName || optionName.includes(personName) || personName.includes(optionName);
                 });
                 const match = byId || byName;
-                const role = match?.role || (isPlaceholderRole(person.role) ? "" : person.role);
-                if (role === person.role) return person;
+                // Kullanıcı listesinde varsa, görev oradan gelir (boş bile olsa kullanıcı listesi
+                // kaynak); listede yoksa kayıtlı görev korunur (placeholder ise temizlenir).
+                const role = match
+                    ? match.role || ""
+                    : (isPlaceholderRole(person.role) ? "" : person.role);
+                // userId'yi de güncelle (envanter eşleşmesi kayıtlıysa kullansın)
+                const userId = match ? match.id : person.userId;
+                if (role === person.role && userId === person.userId) return person;
                 changed = true;
-                return { ...person, role };
+                return { ...person, role, userId };
             });
             return changed ? next : current;
         });
@@ -325,7 +331,9 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                 setReportRevisionNo(json.config?.revisionNo || "");
                 setReportRevisionDate(json.config?.revisionDate || "");
                 setParameters(Array.isArray(json.config?.parameters) ? normalizeWizardParameters(json.config.parameters) : parametersForType((json.study_type || "FULL_VALIDATION") as MethodType));
-                setDevices(Array.isArray(json.config?.devices) ? json.config.devices.map((device: any) => ({
+                // Cihazları yüklerken envanter listesinden güncel verileri çek
+                // (Seri No, birim, belirsizlik vb. envanter güncellenmiş olabilir).
+                const loadedDevices: Device[] = Array.isArray(json.config?.devices) ? json.config.devices.map((device: any) => ({
                     id: device.id || crypto.randomUUID(),
                     code: device.code || "",
                     name: device.name || "",
@@ -337,14 +345,42 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                     uncertaintyComponent: device.uncertaintyComponent,
                     uncertaintyValue: device.uncertaintyValue,
                     distributionType: device.distributionType,
-                })) : []);
+                })) : [];
+                const deviceInventoryIds = Array.from(new Set(loadedDevices.map(d => d.inventoryId).filter((x): x is number => typeof x === "number")));
+                let deviceInventoryMap = new Map<number, InventoryItem>();
+                if (deviceInventoryIds.length > 0) {
+                    try {
+                        // Envanteri toplu çek (search yok, ihtiyaç olan tüm tipleri al)
+                        const invRows = await loadInventory("", ["Ana Cihaz", "Numune Hazırlama", "Standart"]);
+                        deviceInventoryMap = new Map(invRows.map(r => [r.id, r]));
+                    } catch {}
+                }
+                const enrichedDevices = loadedDevices.map(device => {
+                    if (!device.inventoryId) return device;
+                    const inv = deviceInventoryMap.get(device.inventoryId);
+                    if (!inv) return device;
+                    return {
+                        ...device,
+                        code: inv.code,
+                        name: inv.name,
+                        serialNo: inv.serial_lot_no || device.serialNo,
+                        unit: inv.unit || device.unit,
+                        valueText: inv.value_text || device.valueText,
+                        uncertaintyComponent: inv.uncertainty_component || device.uncertaintyComponent,
+                        uncertaintyValue: inv.uncertainty_value ?? device.uncertaintyValue,
+                        distributionType: inv.distribution_type || device.distributionType,
+                        intendedUse: inv.intended_use || device.intendedUse,
+                    };
+                });
+                setDevices(enrichedDevices);
                 setPersonnel(Array.isArray(json.config?.personnel) ? json.config.personnel.map((person: any) => ({
                     id: person.id || crypto.randomUUID(),
                     userId: person.userId,
                     name: person.name || "",
                     role: isPlaceholderRole(person.role) ? "" : person.role || "",
                 })) : []);
-                setComponents(Array.isArray(json.config?.components) ? json.config.components.map((component: any) => ({
+                // Komponentleri yüklerken envanterden güncel CAS, limit, belirsizlik bilgileri ile güncelle
+                const loadedComponents: Component[] = Array.isArray(json.config?.components) ? json.config.components.map((component: any) => ({
                     id: component.id || crypto.randomUUID(),
                     code: component.code || "",
                     name: component.name || "",
@@ -356,7 +392,26 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
                     uncertaintyComponent: component.uncertaintyComponent,
                     uncertaintyValue: component.uncertaintyValue,
                     distributionType: component.distributionType,
-                })) : []);
+                })) : [];
+                const enrichedComponents = loadedComponents.map(component => {
+                    if (!component.inventoryId) return component;
+                    // deviceInventoryMap zaten "Standart" tipini de içeriyor (loadInventory yukarıda 3 tipi de istedi)
+                    const inv = deviceInventoryMap.get(component.inventoryId);
+                    if (!inv) return component;
+                    return {
+                        ...component,
+                        code: inv.code,
+                        name: inv.name,
+                        casNo: inv.cas_no || component.casNo,
+                        limit: inv.limit_info || component.limit,
+                        unit: inv.unit || component.unit,
+                        valueText: inv.value_text || component.valueText,
+                        uncertaintyComponent: inv.uncertainty_component || component.uncertaintyComponent,
+                        uncertaintyValue: inv.uncertainty_value ?? component.uncertaintyValue,
+                        distributionType: inv.distribution_type || component.distributionType,
+                    };
+                });
+                setComponents(enrichedComponents);
             } catch (error: any) {
                 if (alive) setSaveError(error.message);
             } finally {
