@@ -328,31 +328,12 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
 
     return (
         <div className="space-y-5">
-            {/* PDF üretimi sırasında (chromium ?pdfMode=1 ile yüklediğinde)
-                dashboard layout chrome'unu (header + sidebar + provider) GÖRSEL OLARAK
-                gizler ve rapor içeriğini tam genişliğe çıkartır.
-                Bu CSS, print emulation aktif olup olmadığından bağımsız çalışır. */}
+            {/* PDF üretimi sırasında (chromium ?pdfMode=1 ile yüklediğinde) sadece
+                dashboard chrome'unu (header / sidebar / nav) gizler.
+                Body / layout wrapper'larına dokunmaz — rapor kendi düzeniyle akıyor. */}
             {pdfMode && (
                 <style dangerouslySetInnerHTML={{ __html: `
-                    /* Dashboard chrome'unu yok say */
-                    header,
-                    aside,
-                    nav,
-                    [role="banner"] { display: none !important; }
-                    /* Üst boşlukları sıfırla */
-                    html, body { margin: 0 !important; padding: 0 !important; background: #ffffff !important; }
-                    /* Dashboard layout wrapper'ları kayar/padding'siz aç — rapor full-width göründü */
-                    body * { box-shadow: none !important; }
-                    /* SidebarProvider altındaki shell flex'ini sıfırla */
-                    body > div, body > div > div, body > div > div > div {
-                        display: block !important;
-                        flex: none !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        max-width: 100% !important;
-                        width: 100% !important;
-                        background: #ffffff !important;
-                    }
+                    header, aside, nav, [role="banner"] { display: none !important; }
                 ` }} />
             )}
 
