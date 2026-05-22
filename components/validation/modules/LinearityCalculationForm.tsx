@@ -84,7 +84,10 @@ export function LinearityCalculationForm({ components = ["Genel"], initialData =
 
     const [settings, setSettings] = useState<{ unit: string; notes: string }>(() => ({
         unit: Object.values(initialData)[0]?.unit || "mg_L",
-        notes: Object.values(initialData)[0]?.notes || "",
+        // Boşsa varsayılan açıklama metnini öner; kullanıcı isterse değiştirir/siler.
+        notes: Object.values(initialData)[0]?.notes || `Analiz talimatında anlatıldığı şekilde okutmalar yapılmış, kalibrasyon eğrisi oluşturulmuş ve regresyon denklemi ile korelasyon katsayısı belirlenmiştir.
+
+Doğrusal çalışma aralığında korelasyon sabiti (R²) 0,995'den büyük olduğu ve görsel olarak doğrusal grafik oluşturduğu için kabul kriterlerine göre uygun olarak kabul edilmiştir.`,
     }));
 
     // Data state: { [component]: LinearityPoint[] }

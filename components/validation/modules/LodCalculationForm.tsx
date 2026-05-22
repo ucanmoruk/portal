@@ -55,16 +55,22 @@ export function LodCalculationForm({ components = ["Genel"], personnel = ["Anali
             }]))
     );
 
+    // LOD/LOQ modülü için varsayılan açıklama metni.
+    // Kullanıcı boş veya elle değiştirmediği sürece bu metin gelir.
+    const LOD_DEFAULT_NOTES = `Tayin ve Tespit Limiti çalışmaları için 2 personel tarafından lineerite aralığının en düşük noktasında 10'ar adet spike test numunesi çalışılmıştır.
+
+Elde edilen ölçüm değerlerinin ortalamaları ve standart sapmaları hesaplanmış, ortalamaya standart sapmanın 3 katı ilave edilerek LOD, 10 katı ilave edilerek LOQ olarak değerlendirilmiştir.`;
+
     // Settings (Unit, Notes) per component
     const [settings, setSettings] = useState<Record<string, { unit: string; notes: string }>>(() =>
         Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, {
             unit: data?.unit || "mg_L",
-            notes: data?.notes || "",
+            notes: data?.notes || LOD_DEFAULT_NOTES,
         }]))
     );
 
     const getSettings = (comp: string) => {
-        return settings[comp] || { unit: "mg_L", notes: "" };
+        return settings[comp] || { unit: "mg_L", notes: LOD_DEFAULT_NOTES };
     };
 
     const updateSettings = (comp: string, field: 'unit' | 'notes', value: string) => {

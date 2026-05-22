@@ -93,8 +93,15 @@ export function PrecisionRepeatabilityForm({ components = ["Genel"], personnel =
     const [units, setUnits] = useState<UnitMap>(() =>
         Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.unit || "mg_kg"]))
     );
+    const REPEATABILITY_DEFAULT_NOTES = `Validasyon çalışmalarında tekrarlanabilirlik parametresi için "spike test örnekleri" kullanılmıştır.
+
+Tekrarlanabilirlik çalışmaları, 2 analist tarafından 6'şar adet test örneği ve paralel test örneği kullanılarak, her bir analist tarafından farklı zamanlarda, en kısa süre içerisinde aynı şartlar altında ve aynı cihaz kullanılarak yukarıda belirtildiği şekilde yapılmıştır.
+
+Elde edilen sonuçlar incelendiğinde, her bir test örneği ve paralel örnekten elde edilen analiz sonuçları farkının (x1-x2), tekrarlanabilirlik limit değerinden (r) küçük veya eşit olduğu görülmüştür.
+
+(x1 - x2) ≤ r`;
     const [notes, setNotes] = useState<NotesMap>(() =>
-        Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.notes || ""]))
+        Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.notes || REPEATABILITY_DEFAULT_NOTES]))
     );
     const [parallelCounts, setParallelCounts] = useState<CountMap>(() =>
         Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, Number(data?.parallelCount) || DEFAULT_ROWS]))

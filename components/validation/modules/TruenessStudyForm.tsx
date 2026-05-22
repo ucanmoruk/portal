@@ -167,8 +167,9 @@ export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analis
     const [units, setUnits] = useState<UnitMap>(() =>
         Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.unit || "mg_kg"]))
     );
+    const TRUENESS_DEFAULT_NOTES = `Geri kazanım çalışmasının değerlendirmesi aşağıda belirtilen "AOAC Manual For The Peer Verified Methods Program Analyte - Recovery Table" tablosuna göre yapılmıştır.`;
     const [notes, setNotes] = useState<NotesMap>(() =>
-        Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.notes || ""]))
+        Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.notes || TRUENESS_DEFAULT_NOTES]))
     );
     const [allData, setAllData] = useState<ComponentData>(() =>
         Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, Array.isArray(data?.rows) ? data.rows : []]))

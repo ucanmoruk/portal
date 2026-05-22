@@ -34,6 +34,7 @@ import {
     textValue,
     unitLabel,
 } from "./ValidationReport";
+import { getDefaultModuleDescription } from "@/lib/validation/defaultDescriptions";
 
 const REPORT_LOGO_SRC = "https://placehold.co/220x90/ffffff/111827?text=LOGO";
 
@@ -361,6 +362,16 @@ function AuditBlock({
     const showExtraCards = moduleKey !== "MEASUREMENT_UNCERTAINTY"
         && moduleKey !== "MEASUREMENT_UNCERTAINTY_FALLBACK";
 
+    // Modül açıklaması: önce kullanıcının ilgili modül formundaki notes/notlar alanını
+    // dener; boşsa varsayılan tanımlı metni kullanır. Bu blok her audit kartının
+    // hemen üstünde, başlığın altında küçük italik italik bir paragraf olarak çıkar.
+    const moduleNotes = (() => {
+        const rec = asRecord(value);
+        const noteFromValue = typeof rec.notes === "string" ? rec.notes.trim() : "";
+        if (noteFromValue) return noteFromValue;
+        return getDefaultModuleDescription(moduleKey);
+    })();
+
     return (
         <div className="vr2-audit-block">
             <div className="vr2-audit-header">
@@ -368,6 +379,14 @@ function AuditBlock({
                 <span className="vr2-audit-title">{moduleLabel}</span>
                 <span className="vr2-audit-component">{componentName}</span>
             </div>
+
+            {moduleNotes && (
+                <div className="vr2-audit-description">
+                    {moduleNotes.split(/\n+/).filter(Boolean).map((line, i) => (
+                        <p key={i} className="vr2-copy" style={{ margin: "0 0 2mm" }}>{line}</p>
+                    ))}
+                </div>
+            )}
 
             <div className="vr2-audit-card">
                 <div className="vr2-audit-card-title">VERİLER</div>
@@ -1757,6 +1776,22 @@ function ReportStyles() {
                 margin-bottom: 3mm;
                 border-bottom: 1.5px solid #5f1e1e;
             }
+            .vr2-audit-description {
+                margin-bottom: 4mm;
+                padding: 3mm 4mm;
+                background: #f8fafc;
+                border-left: 3px solid #1e3a5f;
+                border-radius: 2px;
+            }
+            .vr2-audit-description .vr2-copy {
+                font-size: 11.5px;
+                line-height: 1.5;
+                color: #1f2937;
+                text-align: justify;
+            }
+            .vr2-audit-description .vr2-copy:last-child {
+                margin-bottom: 0 !important;
+            }
             .vr2-audit-index {
                 font-size: 12px;
                 font-weight: 800;
@@ -2074,6 +2109,18 @@ function ReportStyles() {
                     padding-bottom: 1.5mm;
                     break-after: avoid;
                     page-break-after: avoid;
+                }
+                .vr2-audit-description {
+                    margin-bottom: 3mm;
+                    padding: 2mm 3mm;
+                    background: #f1f5f9 !important;
+                    border-left: 2.5px solid #1e3a5f;
+                    break-inside: avoid;
+                    page-break-inside: avoid;
+                }
+                .vr2-audit-description .vr2-copy {
+                    font-size: 10.5px !important;
+                    line-height: 1.4 !important;
                 }
                 /* Kartlar büyük olunca (ör. Doğrusallık VERİLER — çok satırlı tablo)
                    tek parça kalmaya zorlanırsa Chrome alta itip büyük beyaz boşluk

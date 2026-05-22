@@ -205,8 +205,14 @@ export function PrecisionReproducibilityForm({ components = ["Genel"], personnel
     const [units, setUnits] = useState<UnitMap>(() =>
         Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.unit || "mg_kg"]))
     );
+    const REPRODUCIBILITY_DEFAULT_NOTES = `Laboratuvar içi tekrarüretilebilirlik çalışması farklı çalışanlar tarafından, aynı cihaz kullanılarak, farklı günler içerisinde gerçekleştirilmiştir.
+
+Tekrarüretilebilirlik çalışmasının değerlendirilmesi için F Testi kullanılmaktadır.
+
+İstatistiksel testin değerlendirilmesi aşağıdaki koşula göre yapılmaktadır:
+Ftest > 1   ve   Ftest < Fkritik`;
     const [notes, setNotes] = useState<NotesMap>(() =>
-        Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.notes || ""]))
+        Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.notes || REPRODUCIBILITY_DEFAULT_NOTES]))
     );
     const [parallelCounts, setParallelCounts] = useState<CountMap>(() =>
         Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, Number(data?.parallelCount) || DEFAULT_ROWS]))
