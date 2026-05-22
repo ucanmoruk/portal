@@ -455,14 +455,14 @@ Elde edilen sonuçlar incelendiğinde, her bir test örneği ve paralel örnekte
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead className="h-8 text-center text-xs font-bold">#</TableHead>
-                                        {analysts.map(analyst => (
-                                            <TableHead key={`${levelKey}-${analyst}-diff-head`} colSpan={2} className="h-8 border-l border-slate-200 text-center text-xs font-bold">{analyst}</TableHead>
+                                        {analysts.map((analyst, analystIndex) => (
+                                            <TableHead key={`${levelKey}-diff-head-${analystIndex}`} colSpan={2} className="h-8 border-l border-slate-200 text-center text-xs font-bold">{analyst}</TableHead>
                                         ))}
                                     </TableRow>
                                     <TableRow >
                                         <TableHead className="h-8 text-xs" style={{paddingLeft:"10px"}}></TableHead>
-                                        {analysts.map(analyst => (
-                                            <Fragment key={`${levelKey}-${analyst}-diff-cols`}>
+                                        {analysts.map((_analyst, analystIndex) => (
+                                            <Fragment key={`${levelKey}-diff-cols-${analystIndex}`}>
                                                 <TableHead className="h-8 border-l border-slate-200 text-xs" style={{paddingLeft:"10px"}}>|1.A-2.A|</TableHead>
                                                 <TableHead className="h-8 text-xs">|1.A-2.A| &lt; r</TableHead>
                                             </Fragment>

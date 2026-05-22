@@ -398,16 +398,16 @@ export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analis
                         <TableHeader>
                             <TableRow className="bg-slate-50">
                                 <TableHead className="h-8 w-[52px] text-center text-xs">#</TableHead>
-                                {analysts.map(analyst => (
-                                    <TableHead key={`${component}-${analyst}-recovery-head`} colSpan={2} className="h-8 border-l border-slate-200 text-center text-xs">
+                                {analysts.map((analyst, analystIndex) => (
+                                    <TableHead key={`${component}-rec-head-${analystIndex}`} colSpan={2} className="h-8 border-l border-slate-200 text-center text-xs">
                                         {analyst}
                                     </TableHead>
                                 ))}
                             </TableRow>
                             <TableRow className="bg-slate-50">
                                 <TableHead className="h-8 text-center text-xs"></TableHead>
-                                {analysts.map(analyst => (
-                                    <Fragment key={`${component}-${analyst}-recovery-columns`}>
+                                {analysts.map((_analyst, analystIndex) => (
+                                    <Fragment key={`${component}-rec-cols-${analystIndex}`}>
                                         <TableHead className="h-8 min-w-[92px] border-l border-slate-200 text-center text-xs">Geri Kazanım %</TableHead>
                                         <TableHead className="h-8 min-w-[96px] border-l border-slate-200 text-center text-xs">Sonuç</TableHead>
                                     </Fragment>
@@ -418,7 +418,7 @@ export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analis
                             {Array.from({ length: maxRecoveryRows }).map((_, rowIndex) => (
                                 <TableRow key={`${component}-recovery-row-${rowIndex}`}>
                                     <TableCell className="bg-slate-50 py-1 text-center text-xs font-medium text-slate-600" style={{padding:"3px"}}>{rowIndex + 1}</TableCell>
-                                    {analysts.map(analyst => {
+                                    {analysts.map((analyst, analystIndex) => {
                                         const recovery = result[analyst]?.recoveries[rowIndex];
                                         const statusText = recovery?.isSuitable == null ? "-" : recovery.isSuitable ? "Uygun" : "Uygun Değil";
                                         const statusClass = recovery?.isSuitable == null
@@ -427,7 +427,7 @@ export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analis
                                                 ? "bg-emerald-50 text-emerald-700"
                                                 : "bg-red-50 text-red-700";
                                         return (
-                                            <Fragment key={`${component}-${analyst}-${rowIndex}-recovery`}>
+                                            <Fragment key={`${component}-rec-r${rowIndex}-a${analystIndex}`}>
                                                 <TableCell className="border-l border-slate-200 py-1 text-center text-xs font-bold text-slate-900">
                                                     {formatValue(recovery?.recovery ?? Number.NaN)}
                                                 </TableCell>
@@ -584,8 +584,8 @@ export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analis
                                                 <TableHeader className="sticky top-0 z-10 bg-slate-50">
                                                      <TableRow>
                                                         <TableHead className="w-[72px] text-center"></TableHead>
-                                                        {analysts.map(analyst => (
-                                                            <TableHead key={analyst} className="min-w-[120px] border-l border-slate-200 text-center">
+                                                        {analysts.map((analyst, analystIndex) => (
+                                                            <TableHead key={`analyst-head-${analystIndex}`} className="min-w-[120px] border-l border-slate-200 text-center">
                                                                 {analyst}
                                                             </TableHead>
                                                         ))}
@@ -627,8 +627,8 @@ export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analis
                                                             <TableCell className="border-r border-slate-200 bg-slate-50 text-center text-xs font-medium text-slate-600">
                                                                 {rowIndex + 1}
                                                             </TableCell>
-                                                            {analysts.map((analyst, analystIndex) => (
-                                                                <TableCell key={`${component}-${rowIndex}-${analyst}`} className="border-l border-slate-200 p-2">
+                                                            {analysts.map((_analyst, analystIndex) => (
+                                                                <TableCell key={`${component}-${rowIndex}-a${analystIndex}`} className="border-l border-slate-200 p-2">
                                                                     <Input
                                                                         value={row[analystIndex] || ""}
                                                                         onChange={(event) => updateCell(component, rowIndex, analystIndex, event.target.value)}

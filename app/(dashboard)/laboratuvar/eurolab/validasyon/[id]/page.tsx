@@ -102,6 +102,18 @@ const formatDate = (date: string | null) => {
     return new Date(date).toLocaleDateString("tr-TR");
 };
 
+const displayValidationCode = (validation: Pick<ValidationDetail, "id" | "code" | "method_code"> | null) => {
+    if (!validation) return "";
+    const methodCode = String(validation.method_code || "").trim();
+    const savedCode = String(validation.code || "").trim();
+    if (methodCode) {
+        const escaped = methodCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const ekPattern = new RegExp("^" + escaped + "-Ek\\.\\d+$", "i");
+        return ekPattern.test(savedCode) ? savedCode : `${methodCode}-Ek.1`;
+    }
+    return savedCode || `VAL-${validation.id}`;
+};
+
 const normalizePersonName = (value: string) =>
     value.trim().toLocaleLowerCase("tr-TR").replace(/\s+/g, " ");
 
@@ -242,6 +254,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                 const json = await res.json();
                 if (!res.ok) throw new Error(json.error || "Validasyon detayı alınamadı.");
                 if (!alive) return;
+                const visibleCode = displayValidationCode(json);
                 setValidation(json);
                 setReportData(prev => ({
                     ...prev,
@@ -253,7 +266,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                     moduleData: json.config?.moduleData || {},
                     meta: {
                         title: String(json.title || json.method_name || "").replace(/\s+Validasyonu\s*$/i, "").trim(),
-                        id: json.code || String(json.id),
+                        id: visibleCode,
                         method: json.technique || json.method_code || "",
                         methodCode: json.method_code || "",
                         methodSource: json.config?.methodSource || json.method_code || "",
@@ -261,21 +274,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                         studyType: json.study_type || "",
                         plannedStartDate: json.planned_start_date,
                         plannedEndDate: json.planned_end_date,
-                        documentNo: (() => {
-                            // Doküman no: method_code mevcutsa method_code-Ek.X formatında türetilir
-                            // (legacy VAL-YYYY-NNN kodları için otomatik düzeltme).
-                            const manual = String(json.config?.documentNo || "").trim();
-                            if (manual) return manual;
-                            const methodCode = String(json.method_code || "").trim();
-                            const savedCode = String(json.code || "").trim();
-                            if (methodCode) {
-                                const escaped = methodCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-                                const ekPattern = new RegExp("^" + escaped + "-Ek\\.\\d+$", "i");
-                                if (ekPattern.test(savedCode)) return savedCode;
-                                return methodCode + "-Ek.1";
-                            }
-                            return savedCode || "K.SOP.16 / Ek-1";
-                        })(),
+                        documentNo: json.config?.documentNo || visibleCode,
                         publishDate: json.config?.publishDate || "",
                         revisionNo: json.config?.revisionNo || "-",
                         revisionDate: json.config?.revisionDate || "-",
@@ -412,6 +411,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
     const defaultTab = "protocol";
     const parameterById = new Map((validation.config?.parameters || []).map(parameter => [parameter.id, parameter]));
     const moduleData = validation.config?.moduleData || {};
+    const visibleCode = displayValidationCode(validation);
     const fixedTabs = [
         { value: "sample_preparation", label: "Numune Hazırlama", title: "Numune Hazırlama", description: "Numune hazırlama adımları, seyreltme/ekstraksiyon işlemleri ve çalışma koşulları bu alanda takip edilir." },
         { value: "measurement_uncertainty", label: "Ölçüm Belirsizliği", title: "Ölçüm Belirsizliği", description: "Validasyon çalışmasına ait belirsizlik bileşenleri ve hesap özetleri bu alanda takip edilir." },
@@ -552,7 +552,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                 <div className={detailStyles.heroMain}>
                     <div className={detailStyles.crumb}>Eurolab Validasyon</div>
                     <div className={detailStyles.badgeRow}>
-                        <Badge variant="outline">{validation.code || `VAL-${validation.id}`}</Badge>
+                        <Badge variant="outline">{visibleCode}</Badge>
                         <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">{statusLabel(validation.status)}</Badge>
                     </div>
                     <h1 className={detailStyles.title}>{validation.method_name || validation.title}</h1>
@@ -570,7 +570,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
             <div className={`${detailStyles.infoGrid} no-print`}>
                 <div className={detailStyles.infoCard}>
                     <span className={detailStyles.infoLabel}>Kod</span>
-                    <span className={detailStyles.infoValue}>{validation.code || `VAL-${validation.id}`}</span>
+                    <span className={detailStyles.infoValue}>{visibleCode}</span>
                 </div>
                 <div className={detailStyles.infoCard}>
                     <span className={detailStyles.infoLabel}>Metot</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ClipboardList, Save } from "lucide-react";
+import { ClipboardList, RefreshCw, Save } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -61,6 +61,65 @@ const formatNumber = (value: number) =>
 const normalizeText = (value: unknown) => String(value ?? "")
     .trim()
     .toLocaleLowerCase("tr-TR");
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+    value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+
+const compactText = (value: unknown) => normalizeText(value).replace(/[^a-z0-9ğüşıöç]/gi, "");
+
+const extractAliases = (value: unknown) => {
+    const text = String(value ?? "");
+    const aliases = new Set([normalizeText(text), compactText(text)]);
+    const matches = text.matchAll(/\(([^)]+)\)/g);
+    for (const match of matches) {
+        aliases.add(normalizeText(match[1]));
+        aliases.add(compactText(match[1]));
+    }
+    return aliases;
+};
+
+const extractParentheticalAliases = (value: unknown) =>
+    Array.from(String(value ?? "").matchAll(/\(([^)]+)\)/g))
+        .map(match => normalizeText(match[1]))
+        .filter(Boolean);
+
+const namesMatch = (left: unknown, right: unknown) => {
+    const leftAliases = extractAliases(left);
+    const rightAliases = extractAliases(right);
+    const leftShortAliases = extractParentheticalAliases(left);
+    const rightShortAliases = extractParentheticalAliases(right);
+    if (leftShortAliases.length > 0 && rightShortAliases.length > 0) {
+        return leftShortAliases.some(leftAlias => rightShortAliases.includes(leftAlias));
+    }
+    for (const leftAlias of leftAliases) {
+        if (!leftAlias) continue;
+        for (const rightAlias of rightAliases) {
+            if (!rightAlias) continue;
+            if (leftAlias === rightAlias) return true;
+            const canUsePartial = leftAlias.length >= 5 && rightAlias.length >= 5;
+            if (canUsePartial && (leftAlias.includes(rightAlias) || rightAlias.includes(leftAlias))) return true;
+        }
+    }
+    return false;
+};
+
+const getComponentRecord = (moduleSection: unknown, component: string) => {
+    const section = asRecord(moduleSection);
+    const exact = section[component];
+    if (exact) return exact;
+    const componentShortAliases = extractParentheticalAliases(component);
+    if (componentShortAliases.length > 0) {
+        const acronymMatched = Object.entries(section).find(([key]) => {
+            const keyShortAliases = extractParentheticalAliases(key);
+            return isComponentKey(key) && keyShortAliases.some(alias => componentShortAliases.includes(alias));
+        });
+        if (acronymMatched) return acronymMatched[1];
+    }
+    const matched = Object.entries(section).find(([key]) => (
+        isComponentKey(key) && namesMatch(key, component)
+    ));
+    return matched?.[1];
+};
 
 const isComponentKey = (key: string) => {
     const normalized = normalizeText(key);
@@ -147,12 +206,50 @@ const getReproducibilityUncertainty = (data: any) => {
     return rss(collectRecursiveNumbersByKey(data, ["pooledRsd", "rsdPool", "rsdr"]));
 };
 
-const getTruenessUncertainty = (data: any) => firstFinite(
-    data?.results?.standardUncertainty,
-    data?.results?.uBias,
-    data?.standardUncertainty,
-    data?.uBias
-);
+const sampleStdDev = (values: number[]) => {
+    if (values.length < 2) return Number.NaN;
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / (values.length - 1);
+    return Math.sqrt(variance);
+};
+
+const calculateTruenessUncertaintyFromRecoveries = (data: unknown) => {
+    const results = asRecord(asRecord(data).results);
+    const recoveryRatios = Object.values(results)
+        .flatMap(result => {
+            const recoveries = asRecord(result).recoveries;
+            return Array.isArray(recoveries) ? recoveries : [];
+        })
+        .map(row => numberValue(asRecord(row).recovery) / 100)
+        .filter(Number.isFinite);
+
+    const n = recoveryRatios.length;
+    if (n < 2) return Number.NaN;
+    const recoveryMean = recoveryRatios.reduce((sum, value) => sum + value, 0) / n;
+    const stdDev = sampleStdDev(recoveryRatios);
+    const ux = Number.isFinite(stdDev) ? stdDev / Math.sqrt(n) : Number.NaN;
+    return Number.isFinite(recoveryMean) && Number.isFinite(ux)
+        ? Math.sqrt(Math.pow((1 - recoveryMean) / Math.sqrt(3), 2) + Math.pow(ux, 2))
+        : Number.NaN;
+};
+
+const getTruenessUncertainty = (data: any) => {
+    const direct = firstFinite(
+        data?.standardUncertainty,
+        data?.uBias,
+        data?.summary?.standardUncertainty,
+        data?.summary?.uBias,
+        data?.results?.standardUncertainty,
+        data?.results?.uBias
+    );
+    if (Number.isFinite(direct) && direct > 0) return direct;
+
+    const recursive = collectRecursiveNumbersByKey(data, ["standardUncertainty", "uBias"]);
+    const positiveRecursive = recursive.find(value => value > 0);
+    if (typeof positiveRecursive === "number" && Number.isFinite(positiveRecursive)) return positiveRecursive;
+
+    return calculateTruenessUncertaintyFromRecoveries(data);
+};
 
 const matchesComponent = (component: string, item: any) => {
     const target = normalizeText(component);
@@ -177,10 +274,10 @@ const buildBudgetRows = (moduleData: Record<string, any>) => {
     const samplePreparation = getSamplePreparationCommonUncertainty(sample);
 
     return components.map(component => {
-        const linearity = getLinearityUncertainty(moduleData.LINEARITY?.[component]);
-        const repeatability = getRepeatabilityUncertainty(moduleData.PRECISION_REPEATABILITY?.[component]);
-        const reproducibility = getReproducibilityUncertainty(moduleData.PRECISION_REPRODUCIBILITY?.[component]);
-        const trueness = getTruenessUncertainty(moduleData.TRUENESS?.[component]);
+        const linearity = getLinearityUncertainty(getComponentRecord(moduleData.LINEARITY, component));
+        const repeatability = getRepeatabilityUncertainty(getComponentRecord(moduleData.PRECISION_REPEATABILITY, component));
+        const reproducibility = getReproducibilityUncertainty(getComponentRecord(moduleData.PRECISION_REPRODUCIBILITY, component));
+        const trueness = getTruenessUncertainty(getComponentRecord(moduleData.TRUENESS, component));
         const standardUncertainty = getStandardUncertainty(component, sample);
         const combinedStandardUncertainty = rss([
             linearity,
@@ -238,7 +335,7 @@ export function MeasurementUncertaintyBudgetForm({
 
     const budgetRows = useMemo(() => buildBudgetRows(moduleData), [moduleData]);
 
-    const saveModule = () => {
+    const persistBudget = (message: string) => {
         onReportDataChange?.({
             type: "MEASUREMENT_UNCERTAINTY",
             component: "summary",
@@ -248,7 +345,15 @@ export function MeasurementUncertaintyBudgetForm({
                 coverageFactor: COVERAGE_FACTOR,
             },
         });
-        alert("Ölçüm belirsizliği bütçesi kaydedildi.");
+        alert(message);
+    };
+
+    const saveModule = () => {
+        persistBudget("Ölçüm belirsizliği bütçesi kaydedildi.");
+    };
+
+    const updateBudget = () => {
+        persistBudget("Ölçüm belirsizliği bütçesi güncellendi.");
     };
 
     return (
@@ -273,7 +378,7 @@ export function MeasurementUncertaintyBudgetForm({
                 Modüllerde değer kaydedilmemişse o sütun <strong>0</strong> görünür.
                 <ul className="mt-1 list-disc pl-5">
                     <li><strong>Tekrarlanabilirlik:</strong> Düzeylerin pooled RSD değerlerinin <strong>maksimumu</strong> alınır (worst case).</li>
-                    <li><strong>Geri Kazanım (u<sub>Bias</sub>):</strong> Gerçeklik tabında <em>Rapora Aktar</em> demediyseniz boş olur.</li>
+                    <li><strong>Geri Kazanım (u<sub>Bias</sub>):</strong> Gerçeklik tabındaki standart belirsizlik alınır; eski kayıtlarda bu alan yoksa geri kazanım verilerinden yeniden hesaplanır.</li>
                     <li><strong>Standart Belirsizliği:</strong> Numune Hazırlama tabında bileşene karşılık gelen standart kaydedilmiş olmalı (isim/kod eşleşmesi).</li>
                 </ul>
             </div>
@@ -292,10 +397,26 @@ export function MeasurementUncertaintyBudgetForm({
 
                 <section className="rounded-xl border border-slate-300 bg-[var(--color-bg)]" style={{ padding: "16px" }}>
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                        <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Alt Bileşen Bazlı Belirsizlik Matrisi</h3>
-                        <span className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs">
-                            k = <strong>{COVERAGE_FACTOR}</strong>
-                        </span>
+                        <div>
+                            <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Alt Bileşen Bazlı Belirsizlik Matrisi</h3>
+                            <p className="mt-1 text-xs text-slate-500">
+                                Güncelle, mevcut modül verilerinden matrisi yeniden hesaplayıp eski kaydı yeniler.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs">
+                                k = <strong>{COVERAGE_FACTOR}</strong>
+                            </span>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                style={{ padding: "8px 12px" }}
+                                onClick={updateBudget}
+                                disabled={budgetRows.length === 0}
+                            >
+                                <RefreshCw className="mr-2 h-4 w-4" /> Güncelle
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="overflow-hidden rounded-lg border border-slate-300 bg-white [&_td]:border-slate-300 [&_th]:border-slate-300 [&_tr]:border-slate-300">
@@ -425,7 +546,16 @@ export function MeasurementUncertaintyBudgetForm({
                     </section>
                 )}
 
-                <div className="flex justify-end">
+                <div className="flex flex-wrap justify-end gap-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        style={{ padding: "10px 16px" }}
+                        onClick={updateBudget}
+                        disabled={budgetRows.length === 0}
+                    >
+                        <RefreshCw className="mr-2 h-4 w-4" /> Güncelle
+                    </Button>
                     <Button className="bg-green-600 hover:bg-green-700" style={{ padding: "10px 16px" }} onClick={saveModule}>
                         <Save className="mr-2 h-4 w-4" /> Kaydet
                     </Button>

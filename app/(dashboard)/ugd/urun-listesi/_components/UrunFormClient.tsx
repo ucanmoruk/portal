@@ -391,6 +391,9 @@ interface UrunFormClientProps {
   returnHref?: string;
 }
 
+const editorSectionUiKey = (section: { key?: string }, index: number) =>
+  `${section.key || "section"}-${index}`;
+
 export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/ugd/urun-listesi" }: UrunFormClientProps) {
   const router = useRouter();
   const isEdit = !!editId;
@@ -958,7 +961,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
   };
 
   const getEditedReportHtml = () => editorSections
-    .map((s) => editorRefs.current[s.key]?.innerHTML ?? s.html ?? "")
+    .map((s, index) => editorRefs.current[editorSectionUiKey(s, index)]?.innerHTML ?? s.html ?? "")
     .join("");
 
   const saveEditedReport = async (bodyHtml: string) => {
@@ -975,9 +978,9 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         profile,
         headHtml: editorHead,
         bodyHtml,
-        sections: editorSections.map(s => ({
+        sections: editorSections.map((s, index) => ({
           ...s,
-          html: editorRefs.current[s.key]?.innerHTML ?? s.html,
+          html: editorRefs.current[editorSectionUiKey(s, index)]?.innerHTML ?? s.html,
         })),
       }),
     });
@@ -1102,9 +1105,9 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       false,
       `<figure class="image-block"><img src="${dataUrl}" alt="Rapor görseli" /><figcaption></figcaption></figure>`,
     );
-    const key = editor.dataset.liveEditorKey || "";
-    if (key) {
-      setEditorSections(prev => prev.map(s => s.key === key ? { ...s, html: editor.innerHTML } : s));
+    const index = Number(editor.dataset.liveEditorIndex);
+    if (Number.isInteger(index)) {
+      setEditorSections(prev => prev.map((s, i) => i === index ? { ...s, html: editor.innerHTML } : s));
     }
   };
 
@@ -1122,10 +1125,10 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
   const deleteSelectedTableRow = () => {
     const removeRow = (row: HTMLTableRowElement) => {
       const editor = row.closest("[data-live-editor-key]") as HTMLDivElement | null;
-      const key = editor?.dataset.liveEditorKey || "";
+      const index = Number(editor?.dataset.liveEditorIndex);
       row.remove();
-      if (key && editor) {
-        setEditorSections(prev => prev.map(s => s.key === key ? { ...s, html: editor.innerHTML } : s));
+      if (Number.isInteger(index) && editor) {
+        setEditorSections(prev => prev.map((s, i) => i === index ? { ...s, html: editor.innerHTML } : s));
       }
       selectedEditorRowRef.current = null;
       if (floatingRowDeleteRef.current) {
@@ -1783,24 +1786,28 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
             )}
 
 	            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
-              {editorSections.map((section, idx) => (
-                <div key={section.key} style={{ border: '1px solid var(--color-border-light)', borderRadius: 8, background: '#fff' }}>
+              {editorSections.map((section, idx) => {
+                const uiKey = editorSectionUiKey(section, idx);
+                const isOpen = openSections[uiKey] ?? openSections[section.key] ?? true;
+                return (
+                <div key={uiKey} style={{ border: '1px solid var(--color-border-light)', borderRadius: 8, background: '#fff' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--color-border-light)', fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-text-secondary)' }}>
                     <span>{idx + 1}. {section.title}</span>
                     <button
                       type="button"
                       className={styles.cancelBtn}
-                      onClick={() => setOpenSections(prev => ({ ...prev, [section.key]: !prev[section.key] }))}
+                      onClick={() => setOpenSections(prev => ({ ...prev, [uiKey]: !isOpen }))}
                       style={{ padding: '2px 10px', minHeight: 28 }}
                     >
-                      {openSections[section.key] ? 'Kapat' : 'Aç'}
+                      {isOpen ? 'Kapat' : 'Aç'}
                     </button>
                   </div>
-                  {openSections[section.key] && (
+                  {isOpen && (
 	                    <div
-	                      ref={(el) => { editorRefs.current[section.key] = el; }}
+	                      ref={(el) => { editorRefs.current[uiKey] = el; }}
 	                      className="liveReportEditorBody WordSection1"
-	                      data-live-editor-key={section.key}
+	                      data-live-editor-key={uiKey}
+	                      data-live-editor-index={idx}
 	                      contentEditable
                       suppressContentEditableWarning
                       style={{ minHeight: 320, padding: 12, overflowX: 'hidden', overflowY: 'auto', lineHeight: 1.55, maxWidth: '100%' }}
@@ -1809,12 +1816,12 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
                       onFocus={(e) => { activeEditorRef.current = e.currentTarget; }}
 	                      onBlur={(e) => {
                         const html = (e.currentTarget as HTMLDivElement).innerHTML;
-                        setEditorSections(prev => prev.map(s => s.key === section.key ? { ...s, html } : s));
+                        setEditorSections(prev => prev.map((s, i) => i === idx ? { ...s, html } : s));
                       }}
                     />
                   )}
                 </div>
-	              ))}
+	              )})}
 	            </div>
             <button
               ref={floatingRowDeleteRef}
