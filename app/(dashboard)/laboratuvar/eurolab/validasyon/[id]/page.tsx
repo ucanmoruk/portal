@@ -202,9 +202,25 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
     }, [validation]);
 
     const personnel = useMemo(() => {
-        const configured = validation?.config?.personnel?.map(person => person.name).filter(Boolean) || [];
+        // Modüller (LOD / Linearity / Repeatability / vb.) personeli isim listesi
+        // olarak alıyor. Aynı isim iki kere gelirse React duplicate key uyarısı
+        // ve UI'da çift sütun olur — duplicate'leri ele.
+        const dedupe = (names: string[]): string[] => {
+            const seen = new Set<string>();
+            const result: string[] = [];
+            for (const raw of names) {
+                const name = String(raw || "").trim();
+                if (!name) continue;
+                const key = name.toLocaleLowerCase("tr-TR");
+                if (seen.has(key)) continue;
+                seen.add(key);
+                result.push(name);
+            }
+            return result;
+        };
+        const configured = dedupe(validation?.config?.personnel?.map(person => person.name) || []);
         if (configured.length > 0) return configured;
-        if (Array.isArray(validation?.personnel)) return validation.personnel;
+        if (Array.isArray(validation?.personnel)) return dedupe(validation.personnel);
         return ["Analist"];
     }, [validation]);
 
@@ -436,6 +452,8 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                 <div className={detailStyles.modulePanel}>
                     <MeasurementUncertaintyBudgetForm
                         moduleData={moduleData}
+                        devices={validation.config?.devices || []}
+                        components={validation.config?.components || []}
                         initialData={moduleData.MEASUREMENT_UNCERTAINTY?.summary || {}}
                         onReportDataChange={handleReportDataUpdate}
                     />

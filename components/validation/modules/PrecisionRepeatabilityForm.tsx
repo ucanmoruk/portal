@@ -562,8 +562,8 @@ Elde edilen sonuçlar incelendiğinde, her bir test örneği ve paralel örnekte
                                     </TableRow>
                                     <TableRow>
                                         <TableHead className="w-[72px] text-center"></TableHead>
-                                        {analysts.map(analyst => (
-                                            <TableHead key={analyst} colSpan={2} className="min-w-[220px] border-l border-slate-200 text-center">
+                                        {analysts.map((analyst, analystIndex) => (
+                                            <TableHead key={`${levelKey}-data-head-${analystIndex}`} colSpan={2} className="min-w-[220px] border-l border-slate-200 text-center">
                                                 {analyst}
                                             </TableHead>
                                         ))}
@@ -572,9 +572,9 @@ Elde edilen sonuçlar incelendiğinde, her bir test örneği ve paralel örnekte
                                     </TableRow>
                                     <TableRow>
                                         <TableHead className="w-[72px] text-center"></TableHead>
-                                        {analysts.flatMap(analyst => [
-                                            <TableHead key={`${analyst}-first`} className="min-w-[110px] border-l border-slate-200 text-center">Paralel 1</TableHead>,
-                                            <TableHead key={`${analyst}-second`} className="min-w-[110px] border-l border-slate-200 text-center">Paralel 2</TableHead>
+                                        {analysts.flatMap((_analyst, analystIndex) => [
+                                            <TableHead key={`${levelKey}-par1-a${analystIndex}`} className="min-w-[110px] border-l border-slate-200 text-center">Paralel 1</TableHead>,
+                                            <TableHead key={`${levelKey}-par2-a${analystIndex}`} className="min-w-[110px] border-l border-slate-200 text-center">Paralel 2</TableHead>
                                         ])}
                                         <TableHead className="border-l border-slate-200 text-center"></TableHead>
                                         <TableHead></TableHead>
@@ -586,11 +586,11 @@ Elde edilen sonuçlar incelendiğinde, her bir test örneği ve paralel örnekte
                                             <TableCell className="border-r border-slate-200 bg-slate-50 text-center text-xs font-medium text-slate-600">
                                                 {rowIndex + 1}
                                             </TableCell>
-                                            {analysts.flatMap(analyst => {
+                                            {analysts.flatMap((analyst, analystIndex) => {
                                                 const grid = getGrid(component, levelKey, analyst);
 
                                                 return [0, 1].map(colIndex => (
-                                                    <TableCell key={`${levelKey}-${analyst}-${rowIndex}-${colIndex}`} className="border-l border-slate-200 p-2">
+                                                    <TableCell key={`${levelKey}-r${rowIndex}-a${analystIndex}-c${colIndex}`} className="border-l border-slate-200 p-2">
                                                         <Input
                                                             value={grid[rowIndex]?.[colIndex] || ""}
                                                             onChange={(event) => updateCell(component, levelKey, analyst, rowIndex, colIndex, event.target.value)}

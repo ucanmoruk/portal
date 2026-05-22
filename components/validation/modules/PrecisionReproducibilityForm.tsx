@@ -471,8 +471,8 @@ Ftest > 1   ve   Ftest < Fkritik`;
                                                 <TableHeader className="sticky top-0 z-10 bg-slate-50">
                                                     <TableRow>
                                                         <TableHead className="min-w-[140px] text-center">Tarih</TableHead>
-                                                        {analysts.map(analyst => (
-                                                            <TableHead key={analyst} className="min-w-[120px] border-l border-slate-200 text-center">
+                                                        {analysts.map((analyst, analystIndex) => (
+                                                            <TableHead key={`${component}-data-head-${analystIndex}`} className="min-w-[120px] border-l border-slate-200 text-center">
                                                                 {analyst}
                                                             </TableHead>
                                                         ))}
@@ -491,8 +491,8 @@ Ftest > 1   ve   Ftest < Fkritik`;
                                                                     style={{ padding: "10px" }}
                                                                 />
                                                             </TableCell>
-                                                            {analysts.map((analyst, analystIndex) => (
-                                                                <TableCell key={`${component}-${rowIndex}-${analyst}`} className="border-l border-slate-200 p-2">
+                                                            {analysts.map((_analyst, analystIndex) => (
+                                                                <TableCell key={`${component}-r${rowIndex}-a${analystIndex}`} className="border-l border-slate-200 p-2">
                                                                     <Input
                                                                         value={row.values[analystIndex] || ""}
                                                                         onChange={(event) => updateValue(component, rowIndex, analystIndex, event.target.value)}
@@ -551,8 +551,8 @@ Ftest > 1   ve   Ftest < Fkritik`;
                                                 <TableHeader>
                                                     <TableRow>
                                                         <TableHead className="h-8 text-xs">İstatistik</TableHead>
-                                                        {analysts.map(analyst => (
-                                                            <TableHead key={`${component}-${analyst}-result`} className="h-8 text-center text-xs">{analyst}</TableHead>
+                                                        {analysts.map((analyst, analystIndex) => (
+                                                            <TableHead key={`${component}-result-head-${analystIndex}`} className="h-8 text-center text-xs">{analyst}</TableHead>
                                                         ))}
                                                     </TableRow>
                                                 </TableHeader>
@@ -568,8 +568,8 @@ Ftest > 1   ve   Ftest < Fkritik`;
                                                     ].map(([label, key]) => (
                                                         <TableRow key={`${component}-result-${key}`}>
                                                             <TableCell className="py-1 text-xs font-semibold text-slate-600" style={{padding:"3px"}}>{label}</TableCell>
-                                                            {analysts.map(analyst => (
-                                                                <TableCell key={`${component}-${analyst}-${key}`} className="py-1 text-center text-xs font-bold text-slate-900" >
+                                                            {analysts.map((analyst, analystIndex) => (
+                                                                <TableCell key={`${component}-${key}-a${analystIndex}`} className="py-1 text-center text-xs font-bold text-slate-900" >
                                                                     {formatValue(result.analystStats[analyst]?.[key as keyof SummaryResult] as number)}
                                                                 </TableCell>
                                                             ))}

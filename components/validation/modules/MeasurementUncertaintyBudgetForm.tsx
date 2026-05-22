@@ -12,6 +12,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 interface MeasurementUncertaintyBudgetFormProps {
     moduleData?: Record<string, any>;
     initialData?: Record<string, any>;
+    devices?: Array<{
+        code?: string;
+        name: string;
+        intendedUse?: string;
+        valueText?: string;
+        uncertaintyValue?: string | number | null;
+        distributionType?: string;
+    }>;
+    components?: Array<{
+        code?: string;
+        name: string;
+        valueText?: string;
+        uncertaintyValue?: string | number | null;
+        distributionType?: string;
+    }>;
     onReportDataChange?: (data: any) => void;
 }
 
@@ -126,14 +141,31 @@ const isComponentKey = (key: string) => {
     return Boolean(normalized) && !COMPONENT_IGNORE_KEYS.has(normalized);
 };
 
+const distributionFactor = (distribution: unknown) => {
+    const normalized = normalizeText(distribution);
+    return normalized.includes("normal") ? 2 : Math.sqrt(3);
+};
+
+const relativeUncertainty = (uncertainty: unknown, value: unknown, distribution: unknown) => {
+    const uncertaintyValue = numberValue(uncertainty);
+    const baseValue = numberValue(value);
+    if (!Number.isFinite(uncertaintyValue)) return Number.NaN;
+    const standard = uncertaintyValue / distributionFactor(distribution);
+    return Number.isFinite(baseValue) && baseValue !== 0 ? standard / baseValue : standard;
+};
+
 const addModuleComponents = (components: Set<string>, moduleSection: any) => {
     Object.keys(moduleSection || {}).forEach(key => {
         if (isComponentKey(key)) components.add(key);
     });
 };
 
-const collectComponentNames = (moduleData: Record<string, any>) => {
+const collectComponentNames = (moduleData: Record<string, any>, configuredComponents: Array<{ name: string }> = []) => {
     const components = new Set<string>();
+    configuredComponents.forEach(component => {
+        const name = String(component.name || "").trim();
+        if (name) components.add(name);
+    });
     addModuleComponents(components, moduleData.LINEARITY);
     addModuleComponents(components, moduleData.PRECISION_REPEATABILITY);
     addModuleComponents(components, moduleData.PRECISION_REPRODUCIBILITY);
@@ -252,33 +284,51 @@ const getTruenessUncertainty = (data: any) => {
 };
 
 const matchesComponent = (component: string, item: any) => {
-    const target = normalizeText(component);
-    const name = normalizeText(item?.name);
-    const code = normalizeText(item?.code);
-    return name === target || code === target || Boolean(target && (name.includes(target) || code.includes(target)));
+    return namesMatch(component, item?.name) || namesMatch(component, item?.code);
 };
 
-const getSamplePreparationCommonUncertainty = (sample: any) => rss(
-    (sample?.volumetric || []).map((item: any) => firstFinite(item.relativeStandardUncertainty, item.standardUncertainty))
-);
+const getSamplePreparationCommonUncertainty = (
+    sample: any,
+    devices: MeasurementUncertaintyBudgetFormProps["devices"] = [],
+) => {
+    const saved = rss((sample?.volumetric || []).map((item: any) => firstFinite(item.relativeStandardUncertainty, item.standardUncertainty)));
+    if (Number.isFinite(saved)) return saved;
 
-const getStandardUncertainty = (component: string, sample: any) => rss(
-    (sample?.chemicals || [])
+    return rss((devices || [])
+        .filter(device => normalizeText(device.intendedUse) === "numune hazırlama")
+        .map(device => relativeUncertainty(device.uncertaintyValue, device.valueText, device.distributionType)));
+};
+
+const getStandardUncertainty = (
+    component: string,
+    sample: any,
+    configuredComponents: MeasurementUncertaintyBudgetFormProps["components"] = [],
+) => {
+    const saved = rss((sample?.chemicals || [])
         .filter((item: any) => matchesComponent(component, item))
-        .map((item: any) => firstFinite(item.relativeStandardUncertainty, item.standardUncertainty))
-);
+        .map((item: any) => firstFinite(item.relativeStandardUncertainty, item.standardUncertainty)));
+    if (Number.isFinite(saved)) return saved;
 
-const buildBudgetRows = (moduleData: Record<string, any>) => {
-    const components = collectComponentNames(moduleData);
+    return rss((configuredComponents || [])
+        .filter(item => matchesComponent(component, item))
+        .map(item => relativeUncertainty(item.uncertaintyValue, item.valueText, item.distributionType)));
+};
+
+const buildBudgetRows = (
+    moduleData: Record<string, any>,
+    configuredComponents: MeasurementUncertaintyBudgetFormProps["components"] = [],
+    devices: MeasurementUncertaintyBudgetFormProps["devices"] = [],
+) => {
+    const components = collectComponentNames(moduleData, configuredComponents);
     const sample = moduleData.SAMPLE_PREPARATION?.summary;
-    const samplePreparation = getSamplePreparationCommonUncertainty(sample);
+    const samplePreparation = getSamplePreparationCommonUncertainty(sample, devices);
 
     return components.map(component => {
         const linearity = getLinearityUncertainty(getComponentRecord(moduleData.LINEARITY, component));
         const repeatability = getRepeatabilityUncertainty(getComponentRecord(moduleData.PRECISION_REPEATABILITY, component));
         const reproducibility = getReproducibilityUncertainty(getComponentRecord(moduleData.PRECISION_REPRODUCIBILITY, component));
         const trueness = getTruenessUncertainty(getComponentRecord(moduleData.TRUENESS, component));
-        const standardUncertainty = getStandardUncertainty(component, sample);
+        const standardUncertainty = getStandardUncertainty(component, sample, configuredComponents);
         const combinedStandardUncertainty = rss([
             linearity,
             repeatability,
@@ -329,11 +379,13 @@ const getContributionRows = (row: ComponentBudgetRow) => {
 export function MeasurementUncertaintyBudgetForm({
     moduleData = {},
     initialData = {},
+    devices = [],
+    components = [],
     onReportDataChange,
 }: MeasurementUncertaintyBudgetFormProps) {
     const [notes, setNotes] = useState(() => initialData.notes || "");
 
-    const budgetRows = useMemo(() => buildBudgetRows(moduleData), [moduleData]);
+    const budgetRows = useMemo(() => buildBudgetRows(moduleData, components, devices), [components, devices, moduleData]);
 
     const persistBudget = (message: string) => {
         onReportDataChange?.({
