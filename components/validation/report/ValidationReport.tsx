@@ -452,30 +452,37 @@ export const getExpandedUncertaintyValue = (
 };
 
 export const getMatrixLevelRows = (data: ReportData, moduleData: Record<string, Record<string, unknown>>) => {
-    // Sadece İLK etken maddenin tekrarlanabilirlik düzeylerini kullan — diğer
-    // etken maddelerin matriks/düzey/birim bilgisi büyük ihtimalle aynıdır,
-    // tekrarlamak raporu gereksiz şişiriyor.
+    // Tüm etken maddelerin tekrarlanabilirlik düzeylerini tara ve benzersiz
+    // (matriks, düzey, birim) satırlarını topla. Aynı kombinasyonu birden fazla
+    // gösterme; farklı matriks/düzey varyasyonu varsa hepsini listele.
     const repeatability = asRecord(moduleData.PRECISION_REPEATABILITY);
-    const firstEntry = Object.entries(repeatability).find(([, value]) => {
-        const record = asRecord(value);
-        return Array.isArray(record.levels) && record.levels.length > 0;
+    const seen = new Set<string>();
+    const rows: Array<[React.ReactNode, React.ReactNode, React.ReactNode]> = [];
+
+    Object.values(repeatability).forEach(componentValue => {
+        const record = asRecord(componentValue);
+        const unitRaw = String(record.unitLabel ?? record.unit ?? "").trim();
+        const levels = Array.isArray(record.levels) ? record.levels : [];
+        levels.forEach(level => {
+            const levelRecord = asRecord(level);
+            const matrixRaw = String(levelRecord.matrix ?? "").trim();
+            const targetRaw = String(levelRecord.target ?? "").trim();
+            // Tüm alanlar boşsa atla (boş satır oluşturma)
+            if (!matrixRaw && !targetRaw && !unitRaw) return;
+            const key = `${matrixRaw.toLocaleLowerCase("tr-TR")}|${targetRaw.toLocaleLowerCase("tr-TR")}|${unitRaw.toLocaleLowerCase("tr-TR")}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            rows.push([
+                matrixRaw || data.meta.matrix || "-",
+                targetRaw || "-",
+                unitRaw || "-",
+            ]);
+        });
     });
 
-    if (firstEntry) {
-        const record = asRecord(firstEntry[1]);
-        const unit = textValue(record.unitLabel || record.unit);
-        const levels = Array.isArray(record.levels) ? record.levels : [];
-        const rows = levels.map(level => {
-            const levelRecord = asRecord(level);
-            return [
-                textValue(levelRecord.matrix || data.meta.matrix),
-                textValue(levelRecord.target),
-                unit,
-            ];
-        });
-        if (rows.length > 0) return rows;
-    }
+    if (rows.length > 0) return rows;
 
+    // Hiç tekrarlanabilirlik datası yoksa komponentlerden türet (eski fallback)
     return (data.components || []).map(component => [data.meta.matrix, component.limit, component.unit]);
 };
 
