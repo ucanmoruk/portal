@@ -261,7 +261,21 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                         studyType: json.study_type || "",
                         plannedStartDate: json.planned_start_date,
                         plannedEndDate: json.planned_end_date,
-                        documentNo: json.code || json.config?.documentNo || "K.SOP.16 / Ek-1",
+                        documentNo: (() => {
+                            // Doküman no: method_code mevcutsa method_code-Ek.X formatında türetilir
+                            // (legacy VAL-YYYY-NNN kodları için otomatik düzeltme).
+                            const manual = String(json.config?.documentNo || "").trim();
+                            if (manual) return manual;
+                            const methodCode = String(json.method_code || "").trim();
+                            const savedCode = String(json.code || "").trim();
+                            if (methodCode) {
+                                const escaped = methodCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                                const ekPattern = new RegExp("^" + escaped + "-Ek\\.\\d+$", "i");
+                                if (ekPattern.test(savedCode)) return savedCode;
+                                return methodCode + "-Ek.1";
+                            }
+                            return savedCode || "K.SOP.16 / Ek-1";
+                        })(),
                         publishDate: json.config?.publishDate || "",
                         revisionNo: json.config?.revisionNo || "-",
                         revisionDate: json.config?.revisionDate || "-",

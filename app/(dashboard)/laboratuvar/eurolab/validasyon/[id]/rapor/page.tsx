@@ -160,6 +160,36 @@ function enrichDevicesFromInventory(
     });
 }
 
+// Rapor için doküman no'yu türetir.
+// Öncelik sırası:
+//   1. config.documentNo (kullanıcı manuel override koymuşsa)
+//   2. validation.code zaten {method_code}-Ek.X formatındaysa onu kullan
+//   3. method_code mevcutsa "{method_code}-Ek.1" şeklinde türet
+//      (eski VAL-YYYY-NNN kodlu validasyonlar otomatik düzelir)
+//   4. validation.code (legacy fallback)
+//   5. Son çare: "K.SOP.16 / Ek-1"
+function deriveDocumentNo(
+    validation: { code?: string; method_code?: string; id?: number },
+    config: { documentNo?: string },
+): string {
+    const manualOverride = String(config.documentNo || "").trim();
+    if (manualOverride) return manualOverride;
+
+    const methodCode = String(validation.method_code || "").trim();
+    const savedCode = String(validation.code || "").trim();
+
+    if (methodCode) {
+        // Kayıtlı kod method_code-Ek.X pattern'ine uyuyorsa olduğu gibi kullan
+        const escapedMethod = methodCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const ekPattern = new RegExp(`^${escapedMethod}-Ek\\.\\d+$`, "i");
+        if (ekPattern.test(savedCode)) return savedCode;
+        // Uymuyorsa (örn. legacy "VAL-2026-004") method_code'dan üret
+        return `${methodCode}-Ek.1`;
+    }
+
+    return savedCode || "K.SOP.16 / Ek-1";
+}
+
 function getReproducibilityDateRange(moduleData: Record<string, Record<string, unknown>>) {
     const reproducibility = moduleData.PRECISION_REPRODUCIBILITY;
     const dates: string[] = [];
@@ -325,7 +355,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                 studyType: validation.study_type || "",
                 plannedStartDate: reproducibilityDates.start || validation.planned_start_date,
                 plannedEndDate: reproducibilityDates.end || validation.planned_end_date,
-                documentNo: validation.code || config.documentNo || "K.SOP.16 / Ek-1",
+                documentNo: deriveDocumentNo(validation, config),
                 // Lokal state, config'ten yüklenip kullanıcı düzenleyebilir.
                 publishDate: docPublishDate,
                 revisionNo: docRevisionNo || "-",
