@@ -452,13 +452,20 @@ export const getExpandedUncertaintyValue = (
 };
 
 export const getMatrixLevelRows = (data: ReportData, moduleData: Record<string, Record<string, unknown>>) => {
-    const repeatability = moduleData.PRECISION_REPEATABILITY || {};
-    const rows = Object.entries(repeatability).flatMap(([, value]) => {
+    // Sadece İLK etken maddenin tekrarlanabilirlik düzeylerini kullan — diğer
+    // etken maddelerin matriks/düzey/birim bilgisi büyük ihtimalle aynıdır,
+    // tekrarlamak raporu gereksiz şişiriyor.
+    const repeatability = asRecord(moduleData.PRECISION_REPEATABILITY);
+    const firstEntry = Object.entries(repeatability).find(([, value]) => {
         const record = asRecord(value);
+        return Array.isArray(record.levels) && record.levels.length > 0;
+    });
+
+    if (firstEntry) {
+        const record = asRecord(firstEntry[1]);
         const unit = textValue(record.unitLabel || record.unit);
-        const levels = record.levels;
-        if (!Array.isArray(levels)) return [];
-        return levels.map(level => {
+        const levels = Array.isArray(record.levels) ? record.levels : [];
+        const rows = levels.map(level => {
             const levelRecord = asRecord(level);
             return [
                 textValue(levelRecord.matrix || data.meta.matrix),
@@ -466,9 +473,9 @@ export const getMatrixLevelRows = (data: ReportData, moduleData: Record<string, 
                 unit,
             ];
         });
-    });
+        if (rows.length > 0) return rows;
+    }
 
-    if (rows.length > 0) return rows;
     return (data.components || []).map(component => [data.meta.matrix, component.limit, component.unit]);
 };
 
