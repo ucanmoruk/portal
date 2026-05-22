@@ -235,28 +235,62 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         // Sayfa tamamen yüklensin (data fetch'leri dahil) — sabit bekleme + opsiyonel network idle
         await delay(3500);
 
-        // PDF'e basmadan önce dashboard chrome elementlerini DOM'dan kaldır.
-        // CSS kuralları @media print + emulation altında tutarsız davranabiliyor;
-        // doğrudan removeChild en garantili yol. nav/aside/header + report-disı
-        // her şey çıkarılır, sadece rapor içeriği kalır.
+        // PDF'e basmadan önce dashboard chrome'unu gizle.
+        //
+        // Yaklaşım:
+        //   1. Bulunan tüm <header>, <aside>, <nav> elementlerine agresif inline style
+        //      uygula (display: none + off-screen + height: 0). Sadece display: none
+        //      bazen yetmiyor — position: sticky / fixed elementler hala etki ediyor.
+        //   2. Bir <style> tag enjekte et — CSS module class'larından bağımsız çalışan
+        //      yüksek özgüllüklü kurallar.
+        //   3. MutationObserver kur — React re-render edip elementi geri eklerse
+        //      hemen tekrar gizle.
         await send("Runtime.evaluate", {
             expression: `
                 (function() {
-                    // Header / Sidebar / Nav elementlerini sil
-                    document.querySelectorAll('header, aside, nav, [role="banner"]').forEach(el => el.remove());
-                    // Body ve direkt çocukların üst boşluk/marjlarını sıfırla
-                    document.documentElement.style.margin = '0';
-                    document.documentElement.style.padding = '0';
-                    document.body.style.margin = '0';
-                    document.body.style.padding = '0';
-                    document.body.style.background = '#ffffff';
-                    return 'OK';
+                    var HIDE_CSS = 'display:none !important;visibility:hidden !important;position:absolute !important;left:-99999px !important;top:-99999px !important;height:0 !important;min-height:0 !important;width:0 !important;min-width:0 !important;margin:0 !important;padding:0 !important;border:0 !important;overflow:hidden !important;opacity:0 !important;';
+                    var SELECTOR = 'header, aside, nav, [role="banner"]';
+
+                    // Yüksek özgüllüklü kuralları head'e enjekte et
+                    var style = document.createElement('style');
+                    style.id = 'pdf-mode-hide-chrome';
+                    style.textContent = 'html body header, html body aside, html body nav, html body [role="banner"] { ' + HIDE_CSS + ' }';
+                    document.head.appendChild(style);
+
+                    // Mevcut elementlere agresif inline style
+                    function hide(el) {
+                        try {
+                            el.setAttribute('style', HIDE_CSS);
+                            el.setAttribute('aria-hidden', 'true');
+                        } catch (e) {}
+                    }
+                    document.querySelectorAll(SELECTOR).forEach(hide);
+
+                    // React re-render ettiğinde tekrar gizle
+                    var observer = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(m) {
+                            m.addedNodes.forEach(function(node) {
+                                if (node.nodeType !== 1) return;
+                                if (node.matches && node.matches(SELECTOR)) hide(node);
+                                if (node.querySelectorAll) {
+                                    node.querySelectorAll(SELECTOR).forEach(hide);
+                                }
+                            });
+                        });
+                    });
+                    observer.observe(document.body, { childList: true, subtree: true });
+
+                    // Body ve html reset
+                    document.documentElement.style.cssText = 'margin:0 !important;padding:0 !important;background:#ffffff !important;';
+                    document.body.style.cssText = 'margin:0 !important;padding:0 !important;background:#ffffff !important;';
+
+                    return 'OK ' + document.querySelectorAll(SELECTOR).length;
                 })();
             `,
             returnByValue: true,
         }, sessionId);
-        // DOM manipülasyonu sonrası React'in yeniden render etmesi için kısa bekleme
-        await delay(300);
+        // React reconciliation + observer yerleşim süresi
+        await delay(500);
 
         const pdfResult = await send<{ data: string }>("Page.printToPDF", {
             printBackground: true,
