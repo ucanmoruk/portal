@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BarChart3, Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,12 @@ type QcCardGroupRow = {
   card_type: string;
 };
 
+const statusFilterOptions = [
+  { value: "ALL", label: "Tüm Durumlar" },
+  { value: "COMPLETED", label: "Tamamlandı" },
+  { value: "NEW", label: "Yeni" },
+  { value: "IN_PROGRESS", label: "Devam Ediyor" },
+];
 
 const statusLabel = (status: string) => {
   if (status === "NEW") return "Yeni";
@@ -109,6 +115,12 @@ export default function ValidationDashboard() {
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [qcDialogRow, setQcDialogRow] = useState<ValidationRow | null>(null);
   const [creatingQcId, setCreatingQcId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState("ALL");
+
+  const filteredRows = useMemo(
+    () => statusFilter === "ALL" ? rows : rows.filter(row => row.status === statusFilter),
+    [rows, statusFilter],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -245,7 +257,19 @@ export default function ValidationDashboard() {
 
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
-          <span className={styles.totalCount}>{rows.length} validasyon</span>
+          <span className={styles.totalCount}>
+            {filteredRows.length} / {rows.length} validasyon
+          </span>
+          <select
+            className={styles.pageSizeSelect}
+            value={statusFilter}
+            onChange={event => setStatusFilter(event.target.value)}
+            aria-label="Duruma göre filtrele"
+          >
+            {statusFilterOptions.map(option => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -274,7 +298,7 @@ export default function ValidationDashboard() {
                     ))}
                   </tr>
                 ))
-              ) : rows.length === 0 ? (
+              ) : filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={8}>
                     <div className={styles.empty}>
@@ -282,7 +306,7 @@ export default function ValidationDashboard() {
                     </div>
                   </td>
                 </tr>
-              ) : rows.map(row => (
+              ) : filteredRows.map(row => (
                 <tr key={row.id}>
                   <td className={styles.tdMono}>
                     <Link className="text-blue-600 hover:underline font-semibold" style={{
