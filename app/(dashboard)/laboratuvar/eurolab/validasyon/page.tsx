@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, Printer } from "lucide-react";
+import { BarChart3, Printer, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import styles from "@/app/styles/table.module.css";
 
@@ -116,11 +116,28 @@ export default function ValidationDashboard() {
   const [qcDialogRow, setQcDialogRow] = useState<ValidationRow | null>(null);
   const [creatingQcId, setCreatingQcId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [search, setSearch] = useState("");
 
-  const filteredRows = useMemo(
-    () => statusFilter === "ALL" ? rows : rows.filter(row => row.status === statusFilter),
-    [rows, statusFilter],
-  );
+  const filteredRows = useMemo(() => {
+    const normalizedSearch = search.trim().toLocaleLowerCase("tr-TR");
+    return rows.filter(row => {
+      if (statusFilter !== "ALL" && row.status !== statusFilter) return false;
+      if (!normalizedSearch) return true;
+      const haystack = [
+        displayValidationCode(row),
+        row.method_name,
+        row.technique,
+        row.method_code,
+        typeLabel(row.study_type),
+        statusLabel(row.status),
+        authorizedPeople(row).join(" "),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("tr-TR");
+      return haystack.includes(normalizedSearch);
+    });
+  }, [rows, statusFilter, search]);
 
   useEffect(() => {
     let alive = true;
@@ -257,6 +274,22 @@ export default function ValidationDashboard() {
 
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
+          <div className={styles.searchBox} style={{ width: 340 }}>
+            <Search className={styles.searchIcon} size={15} />
+            <input
+              className={styles.searchInput}
+              placeholder="Kod, analiz adı, metot, yetkili kişi, tür..."
+              value={search}
+              onChange={event => setSearch(event.target.value)}
+            />
+            {search && (
+              <button className={styles.searchClear} onClick={() => setSearch("")} aria-label="Aramayı temizle">
+                <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                </svg>
+              </button>
+            )}
+          </div>
           <span className={styles.totalCount}>
             {filteredRows.length} / {rows.length} validasyon
           </span>
