@@ -233,15 +233,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         // Rapor sayfasını yükle
         const waitForReportReady = async () => {
             const startedAt = Date.now();
-            while (Date.now() - startedAt < 15000) {
+            let lastState = "";
+            while (Date.now() - startedAt < 45000) {
                 const ready = await send<{ result?: { value?: boolean } }>("Runtime.evaluate", {
-                    expression: "Boolean(document.querySelector('.vr2-shell, .validation-report-shell'))",
+                    expression: "Boolean(document.querySelector('.vr2-shell, .vr2-page, .validation-report-shell, .report-page'))",
                     returnByValue: true,
                 }, sessionId);
                 if (ready.result?.value === true) return;
+                const state = await send<{ result?: { value?: string } }>("Runtime.evaluate", {
+                    expression: "document.readyState + ' | ' + (document.title || '') + ' | ' + (document.body ? document.body.innerText.slice(0, 180) : '')",
+                    returnByValue: true,
+                }, sessionId);
+                lastState = state.result?.value || lastState;
                 await delay(250);
             }
-            throw new Error("Rapor PDF icin hazir hale gelmeden zaman asimi olustu.");
+            throw new Error(`Rapor PDF icin hazir hale gelmeden zaman asimi olustu. Son durum: ${lastState}`);
         };
 
         await send("Page.navigate", { url: reportUrl, transitionType: "link" }, sessionId);
