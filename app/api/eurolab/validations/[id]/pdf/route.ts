@@ -219,7 +219,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                 return {
                     name: c.slice(0, eqIndex).trim(),
                     value: c.slice(eqIndex + 1).trim(),
-                    domain: url.hostname,
+                    url: origin,
                     path: "/",
                     httpOnly: false,
                     secure: url.protocol === "https:",
@@ -235,7 +235,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             const startedAt = Date.now();
             while (Date.now() - startedAt < 15000) {
                 const ready = await send<{ result?: { value?: boolean } }>("Runtime.evaluate", {
-                    expression: "Boolean(document.querySelector('.validation-report-shell'))",
+                    expression: "Boolean(document.querySelector('.vr2-shell, .validation-report-shell'))",
                     returnByValue: true,
                 }, sessionId);
                 if (ready.result?.value === true) return;
