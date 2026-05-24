@@ -137,7 +137,7 @@ function enrichComponentsFromInventory(
             casNo: match?.cas_no || savedCasNo || "",
             limit: match?.limit_info || savedLimit || "",
             unit: match?.unit || savedUnit || "",
-            uncertaintyValue: match?.uncertainty_value ?? component.uncertaintyValue ?? component.uncertainty_value ?? null,
+            uncertaintyValue: null,
         };
     });
 }

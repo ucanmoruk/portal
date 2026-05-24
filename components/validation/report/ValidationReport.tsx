@@ -435,9 +435,6 @@ export const getExpandedUncertaintyValue = (
     moduleData: Record<string, Record<string, unknown>>,
     allowSingleFallback = false,
 ) => {
-    const componentUncertainty = parseNumeric(component.uncertaintyValue ?? component.uncertainty_value);
-    if (Number.isFinite(componentUncertainty) && componentUncertainty > 0) return numberValue(componentUncertainty, 5);
-
     const uncertaintyData = moduleData.MEASUREMENT_UNCERTAINTY;
     const matched = collectExpandedUncertainties(uncertaintyData, component.name, true);
     if (matched.length > 0) return numberValue(matched[0], 5);
