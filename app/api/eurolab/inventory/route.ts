@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hasEurolabDatabaseConfig, query } from "@/lib/db_eurolab";
 import { ensureEurolabInventoryTable } from "@/lib/eurolab_inventory_schema";
 
-const PAGE_SIZE_OPTIONS = new Set([10, 20, 50, 100]);
+const PAGE_SIZE_OPTIONS = new Set([10, 20, 50, 100, 200, 500]);
 
 const normalizeNumber = (value: unknown) => {
   if (value === null || value === undefined || value === "") return null;

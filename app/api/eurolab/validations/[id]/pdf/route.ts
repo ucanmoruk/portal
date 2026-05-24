@@ -207,6 +207,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
         await send("Network.enable", {}, sessionId);
         await send("Page.enable", {}, sessionId);
+        await send("Runtime.enable", {}, sessionId);
         await send("Emulation.setEmulatedMedia", { media: "print" }, sessionId);
 
         // Auth cookie'lerini aktar
@@ -230,10 +231,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         }
 
         // Rapor sayfasını yükle
+        const waitForReportReady = async () => {
+            const startedAt = Date.now();
+            while (Date.now() - startedAt < 15000) {
+                const ready = await send<{ result?: { value?: boolean } }>("Runtime.evaluate", {
+                    expression: "Boolean(document.querySelector('.validation-report-shell'))",
+                    returnByValue: true,
+                }, sessionId);
+                if (ready.result?.value === true) return;
+                await delay(250);
+            }
+            throw new Error("Rapor PDF icin hazir hale gelmeden zaman asimi olustu.");
+        };
+
         await send("Page.navigate", { url: reportUrl, transitionType: "link" }, sessionId);
 
         // Sayfa tamamen yüklensin (data fetch'leri dahil) — sabit bekleme + opsiyonel network idle
-        await delay(3500);
+        await waitForReportReady();
 
         // PDF'e basmadan önce dashboard chrome'unu gizle.
         //

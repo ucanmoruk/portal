@@ -304,6 +304,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
     const [personnelDirectory, setPersonnelDirectory] = useState<PersonnelDirectoryRow[]>([]);
     const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [inventoryLoading, setInventoryLoading] = useState(true);
     const [error, setError] = useState("");
     // Rapor başlık bilgileri (Yayın Tarihi / Revizyon No / Revizyon Tarihi)
     // ve Revizyon kayıtları — config'ten yüklenir, kullanıcı düzenler, "Kaydet" ile yazılır.
@@ -367,6 +368,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
         let alive = true;
 
         async function loadInventoryRows() {
+            setInventoryLoading(true);
             try {
                 // Hem komponentleri (Standart) hem cihazları (Ana Cihaz / Numune Hazırlama)
                 // envanterden çekmek için her ikisinin de kod/isim'ini arama listesine ekle.
@@ -374,6 +376,15 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                 // kapsamasını arttır.
                 const components = validation?.config?.components || [];
                 const devices = validation?.config?.devices || [];
+                const allParams = new URLSearchParams({ search: "", page: "1", pageSize: "500" });
+                const allResponse = await fetch(`/api/eurolab/inventory?${allParams.toString()}`, { credentials: "same-origin" });
+                const allJson: { rows?: InventoryRow[] } = await allResponse.json();
+                const allRows = allResponse.ok && Array.isArray(allJson.rows) ? allJson.rows : [];
+
+                if (pdfMode) {
+                    if (alive) setInventoryRows(allRows);
+                    return;
+                }
                 const searches = Array.from(new Set<string>([
                     "", // tüm envanter (ilk 200)
                     ...components.flatMap(c => [c.name, c.code || ""]),
@@ -387,10 +398,13 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                     return response.ok && Array.isArray(json.rows) ? json.rows : [];
                 }));
                 const merged = new Map<number, InventoryRow>();
+                allRows.forEach(row => merged.set(row.id, row));
                 responses.flat().forEach(row => merged.set(row.id, row));
                 if (alive) setInventoryRows(Array.from(merged.values()));
             } catch {
                 if (alive) setInventoryRows([]);
+            } finally {
+                if (alive) setInventoryLoading(false);
             }
         }
 
@@ -398,10 +412,11 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
         return () => {
             alive = false;
         };
-    }, [validation]);
+    }, [pdfMode, validation]);
 
     const reportData = useMemo<ReportData | null>(() => {
         if (!validation) return null;
+        if (inventoryLoading) return null;
         const config = validation.config || {};
         const configuredPersonnel = config.personnel || [];
         const fallbackPersonnel = Array.isArray(validation.personnel)
@@ -465,7 +480,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                 analyst: personnel[0]?.name || "Analist",
             },
         };
-    }, [validation, personnelDirectory, inventoryRows, revisions, docPublishDate, docRevisionNo, docRevisionDate]);
+    }, [validation, inventoryLoading, personnelDirectory, inventoryRows, revisions, docPublishDate, docRevisionNo, docRevisionDate]);
 
     // ─── Revisions handlers ─────────────────────────────────────────────────
     const addRevision = () => {
