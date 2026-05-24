@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { TruenessStudyForm } from "@/components/validation/modules/TruenessStudy
 import type { ReportData } from "@/components/validation/report/ValidationReport";
 import { ValidationReportV2 as ValidationReport } from "@/components/validation/report/ValidationReportV2";
 import { sortValidationParameters } from "@/types/validation";
-import { FileText, Printer } from "lucide-react";
+import { Download, FileText, Printer, Upload } from "lucide-react";
 import styles from "@/app/styles/table.module.css";
 import detailStyles from "./page.module.css";
 
@@ -195,6 +195,67 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [personnelDirectory, setPersonnelDirectory] = useState<PersonnelDirectoryRow[]>([]);
+    const [excelBusy, setExcelBusy] = useState<"idle" | "downloading" | "uploading">("idle");
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    const handleExcelDownload = async () => {
+        if (!validation) return;
+        try {
+            setExcelBusy("downloading");
+            const res = await fetch(`/api/eurolab/validations/${validation.id}/excel-template`, {
+                credentials: "same-origin",
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || "Excel şablonu indirilemedi.");
+            }
+            const blob = await res.blob();
+            const disposition = res.headers.get("content-disposition") || "";
+            const match = /filename="([^"]+)"/.exec(disposition);
+            const fileName = match?.[1] || `${displayValidationCode(validation)}-sablon.xlsx`;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : "Excel şablonu indirilemedi.");
+        } finally {
+            setExcelBusy("idle");
+        }
+    };
+
+    const handleExcelUpload = async (file: File) => {
+        if (!validation) return;
+        try {
+            setExcelBusy("uploading");
+            const formData = new FormData();
+            formData.append("file", file);
+            const res = await fetch(`/api/eurolab/validations/${validation.id}/excel-import`, {
+                method: "POST",
+                body: formData,
+                credentials: "same-origin",
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(json.error || "Excel yüklenemedi.");
+            const count = Array.isArray(json.touched) ? json.touched.length : 0;
+            alert(count > 0
+                ? `${count} kayıt güncellendi. Sayfa yenileniyor…`
+                : (json.message || "Excel'de import edilebilir veri bulunamadı."));
+            if (count > 0) {
+                // Sayfayı yenile (kolay yol — moduleData'yı tüm modüllere yansıtır)
+                window.location.reload();
+            }
+        } catch (err: unknown) {
+            alert(err instanceof Error ? err.message : "Excel yüklenemedi.");
+        } finally {
+            setExcelBusy("idle");
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
 
     const components = useMemo(() => {
         const configured = validation?.config?.components?.map(component => component.name).filter(Boolean) || [];
@@ -579,6 +640,34 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                     </p>
                 </div>
                 <div className={detailStyles.actions}>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleExcelUpload(file);
+                        }}
+                    />
+                    <Button
+                        variant="outline"
+                        className={detailStyles.printButton}
+                        onClick={handleExcelDownload}
+                        disabled={excelBusy !== "idle"}
+                        title="Protokole göre Excel şablonu indir"
+                    >
+                        <Download size={16} /> {excelBusy === "downloading" ? "İndiriliyor…" : "Şablon İndir"}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        className={detailStyles.printButton}
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={excelBusy !== "idle"}
+                        title="Doldurulmuş Excel'i yükle (sadece dolu hücreler import edilir)"
+                    >
+                        <Upload size={16} /> {excelBusy === "uploading" ? "Yükleniyor…" : "Excel Yükle"}
+                    </Button>
                     <Button variant="outline" className={detailStyles.printButton} onClick={() => window.print()}>
                         <Printer size={16} /> Yazdır
                     </Button>
