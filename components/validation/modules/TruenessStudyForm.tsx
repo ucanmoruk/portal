@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { calculateGrubbs } from "../shared/grubbs";
+import { formatForDisplay } from "../shared/displayFormat";
 
 type ComponentData = Record<string, string[][]>;
 type MatrixMap = Record<string, string>;
@@ -158,6 +159,8 @@ const tCritical95 = (degreesOfFreedom: number) => {
 export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analist"], initialData = {}, onReportDataChange }: TruenessStudyFormProps) {
     const analysts = personnel.length > 0 ? personnel : ["Analist"];
     const [activeComponent, setActiveComponent] = useState(components[0] || "Genel");
+    // Görüntü yuvarlama için odak takibi (yalnız görsel; veri ham kalır).
+    const [focusedKey, setFocusedKey] = useState<string | null>(null);
     const [matrices, setMatrices] = useState<MatrixMap>(() =>
         Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.matrix || ""]))
     );
@@ -627,18 +630,25 @@ export function TruenessStudyForm({ components = ["Genel"], personnel = ["Analis
                                                             <TableCell className="border-r border-slate-200 bg-slate-50 text-center text-xs font-medium text-slate-600">
                                                                 {rowIndex + 1}
                                                             </TableCell>
-                                                            {analysts.map((_analyst, analystIndex) => (
+                                                            {analysts.map((_analyst, analystIndex) => {
+                                                                const cellKey = `${component}-${rowIndex}-${analystIndex}`;
+                                                                const raw = row[analystIndex] || "";
+                                                                const shown = focusedKey === cellKey ? raw : formatForDisplay(raw, 3);
+                                                                return (
                                                                 <TableCell key={`${component}-${rowIndex}-a${analystIndex}`} className="border-l border-slate-200 p-2">
                                                                     <Input
-                                                                        value={row[analystIndex] || ""}
+                                                                        value={shown}
                                                                         onChange={(event) => updateCell(component, rowIndex, analystIndex, event.target.value)}
                                                                         onPaste={(event) => handlePaste(event, component, rowIndex, analystIndex)}
+                                                                        onFocus={() => setFocusedKey(cellKey)}
+                                                                        onBlur={() => setFocusedKey(prev => prev === cellKey ? null : prev)}
                                                                         className="h-9 bg-white text-center"
                                                                         style={{ padding: "10px" }}
                                                                         placeholder="-"
                                                                     />
                                                                 </TableCell>
-                                                            ))}
+                                                                );
+                                                            })}
                                                             <TableCell className="w-[42px] p-1 text-center">
                                                                 <Button
                                                                     variant="ghost"

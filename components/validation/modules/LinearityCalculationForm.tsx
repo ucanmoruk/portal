@@ -10,6 +10,7 @@ import { Calculator, Plus, Trash2, Save, Activity, Weight } from "lucide-react";
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, Legend } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { formatForDisplay } from "../shared/displayFormat";
 
 interface LinearityPoint {
     id: string;
@@ -81,6 +82,8 @@ const rangeUnitLabel = (unit: string) => {
 export function LinearityCalculationForm({ components = ["Genel"], initialData = {}, onReportDataChange }: LinearityFormProps) {
     const [activeComponent, setActiveComponent] = useState(components[0]);
     const [replicates, setReplicates] = useState(() => Number(Object.values(initialData)[0]?.replicates) || 1); // Default n=1
+    // Görüntü yuvarlama için odak takibi (yalnız görsel; veri ham kalır).
+    const [focusedKey, setFocusedKey] = useState<string | null>(null);
 
     const [settings, setSettings] = useState<{ unit: string; notes: string }>(() => ({
         unit: Object.values(initialData)[0]?.unit || "mg_L",
@@ -604,24 +607,42 @@ Doğrusal çalışma aralığında korelasyon sabiti (R²) 0,995'den büyük old
                                                                 ) : null}
 
                                                                 <TableCell className="p-2">
-                                                                    <Input
-                                                                        className="h-9 bg-white"
-                                                                        style={{padding: "10px"}}
-                                                                        placeholder="Conc."
-                                                                        value={row.concentrations[rIdx] || ''}
-                                                                        onChange={(e) => handleDataChange(comp, idx, 'concentration', e.target.value, rIdx)}
-                                                                        onPaste={(e) => handlePaste(e, comp, idx, rIdx, 'concentration')}
-                                                                    />
+                                                                    {(() => {
+                                                                        const concKey = `${comp}-c-${idx}-${rIdx}`;
+                                                                        const raw = row.concentrations[rIdx] || '';
+                                                                        const shown = focusedKey === concKey ? raw : formatForDisplay(raw, 3);
+                                                                        return (
+                                                                            <Input
+                                                                                className="h-9 bg-white"
+                                                                                style={{padding: "10px"}}
+                                                                                placeholder="Conc."
+                                                                                value={shown}
+                                                                                onChange={(e) => handleDataChange(comp, idx, 'concentration', e.target.value, rIdx)}
+                                                                                onPaste={(e) => handlePaste(e, comp, idx, rIdx, 'concentration')}
+                                                                                onFocus={() => setFocusedKey(concKey)}
+                                                                                onBlur={() => setFocusedKey(prev => prev === concKey ? null : prev)}
+                                                                            />
+                                                                        );
+                                                                    })()}
                                                                 </TableCell>
                                                                 <TableCell className="p-2">
-                                                                    <Input
-                                                                        className="h-9 bg-white"
-                                                                        style={{padding: "10px"}}
-                                                                        placeholder={`R${rIdx + 1}`}
-                                                                        value={row.responses[rIdx] || ''}
-                                                                        onChange={(e) => handleDataChange(comp, idx, 'response', e.target.value, rIdx)}
-                                                                        onPaste={(e) => handlePaste(e, comp, idx, rIdx, 'response')}
-                                                                    />
+                                                                    {(() => {
+                                                                        const respKey = `${comp}-r-${idx}-${rIdx}`;
+                                                                        const raw = row.responses[rIdx] || '';
+                                                                        const shown = focusedKey === respKey ? raw : formatForDisplay(raw, 3);
+                                                                        return (
+                                                                            <Input
+                                                                                className="h-9 bg-white"
+                                                                                style={{padding: "10px"}}
+                                                                                placeholder={`R${rIdx + 1}`}
+                                                                                value={shown}
+                                                                                onChange={(e) => handleDataChange(comp, idx, 'response', e.target.value, rIdx)}
+                                                                                onPaste={(e) => handlePaste(e, comp, idx, rIdx, 'response')}
+                                                                                onFocus={() => setFocusedKey(respKey)}
+                                                                                onBlur={() => setFocusedKey(prev => prev === respKey ? null : prev)}
+                                                                            />
+                                                                        );
+                                                                    })()}
                                                                 </TableCell>
 
                                                                 {/* Remove Button: Only on first replicate */}

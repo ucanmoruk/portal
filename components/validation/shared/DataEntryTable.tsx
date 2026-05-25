@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Trash2, Plus } from "lucide-react";
+import { formatForDisplay } from "./displayFormat";
 
 interface DataEntryTableProps {
     personnel: string[]; // List of analyst names
@@ -18,18 +19,6 @@ interface DataEntryTableProps {
      */
     displayDigits?: number;
 }
-
-// Görsel formatlama yardımcısı — DB'deki ham veriyi DEĞİŞTİRMEZ, sadece
-// odaklanılmayan input'larda kullanıcıya gösterilecek metni üretir.
-const formatForDisplay = (raw: string, digits: number): string => {
-    const text = String(raw ?? "").trim();
-    if (!text) return "";
-    // Sadece sayı (rakam, +/-, .,) içeriyorsa yuvarla; başka karakter varsa ham bırak
-    if (!/^[-+]?\d+([.,]\d+)?$/.test(text)) return text;
-    const parsed = Number(text.replace(",", "."));
-    if (!Number.isFinite(parsed)) return text;
-    return parsed.toFixed(digits).replace(".", ",");
-};
 
 export function DataEntryTable({ personnel, component, initialData, onDataChange, displayDigits = 3 }: DataEntryTableProps) {
     // Rows x Columns grid.

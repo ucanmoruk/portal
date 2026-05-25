@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { calculateGrubbs } from "../shared/grubbs";
+import { formatForDisplay } from "../shared/displayFormat";
 
 type Row = {
     date: string;
@@ -202,6 +203,8 @@ export function PrecisionReproducibilityForm({ components = ["Genel"], personnel
     while (analysts.length < 2) analysts.push(`Analist ${analysts.length + 1}`);
 
     const [activeComponent, setActiveComponent] = useState(components[0] || "Genel");
+    // Görüntü yuvarlama için odak takibi (yalnız görsel; veri ham kalır).
+    const [focusedKey, setFocusedKey] = useState<string | null>(null);
     const [units, setUnits] = useState<UnitMap>(() =>
         Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.unit || "mg_kg"]))
     );
@@ -496,18 +499,25 @@ Ftest > 1   ve   Ftest < Fkritik`;
                                                                     style={{ padding: "10px" }}
                                                                 />
                                                             </TableCell>
-                                                            {analysts.map((_analyst, analystIndex) => (
-                                                                <TableCell key={`${component}-r${rowIndex}-a${analystIndex}`} className="border-l border-slate-200 p-2">
-                                                                    <Input
-                                                                        value={row.values[analystIndex] || ""}
-                                                                        onChange={(event) => updateValue(component, rowIndex, analystIndex, event.target.value)}
-                                                                        onPaste={(event) => handlePaste(event, component, rowIndex, analystIndex)}
-                                                                        className="h-9 bg-white text-center"
-                                                                        style={{ padding: "10px" }}
-                                                                        placeholder="-"
-                                                                    />
-                                                                </TableCell>
-                                                            ))}
+                                                            {analysts.map((_analyst, analystIndex) => {
+                                                                const cellKey = `${component}-${rowIndex}-${analystIndex}`;
+                                                                const raw = row.values[analystIndex] || "";
+                                                                const shown = focusedKey === cellKey ? raw : formatForDisplay(raw, 3);
+                                                                return (
+                                                                    <TableCell key={`${component}-r${rowIndex}-a${analystIndex}`} className="border-l border-slate-200 p-2">
+                                                                        <Input
+                                                                            value={shown}
+                                                                            onChange={(event) => updateValue(component, rowIndex, analystIndex, event.target.value)}
+                                                                            onPaste={(event) => handlePaste(event, component, rowIndex, analystIndex)}
+                                                                            onFocus={() => setFocusedKey(cellKey)}
+                                                                            onBlur={() => setFocusedKey(prev => prev === cellKey ? null : prev)}
+                                                                            className="h-9 bg-white text-center"
+                                                                            style={{ padding: "10px" }}
+                                                                            placeholder="-"
+                                                                        />
+                                                                    </TableCell>
+                                                                );
+                                                            })}
                                                             <TableCell className="w-[42px] p-1 text-center">
                                                                 <Button
                                                                     variant="ghost"

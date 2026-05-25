@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { calculateGrubbs } from "../shared/grubbs";
+import { formatForDisplay } from "../shared/displayFormat";
 
 type AnalystGrid = string[][];
 type LevelData = Record<string, Record<string, AnalystGrid>>;
@@ -84,6 +85,8 @@ const levelKeys = (count: number) => Array.from({ length: count }, (_, index) =>
 export function PrecisionRepeatabilityForm({ components = ["Genel"], personnel = ["Ali", "Duygu"], initialData = {}, onReportDataChange }: PrecisionRepeatabilityFormProps) {
     const analysts = personnel.length > 0 ? personnel : ["Ali", "Duygu"];
     const [activeComponent, setActiveComponent] = useState(components[0] || "Genel");
+    // Görüntü yuvarlama için odak takibi (yalnız görsel; veri ham kalır).
+    const [focusedKey, setFocusedKey] = useState<string | null>(null);
     const [targets, setTargets] = useState<TargetMap>(() =>
         Object.fromEntries(Object.entries(initialData).map(([component, data]) => [component, data?.targets || Object.fromEntries((data?.levels || []).map((level: any) => [level.key, level.target || ""]))]))
     );
@@ -589,18 +592,25 @@ Elde edilen sonuçlar incelendiğinde, her bir test örneği ve paralel örnekte
                                             {analysts.flatMap((analyst, analystIndex) => {
                                                 const grid = getGrid(component, levelKey, analyst);
 
-                                                return [0, 1].map(colIndex => (
-                                                    <TableCell key={`${levelKey}-r${rowIndex}-a${analystIndex}-c${colIndex}`} className="border-l border-slate-200 p-2">
-                                                        <Input
-                                                            value={grid[rowIndex]?.[colIndex] || ""}
-                                                            onChange={(event) => updateCell(component, levelKey, analyst, rowIndex, colIndex, event.target.value)}
-                                                            onPaste={(event) => handlePaste(event, component, levelKey, analyst, rowIndex, colIndex)}
-                                                            className="h-9 bg-white text-center"
-                                                            style={{ padding: "10px" }}
-                                                            placeholder="-"
-                                                        />
-                                                    </TableCell>
-                                                ));
+                                                return [0, 1].map(colIndex => {
+                                                    const cellKey = `${component}-${levelKey}-${analyst}-${rowIndex}-${colIndex}`;
+                                                    const raw = grid[rowIndex]?.[colIndex] || "";
+                                                    const shown = focusedKey === cellKey ? raw : formatForDisplay(raw, 3);
+                                                    return (
+                                                        <TableCell key={`${levelKey}-r${rowIndex}-a${analystIndex}-c${colIndex}`} className="border-l border-slate-200 p-2">
+                                                            <Input
+                                                                value={shown}
+                                                                onChange={(event) => updateCell(component, levelKey, analyst, rowIndex, colIndex, event.target.value)}
+                                                                onPaste={(event) => handlePaste(event, component, levelKey, analyst, rowIndex, colIndex)}
+                                                                onFocus={() => setFocusedKey(cellKey)}
+                                                                onBlur={() => setFocusedKey(prev => prev === cellKey ? null : prev)}
+                                                                className="h-9 bg-white text-center"
+                                                                style={{ padding: "10px" }}
+                                                                placeholder="-"
+                                                            />
+                                                        </TableCell>
+                                                    );
+                                                });
                                             })}
                                             <TableCell className="border-l border-slate-200 p-0"></TableCell>
                                             <TableCell className="w-[42px] p-1 text-center">
