@@ -91,6 +91,40 @@ const moduleCriteria: Record<string, { criterion: string; rule: string }> = {
     },
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Raw veri hücreleri için gösterim formatı.
+// Kullanıcı `0,2022585` gibi uzun ondalıklı bir değer girdiyse rapor sayısal
+// hücrelerde 3 hane göstersin. ALTTAKİ DATA / HESAPLAMA DEĞİŞMEZ — sadece
+// görsel formatlama.
+//
+// Davranış:
+//   • Sayı olarak parse edilebiliyorsa  → toFixed(3) + Türkçe virgül
+//   • Tarih, kod, metin gibi alanlar    → olduğu gibi (textValue gibi)
+//   • Boş / null / undefined            → "-"
+// ─────────────────────────────────────────────────────────────────────────────
+const displayNumber = (value: unknown, digits = 3): React.ReactNode => {
+    if (value === null || value === undefined || value === "") return "-";
+    if (React.isValidElement(value)) return value;
+    // Sadece sayı VEYA sayı-formundaki string ise yuvarla.
+    // "12,5" veya "12.5" gibi → yuvarla. "Analist 1", "2024-01-15" → dokunma.
+    if (typeof value === "number") {
+        if (!Number.isFinite(value)) return "-";
+        return value.toFixed(digits).replace(".", ",");
+    }
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return "-";
+        // Tarih (YYYY-MM-DD) veya alfasayısal görünüyorsa olduğu gibi
+        if (/^-?\d+([.,]\d+)?$/.test(trimmed)) {
+            const parsed = Number(trimmed.replace(",", "."));
+            if (Number.isFinite(parsed)) return parsed.toFixed(digits).replace(".", ",");
+        }
+        return trimmed;
+    }
+    if (typeof value === "boolean") return String(value);
+    return JSON.stringify(value);
+};
+
 interface ValidationReportV2Props {
     data: ReportData;
     /** PDF üretimi sırasında butonları ve interaktif elementleri gizler. */
@@ -433,7 +467,7 @@ function renderAuditData(moduleKey: string, value: unknown, data: ReportData): R
             const cells = Array.isArray(row) ? row : [row];
             const padded = Array.from({ length: maxCols }, (_, ci) => {
                 const v = cells[ci];
-                return v === "" || v === undefined || v === null ? "-" : textValue(v);
+                return v === "" || v === undefined || v === null ? "-" : displayNumber(v);
             });
             return [i + 1, ...padded];
         }).filter(row => row.slice(1).some(c => c !== "-"));
@@ -474,7 +508,7 @@ function renderAuditData(moduleKey: string, value: unknown, data: ReportData): R
                 const c = concs[i];
                 const r = resps[i];
                 if ((c === "" || c === undefined) && (r === "" || r === undefined)) continue;
-                flat.push([level, i + 1, textValue(c ?? "-"), textValue(r ?? "-"), unitLabel(record.unit)]);
+                flat.push([level, i + 1, displayNumber(c ?? "-"), displayNumber(r ?? "-"), unitLabel(record.unit)]);
             }
         });
 
@@ -515,7 +549,7 @@ function renderAuditData(moduleKey: string, value: unknown, data: ReportData): R
             Object.entries(analysts).forEach(([analyst, gridValue]) => {
                 const grid = Array.isArray(gridValue) ? gridValue : [];
                 grid.forEach((row, rowIndex) => {
-                    const cells = Array.isArray(row) ? row.map(textValue) : [textValue(row)];
+                    const cells = Array.isArray(row) ? row.map(v => displayNumber(v)) : [displayNumber(row)];
                     rows.push([fieldLabel(levelKey), analyst, rowIndex + 1, ...cells]);
                 });
             });
@@ -574,7 +608,7 @@ function renderAuditData(moduleKey: string, value: unknown, data: ReportData): R
                     const values = Array.isArray(r.values) ? r.values : [];
                     return [
                         textValue(r.date),
-                        ...Array.from({ length: maxValueCount }, (_, i) => textValue(values[i])),
+                        ...Array.from({ length: maxValueCount }, (_, i) => displayNumber(values[i])),
                     ];
                 })}
             />
@@ -596,7 +630,7 @@ function renderAuditData(moduleKey: string, value: unknown, data: ReportData): R
         // Ölçülen değerler tablosu
         const measuredRows: Array<Array<React.ReactNode>> = rows.map((row, i) => [
             i + 1,
-            ...Array.from({ length: maxColumns }, (_, ci) => Array.isArray(row) ? textValue(row[ci]) : "-"),
+            ...Array.from({ length: maxColumns }, (_, ci) => Array.isArray(row) ? displayNumber(row[ci]) : "-"),
         ]).filter(row => row.slice(1).some(c => c !== "-" && c !== ""));
 
         // Geri kazanım % tablosu — results[analyst].recoveries[i].recovery
