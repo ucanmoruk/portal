@@ -237,10 +237,15 @@ Ftest > 1   ve   Ftest < Fkritik`;
         const rows = getRows(component);
         rows[rowIndex] = { ...rows[rowIndex], date: value };
 
-        if (rowIndex === 0 && value) {
-            for (let index = 1; index < rows.length; index += 1) {
-                if (!rows[index].date) {
-                    rows[index] = { ...rows[index], date: addDays(value, index) };
+        // Bir satıra geçerli tarih girilince, altındaki TÜM satırları otomatik
+        // olarak +1, +2, +3 ... şeklinde günceller (üzerine yazar).
+        // Eğer girilen değer boşaltılırsa otomatik doldurma yapılmaz.
+        if (value) {
+            for (let index = rowIndex + 1; index < rows.length; index += 1) {
+                const offset = index - rowIndex;
+                const nextDate = addDays(value, offset);
+                if (nextDate) {
+                    rows[index] = { ...rows[index], date: nextDate };
                 }
             }
         }
