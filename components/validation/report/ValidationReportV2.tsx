@@ -105,22 +105,28 @@ const moduleCriteria: Record<string, { criterion: string; rule: string }> = {
 const displayNumber = (value: unknown, digits = 3): React.ReactNode => {
     if (value === null || value === undefined || value === "") return "-";
     if (React.isValidElement(value)) return value;
-    // Sadece sayı VEYA sayı-formundaki string ise yuvarla.
-    // "12,5" veya "12.5" gibi → yuvarla. "Analist 1", "2024-01-15" → dokunma.
-    if (typeof value === "number") {
-        if (!Number.isFinite(value)) return "-";
-        return value.toFixed(digits).replace(".", ",");
-    }
+
+    // 1) Tarih, alfasayısal etiket, vb. değerleri SAYISAL formatlamadan koru.
     if (typeof value === "string") {
         const trimmed = value.trim();
         if (!trimmed) return "-";
-        // Tarih (YYYY-MM-DD) veya alfasayısal görünüyorsa olduğu gibi
-        if (/^-?\d+([.,]\d+)?$/.test(trimmed)) {
-            const parsed = Number(trimmed.replace(",", "."));
-            if (Number.isFinite(parsed)) return parsed.toFixed(digits).replace(".", ",");
-        }
-        return trimmed;
+        // Tarih (YYYY-MM-DD, DD.MM.YYYY)
+        if (/^\d{4}-\d{1,2}-\d{1,2}/.test(trimmed)) return trimmed;
+        if (/^\d{1,2}[./-]\d{1,2}[./-]\d{2,4}/.test(trimmed)) return trimmed;
+        // Sayı OLMAYAN bir karakter içeriyorsa (harf, harici sembol) → olduğu gibi
+        // Sadece rakam, virgül, nokta, eksi ve boşluk içermesini kontrol et.
+        if (!/^[-+\d.,\s eE]+$/.test(trimmed)) return trimmed;
     }
+
+    // 2) Sayı parse et — parseNumeric virgülü "." ile değiştirip parse eder.
+    const parsed = parseNumeric(value);
+    if (Number.isFinite(parsed)) {
+        return parsed.toFixed(digits).replace(".", ",");
+    }
+
+    // 3) Sayı değilse string'e çevir
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "number") return "-";
     if (typeof value === "boolean") return String(value);
     return JSON.stringify(value);
 };
@@ -699,7 +705,7 @@ function renderAuditData(moduleKey: string, value: unknown, data: ReportData): R
                                 textValue(r.code),
                                 textValue(r.name),
                                 textValue(r.unit),
-                                textValue(r.value),
+                                displayNumber(r.value),
                                 textValue(r.distribution),
                                 numberValue(r.standardUncertainty, 5),
                             ];
@@ -716,7 +722,7 @@ function renderAuditData(moduleKey: string, value: unknown, data: ReportData): R
                             return [
                                 textValue(r.code),
                                 textValue(r.name),
-                                textValue(r.purity),
+                                displayNumber(r.purity),
                                 textValue(r.distribution),
                                 numberValue(r.standardUncertainty, 5),
                             ];
