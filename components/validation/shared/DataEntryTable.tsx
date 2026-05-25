@@ -11,16 +11,38 @@ interface DataEntryTableProps {
     component: string;   // Current component name (for labeling)
     initialData?: string[][]; // Optional initial data
     onDataChange: (data: string[][]) => void;
+    /**
+     * Hücreye odaklanılmadığında uygulanacak ondalık hane sayısı (Türkçe virgül).
+     * Hücreye tıklayınca ham değer geri görünür — düzenleme/hesap için
+     * orijinal veri korunur. Varsayılan: 3.
+     */
+    displayDigits?: number;
 }
 
-export function DataEntryTable({ personnel, component, initialData, onDataChange }: DataEntryTableProps) {
-    // Rows x Columns grid. 
+// Görsel formatlama yardımcısı — DB'deki ham veriyi DEĞİŞTİRMEZ, sadece
+// odaklanılmayan input'larda kullanıcıya gösterilecek metni üretir.
+const formatForDisplay = (raw: string, digits: number): string => {
+    const text = String(raw ?? "").trim();
+    if (!text) return "";
+    // Sadece sayı (rakam, +/-, .,) içeriyorsa yuvarla; başka karakter varsa ham bırak
+    if (!/^[-+]?\d+([.,]\d+)?$/.test(text)) return text;
+    const parsed = Number(text.replace(",", "."));
+    if (!Number.isFinite(parsed)) return text;
+    return parsed.toFixed(digits).replace(".", ",");
+};
+
+export function DataEntryTable({ personnel, component, initialData, onDataChange, displayDigits = 3 }: DataEntryTableProps) {
+    // Rows x Columns grid.
     // Default 10 rows. Columns = personnel.length
     const [grid, setGrid] = useState<string[][]>(() => {
         if (initialData && initialData.length > 0) return initialData;
         const rows = 10;
         return Array(rows).fill(null).map(() => Array(personnel.length).fill(""));
     });
+
+    // Hangi hücre odakta — odaktaki hücre ham değeri gösterir, diğerleri yuvarlanmış.
+    // Bu state SADECE görüntü kontrolü içindir; `grid` her zaman ham veriyi tutar.
+    const [focusedKey, setFocusedKey] = useState<string | null>(null);
 
     // Helper to update grid and notify parent
     const updateGrid = (newGrid: string[][]) => {
@@ -110,18 +132,26 @@ export function DataEntryTable({ personnel, component, initialData, onDataChange
                                 <TableCell className="border-r border-slate-200 bg-slate-50 text-center text-xs font-medium text-slate-600">
                                     {rowIndex + 1}
                                 </TableCell>
-                                {row.map((cellValue, colIndex) => (
-                                    <TableCell key={colIndex} className="border-l border-slate-200 p-2">
-                                        <Input
-                                            className="h-9 bg-white text-center"
-                                            style={{ padding: "10px" }}
-                                            value={cellValue}
-                                            onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                                            onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
-                                            placeholder="-"
-                                        />
-                                    </TableCell>
-                                ))}
+                                {row.map((cellValue, colIndex) => {
+                                    const cellKey = `${rowIndex}-${colIndex}`;
+                                    const isFocused = focusedKey === cellKey;
+                                    // Odakta ise ham değer (kullanıcı düzenleyebilsin), değilse yuvarlanmış görünüm.
+                                    const shownValue = isFocused ? cellValue : formatForDisplay(cellValue, displayDigits);
+                                    return (
+                                        <TableCell key={colIndex} className="border-l border-slate-200 p-2">
+                                            <Input
+                                                className="h-9 bg-white text-center"
+                                                style={{ padding: "10px" }}
+                                                value={shownValue}
+                                                onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                                                onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
+                                                onFocus={() => setFocusedKey(cellKey)}
+                                                onBlur={() => setFocusedKey(prev => prev === cellKey ? null : prev)}
+                                                placeholder="-"
+                                            />
+                                        </TableCell>
+                                    );
+                                })}
                                 <TableCell className="p-1 text-center">
                                     <Button
                                         variant="ghost"
