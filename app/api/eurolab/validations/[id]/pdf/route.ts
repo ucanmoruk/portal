@@ -236,7 +236,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             let lastState = "";
             while (Date.now() - startedAt < 45000) {
                 const ready = await send<{ result?: { value?: boolean } }>("Runtime.evaluate", {
-                    expression: "Boolean(document.querySelector('.vr2-shell, .vr2-page, .validation-report-shell, .report-page'))",
+                    expression: `
+                        (function() {
+                            var root = document.querySelector('.vr2-shell, .validation-report-shell');
+                            if (!root) return false;
+                            var page = document.querySelector('.vr2-page, .report-page');
+                            var text = (root.innerText || '').trim();
+                            var rect = root.getBoundingClientRect ? root.getBoundingClientRect() : { height: 0 };
+                            var height = Math.max(root.scrollHeight || 0, rect.height || 0);
+                            return Boolean(page && text.length > 500 && height > 500);
+                        })();
+                    `,
                     returnByValue: true,
                 }, sessionId);
                 if (ready.result?.value === true) return;
@@ -310,7 +320,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             returnByValue: true,
         }, sessionId);
         // React reconciliation + observer yerleşim süresi
-        await delay(500);
+        await send("Runtime.evaluate", {
+            expression: `
+                Promise.all([
+                    document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(),
+                    new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+                ]).then(() => true)
+            `,
+            awaitPromise: true,
+            returnByValue: true,
+        }, sessionId);
+        await delay(750);
 
         const pdfResult = await send<{ data: string }>("Page.printToPDF", {
             printBackground: true,
