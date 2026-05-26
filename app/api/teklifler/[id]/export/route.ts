@@ -214,17 +214,20 @@ export async function GET(
     //    {kdv}            = KDV tutarı (şablonda "KDV (%20):" başlığı sabit kalıyor)
     //    {sayfa_no}       = "1" (dinamik sayfa numarası Word alanı değil, statik)
     const vars: Record<string, string> = {
-      teklif_no:       `ROT${no}`,
-      revizyon_no:     h.RevNo > 0 ? String(h.RevNo) : "--",
-      teklif_tarihi:   h.Tarih || "",
-      teklifi_veren:   h.TeklifVeren || "",
-      sayfa_no:        "1",
-      musteri_adi:     h.MusteriAd || "",
-      musteri_adresi:  h.MusteriAdres || "",
-      tutar:           `${fmt(araToplam)} ${pb}`,
-      toplam_iskonto:  `${fmt(araToplam * genelIsk / 100)} ${pb}`,
-      kdv:             `${fmt(kdvTutar)} ${pb}`,
-      genel_toplam:    `${fmt(genelToplam)} ${pb}`,
+      teklif_no:        `ROT${no}`,
+      revizyon_no:      h.RevNo > 0 ? String(h.RevNo) : "--",
+      teklif_tarihi:    h.Tarih || "",
+      teklifi_veren:    h.TeklifVeren || "",
+      sayfa_no:         "1",
+      musteri_adi:      h.MusteriAd || "",
+      musteri_adresi:   h.MusteriAdres || "",
+      musteri_yetkili:  h.MusteriYetkili || "",
+      musteri_email:    h.MusteriEmail || "",
+      musteri_telefon:  h.MusteriTelefon || "",
+      tutar:            `${fmt(araToplam)} ${pb}`,
+      toplam_iskonto:   `${fmt(araToplam * genelIsk / 100)} ${pb}`,
+      kdv:              `${fmt(kdvTutar)} ${pb}`,
+      genel_toplam:     `${fmt(genelToplam)} ${pb}`,
     };
 
     // Değişkenleri document.xml'e uygula
@@ -232,15 +235,17 @@ export async function GET(
       xml = xml.split(`{${key}}`).join(escXml(value));
     }
 
-    // 5. Aynı değişkenleri header1.xml'e de uygula (teklif_no, tarih, teklifi_veren, sayfa_no burada)
-    const headerFile = zip.file("word/header1.xml");
-    if (headerFile) {
-      let hXml = await headerFile.async("string");
-      hXml = mergeVariables(hXml);
+    // 5. Aynı değişkenleri tüm header/footer dosyalarına uygula
+    const extraFiles = ["word/header1.xml", "word/header2.xml", "word/footer1.xml", "word/footer2.xml"];
+    for (const fp of extraFiles) {
+      const file = zip.file(fp);
+      if (!file) continue;
+      let fxml = await file.async("string");
+      fxml = mergeVariables(fxml);
       for (const [key, value] of Object.entries(vars)) {
-        hXml = hXml.split(`{${key}}`).join(escXml(value));
+        fxml = fxml.split(`{${key}}`).join(escXml(value));
       }
-      zip.file("word/header1.xml", hXml);
+      zip.file(fp, fxml);
     }
 
     // 6. Güncellenen XML'i zip'e yaz
