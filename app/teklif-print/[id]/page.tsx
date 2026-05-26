@@ -119,15 +119,23 @@ export default async function TeklifPrintPage({
       <head>
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
         <style>{`
           @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
             background: #f5f5f7;
             color: #1d1d1f;
-            font-size: 11px;
-            line-height: 1.45;
+            font-size: 10.5px;
+            line-height: 1.5;
+            -webkit-font-feature-settings: "calt" 0, "liga" 0;
+            font-feature-settings: "calt" 0, "liga" 0;
           }
           .toolbar {
             background: #1d1d1f;
@@ -275,17 +283,17 @@ export default async function TeklifPrintPage({
 
           /* ───── Notlar ───────────────────────────────────────────────── */
           .notlar {
-            margin-top: 7mm;
-            font-size: 9px;
+            margin-top: 6mm;
+            font-size: 9.5px;
             color: #1d1d1f;
-            line-height: 1.55;
+            line-height: 1.5;
           }
           .notlar-title {
             font-weight: 700;
             font-size: 10px;
-            margin-bottom: 2mm;
+            margin-bottom: 1mm;
           }
-          .notlar p { margin-bottom: 1mm; }
+          .notlar p { margin-bottom: 0; }
 
           /* ───── Onay bloğu ───────────────────────────────────────────── */
           .approval-block {
@@ -297,8 +305,8 @@ export default async function TeklifPrintPage({
             text-align: center;
             min-width: 200px;
           }
-          .approval-line { border-top: 1px solid #1d1d1f; margin-bottom: 4px; }
-          .approval-label { font-weight: 700; font-size: 11px; }
+          .approval-dash { font-size: 13px; letter-spacing: -1px; color: #1d1d1f; margin-bottom: 2px; }
+          .approval-label { font-weight: 700; font-size: 11px; letter-spacing: 0.5px; }
           .approval-sub { font-size: 10px; color: #6e6e73; }
 
           /* ───── Alt kısım — hazırlayan + logo ────────────────────────── */
@@ -484,7 +492,7 @@ export default async function TeklifPrintPage({
           {/* ───── Onay ──────────────────────────────────────────────── */}
           <div className="approval-block">
             <div className="approval-content">
-              <div className="approval-line">&nbsp;</div>
+              <div className="approval-dash">_______________</div>
               <div className="approval-label">ONAYLAYAN</div>
               <div className="approval-sub">Kaşe / İmza</div>
             </div>
