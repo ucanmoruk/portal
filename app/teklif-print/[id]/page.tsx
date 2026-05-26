@@ -7,15 +7,27 @@ export const metadata = { title: "Teklif Çıktısı" };
 
 function teklifLabel(no: number | null, rev: number) {
   if (!no) return "—";
-  const yy  = String(no).slice(0, 2);
+  const yy = String(no).slice(0, 2);
   const seq = String(no).slice(2).padStart(4, "0");
-  return rev > 0 ? `${yy}${seq}/${rev}` : `${yy}${seq}`;
+  return rev > 0 ? `${yy}${seq}/${rev}` : `${yy}${seq}/0`;
 }
 
 function fmt(n: any) {
   const num = parseFloat(n);
   if (isNaN(num)) return "0,00";
   return num.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function addMonths(dateStr: string, months: number) {
+  // "dd.MM.yyyy" → 6 ay sonrası "dd.MM.yyyy"
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(dateStr || "");
+  if (!m) return "";
+  const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  d.setMonth(d.getMonth() + months);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = d.getFullYear();
+  return `${dd}.${mm}.${yy}`;
 }
 
 export default async function TeklifPrintPage({
@@ -44,6 +56,7 @@ export default async function TeklifPrintPage({
         ISNULL(t.TeklifKonusu, 'Fiyat teklifimiz') AS TeklifKonusu,
         ISNULL(t.TeklifVeren,  '')                 AS TeklifVeren,
         ISNULL(t.KdvOran, 20)                      AS KdvOran,
+        ISNULL(t.GenelIskonto, 0)                  AS GenelIskonto,
         ISNULL(m.Ad,'')           AS MusteriAd,
         ISNULL(m.Adres,'')        AS MusteriAdres,
         ISNULL(m.Telefon,'')      AS MusteriTelefon,
@@ -75,20 +88,31 @@ export default async function TeklifPrintPage({
     `);
 
   const satirlar: any[] = satirRes.recordset;
-  const no = teklifLabel(h.TeklifNo, h.RevNo);
-  const sirketAdi  = process.env.SIRKET_ADI   || "ÜGD";
-  const sirketAdres = process.env.SIRKET_ADRES || "";
-  const sirketWeb   = process.env.SIRKET_WEB   || "";
-  const sirketEmail = process.env.SIRKET_EMAIL || "";
+  const noLabel = teklifLabel(h.TeklifNo, h.RevNo);
+  const sirketAdi = process.env.SIRKET_ADI || "UNIQUE ANALYSE";
 
-  // Toplam hesapla
-  const tutar  = satirlar.reduce((acc: number, s: any) => {
+  // Hesaplamalar
+  const kdvOran = parseInt(h.KdvOran) || 20;
+  const genelIsk = parseFloat(h.GenelIskonto) || 0;
+  let araToplam = 0;
+  for (const s of satirlar) {
     const adet = parseInt(s.Adet) || 1;
-    return acc + adet * (parseFloat(s.Fiyat) || 0) * (1 - (parseFloat(s.Iskonto) || 0) / 100);
-  }, 0);
-  const kdvOran   = parseInt(h.KdvOran) || 20;
-  const kdvTutar  = tutar * kdvOran / 100;
+    const fiyat = parseFloat(s.Fiyat) || 0;
+    const iskonto = parseFloat(s.Iskonto) || 0;
+    araToplam += adet * fiyat * (1 - iskonto / 100);
+  }
+  const iskontoTutar = araToplam * genelIsk / 100;
+  const tutar = araToplam - iskontoTutar;
+  const kdvTutar = tutar * kdvOran / 100;
   const genelToplam = tutar + kdvTutar;
+
+  // Çoğunluk para birimi
+  const pbCount: Record<string, number> = {};
+  satirlar.forEach(s => { const p = s.ParaBirimi || "TRY"; pbCount[p] = (pbCount[p] || 0) + 1; });
+  const pb = Object.entries(pbCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "TRY";
+
+  // Geçerlilik: teklif tarihinden 6 ay sonrası
+  const gecerlilik = addMonths(h.Tarih, 6);
 
   return (
     <html lang="tr">
@@ -96,351 +120,400 @@ export default async function TeklifPrintPage({
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <style>{`
+          @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
             background: #f5f5f7;
             color: #1d1d1f;
-            font-size: 14px;
-            line-height: 1.5;
+            font-size: 11px;
+            line-height: 1.45;
           }
-          .print-btn-bar {
+          .toolbar {
             background: #1d1d1f;
             padding: 12px 24px;
             display: flex;
-            align-items: center;
             gap: 12px;
+            align-items: center;
           }
-          .print-btn {
-            background: #0071e3;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            padding: 8px 20px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
+          .btn-pdf {
+            background: #0071e3; color: #fff; border: none; border-radius: 8px;
+            padding: 8px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
           }
-          .print-btn:hover { background: #0077ed; }
-          .close-btn {
-            background: transparent;
-            color: #ffffffcc;
-            border: 1px solid #ffffff44;
-            border-radius: 8px;
-            padding: 8px 16px;
-            font-size: 14px;
-            cursor: pointer;
+          .btn-pdf:hover { background: #0077ed; }
+          .btn-close {
+            background: transparent; color: #ffffffcc; border: 1px solid #ffffff44;
+            border-radius: 8px; padding: 8px 16px; font-size: 14px; cursor: pointer;
           }
+
           .page {
-            max-width: 860px;
-            margin: 32px auto 64px;
+            max-width: 210mm;
+            min-height: 297mm;
+            margin: 24px auto 64px;
             background: #fff;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.10);
-          }
-          .header-band {
-            background: #1B4F8A;
-            padding: 28px 40px 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-          }
-          .company-name {
-            color: #fff;
-            font-size: 24px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-          }
-          .doc-title {
-            color: rgba(255,255,255,0.8);
-            font-size: 12px;
-            margin-top: 4px;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-          }
-          .teklif-no-box { text-align: right; }
-          .teklif-no-label {
-            color: rgba(255,255,255,0.65);
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-          }
-          .teklif-no-value {
-            color: #fff;
-            font-size: 20px;
-            font-weight: 700;
-            letter-spacing: -0.2px;
-          }
-          .body { padding: 32px 40px; }
-
-          /* Info grid */
-          .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0;
-            border: 1px solid #d6e4f0;
-            border-radius: 8px;
-            overflow: hidden;
-            margin-bottom: 28px;
-            font-size: 13px;
-          }
-          .info-row {
-            display: contents;
-          }
-          .info-label {
-            background: #d6e4f0;
-            color: #1B4F8A;
-            font-weight: 600;
-            font-size: 11px;
-            padding: 7px 12px;
-            border-bottom: 1px solid #c4d9ed;
-          }
-          .info-value {
-            background: #fff;
-            padding: 7px 12px;
-            border-bottom: 1px solid #e5eef6;
-            color: #1d1d1f;
-          }
-          .info-label:last-of-type, .info-value:last-of-type { border-bottom: none; }
-
-          /* Services table */
-          .section-title {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #6e6e73;
-            margin-bottom: 10px;
-          }
-          .services-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 0;
-            font-size: 12.5px;
-          }
-          .services-table thead tr { background: #1B4F8A; }
-          .services-table th {
-            padding: 8px 10px;
-            text-align: left;
-            font-size: 11px;
-            font-weight: 600;
-            color: #fff;
-            border: 1px solid #1B4F8A;
-          }
-          .services-table th.right { text-align: right; }
-          .services-table th.center { text-align: center; }
-          .services-table td {
-            padding: 8px 10px;
-            color: #1d1d1f;
-            border: 1px solid #d6e4f0;
-          }
-          .services-table td.right { text-align: right; }
-          .services-table td.center { text-align: center; color: #6e6e73; }
-          .services-table td.net { text-align: right; font-weight: 600; }
-          .services-table tbody tr:nth-child(even) td { background: #f5f9fd; }
-
-          /* Summary */
-          .summary-box {
+            padding: 14mm 12mm 16mm 12mm;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
             display: flex;
             flex-direction: column;
-            align-items: flex-end;
-            padding: 12px 0;
-            margin-bottom: 24px;
-            border-top: 2px solid #d6e4f0;
           }
-          .summary-row {
-            display: flex;
-            gap: 40px;
-            font-size: 13px;
-            margin-bottom: 4px;
-          }
-          .summary-label { color: #6e6e73; min-width: 180px; text-align: right; }
-          .summary-amount { font-variant-numeric: tabular-nums; min-width: 120px; text-align: right; }
-          .summary-total { font-weight: 700; font-size: 15px; color: #1B4F8A; }
 
-          .notlar-box {
-            background: #f5f9fd;
-            border-left: 3px solid #1B4F8A;
-            border-radius: 0 8px 8px 0;
-            padding: 12px 16px;
-            margin-bottom: 28px;
-          }
-          .notlar-box p { font-size: 13px; color: #1d1d1f; white-space: pre-wrap; }
-
-          .footer {
-            padding: 16px 40px;
-            background: #f5f5f7;
-            border-top: 1px solid #e5e7eb;
-            font-size: 11px;
-            color: #6e6e73;
+          /* ───── Üst başlık ───────────────────────────────────────────── */
+          .top {
             display: flex;
             justify-content: space-between;
+            align-items: flex-start;
+            padding-bottom: 8mm;
+            border-bottom: 1.5px solid #d6dee8;
+          }
+          .logo-wrap {
+            display: flex; align-items: center; gap: 10px;
+          }
+          .logo-img {
+            height: 56px;
+            width: auto;
+            object-fit: contain;
+          }
+          .title {
+            font-size: 26px;
+            font-weight: 700;
+            color: #1d1d1f;
+            letter-spacing: 1px;
+            line-height: 1;
+            padding-top: 6px;
+          }
+
+          /* ───── Meta info — 2 sütun ──────────────────────────────────── */
+          .meta {
+            margin-top: 6mm;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2mm 12mm;
+            font-size: 11px;
+          }
+          .meta-row {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 8px;
+            padding: 2px 0;
+          }
+          .meta-label {
+            color: #2A4A8F;
+            font-weight: 700;
+          }
+          .meta-value {
+            color: #1d1d1f;
+            text-align: left;
+          }
+          .meta-row.right .meta-value { text-align: right; }
+
+          /* ───── Müşteri bilgileri ────────────────────────────────────── */
+          .section-label {
+            font-weight: 700;
+            font-size: 11px;
+            margin-top: 8mm;
+            margin-bottom: 2mm;
+            color: #1d1d1f;
+          }
+          .musteri-box {
+            font-size: 11px;
+            line-height: 1.6;
+            color: #1d1d1f;
+          }
+          .musteri-box .firma { font-weight: 600; }
+
+          /* ───── Hizmet tablosu ───────────────────────────────────────── */
+          .services {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 6mm;
+            font-size: 10.5px;
+          }
+          .services thead th {
+            font-weight: 700;
+            font-size: 11px;
+            color: #1d1d1f;
+            text-align: left;
+            padding: 7px 8px;
+            border-bottom: 1.5px solid #444;
+          }
+          .services thead th.center { text-align: center; }
+          .services thead th.right { text-align: right; }
+          .services tbody td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #eaeaea;
+            vertical-align: top;
+          }
+          .services tbody td.center { text-align: center; }
+          .services tbody td.right { text-align: right; font-variant-numeric: tabular-nums; }
+          .services tbody td.no { color: #6e6e73; }
+
+          /* ───── Toplam kutusu ────────────────────────────────────────── */
+          .totals {
+            margin-top: 5mm;
+            border: 1.5px solid #2A4A8F;
+            border-radius: 6px;
+            padding: 6px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+          }
+          .totals-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11.5px;
+            padding: 3px 4px;
+          }
+          .totals-label { color: #1d1d1f; }
+          .totals-value { font-variant-numeric: tabular-nums; }
+          .totals-row.grand {
+            font-weight: 700;
+            font-size: 13px;
+            border-top: 1px solid #d6dee8;
+            margin-top: 4px;
+            padding-top: 8px;
+          }
+
+          /* ───── Notlar ───────────────────────────────────────────────── */
+          .notlar {
+            margin-top: 7mm;
+            font-size: 9px;
+            color: #1d1d1f;
+            line-height: 1.55;
+          }
+          .notlar-title {
+            font-weight: 700;
+            font-size: 10px;
+            margin-bottom: 2mm;
+          }
+          .notlar p { margin-bottom: 1mm; }
+
+          /* ───── Onay bloğu ───────────────────────────────────────────── */
+          .approval-block {
+            margin-top: 14mm;
+            display: flex;
+            justify-content: flex-end;
+          }
+          .approval-content {
+            text-align: center;
+            min-width: 200px;
+          }
+          .approval-line { border-top: 1px solid #1d1d1f; margin-bottom: 4px; }
+          .approval-label { font-weight: 700; font-size: 11px; }
+          .approval-sub { font-size: 10px; color: #6e6e73; }
+
+          /* ───── Alt kısım — hazırlayan + logo ────────────────────────── */
+          .bottom {
+            margin-top: auto;
+            padding-top: 8mm;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+          }
+          .prep {
+            text-align: center;
+          }
+          .prep-title { font-weight: 700; font-size: 11px; margin-bottom: 3mm; }
+          .e-imza {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #e8f4f8;
+            color: #1a7f4b;
+            border: 1px solid #b8dbe3;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-bottom: 2mm;
+          }
+          .prep-name { font-weight: 600; font-size: 11px; margin-top: 1mm; }
+          .corner-logo { height: 40px; opacity: 0.75; }
+
+          /* ───── Sayfa altı sabit metin ───────────────────────────────── */
+          .footer {
+            margin-top: 4mm;
+            padding-top: 3mm;
+            border-top: 1px solid #d6dee8;
+            display: flex;
+            justify-content: space-between;
+            font-size: 8.5px;
+            color: #6e6e73;
           }
 
           @media print {
             body { background: #fff; }
-            .print-btn-bar { display: none !important; }
+            .toolbar { display: none !important; }
             .page {
               margin: 0;
-              border-radius: 0;
               box-shadow: none;
               max-width: 100%;
+              min-height: auto;
+              padding: 0;
             }
           }
         `}</style>
       </head>
       <body>
-        {/* Yazdır butonu — print'te gizlenir */}
-        <div className="print-btn-bar">
-          <button className="print-btn">Yazdır / PDF olarak kaydet</button>
-          <button className="close-btn">Kapat</button>
+        {/* Yazdır toolbar — print'te gizli */}
+        <div className="toolbar">
+          <button className="btn-pdf">PDF olarak indir / Yazdır</button>
+          <button className="btn-close">Kapat</button>
         </div>
 
         <div className="page">
-          {/* Header */}
-          <div className="header-band">
-            <div>
-              <div className="company-name">{sirketAdi}</div>
-              <div className="doc-title">Fiyat Teklif Formu</div>
+          {/* ───── Üst başlık ────────────────────────────────────────── */}
+          <div className="top">
+            <div className="logo-wrap">
+              <img src="/logo-teklif.png" alt={sirketAdi} className="logo-img" />
             </div>
-            <div className="teklif-no-box">
-              <div className="teklif-no-label">Teklif No</div>
-              <div className="teklif-no-value">ROT{no}</div>
+            <div className="title">FİYAT TEKLİFİ</div>
+          </div>
+
+          {/* ───── Meta info ─────────────────────────────────────────── */}
+          <div className="meta">
+            <div>
+              <div className="meta-row">
+                <span className="meta-label">Teklif No / Rev. No:</span>
+                <span className="meta-value">{noLabel}</span>
+              </div>
+              <div className="meta-row">
+                <span className="meta-label">Teklif Tarihi:</span>
+                <span className="meta-value">{h.Tarih || "—"}</span>
+              </div>
+            </div>
+            <div>
+              <div className="meta-row right">
+                <span className="meta-label">Sayfa:</span>
+                <span className="meta-value">1 / 1</span>
+              </div>
+              <div className="meta-row right">
+                <span className="meta-label">Geçerlilik Süresi:</span>
+                <span className="meta-value">{gecerlilik || "—"}</span>
+              </div>
             </div>
           </div>
 
-          {/* Body */}
-          <div className="body">
-            {/* Info grid */}
-            <div className="info-grid">
-              <div className="info-label">Teklif No</div>
-              <div className="info-value">ROT{no}</div>
+          {/* ───── Müşteri ───────────────────────────────────────────── */}
+          <div className="section-label">MÜŞTERİ BİLGİLERİ</div>
+          <div className="musteri-box">
+            {h.MusteriAd && <div className="firma">{h.MusteriAd}</div>}
+            {h.MusteriAdres && <div>{h.MusteriAdres}</div>}
+            {h.MusteriYetkili && <div>{h.MusteriYetkili}</div>}
+            {h.MusteriEmail && <div>{h.MusteriEmail}</div>}
+          </div>
 
-              <div className="info-label">Tarih</div>
-              <div className="info-value">{h.Tarih}</div>
-
-              {h.RevNo > 0 && <>
-                <div className="info-label">Revizyon</div>
-                <div className="info-value">{h.RevNo}</div>
-              </>}
-
-              <div className="info-label">Teklifin Konusu</div>
-              <div className="info-value">{h.TeklifKonusu}</div>
-
-              {h.TeklifVeren && <>
-                <div className="info-label">Teklif Veren</div>
-                <div className="info-value">{h.TeklifVeren}</div>
-              </>}
-
-              <div className="info-label">Firma Adı</div>
-              <div className="info-value" style={{ fontWeight: 600 }}>{h.MusteriAd || "—"}</div>
-
-              {h.MusteriAdres && <>
-                <div className="info-label">Adres</div>
-                <div className="info-value">{h.MusteriAdres}</div>
-              </>}
-
-              {h.MusteriYetkili && <>
-                <div className="info-label">Yetkili</div>
-                <div className="info-value">{h.MusteriYetkili}</div>
-              </>}
-
-              {(h.MusteriTelefon || h.MusteriEmail) && <>
-                <div className="info-label">Tel / E-posta</div>
-                <div className="info-value">
-                  {[h.MusteriTelefon, h.MusteriEmail].filter(Boolean).join(" / ")}
-                </div>
-              </>}
-
-              {h.VergiNo && <>
-                <div className="info-label">Vergi Dairesi / No</div>
-                <div className="info-value">{[h.VergiDairesi, h.VergiNo].filter(Boolean).join(" / ")}</div>
-              </>}
-            </div>
-
-            {/* Hizmet tablosu */}
-            <div className="section-title">Analiz / Hizmet Listesi</div>
-            <table className="services-table">
-              <thead>
+          {/* ───── Hizmet tablosu ────────────────────────────────────── */}
+          <table className="services">
+            <thead>
+              <tr>
+                <th className="center" style={{ width: 36 }}>No</th>
+                <th>Açıklama</th>
+                <th className="center" style={{ width: 60 }}>Adet</th>
+                <th className="right" style={{ width: 120 }}>Birim Fiyat</th>
+                <th className="right" style={{ width: 130 }}>Toplam Fiyat</th>
+              </tr>
+            </thead>
+            <tbody>
+              {satirlar.map((s: any, i: number) => {
+                const adet = parseInt(s.Adet) || 1;
+                const fiyat = parseFloat(s.Fiyat) || 0;
+                const iskonto = parseFloat(s.Iskonto) || 0;
+                const net = adet * fiyat * (1 - iskonto / 100);
+                const akr = s.Akreditasyon ? "*" : "";
+                const adi = `${akr}${s.HizmetAdi || ""}${s.Metot ? ` / ${s.Metot}` : ""}`;
+                return (
+                  <tr key={i}>
+                    <td className="center no">{i + 1}.</td>
+                    <td>{adi}</td>
+                    <td className="center">{adet}</td>
+                    <td className="right">
+                      {fiyat > 0
+                        ? <>{fmt(fiyat)} {s.ParaBirimi || pb}{iskonto > 0 ? ` (-%${iskonto})` : ""}</>
+                        : "—"}
+                    </td>
+                    <td className="right">
+                      {net > 0 ? <>{fmt(net)} {s.ParaBirimi || pb}</> : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+              {satirlar.length === 0 && (
                 <tr>
-                  <th style={{ width: 32 }} className="center">No</th>
-                  <th style={{ width: 40 }} className="center">Akr.</th>
-                  <th>Analiz Adı</th>
-                  <th>Metot</th>
-                  <th style={{ width: 48 }} className="center">Adet</th>
-                  <th className="right" style={{ width: 110 }}>Birim Fiyat</th>
-                  <th className="right" style={{ width: 120 }}>Toplam (KDV'siz)</th>
+                  <td colSpan={5} style={{ textAlign: "center", color: "#6e6e73", padding: "20px" }}>
+                    Henüz hizmet satırı eklenmedi.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {satirlar.map((s: any, i: number) => {
-                  const adet    = parseInt(s.Adet) || 1;
-                  const fiyat   = parseFloat(s.Fiyat)   || 0;
-                  const iskonto = parseFloat(s.Iskonto) || 0;
-                  const net     = adet * fiyat * (1 - iskonto / 100);
-                  return (
-                    <tr key={i}>
-                      <td className="center" style={{ color: "#6e6e73" }}>{i + 1}</td>
-                      <td className="center" style={{ color: s.Akreditasyon === "A" ? "#1a7f4b" : "#6e6e73" }}>
-                        {s.Akreditasyon || "—"}
-                      </td>
-                      <td>
-                        <span style={{ fontWeight: 500 }}>{s.HizmetAdi}</span>
-                        {s.Notlar && <span style={{ display: "block", fontSize: 11, color: "#6e6e73" }}>{s.Notlar}</span>}
-                      </td>
-                      <td style={{ color: "#6e6e73", fontSize: 12 }}>{s.Metot || "—"}</td>
-                      <td className="center">{adet}</td>
-                      <td className="right">
-                        {iskonto > 0
-                          ? <><s style={{ color: "#999", fontSize: 11 }}>{fmt(fiyat)}</s><br />{fmt(fiyat * (1 - iskonto / 100))}</>
-                          : fmt(fiyat)
-                        } <span style={{ fontSize: 11, color: "#6e6e73" }}>{s.ParaBirimi}</span>
-                      </td>
-                      <td className="net">{fmt(net)} <span style={{ fontSize: 11, color: "#1B4F8A" }}>{s.ParaBirimi}</span></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+              )}
+            </tbody>
+          </table>
 
-            {/* Toplam özeti */}
-            <div className="summary-box">
-              <div className="summary-row">
-                <span className="summary-label">Tutar</span>
-                <span className="summary-amount">{fmt(tutar)}</span>
-              </div>
-              <div className="summary-row">
-                <span className="summary-label">KDV (%{kdvOran})</span>
-                <span className="summary-amount">{fmt(kdvTutar)}</span>
-              </div>
-              <div className="summary-row summary-total">
-                <span className="summary-label" style={{ color: "#1B4F8A" }}>Genel Toplam</span>
-                <span className="summary-amount">{fmt(genelToplam)}</span>
-              </div>
+          {/* ───── Toplamlar ─────────────────────────────────────────── */}
+          <div className="totals">
+            <div className="totals-row">
+              <span className="totals-label">Ara Toplam:</span>
+              <span className="totals-value">{fmt(araToplam)} {pb}</span>
             </div>
-
-            {/* Not */}
-            {h.Notlar && (
-              <div className="notlar-box">
-                <div className="section-title" style={{ marginBottom: 6 }}>Not</div>
-                <p>{h.Notlar}</p>
+            {genelIsk > 0 && (
+              <div className="totals-row">
+                <span className="totals-label">İskonto (%{genelIsk}):</span>
+                <span className="totals-value">{fmt(iskontoTutar)} {pb}</span>
               </div>
             )}
+            <div className="totals-row">
+              <span className="totals-label">KDV (%{kdvOran}):</span>
+              <span className="totals-value">{fmt(kdvTutar)} {pb}</span>
+            </div>
+            <div className="totals-row grand">
+              <span className="totals-label">Genel Toplam:</span>
+              <span className="totals-value">{fmt(genelToplam)} {pb}</span>
+            </div>
           </div>
 
-          {/* Footer */}
+          {/* ───── Notlar ────────────────────────────────────────────── */}
+          <div className="notlar">
+            <div className="notlar-title">Notlar:</div>
+            <p>&ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.</p>
+            <p>Numune gönderimi kargo ile yapıldığında, kargo ücreti göndericiye aittir.</p>
+            <p>Fiyat teklifimizi ıslak imzalı olarak, mail üzerinden veya numune gönderimi sağlayarak onayladığınızı beyan edebilirsiniz.</p>
+            <p>Yapılacak analizlere ve hizmetlere ait ücretler, müşteri tarafından peşin olarak ödenir. Rapor, ödeme yapıldıktan sonra müşteriye gönderilir. Ödemenin yapılmaması halinde, {sirketAdi} ödeme yapılıncaya kadar analiz hizmetlerine başlamama veya analiz raporunu müşteriye iletmeme hakkına sahiptir.</p>
+            <p>İkinci dilde rapor ve/veya eksik bilgi sebebi ile revize rapor ücreti 10,00 $ + KDV şeklindedir.</p>
+            <p>İşbu teklifi onaylayarak {sirketAdi} tarafından verilecek olan hizmetlerin, bu formun bütün sayfalarında yer alan şartlara uygun olarak gerçekleştirilmesini ve bu hizmetler karşılığında uygulanacak fiyat ve ödeme koşullarını gayri kabili rücu olarak kabul ettiğimizi beyan ve taahhüt ederiz.</p>
+            {h.Notlar && <p style={{ marginTop: "3mm", fontWeight: 600 }}>{h.Notlar}</p>}
+          </div>
+
+          {/* ───── Onay ──────────────────────────────────────────────── */}
+          <div className="approval-block">
+            <div className="approval-content">
+              <div className="approval-line">&nbsp;</div>
+              <div className="approval-label">ONAYLAYAN</div>
+              <div className="approval-sub">Kaşe / İmza</div>
+            </div>
+          </div>
+
+          {/* ───── Hazırlayan + corner logo ──────────────────────────── */}
+          <div className="bottom">
+            <div className="prep">
+              <div className="prep-title">Teklifi Hazırlayan</div>
+              <div className="e-imza">✓ E-İmzalıdır</div>
+              <div className="prep-name">{h.TeklifVeren || "—"}</div>
+            </div>
+            <img src="/logo-footer.png" alt="" className="corner-logo" />
+          </div>
+
+          {/* ───── Footer sabit ─────────────────────────────────────── */}
           <div className="footer">
-            <span>{sirketAdi}{sirketAdres ? ` · ${sirketAdres}` : ""}</span>
-            <span>{[sirketWeb, sirketEmail].filter(Boolean).join(" · ") || "Bu teklif elektronik olarak hazırlanmıştır."}</span>
+            <span>F.01.PR.03 – Yayın Tarihi: 27.09.2023</span>
+            <span>{process.env.SIRKET_EMAIL || "info@uniqueanalyse.com"}</span>
           </div>
         </div>
 
-        <script dangerouslySetInnerHTML={{ __html: `
-          document.querySelector('.print-btn').addEventListener('click', () => window.print());
-          document.querySelector('.close-btn').addEventListener('click', () => window.close());
-          ${autoPrint ? "setTimeout(() => window.print(), 450);" : ""}
-        `}} />
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            document.querySelector('.btn-pdf').addEventListener('click', () => window.print());
+            document.querySelector('.btn-close').addEventListener('click', () => window.close());
+            ${autoPrint ? "setTimeout(() => window.print(), 450);" : ""}
+          `
+        }} />
       </body>
     </html>
   );
