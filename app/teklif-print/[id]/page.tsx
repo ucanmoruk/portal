@@ -2,8 +2,47 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import poolPromise from "@/lib/db";
+import { JetBrains_Mono } from "next/font/google";
+import PrintToolbar from "./PrintToolbar";
 
 export const metadata = { title: "Teklif Çıktısı" };
+
+const jetBrainsMono = JetBrains_Mono({
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+interface TeklifHeader {
+  ID: number;
+  TeklifNo: number | null;
+  RevNo: number;
+  Tarih: string;
+  Toplam: number | string | null;
+  Notlar: string | null;
+  TeklifKonusu: string;
+  TeklifVeren: string;
+  KdvOran: number | string | null;
+  GenelIskonto: number | string | null;
+  MusteriAd: string;
+  MusteriAdres: string;
+  MusteriTelefon: string;
+  MusteriEmail: string;
+  VergiDairesi: string;
+  VergiNo: string;
+  MusteriYetkili: string;
+}
+
+interface TeklifSatir {
+  HizmetAdi: string;
+  Adet: number | string | null;
+  Fiyat: number | string | null;
+  ParaBirimi: string | null;
+  Iskonto: number | string | null;
+  Metot: string;
+  Akreditasyon: string;
+  Notlar: string | null;
+}
 
 function teklifLabel(no: number | null, rev: number) {
   if (!no) return "—";
@@ -12,8 +51,8 @@ function teklifLabel(no: number | null, rev: number) {
   return rev > 0 ? `${yy}${seq}/${rev}` : `${yy}${seq}/0`;
 }
 
-function fmt(n: any) {
-  const num = parseFloat(n);
+function fmt(n: unknown) {
+  const num = Number.parseFloat(String(n ?? ""));
   if (isNaN(num)) return "0,00";
   return num.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -35,7 +74,7 @@ export default async function TeklifPrintPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ print?: string }>;
+  searchParams?: Promise<{ print?: string; pdfMode?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -43,6 +82,7 @@ export default async function TeklifPrintPage({
   const { id } = await params;
   const sp = searchParams ? await searchParams : {};
   const autoPrint = sp.print === "1";
+  const pdfMode = sp.pdfMode === "1";
 
   const pool = await poolPromise;
 
@@ -73,7 +113,7 @@ export default async function TeklifPrintPage({
     return <div style={{ padding: 40, fontFamily: "system-ui" }}>Teklif bulunamadı.</div>;
   }
 
-  const h = headerRes.recordset[0];
+  const h = headerRes.recordset[0] as TeklifHeader;
 
   const satirRes = await pool.request()
     .input("TeklifID", Number(id))
@@ -87,18 +127,18 @@ export default async function TeklifPrintPage({
       ORDER BY ID
     `);
 
-  const satirlar: any[] = satirRes.recordset;
+  const satirlar = satirRes.recordset as TeklifSatir[];
   const noLabel = teklifLabel(h.TeklifNo, h.RevNo);
   const sirketAdi = process.env.SIRKET_ADI || "UNIQUE ANALYSE";
 
   // Hesaplamalar
-  const kdvOran = parseInt(h.KdvOran) || 20;
-  const genelIsk = parseFloat(h.GenelIskonto) || 0;
+  const kdvOran = Number.parseInt(String(h.KdvOran ?? ""), 10) || 20;
+  const genelIsk = Number.parseFloat(String(h.GenelIskonto ?? "")) || 0;
   let araToplam = 0;
   for (const s of satirlar) {
-    const adet = parseInt(s.Adet) || 1;
-    const fiyat = parseFloat(s.Fiyat) || 0;
-    const iskonto = parseFloat(s.Iskonto) || 0;
+    const adet = Number.parseInt(String(s.Adet ?? ""), 10) || 1;
+    const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
+    const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
     araToplam += adet * fiyat * (1 - iskonto / 100);
   }
   const iskontoTutar = araToplam * genelIsk / 100;
@@ -115,25 +155,17 @@ export default async function TeklifPrintPage({
   const gecerlilik = addMonths(h.Tarih, 6);
 
   return (
-    <html lang="tr">
-      <head>
-        <meta charSet="UTF-8" />
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
+    <>
         <style>{`
-          @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+          @page { size: A4; margin: 0; }
           * { box-sizing: border-box; margin: 0; padding: 0; }
-          body {
+          .quote-print-root {
             font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
             background: #f5f5f7;
             color: #1d1d1f;
             font-size: 10.5px;
             line-height: 1.5;
+            min-height: 100vh;
             -webkit-font-feature-settings: "calt" 0, "liga" 0;
             font-feature-settings: "calt" 0, "liga" 0;
           }
@@ -147,9 +179,10 @@ export default async function TeklifPrintPage({
           .btn-pdf {
             background: #0071e3; color: #fff; border: none; border-radius: 8px;
             padding: 8px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
+            text-decoration: none; display: inline-flex; align-items: center;
           }
           .btn-pdf:hover { background: #0077ed; }
-          .btn-close {
+          .btn-print, .btn-close {
             background: transparent; color: #ffffffcc; border: 1px solid #ffffff44;
             border-radius: 8px; padding: 8px 16px; font-size: 14px; cursor: pointer;
           }
@@ -170,14 +203,14 @@ export default async function TeklifPrintPage({
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            padding-bottom: 8mm;
-            border-bottom: 1.5px solid #d6dee8;
+            padding-bottom: 9mm;
+            border-bottom: none;
           }
           .logo-wrap {
             display: flex; align-items: center; gap: 10px;
           }
           .logo-img {
-            height: 56px;
+            height: 45px;
             width: auto;
             object-fit: contain;
           }
@@ -205,7 +238,7 @@ export default async function TeklifPrintPage({
             padding: 2px 0;
           }
           .meta-label {
-            color: #2A4A8F;
+            color: #1d1d1f;
             font-weight: 700;
           }
           .meta-value {
@@ -258,8 +291,8 @@ export default async function TeklifPrintPage({
           /* ───── Toplam kutusu ────────────────────────────────────────── */
           .totals {
             margin-top: 5mm;
-            border: 1.5px solid #2A4A8F;
-            border-radius: 6px;
+            border: 1px solid #1d1d1f;
+            border-radius: 0;
             padding: 6px 10px;
             display: flex;
             flex-direction: column;
@@ -314,7 +347,7 @@ export default async function TeklifPrintPage({
             margin-top: auto;
             padding-top: 8mm;
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-start;
             align-items: flex-end;
           }
           .prep {
@@ -335,7 +368,6 @@ export default async function TeklifPrintPage({
             margin-bottom: 2mm;
           }
           .prep-name { font-weight: 600; font-size: 11px; margin-top: 1mm; }
-          .corner-logo { height: 40px; opacity: 0.75; }
 
           /* ───── Sayfa altı sabit metin ───────────────────────────────── */
           .footer {
@@ -352,29 +384,32 @@ export default async function TeklifPrintPage({
             body { background: #fff; }
             .toolbar { display: none !important; }
             .page {
-              margin: 0;
+              width: 210mm;
+              max-width: 210mm;
+              min-height: 297mm;
+              margin: 0 auto;
               box-shadow: none;
-              max-width: 100%;
-              min-height: auto;
-              padding: 0;
+              padding: 14mm 12mm 16mm 12mm;
             }
           }
         `}</style>
-      </head>
-      <body>
-        {/* Yazdır toolbar — print'te gizli */}
-        <div className="toolbar">
-          <button className="btn-pdf">PDF olarak indir / Yazdır</button>
-          <button className="btn-close">Kapat</button>
-        </div>
 
-        <div className="page">
+      <div className={`quote-print-root ${jetBrainsMono.className}`}>
+        {/* Yazdır toolbar — print'te gizli */}
+        {!pdfMode && (
+          <PrintToolbar
+            pdfUrl={`/api/teklif-print/${encodeURIComponent(id)}/pdf?download=1`}
+            autoPrint={autoPrint}
+          />
+        )}
+
+        <div className="page quote-print-page">
           {/* ───── Üst başlık ────────────────────────────────────────── */}
           <div className="top">
             <div className="logo-wrap">
-              <img src="/logo-teklif.png" alt={sirketAdi} className="logo-img" />
+              <img src="https://uniqueportal.vercel.app/unique-logo.jpeg" alt={sirketAdi} className="logo-img" />
             </div>
-            <div className="title">FİYAT TEKLİFİ</div>
+            <div className="title" style={{fontWeight:"800"}}>FİYAT TEKLİFİ</div>
           </div>
 
           {/* ───── Meta info ─────────────────────────────────────────── */}
@@ -422,10 +457,10 @@ export default async function TeklifPrintPage({
               </tr>
             </thead>
             <tbody>
-              {satirlar.map((s: any, i: number) => {
-                const adet = parseInt(s.Adet) || 1;
-                const fiyat = parseFloat(s.Fiyat) || 0;
-                const iskonto = parseFloat(s.Iskonto) || 0;
+              {satirlar.map((s, i) => {
+                const adet = Number.parseInt(String(s.Adet ?? ""), 10) || 1;
+                const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
+                const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
                 const net = adet * fiyat * (1 - iskonto / 100);
                 const akr = s.Akreditasyon ? "*" : "";
                 const adi = `${akr}${s.HizmetAdi || ""}${s.Metot ? ` / ${s.Metot}` : ""}`;
@@ -505,7 +540,6 @@ export default async function TeklifPrintPage({
               <div className="e-imza">✓ E-İmzalıdır</div>
               <div className="prep-name">{h.TeklifVeren || "—"}</div>
             </div>
-            <img src="/logo-footer.png" alt="" className="corner-logo" />
           </div>
 
           {/* ───── Footer sabit ─────────────────────────────────────── */}
@@ -515,14 +549,7 @@ export default async function TeklifPrintPage({
           </div>
         </div>
 
-        <script dangerouslySetInnerHTML={{
-          __html: `
-            document.querySelector('.btn-pdf').addEventListener('click', () => window.print());
-            document.querySelector('.btn-close').addEventListener('click', () => window.close());
-            ${autoPrint ? "setTimeout(() => window.print(), 450);" : ""}
-          `
-        }} />
-      </body>
-    </html>
+      </div>
+    </>
   );
 }
