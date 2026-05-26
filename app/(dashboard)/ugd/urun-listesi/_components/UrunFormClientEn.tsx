@@ -262,6 +262,26 @@ function labSentence(kind: 'mikro' | 'challenge' | 'stabilite', status: LabStatu
     : `Ürünün üretici tarafından öngörülen raf ömrü ${shelf} aydır. Ürünün açıldıktan sonraki dayanıklılık süresi etikette ${after} ay olarak belirtilmiştir. Ürünle ilgili stabilite çalışmaları devam etmektedir.`;
 }
 
+// İngilizce versiyon — durum'a göre EN şablon. Canlı rapor editöründen düzenlenebilir.
+function labSentenceEn(kind: 'mikro' | 'challenge' | 'stabilite', status: LabStatus, shelfLife: string, pao: string) {
+  if (kind === 'mikro') {
+    return status === 'Tamamlandı'
+      ? "Microbiological analysis results for the final product have been provided in the product safety dossier. Results comply with the microbiological quality control limits. There is no risk of microbiological contamination."
+      : "Microbiological testing is in progress.";
+  }
+  if (kind === 'challenge') {
+    return status === 'Tamamlandı'
+      ? "Preservative efficacy (challenge) test results for the final product have been provided in the product safety dossier. The results are evaluated as compliant."
+      : "Preservative efficacy (challenge) testing is in progress.";
+  }
+
+  const shelf = shelfLife || "[..]";
+  const after = pao || "[..]";
+  return status === 'Tamamlandı'
+    ? `The manufacturer-projected shelf life of the product is ${shelf} months. The period-after-opening (PAO) is declared on the label as ${after} months. The stability test report is enclosed in the product file.`
+    : `The manufacturer-projected shelf life of the product is ${shelf} months. The period-after-opening (PAO) is declared on the label as ${after} months. Stability studies for the product are currently in progress.`;
+}
+
 function ImagePicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   const handleFile = (file?: File | null) => {
     if (!file) return;
@@ -424,12 +444,18 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
     const mikro = labSentence('mikro', form.MikrobiyolojiDurum as LabStatus, form.StabiliteRafOmruAy, form.StabiliteAcilisAy);
     const challenge = labSentence('challenge', form.KoruyucuEtkinlikDurum as LabStatus, form.StabiliteRafOmruAy, form.StabiliteAcilisAy);
     const stabilite = labSentence('stabilite', form.StabiliteDurum as LabStatus, form.StabiliteRafOmruAy, form.StabiliteAcilisAy);
+    const mikroEn = labSentenceEn('mikro', form.MikrobiyolojiDurum as LabStatus, form.StabiliteRafOmruAy, form.StabiliteAcilisAy);
+    const challengeEn = labSentenceEn('challenge', form.KoruyucuEtkinlikDurum as LabStatus, form.StabiliteRafOmruAy, form.StabiliteAcilisAy);
+    const stabiliteEn = labSentenceEn('stabilite', form.StabiliteDurum as LabStatus, form.StabiliteRafOmruAy, form.StabiliteAcilisAy);
     setForm(prev => (
       prev.Mikrobiyoloji === mikro &&
       prev.KoruyucuEtkinlik === challenge &&
-      prev.Stabilite === stabilite
+      prev.Stabilite === stabilite &&
+      prev.MikrobiyolojiEn === mikroEn &&
+      prev.KoruyucuEtkinlikEn === challengeEn &&
+      prev.StabiliteEn === stabiliteEn
         ? prev
-        : { ...prev, Mikrobiyoloji: mikro, KoruyucuEtkinlik: challenge, Stabilite: stabilite }
+        : { ...prev, Mikrobiyoloji: mikro, KoruyucuEtkinlik: challenge, Stabilite: stabilite, MikrobiyolojiEn: mikroEn, KoruyucuEtkinlikEn: challengeEn, StabiliteEn: stabiliteEn }
     ));
   }, [form.MikrobiyolojiDurum, form.KoruyucuEtkinlikDurum, form.StabiliteDurum, form.StabiliteRafOmruAy, form.StabiliteAcilisAy]);
 

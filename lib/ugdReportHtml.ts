@@ -183,8 +183,8 @@ const reportCopy = {
     signature: "Signature",
     evaluator: "Name and Address of the Safety Assessor",
     qualification: "Proof of Qualification of the Safety Assessor",
-    statusOk: "COMPLIANT",
-    statusWarn: "NOT COMPLIANT",
+    statusOk: "SUITABLE",
+    statusWarn: "NOT SUITABLE",
     formulaEmpty: "No formula ingredient was entered.",
     preservativeEmpty: "No preservative ingredient record.",
     allergenEmpty: "No allergen ingredient record.",
@@ -588,7 +588,7 @@ export function renderUgdReportHtml(input: UGDReportInput) {
 
     <div style="font-weight: bold;">c. Kozmetik Ürünün Stabilitesi</div>
     <p>Piyasada satılan bir kozmetik ürün, normal veya öngörülebilir kullanım koşulları altında kullanıldığında insan sağlığı için güvenli olmalıdır. Bitmiş ürün üzerinde stabilite çalışmaları yapılmıştır. Ürünün görünümü, rengi, kokusu, pH ve ağırlık değerleri farklı sıcaklık koşulları altında düzenli aralıklarla kontrol edilir. Stabilite test sonuçları ürün bilgi dosyasına eklenmektedir.</p>
-    <p>${nl2br(f.Stabilite)}</p>
+    ${(() => { const v = esc(f.Stabilite).trim(); return v && v.toUpperCase() !== "N/A" ? `<p>${nl2br(v)}</p>` : ""; })()}
     ${imageBlock(f.StabiliteGorsel, copy.stabilityImage)}
 
 
@@ -600,7 +600,7 @@ export function renderUgdReportHtml(input: UGDReportInput) {
 
 <p>Test sonuçlarına göre, üretici bu ürünün korunmasının etkinliğini challenge testi yaparak deneysel olarak garanti eder.</p>
 
-   <p>${nl2br(f.KoruyucuEtkinlik)}</p>
+   ${(() => { const v = esc(f.KoruyucuEtkinlik).trim(); return v && v.toUpperCase() !== "N/A" ? `<p>${nl2br(v)}</p>` : ""; })()}
     ${imageBlock(f.KoruyucuEtkinlikGorsel, copy.challengeImage)}
 
 <div style="font-weight: bold; margin-bottom: 2px">(3) Uygulanabilir olduğunda, açıldıktan sonra kullanım süresi ve gerekçesi</div>
@@ -655,7 +655,7 @@ export function renderUgdReportHtml(input: UGDReportInput) {
 <p>İyi İmalat Uygulamalarına ve Mikrobiyolojik Kalite Yönetimine uyarak cihaz ve malzemelerin temiz, ürünlerin patolojik mikroorganizmasız olmasını sağlamalı, özel temizleme, sanitasyon ve kontrol prosedürlerini tanımlayarak takip edilmektedir.
 <p>Son ürün için yapılan mikrobiyolojik analiz sonuçları ürün güvenlik dosyasında sunulmuştur. Sonuçlar mikrobiyolojik kalite kontrol limitlerine uygundur. Mikrobiyolojik kontaminasyon riski taşımamaktadır. Mikrobiyolojik olarak ürün kategori 2’dedir. </p>
 
-<p>${nl2br(f.Mikrobiyoloji)}</p>
+${(() => { const v = esc(f.Mikrobiyoloji).trim(); return v && v.toUpperCase() !== "N/A" ? `<p>${nl2br(v)}</p>` : ""; })()}
     ${imageBlock(f.MikrobiyolojiGorsel, copy.microbiologyImage)}
 
     <h3>A.4. Safsızlıklar, Kalıntılar, Ambalaj Materyali Bilgisi</h3>
@@ -769,7 +769,7 @@ ${infoTable([
    <p>Hammaddeden başlayarak bitmiş kozmetik ürünün eksiksiz olarak kalitatif ve kantitatif bileşimi açıklanmış, her bir hammaddenin ismi kimliği (kalitatif) ve miktarını belirten ağırlık yüzdelerinin yer aldığı tüm ürün bileşimi değerlendirilmiştir.</p>
    <p>Bitmiş ürüne ait fizikokimyasal spesifikasyonları değerlendirilmiştir.</p>
    <p>Hızlandırılmış ve uzun süreli stabilite testleri kozmetik ürünün bileşimi, formülasyonu, ambalaj şekli, kullanım şekli gibi ürüne özel kriterler göz önüne alınarak belirlenen farklı sıcaklıklarda, depolama ve dağıtım için önerilen son ambalaj ve kap/kapak sistemindeki ambalajlı kozmetik ürün üzerinden fiziksel, kimyasal ve ambalaj uyumu testleri gerçekleştirilmiştir.</p>
-   <p>${nl2br(f.Stabilite)}</p>
+   ${(() => { const v = esc(f.Stabilite).trim(); return v && v.toUpperCase() !== "N/A" ? `<p>${nl2br(v)}</p>` : ""; })()}
    <p>Normal koşullar altında depolanan kozmetik ürünün belirtilen minimum dayanma süresinin ve bitmiş ürünün açıldıktan sonra kullanım süresinin doğrulanması güvenlilik açısından önemlidir.</p>
    <p>Ürün formülasyonu ve stabilite test sonuçlarına göre; ambalaj materyali ürünün saflığı ve stabilitesi üzerine olumsuz etki yapmamaktadır.</p>
    <p>Ürün, yasaklı madde kalıntısı içermemektedir. Safsızlıklar ve kalıntılar hakkında bilgi bulunmamaktadır.</p>
@@ -886,8 +886,8 @@ ${infoTable([
     
     <h3>B.4. Güvenlilik Değerlendirme Sorumlusu ile İlgili Bilgiler ve Kısım B'nin Onayı</h3>
     ${infoTable([
-      [copy.evaluator, `${text(evaluatorName, empty)}\n${text(evaluatorAddress, empty)}`],
-      [copy.qualification, evaluatorQualification],
+      [copy.evaluator, "Dilsun KARABULUT SEFER \n OZECO GROUP ULUSLARARASI DANIŞMANLIK TİCARET LİMİTED ŞİRKETİ \n Şehit Osman Avcı, Malazgirt 1071. Cad. No:49 A İç Kapı No:13, 06820 Eryaman/Ankara +90 (850) 308 33 51 / +90 533 450 69 05"],
+      [copy.qualification, "Gazi University Faculty Of Engineering And Architecture/ Chemical Engineer (Diploma no: 2267)\n See Annex \n– Qualification of Safety Assessor \n– University Diploma \n–University Diploma Supplement"],
       [copy.reportDate, todayByLanguage(language)],
       [copy.signature, '<div class="signature"></div>']
     ])}

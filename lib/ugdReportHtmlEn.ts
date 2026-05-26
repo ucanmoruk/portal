@@ -195,8 +195,8 @@ const reportCopy = {
     signature: "Signature",
     evaluator: "Name and Address of the Safety Assessor",
     qualification: "Proof of Qualification of the Safety Assessor",
-    statusOk: "COMPLIANT",
-    statusWarn: "NOT COMPLIANT",
+    statusOk: "SUITABLE",
+    statusWarn: "NOT SUITABLE",
     formulaEmpty: "No formula ingredient was entered.",
     preservativeEmpty: "No preservative ingredient record.",
     allergenEmpty: "No allergen ingredient record.",
@@ -632,7 +632,7 @@ export function renderUgdReportHtmlEn(input: UGDReportInput) {
 
     <div style="font-weight: bold;">c. Stability of the Cosmetic Product</div>
     <p>A commercially available cosmetic product must be safe for human health when used under normal or foreseeable conditions of use. Stability studies were carried out on the finished product. The appearance, color, odor, pH and weight values of the product are checked at regular intervals under different temperature conditions. Stability test results are included in the product security file.</p>
-    <p>${nl2br(f.Stabilite)}</p>
+    ${(() => { const v = localizedField(f, "Stabilite", language).trim(); return v && v.toUpperCase() !== "N/A" ? `<p>${nl2br(v)}</p>` : ""; })()}
     ${imageBlock(f.StabiliteGorsel, copy.stabilityImage)}
 
 
@@ -644,7 +644,7 @@ export function renderUgdReportHtmlEn(input: UGDReportInput) {
 According to the test results, the manufacturer guarantees the efficacy of the preservation of this product experimentially by carrying out challenge test.
 See Annex - Challenge Test Report       
 
-   <p>${nl2br(f.KoruyucuEtkinlik)}</p>
+   ${(() => { const v = localizedField(f, "KoruyucuEtkinlik", language).trim(); return v && v.toUpperCase() !== "N/A" ? `<p>${nl2br(v)}</p>` : ""; })()}
     ${imageBlock(f.KoruyucuEtkinlikGorsel, copy.challengeImage)}
 
 <div style="font-weight: bold; margin-bottom: 2px">(3) The period-after-opening (PAO) and its justification</div>
@@ -712,7 +712,7 @@ pathogens must not be detectable in 1 g or 1 ml of a cosmetic product of Categor
 Category 2.
 This product has to be evaluated according to Category 2.
 
-<p>${nl2br(f.Mikrobiyoloji)}</p>
+${(() => { const v = localizedField(f, "Mikrobiyoloji", language).trim(); return v && v.toUpperCase() !== "N/A" ? `<p>${nl2br(v)}</p>` : ""; })()}
     ${imageBlock(f.MikrobiyolojiGorsel, copy.microbiologyImage)}
 
     <h3>A.4. Impurities, traces, information about the packaging material</h3>

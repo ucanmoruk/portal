@@ -37,6 +37,7 @@ const navGroups: NavGroup[] = [
     ),
     items: [
       { label: "Ürün Listesi",  href: "/ugd/urun-listesi",  menuKey: "ugd.urun-listesi"  },
+      { label: "Formül Hammadde Listesi", href: "/ugd/formul-hammadde-listesi", menuKey: "ugd.formul-hammadde-listesi" },
       { label: "Cosing",        href: "/ugd/cosing",         menuKey: "ugd.cosing"         },
       { label: "Yönetmelik",    href: "/ugd/yonetmelik",     menuKey: "ugd.yonetmelik"     },
       { label: "Firma Listesi", href: "/ugd/firma-listesi",  menuKey: "ugd.firma-listesi"  },
