@@ -20,8 +20,10 @@ export async function GET(request: NextRequest) {
 
     const whereParts = ["u.Durum = 'Aktif'", "u.BirimID = '1005'"];
     if (search) {
+      // RaporNo integer kolonu — empty string fallback (ISNULL/COALESCE) integer'a
+      // cast edilemiyor; metin karşılaştırması için CAST AS NVARCHAR ile string'e çevir.
       whereParts.push(`(
-        ISNULL(u.RaporNo, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
+        ISNULL(CAST(u.RaporNo AS NVARCHAR(50)), '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
         OR ISNULL(u.Urun, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
         OR ISNULL(f.INCIName, '') COLLATE Turkish_CI_AS LIKE N'%' + @search + '%'
       )`);
@@ -44,10 +46,10 @@ export async function GET(request: NextRequest) {
     const dataRes = await req.query(`
       SELECT
         u.ID AS UrunID,
-        u.RaporNo,
+        CAST(u.RaporNo AS NVARCHAR(50)) AS RaporNo,
         u.Urun AS UrunAdi,
         ISNULL(f.INCIName, '') AS INCIName,
-        ISNULL(f.Miktar, '0') AS Yuzde
+        CAST(ISNULL(f.Miktar, '0') AS NVARCHAR(50)) AS Yuzde
       FROM rUGDFormul f
       INNER JOIN rUGDListe u ON u.ID = f.UrunID
       ${where}
