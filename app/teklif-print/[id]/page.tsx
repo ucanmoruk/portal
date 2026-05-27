@@ -9,7 +9,7 @@ export const metadata = { title: "Teklif Çıktısı" };
 
 const jetBrainsMono = JetBrains_Mono({
   subsets: ["latin", "latin-ext"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700" , "800"],
   display: "swap",
 });
 
@@ -55,18 +55,6 @@ function fmt(n: unknown) {
   const num = Number.parseFloat(String(n ?? ""));
   if (isNaN(num)) return "0,00";
   return num.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function addMonths(dateStr: string, months: number) {
-  // "dd.MM.yyyy" → 6 ay sonrası "dd.MM.yyyy"
-  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(dateStr || "");
-  if (!m) return "";
-  const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
-  d.setMonth(d.getMonth() + months);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yy = d.getFullYear();
-  return `${dd}.${mm}.${yy}`;
 }
 
 export default async function TeklifPrintPage({
@@ -151,9 +139,6 @@ export default async function TeklifPrintPage({
   satirlar.forEach(s => { const p = s.ParaBirimi || "TRY"; pbCount[p] = (pbCount[p] || 0) + 1; });
   const pb = Object.entries(pbCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "TRY";
 
-  // Geçerlilik: teklif tarihinden 6 ay sonrası
-  const gecerlilik = addMonths(h.Tarih, 6);
-
   return (
     <>
         <style>{`
@@ -192,7 +177,7 @@ export default async function TeklifPrintPage({
             min-height: 297mm;
             margin: 24px auto 64px;
             background: #fff;
-            padding: 14mm 12mm 16mm 12mm;
+            padding: 10mm 12mm 8mm 12mm;
             box-shadow: 0 4px 24px rgba(0,0,0,0.08);
             display: flex;
             flex-direction: column;
@@ -203,7 +188,7 @@ export default async function TeklifPrintPage({
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            padding-bottom: 9mm;
+            padding-bottom: 5mm;
             border-bottom: none;
           }
           .logo-wrap {
@@ -215,12 +200,12 @@ export default async function TeklifPrintPage({
             object-fit: contain;
           }
           .title {
-            font-size: 26px;
-            font-weight: 700;
+            font-size: 21px;
+            font-weight: 900;
             color: #1d1d1f;
-            letter-spacing: 1px;
+            letter-spacing: 0,8px;
             line-height: 1;
-            padding-top: 6px;
+            padding-top: 15px;
           }
 
           /* ───── Meta info — 2 sütun ──────────────────────────────────── */
@@ -274,7 +259,7 @@ export default async function TeklifPrintPage({
             font-size: 11px;
             color: #1d1d1f;
             text-align: left;
-            padding: 7px 8px;
+            padding: 2px 4px;
             border-bottom: 1.5px solid #444;
           }
           .services thead th.center { text-align: center; }
@@ -291,7 +276,7 @@ export default async function TeklifPrintPage({
           /* ───── Toplam kutusu ────────────────────────────────────────── */
           .totals {
             margin-top: 5mm;
-            border: 1px solid #1d1d1f;
+            border: 2px solid #4A46E5;
             border-radius: 0;
             padding: 6px 10px;
             display: flex;
@@ -308,7 +293,7 @@ export default async function TeklifPrintPage({
           .totals-value { font-variant-numeric: tabular-nums; }
           .totals-row.grand {
             font-weight: 700;
-            font-size: 13px;
+            font-size: 12px;
             border-top: 1px solid #d6dee8;
             margin-top: 4px;
             padding-top: 8px;
@@ -316,8 +301,9 @@ export default async function TeklifPrintPage({
 
           /* ───── Notlar ───────────────────────────────────────────────── */
           .notlar {
-            margin-top: 6mm;
-            font-size: 9.5px;
+            margin-top: 5mm;
+            margin-left: 2mm;
+            font-size: 8px;
             color: #1d1d1f;
             line-height: 1.5;
           }
@@ -359,7 +345,7 @@ export default async function TeklifPrintPage({
             align-items: center;
             gap: 4px;
             background: #e8f4f8;
-            color: #1a7f4b;
+            color: #4A46E5;
             border: 1px solid #b8dbe3;
             padding: 2px 8px;
             border-radius: 999px;
@@ -370,12 +356,10 @@ export default async function TeklifPrintPage({
           .prep-name { font-weight: 600; font-size: 11px; margin-top: 1mm; }
 
           /* ───── Sayfa altı sabit metin ───────────────────────────────── */
-          .footer {
-            margin-top: 4mm;
-            padding-top: 3mm;
-            border-top: 1px solid #d6dee8;
+          .footer {       
             display: flex;
             justify-content: space-between;
+            align-items: flex-end;
             font-size: 8.5px;
             color: #6e6e73;
           }
@@ -383,13 +367,14 @@ export default async function TeklifPrintPage({
           @media print {
             body { background: #fff; }
             .toolbar { display: none !important; }
+            .page-number { visibility: hidden; }
             .page {
               width: 210mm;
               max-width: 210mm;
               min-height: 297mm;
               margin: 0 auto;
               box-shadow: none;
-              padding: 14mm 12mm 16mm 12mm;
+              padding: 10mm 12mm 6mm 12mm;
             }
           }
         `}</style>
@@ -407,44 +392,40 @@ export default async function TeklifPrintPage({
           {/* ───── Üst başlık ────────────────────────────────────────── */}
           <div className="top">
             <div className="logo-wrap">
-              <img src="https://uniqueportal.vercel.app/unique-logo.jpeg" alt={sirketAdi} className="logo-img" />
+              <img src="\unique-logo.png" alt={sirketAdi} className="logo-img" />
             </div>
-            <div className="title" style={{fontWeight:"800"}}>FİYAT TEKLİFİ</div>
+            <div className="title" >FİYAT TEKLİFİ</div>
           </div>
 
           {/* ───── Meta info ─────────────────────────────────────────── */}
           <div className="meta">
             <div>
               <div className="meta-row">
-                <span className="meta-label">Teklif No / Rev. No:</span>
+                <span className="meta-label" style={{width: "70%"}}>Referans No:</span>
                 <span className="meta-value">{noLabel}</span>
               </div>
-              <div className="meta-row">
-                <span className="meta-label">Teklif Tarihi:</span>
-                <span className="meta-value">{h.Tarih || "—"}</span>
-              </div>
+              
             </div>
             <div>
               <div className="meta-row right">
-                <span className="meta-label">Sayfa:</span>
-                <span className="meta-value">1 / 1</span>
+                <span className="meta-label" style={{marginLeft: "200px"}} ></span>
+                <span className="meta-value">{h.Tarih || "—"}</span>
               </div>
-              <div className="meta-row right">
-                <span className="meta-label">Geçerlilik Süresi:</span>
-                <span className="meta-value">{gecerlilik || "—"}</span>
-              </div>
+            
             </div>
           </div>
+          
 
           {/* ───── Müşteri ───────────────────────────────────────────── */}
-          <div className="section-label">MÜŞTERİ BİLGİLERİ</div>
+          <div className="section-label">Sayın,</div>
           <div className="musteri-box">
-            {h.MusteriAd && <div className="firma">{h.MusteriAd}</div>}
-            {h.MusteriAdres && <div>{h.MusteriAdres}</div>}
+            {h.MusteriAd && <div className="firma" style={{fontWeight:"800"}}>{h.MusteriAd}</div>}
+            {h.MusteriAdres && <div style={{width:"40%" , color: "#6e6e73"}}>{h.MusteriAdres}</div>}
             {h.MusteriYetkili && <div>{h.MusteriYetkili}</div>}
             {h.MusteriEmail && <div>{h.MusteriEmail}</div>}
           </div>
-
+          <br></br>
+          <div>Hizmet teklifimiz aşağıdaki gibidir.</div>
           {/* ───── Hizmet tablosu ────────────────────────────────────── */}
           <table className="services">
             <thead>
@@ -492,7 +473,7 @@ export default async function TeklifPrintPage({
 
           {/* ───── Toplamlar ─────────────────────────────────────────── */}
           <div className="totals">
-            <div className="totals-row">
+            <div className="totals-row" style={{paddingTop:"12px"}}>
               <span className="totals-label">Ara Toplam:</span>
               <span className="totals-value">{fmt(araToplam)} {pb}</span>
             </div>
@@ -506,7 +487,7 @@ export default async function TeklifPrintPage({
               <span className="totals-label">KDV (%{kdvOran}):</span>
               <span className="totals-value">{fmt(kdvTutar)} {pb}</span>
             </div>
-            <div className="totals-row grand">
+            <div className="totals-row grand" style={{paddingBottom:"12px"}}>
               <span className="totals-label">Genel Toplam:</span>
               <span className="totals-value">{fmt(genelToplam)} {pb}</span>
             </div>
@@ -515,7 +496,8 @@ export default async function TeklifPrintPage({
           {/* ───── Notlar ────────────────────────────────────────────── */}
           <div className="notlar">
             <div className="notlar-title">Notlar:</div>
-            <p>&ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.</p>
+            <p>Teklifimizin geçerlilik süresi 30 gündür.</p>
+            <p>&ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akreditasyon kapsamımızda yer almaktadır.</p>
             <p>Numune gönderimi kargo ile yapıldığında, kargo ücreti göndericiye aittir.</p>
             <p>Fiyat teklifimizi ıslak imzalı olarak, mail üzerinden veya numune gönderimi sağlayarak onayladığınızı beyan edebilirsiniz.</p>
             <p>Yapılacak analizlere ve hizmetlere ait ücretler, müşteri tarafından peşin olarak ödenir. Rapor, ödeme yapıldıktan sonra müşteriye gönderilir. Ödemenin yapılmaması halinde, {sirketAdi} ödeme yapılıncaya kadar analiz hizmetlerine başlamama veya analiz raporunu müşteriye iletmeme hakkına sahiptir.</p>
@@ -523,13 +505,15 @@ export default async function TeklifPrintPage({
             <p>İşbu teklifi onaylayarak {sirketAdi} tarafından verilecek olan hizmetlerin, bu formun bütün sayfalarında yer alan şartlara uygun olarak gerçekleştirilmesini ve bu hizmetler karşılığında uygulanacak fiyat ve ödeme koşullarını gayri kabili rücu olarak kabul ettiğimizi beyan ve taahhüt ederiz.</p>
             {h.Notlar && <p style={{ marginTop: "3mm", fontWeight: 600 }}>{h.Notlar}</p>}
           </div>
+          <br></br>
+          <br></br>
 
           {/* ───── Onay ──────────────────────────────────────────────── */}
           <div className="approval-block">
             <div className="approval-content">
-              <div className="approval-dash">_______________</div>
-              <div className="approval-label">ONAYLAYAN</div>
-              <div className="approval-sub">Kaşe / İmza</div>
+              <div className="approval-dash" style={{textAlign:"right"}}>_______________</div>
+              <div className="approval-label" style={{textAlign:"right"}}>ONAYLAYAN</div>
+              <div className="approval-sub" style={{textAlign:"right"}}>Kaşe / İmza</div>
             </div>
           </div>
 
@@ -540,13 +524,18 @@ export default async function TeklifPrintPage({
               <div className="e-imza">✓ E-İmzalıdır</div>
               <div className="prep-name">{h.TeklifVeren || "—"}</div>
             </div>
+            <div className="prep" style={{ marginLeft: "auto", textAlign: "right" , marginBottom:"4px"}}>
+              <div><img src="\unique-seal.png" alt={sirketAdi} style={{height:"90px"}} /></div>
+            </div>
           </div>
 
           {/* ───── Footer sabit ─────────────────────────────────────── */}
-          <div className="footer">
-            <span>F.01.PR.03 – Yayın Tarihi: 27.09.2023</span>
-            <span>{process.env.SIRKET_EMAIL || "info@uniqueanalyse.com"}</span>
+          <div className="footer" style={{marginTop:"20px"}}>
+            <span> {process.env.SIRKET_EMAIL || "info@uniqueanalyse.com"}</span>
+            <span>F.01.PR.03 – Yayın Tarihi: 27.09.2023</span>            
+            <span className="page-number">Sayfa: 1 / 1</span>            
           </div>
+          
         </div>
 
       </div>

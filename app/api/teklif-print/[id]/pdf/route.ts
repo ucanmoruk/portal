@@ -261,10 +261,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const pdfResult = await send<{ data: string }>("Page.printToPDF", {
       printBackground: true,
       preferCSSPageSize: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<div></div>",
+      footerTemplate: `
+        <div style="width:100%;font-family:'JetBrains Mono','Cascadia Mono',Consolas,monospace;font-size:8.5px;color:#6e6e73;padding:0 12mm 4mm 12mm;text-align:right;">
+          Sayfa: <span class="pageNumber"></span> / <span class="totalPages"></span>
+        </div>
+      `,
       paperWidth: 8.27,
       paperHeight: 11.69,
       marginTop: 0,
-      marginBottom: 0,
+      marginBottom: 0.24,
       marginLeft: 0,
       marginRight: 0,
     }, sessionId);
