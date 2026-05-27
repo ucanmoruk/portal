@@ -5,6 +5,19 @@ import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
 import nodemailer from "nodemailer";
 import { getAllSettings } from "@/lib/settings";
+import { createTeklifApprovalToken } from "@/lib/teklifApprovalToken";
+import { existsSync } from "node:fs";
+import path from "node:path";
+
+interface TeklifMailSatir {
+  HizmetAdi: string;
+  Adet: number | string | null;
+  Metot: string;
+  Akreditasyon: string;
+  Fiyat: number | string | null;
+  ParaBirimi: string | null;
+  Iskonto: number | string | null;
+}
 
 // ----------------------------------------------------------------
 // POST /api/teklifler/[id]/mail
@@ -94,17 +107,17 @@ export async function POST(
         ORDER BY ID
       `);
 
-    const satirlar: any[] = sRes.recordset;
+    const satirlar = sRes.recordset as TeklifMailSatir[];
     const no = teklifLabel(h.TeklifNo, h.RevNo);
 
     // Hesaplamalar
-    const kdvOran  = parseInt(h.KdvOran)      || 20;
-    const genelIsk = parseFloat(h.GenelIskonto) || 0;
+    const kdvOran = Number.parseInt(String(h.KdvOran ?? ""), 10) || 20;
+    const genelIsk = Number.parseFloat(String(h.GenelIskonto ?? "")) || 0;
     let araToplam  = 0;
     for (const s of satirlar) {
-      const adet    = parseInt(s.Adet)      || 1;
-      const fiyat   = parseFloat(s.Fiyat)   || 0;
-      const iskonto = parseFloat(s.Iskonto) || 0;
+      const adet = Number.parseInt(String(s.Adet ?? ""), 10) || 1;
+      const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
+      const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
       araToplam += adet * fiyat * (1 - iskonto / 100);
     }
     const iskontoluTutar = araToplam * (1 - genelIsk / 100);
@@ -113,20 +126,21 @@ export async function POST(
 
     // Çoğunluk para birimi
     const pbCount: Record<string, number> = {};
-    satirlar.forEach(s => { pbCount[s.ParaBirimi] = (pbCount[s.ParaBirimi] || 0) + 1; });
+    satirlar.forEach(s => {
+      const p = s.ParaBirimi || "TRY";
+      pbCount[p] = (pbCount[p] || 0) + 1;
+    });
     const pb = Object.entries(pbCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "TRY";
 
     // Portal base URL (onay linkleri için ileriye dönük)
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "";
+    const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "");
 
     // Hizmet satır HTML'i
-    const satirHtml = satirlar.map((s: any, i: number) => {
-      const adet    = parseInt(s.Adet)      || 1;
-      const fiyat   = parseFloat(s.Fiyat)   || 0;
-      const iskonto = parseFloat(s.Iskonto) || 0;
+    const satirHtml = satirlar.map((s, i) => {
+      const adet = Number.parseInt(String(s.Adet ?? ""), 10) || 1;
+      const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
+      const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
       const net     = adet * fiyat * (1 - iskonto / 100);
-      const rowBg   = i % 2 === 0 ? "#ffffff" : "#f8f9fb";
-
       // Hizmet adı: akreditasyon varsa * öne, metot varsa sona
       const parts: string[] = [];
       if (s.Akreditasyon) parts.push("*");
@@ -135,23 +149,23 @@ export async function POST(
       const hizmetLabel = parts.join(" ");
 
       return `
-        <tr style="background:${rowBg};">
-          <td style="padding:9px 14px;border-bottom:1px solid #eaedf1;font-size:13px;color:#1d1d1f;">${hizmetLabel}</td>
-          <td style="padding:9px 14px;border-bottom:1px solid #eaedf1;font-size:13px;text-align:center;color:#3a3a3c;">${adet}</td>
-          <td style="padding:9px 14px;border-bottom:1px solid #eaedf1;font-size:13px;text-align:right;color:#3a3a3c;">${fmt(fiyat)} ${escHtml(s.ParaBirimi)}</td>
-          <td style="padding:9px 14px;border-bottom:1px solid #eaedf1;font-size:13px;text-align:center;color:${iskonto > 0 ? "#c0392b" : "#8e8e93"};">${iskonto > 0 ? `%${iskonto}` : "—"}</td>
-          <td style="padding:9px 14px;border-bottom:1px solid #eaedf1;font-size:13px;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(net)} ${escHtml(s.ParaBirimi)}</td>
+        <tr>
+          <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:center;color:#6e6e73;">${i + 1}.</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;color:#1d1d1f;">${hizmetLabel}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:center;color:#1d1d1f;">${adet}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:right;color:#1d1d1f;">${fmt(fiyat)} ${escHtml(s.ParaBirimi)}${iskonto > 0 ? ` (-%${iskonto})` : ""}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(net)} ${escHtml(s.ParaBirimi)}</td>
         </tr>`;
     }).join("");
 
     // Genel iskonto satırı (varsa)
     const iskontoSatirHtml = genelIsk > 0 ? `
       <tr>
-        <td colspan="3" style="padding:7px 14px;text-align:right;font-size:13px;color:#6e6e73;">Genel İskonto (%${genelIsk})</td>
-        <td colspan="2" style="padding:7px 14px;text-align:right;font-size:13px;font-weight:600;color:#c0392b;">-${fmt(araToplam * genelIsk / 100)} ${escHtml(pb)}</td>
+        <td colspan="4" style="padding:3px 4px;text-align:left;color:#1d1d1f;">İskonto (%${genelIsk}):</td>
+        <td style="padding:3px 4px;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(araToplam * genelIsk / 100)} ${escHtml(pb)}</td>
       </tr>` : "";
 
-    const html = buildHtml({
+    const html = buildHtmlV4({
       sirketAdi, sirketWeb, sirketEmail, sirketAdres,
       no, tarih: h.Tarih, musteriAd: h.MusteriAd,
       musteriYetkili: h.MusteriYetkili, teklifVeren: h.TeklifVeren,
@@ -160,7 +174,14 @@ export async function POST(
       satirHtml, iskontoSatirHtml,
       pb, araToplam, genelIsk, kdvOran, kdvTutar, genelToplam,
       baseUrl, teklifId: id,
+      logoSrc: "cid:unique-logo",
+      sealSrc: "cid:unique-seal",
     });
+
+    const attachments = [
+      { filename: "unique-logo.png", path: path.join(process.cwd(), "public", "unique-logo.png"), cid: "unique-logo" },
+      { filename: "unique-seal.png", path: path.join(process.cwd(), "public", "unique-seal.png"), cid: "unique-seal" },
+    ].filter((asset) => existsSync(asset.path));
 
     // SMTP
     const transporter = nodemailer.createTransport({
@@ -176,6 +197,7 @@ export async function POST(
       cc:      cc.length ? cc.join(", ") : undefined,
       subject: konu || `Fiyat Teklifimiz — ROT${no} | ${sirketAdi}`,
       html,
+      attachments,
     });
 
     // Durumu "Gönderildi" yap
@@ -184,12 +206,155 @@ export async function POST(
       .query(`UPDATE TeklifX1 SET TeklifDurum = 'Gönderildi' WHERE ID = @ID AND TeklifDurum = 'Taslak'`);
 
     return Response.json({ success: true });
-  } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Mail gönderilemedi.";
+    return Response.json({ error: message }, { status: 500 });
   }
 }
 
 // ── HTML builder ──────────────────────────────────────────────────────────────
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
+
+  const { id } = await params;
+  if (!id || isNaN(Number(id))) {
+    return Response.json({ error: "Geçersiz ID" }, { status: 400 });
+  }
+
+  try {
+    const html = await buildPreviewHtml(id, new URL(request.url).searchParams.get("mesaj") || "");
+    return new Response(html, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Mail önizleme oluşturulamadı.";
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
+
+async function buildPreviewHtml(id: string, mesaj: string) {
+  const pool = await poolPromise;
+  const cfg = await getAllSettings();
+  const sirketAdi = cfg.SIRKET_ADI || process.env.SIRKET_ADI || "ÜGD";
+  const sirketWeb = cfg.SIRKET_WEB || process.env.SIRKET_WEB || "";
+  const sirketEmail = cfg.SIRKET_EMAIL || process.env.SIRKET_EMAIL || "";
+  const sirketAdres = cfg.SIRKET_ADRES || process.env.SIRKET_ADRES || "";
+
+  const hRes = await pool.request()
+    .input("ID", Number(id))
+    .query(`
+      SELECT
+        t.ID, t.TeklifNo, t.RevNo,
+        FORMAT(t.Tarih, 'dd.MM.yyyy') AS Tarih,
+        t.Notlar,
+        ISNULL(t.TeklifKonusu, 'Fiyat teklifimiz') AS TeklifKonusu,
+        ISNULL(t.TeklifVeren,  '')                  AS TeklifVeren,
+        ISNULL(t.KdvOran, 20)                       AS KdvOran,
+        ISNULL(t.GenelIskonto, 0)                   AS GenelIskonto,
+        ISNULL(m.Ad,'')           AS MusteriAd,
+        ISNULL(m.Yetkili,'')      AS MusteriYetkili
+      FROM TeklifX1 t
+      LEFT JOIN RootTedarikci m ON m.ID = t.MusteriID
+      WHERE t.ID = @ID
+    `);
+  if (!hRes.recordset.length) throw new Error("Teklif bulunamadı.");
+
+  const h = hRes.recordset[0];
+  const sRes = await pool.request()
+    .input("TeklifID", Number(id))
+    .query(`
+      SELECT HizmetAdi,
+             ISNULL(Adet, 1)          AS Adet,
+             ISNULL(Metot, '')        AS Metot,
+             ISNULL(Akreditasyon, '') AS Akreditasyon,
+             Fiyat, ParaBirimi,
+             ISNULL(Iskonto, 0)       AS Iskonto
+      FROM TeklifX2
+      WHERE TeklifID = @TeklifID
+      ORDER BY ID
+    `);
+
+  const satirlar = sRes.recordset as TeklifMailSatir[];
+  const kdvOran = Number.parseInt(String(h.KdvOran ?? ""), 10) || 20;
+  const genelIsk = Number.parseFloat(String(h.GenelIskonto ?? "")) || 0;
+  let araToplam = 0;
+  for (const s of satirlar) {
+    const adet = Number.parseInt(String(s.Adet ?? ""), 10) || 1;
+    const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
+    const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
+    araToplam += adet * fiyat * (1 - iskonto / 100);
+  }
+  const iskontoluTutar = araToplam * (1 - genelIsk / 100);
+  const kdvTutar = iskontoluTutar * kdvOran / 100;
+  const genelToplam = iskontoluTutar + kdvTutar;
+
+  const pbCount: Record<string, number> = {};
+  satirlar.forEach(s => {
+    const p = s.ParaBirimi || "TRY";
+    pbCount[p] = (pbCount[p] || 0) + 1;
+  });
+  const pb = Object.entries(pbCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "TRY";
+
+  const satirHtml = satirlar.map((s, i) => {
+    const adet = Number.parseInt(String(s.Adet ?? ""), 10) || 1;
+    const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
+    const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
+    const net = adet * fiyat * (1 - iskonto / 100);
+    const parts: string[] = [];
+    if (s.Akreditasyon) parts.push("*");
+    parts.push(escHtml(s.HizmetAdi || ""));
+    if (s.Metot) parts.push(`/ ${escHtml(s.Metot)}`);
+    const hizmetLabel = parts.join(" ");
+
+    return `
+      <tr>
+        <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:center;color:#6e6e73;">${i + 1}.</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;color:#1d1d1f;">${hizmetLabel}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:center;color:#1d1d1f;">${adet}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:right;color:#1d1d1f;">${fmt(fiyat)} ${escHtml(s.ParaBirimi)}${iskonto > 0 ? ` (-%${iskonto})` : ""}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(net)} ${escHtml(s.ParaBirimi)}</td>
+      </tr>`;
+  }).join("");
+
+  const iskontoSatirHtml = genelIsk > 0 ? `
+    <tr>
+      <td colspan="4" style="padding:3px 4px;text-align:left;color:#1d1d1f;">İskonto (%${genelIsk}):</td>
+      <td style="padding:3px 4px;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(araToplam * genelIsk / 100)} ${escHtml(pb)}</td>
+    </tr>` : "";
+
+  const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "");
+  return buildHtmlV4({
+    sirketAdi, sirketWeb, sirketEmail, sirketAdres,
+    no: teklifLabel(h.TeklifNo, h.RevNo),
+    tarih: h.Tarih,
+    musteriAd: h.MusteriAd,
+    musteriYetkili: h.MusteriYetkili,
+    teklifVeren: h.TeklifVeren,
+    teklifKonusu: h.TeklifKonusu,
+    mesaj,
+    notlar: h.Notlar,
+    satirHtml,
+    iskontoSatirHtml,
+    pb,
+    araToplam,
+    genelIsk,
+    kdvOran,
+    kdvTutar,
+    genelToplam,
+    baseUrl,
+    teklifId: id,
+    logoSrc: baseUrl ? `${baseUrl}/unique-logo.png` : "/unique-logo.png",
+    sealSrc: baseUrl ? `${baseUrl}/unique-seal.png` : "/unique-seal.png",
+  });
+}
 
 function buildHtml(p: {
   sirketAdi: string; sirketWeb: string; sirketEmail: string; sirketAdres: string;
@@ -199,6 +364,7 @@ function buildHtml(p: {
   pb: string; araToplam: number; genelIsk: number;
   kdvOran: number; kdvTutar: number; genelToplam: number;
   baseUrl: string; teklifId: string;
+  logoSrc?: string; sealSrc?: string;
 }) {
   const {
     sirketAdi, sirketWeb, sirketEmail, sirketAdres,
@@ -208,6 +374,7 @@ function buildHtml(p: {
     pb, araToplam, genelIsk, kdvOran, kdvTutar, genelToplam,
     baseUrl, teklifId,
   } = p;
+  void genelIsk;
 
   // Onay butonları — URL'ler şimdilik placeholder (ileriye dönük)
   const onayUrl  = baseUrl ? `${baseUrl}/api/teklifler/${teklifId}/onay?action=onayla`  : "#";
@@ -351,6 +518,108 @@ function buildHtml(p: {
 
 // ── Yardımcı fonksiyonlar ─────────────────────────────────────────────────────
 
+void buildHtml;
+
+function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
+  const {
+    sirketAdi, sirketEmail,
+    no, tarih, musteriAd, musteriYetkili, teklifVeren,
+    mesaj, notlar, satirHtml, iskontoSatirHtml,
+    pb, araToplam, kdvOran, kdvTutar, genelToplam,
+    baseUrl, teklifId, logoSrc, sealSrc,
+  } = p;
+
+  const approvalToken = createTeklifApprovalToken(teklifId);
+  const onayUrl = baseUrl ? `${baseUrl}/api/teklifler/${teklifId}/onay?token=${encodeURIComponent(approvalToken)}` : "#";
+  const logoUrl = logoSrc ?? (baseUrl ? `${baseUrl}/unique-logo.png` : "");
+  const sealUrl = sealSrc ?? (baseUrl ? `${baseUrl}/unique-seal.png` : "");
+
+  return `<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Teklif ${escHtml(no)}</title>
+</head>
+<body style="margin:0;padding:24px;background:#f5f5f7;font-family:'JetBrains Mono','Cascadia Mono',Consolas,'Courier New',monospace;color:#1d1d1f;font-size:10.5px;line-height:1.5;">
+  <div style="width:720px;max-width:100%;margin:0 auto;background:#ffffff;padding:48px 42px 28px;box-sizing:border-box;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:34px;">
+      <div>${logoUrl ? `<img src="${logoUrl}" alt="${escHtml(sirketAdi)}" style="height:45px;width:auto;display:block;">` : `<div style="font-weight:800;font-size:18px;">${escHtml(sirketAdi)}</div>`}</div>
+      <div style="font-size:21px;font-weight:900;letter-spacing:.8px;padding-top:15px;">FİYAT TEKLİFİ</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px;">
+      <tr>
+        <td style="font-weight:700;width:120px;padding:2px 8px 2px 0;">Referans No:</td>
+        <td style="padding:2px 8px;">${escHtml(no)}</td>
+        <td style="text-align:right;padding:2px 0;">${escHtml(tarih)}</td>
+      </tr>
+    </table>
+    <div style="font-weight:700;font-size:11px;margin-top:30px;margin-bottom:8px;">Sayın,</div>
+    <div style="font-weight:800;font-size:11px;">${escHtml(musteriAd)}</div>
+    ${musteriYetkili ? `<div style="font-size:11px;margin-top:2px;">${escHtml(musteriYetkili)}</div>` : ""}
+    <div style="margin-top:18px;">Hizmet teklifimiz aşağıdaki gibidir.</div>
+    ${mesaj ? `<div style="margin-top:14px;white-space:pre-wrap;">${escHtml(mesaj)}</div>` : ""}
+    <table style="width:100%;border-collapse:collapse;margin-top:22px;font-size:10.5px;">
+      <thead>
+        <tr>
+          <th style="width:36px;text-align:center;padding:7px 8px;border-bottom:1.5px solid #444;">No</th>
+          <th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #444;">Açıklama</th>
+          <th style="width:60px;text-align:center;padding:7px 8px;border-bottom:1.5px solid #444;">Adet</th>
+          <th style="width:120px;text-align:right;padding:7px 8px;border-bottom:1.5px solid #444;">Birim Fiyat</th>
+          <th style="width:130px;text-align:right;padding:7px 8px;border-bottom:1.5px solid #444;">Toplam Fiyat</th>
+        </tr>
+      </thead>
+      <tbody>${satirHtml}</tbody>
+    </table>
+    <table style="width:100%;border-collapse:collapse;margin-top:18px;border:2px solid #4A46E5;font-size:11.5px;">
+      <tr>
+        <td style="padding:12px 14px 3px;">Ara Toplam:</td>
+        <td style="padding:12px 14px 3px;text-align:right;">${fmt(araToplam)} ${escHtml(pb)}</td>
+      </tr>
+      ${iskontoSatirHtml}
+      <tr>
+        <td style="padding:3px 14px;">KDV (%${kdvOran}):</td>
+        <td style="padding:3px 14px;text-align:right;">${fmt(kdvTutar)} ${escHtml(pb)}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 14px 12px;font-weight:700;border-top:1px solid #d6dee8;">Genel Toplam:</td>
+        <td style="padding:8px 14px 12px;text-align:right;font-weight:700;border-top:1px solid #d6dee8;">${fmt(genelToplam)} ${escHtml(pb)}</td>
+      </tr>
+    </table>
+    <div style="margin-top:22px;font-size:9.5px;line-height:1.5;">
+      <div style="font-weight:700;font-size:10px;margin-bottom:4px;">Notlar:</div>
+      <p style="margin:0;">Teklifimizin geçerlilik süresi 30 gündür.</p>
+      <p style="margin:0;">“*” işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025'e göre akreditasyon kapsamımızda yer almaktadır.</p>
+      <p style="margin:0;">Numune gönderimi kargo ile yapıldığında, kargo ücreti göndericiye aittir.</p>
+      <p style="margin:0;">Fiyat teklifimizi ıslak imzalı olarak, mail üzerinden veya numune gönderimi sağlayarak onayladığınızı beyan edebilirsiniz.</p>
+      ${notlar ? `<p style="margin:10px 0 0;font-weight:600;">${escHtml(notlar)}</p>` : ""}
+    </div>
+    <div style="margin-top:34px;text-align:right;">
+      <div style="text-align:right;min-width:200px;margin-left:auto;display:inline-block;">
+        <div style="font-size:13px;letter-spacing:-1px;">_______________</div>
+        <div style="font-weight:700;font-size:11px;letter-spacing:.5px;">ONAYLAYAN</div>
+        <div style="font-size:10px;color:#6e6e73;">Kaşe / İmza</div>
+        <a href="${onayUrl}" style="display:inline-block;margin-top:14px;padding:10px 18px;background:#4A46E5;color:#ffffff;text-decoration:none;font-weight:700;border-radius:6px;font-size:12px;">Onaylıyorum</a>
+      </div>
+    </div>
+    <div style="margin-top:30px;display:flex;align-items:flex-end;">
+      <div style="text-align:center;">
+        <div style="font-weight:700;font-size:11px;margin-bottom:10px;">Teklifi Hazırlayan</div>
+        <div style="display:inline-block;background:#e8f4f8;color:#4A46E5;border:1px solid #b8dbe3;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;margin-bottom:8px;">✓ E-İmzalıdır</div>
+        <div style="font-weight:600;font-size:11px;">${escHtml(teklifVeren || "—")}</div>
+      </div>
+      ${sealUrl ? `<div style="margin-left:auto;text-align:right;"><img src="${sealUrl}" alt="" style="height:90px;width:auto;"></div>` : ""}
+    </div>
+    <div style="margin-top:30px;display:table;width:100%;font-size:8.5px;color:#6e6e73;text-align:center;">
+      <span style="display:table-cell;width:33.33%;text-align:left;">${escHtml(sirketEmail || "info@uniqueanalyse.com")}</span>
+      <span style="display:table-cell;width:33.33%;text-align:center;">F.01.PR.03 – Yayın Tarihi: 27.09.2023</span>
+      <span style="display:table-cell;width:33.33%;text-align:right;">Sayfa: 1 / 1</span>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 function teklifLabel(no: number | null, rev: number) {
   if (!no) return "—";
   const yy  = String(no).slice(0, 2);
@@ -358,8 +627,8 @@ function teklifLabel(no: number | null, rev: number) {
   return rev > 0 ? `${yy}${seq}/${rev}` : `${yy}${seq}`;
 }
 
-function fmt(n: any) {
-  const num = parseFloat(n);
+function fmt(n: unknown) {
+  const num = Number.parseFloat(String(n ?? ""));
   if (isNaN(num)) return "—";
   return num.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }

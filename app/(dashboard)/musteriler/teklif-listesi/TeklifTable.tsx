@@ -33,6 +33,30 @@ interface Satir {
   notlar: string;
 }
 
+interface TeklifApiSatir {
+  HizmetID: number | null;
+  HizmetAdi: string | null;
+  Adet: number | string | null;
+  Fiyat: number | string | null;
+  ParaBirimi: string | null;
+  Iskonto: number | string | null;
+  Metot: string | null;
+  Akreditasyon: string | null;
+  Notlar: string | null;
+}
+
+interface TeklifOnayLog {
+  ID: number;
+  TeklifNo: string | null;
+  Aksiyon: string;
+  Aciklama: string | null;
+  IpAdresi: string | null;
+  MusteriAd: string | null;
+  MusteriEmail: string | null;
+  MusteriYetkili: string | null;
+  Tarih: string;
+}
+
 interface MusteriOpt { ID: number; Ad: string; Email?: string; }
 interface HizmetOpt  { ID: number; Kod: string; Ad: string; Fiyat: number | null; ParaBirimi: string | null; Metot?: string; Akreditasyon?: string; }
 interface PaketItem  { HizmetID: number; HizmetAdi: string; Kod: string; Fiyat: number | null; ParaBirimi: string | null; Metot?: string; Akreditasyon?: string; }
@@ -148,6 +172,9 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   const [mailSending, setMailSending] = useState(false);
   const [mailErr,     setMailErr]     = useState("");
   const [mailOk,      setMailOk]      = useState(false);
+  const [mailTab,     setMailTab]     = useState<"edit" | "preview" | "logs">("edit");
+  const [onayLogs,    setOnayLogs]    = useState<TeklifOnayLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   // ── delete ──
   const [deleteTarget, setDeleteTarget] = useState<Teklif | null>(null);
@@ -269,7 +296,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
         setGenelIskonto(String(j.header.GenelIskonto ?? 0));
         setTeklifNotlar(j.header.Notlar || "");
       }
-      if (j.satirlar) setSatirlar(j.satirlar.map((s: any) => ({
+      if (j.satirlar) setSatirlar((j.satirlar as TeklifApiSatir[]).map((s) => ({
         _key: nextKey(), hizmetId: s.HizmetID, hizmetAdi: s.HizmetAdi || "",
         hizmetKod: "", adet: s.Adet != null ? String(s.Adet) : "1",
         fiyat: s.Fiyat != null ? String(s.Fiyat) : "",
@@ -296,7 +323,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
         setGenelIskonto(String(j.header.GenelIskonto ?? 0));
         setTeklifNotlar(j.header.Notlar || "");
       }
-      if (j.satirlar) setSatirlar(j.satirlar.map((s: any) => ({
+      if (j.satirlar) setSatirlar((j.satirlar as TeklifApiSatir[]).map((s) => ({
         _key: nextKey(), hizmetId: s.HizmetID, hizmetAdi: s.HizmetAdi || "",
         hizmetKod: "", adet: s.Adet != null ? String(s.Adet) : "1",
         fiyat: s.Fiyat != null ? String(s.Fiyat) : "",
@@ -365,6 +392,8 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   // ── mail modal ────────────────────────────────────────────────────────────
   async function openMail(t: Teklif) {
     setMailTarget(t); setMailErr(""); setMailOk(false);
+    setMailTab("edit");
+    setOnayLogs([]);
     setMailTo([]); setMailToInput(""); setMailCc([]); setMailCcInput("");
     setMailKonu(`Teklif: ${teklifLabel(t.TeklifNo, t.RevNo)} — ${t.MusteriAd}`);
     setMailMesaj("");
@@ -376,6 +405,18 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
       if (email) setMailTo([email]);
     } catch {}
   }
+
+  useEffect(() => {
+    if (!mailTarget || mailTab !== "logs") return;
+    let cancelled = false;
+    setLogsLoading(true);
+    fetch(`/api/teklifler/${mailTarget.ID}/onay-log`)
+      .then(r => r.ok ? r.json() : { logs: [] })
+      .then(j => { if (!cancelled) setOnayLogs(j.logs || []); })
+      .catch(() => { if (!cancelled) setOnayLogs([]); })
+      .finally(() => { if (!cancelled) setLogsLoading(false); });
+    return () => { cancelled = true; };
+  }, [mailTarget, mailTab]);
 
   function addMailAddr(list: string[], setList: (v: string[]) => void, input: string, setInput: (v: string) => void) {
     const v = input.trim();
@@ -854,11 +895,78 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                   <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
                   <p style={{ fontWeight: 600, fontSize: 16 }}>Mail başarıyla gönderildi.</p>
                   <p style={{ color: "var(--color-text-tertiary)", marginTop: 6 }}>
-                    Teklif durumu "Gönderildi" olarak güncellendi.
+                    Teklif durumu &quot;Gönderildi&quot; olarak güncellendi.
                   </p>
                   <button className={styles.saveBtn} style={{ marginTop: 20 }} onClick={() => setMailTarget(null)}>Kapat</button>
                 </div>
               : <>
+                  <div style={{ display: "flex", gap: 8, padding: "14px 24px 0", borderBottom: "1px solid var(--color-border)" }}>
+                    <button
+                      type="button"
+                      onClick={() => setMailTab("edit")}
+                      style={{ ...mailTabBtnStyle, ...(mailTab === "edit" ? mailTabBtnActiveStyle : null) }}
+                    >
+                      Düzenle
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMailTab("preview")}
+                      style={{ ...mailTabBtnStyle, ...(mailTab === "preview" ? mailTabBtnActiveStyle : null) }}
+                    >
+                      Önizleme
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMailTab("logs")}
+                      style={{ ...mailTabBtnStyle, ...(mailTab === "logs" ? mailTabBtnActiveStyle : null) }}
+                    >
+                      Onay / Red Geçmişi
+                    </button>
+                  </div>
+
+                  {mailTab === "preview" ? (
+                    <div className={styles.modalBody} style={{ padding: 0, height: "70vh", background: "#f5f5f7" }}>
+                      <iframe
+                        title="Mail önizleme"
+                        src={`/api/teklifler/${mailTarget.ID}/mail?mesaj=${encodeURIComponent(mailMesaj)}`}
+                        style={{ width: "100%", height: "100%", border: 0, background: "#f5f5f7" }}
+                      />
+                    </div>
+                  ) : mailTab === "logs" ? (
+                    <div className={styles.modalBody} style={{ maxHeight: "70vh", overflow: "auto" }}>
+                      {logsLoading ? (
+                        <div style={{ color: "var(--color-text-tertiary)" }}>Kayıtlar yükleniyor...</div>
+                      ) : onayLogs.length === 0 ? (
+                        <div style={{ color: "var(--color-text-tertiary)" }}>Henüz onay/red kaydı yok.</div>
+                      ) : (
+                        <table className={styles.table} style={{ fontSize: 12 }}>
+                          <thead>
+                            <tr>
+                              <th>Tarih</th>
+                              <th>İşlem</th>
+                              <th>Firma / Yetkili</th>
+                              <th>IP</th>
+                              <th>Açıklama</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {onayLogs.map(log => (
+                              <tr key={log.ID}>
+                                <td className={styles.tdMono}>{log.Tarih}</td>
+                                <td>{log.Aksiyon}</td>
+                                <td>
+                                  <div>{log.MusteriAd || "-"}</div>
+                                  <div style={{ color: "var(--color-text-tertiary)" }}>{log.MusteriYetkili || log.MusteriEmail || ""}</div>
+                                </td>
+                                <td className={styles.tdMono}>{log.IpAdresi || "-"}</td>
+                                <td>{log.Aciklama || "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  ) : (
                   <div className={styles.modalBody}>
                     {/* Alıcılar */}
                     <div style={{ marginBottom: 18 }}>
@@ -914,6 +1022,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
 
                     {mailErr && <p className={styles.formError} style={{ marginTop: 12 }}>{mailErr}</p>}
                   </div>
+                  )}
 
                   <div className={styles.modalFooter}>
                     <button className={styles.cancelBtn} onClick={() => setMailTarget(null)} disabled={mailSending}>İptal</button>
@@ -1009,4 +1118,23 @@ const tagStyle: React.CSSProperties = {
 const tagRemoveStyle: React.CSSProperties = {
   background: "none", border: "none", cursor: "pointer",
   color: "var(--color-text-tertiary)", fontSize: 14, lineHeight: 1, padding: 0,
+};
+const mailTabBtnStyle: React.CSSProperties = {
+  border: 0,
+  // Aktif duruma geçince `borderBottomColor` üzerine yazılıyor; bu yüzden
+  // shorthand (`borderBottom`) yerine longhand ile yazıyoruz — aksi halde
+  // React "shorthand/longhand mixed" uyarısı veriyor.
+  borderBottomWidth: 2,
+  borderBottomStyle: "solid",
+  borderBottomColor: "transparent",
+  background: "transparent",
+  color: "var(--color-text-secondary)",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 600,
+  padding: "8px 12px",
+};
+const mailTabBtnActiveStyle: React.CSSProperties = {
+  borderBottomColor: "var(--color-accent)",
+  color: "var(--color-accent)",
 };
