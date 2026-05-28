@@ -63,23 +63,53 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   await ensureLogTable();
   const pool = await poolPromise;
-  const res = await pool.request()
-    .input("TeklifID", Number(id))
-    .query(`
-      SELECT TOP 200
-        ID, TeklifID, TeklifNo, Aksiyon, Aciklama, IpAdresi, UserAgent,
-        ISNULL(MusteriAd, '')      AS MusteriAd,
-        ISNULL(MusteriEmail, '')   AS MusteriEmail,
-        ISNULL(MusteriYetkili, '') AS MusteriYetkili,
-        ISNULL(kullaniciid, 0)     AS KullaniciID,
-        ISNULL(kullaniciad, '')    AS KullaniciAd,
-        ${isPostgres
-          ? `TO_CHAR(Tarih, 'DD.MM.YYYY HH24:MI:SS') AS Tarih`
-          : `FORMAT(Tarih, 'dd.MM.yyyy HH:mm:ss') AS Tarih`}
-      FROM TeklifOnayLog
-      WHERE TeklifID = @TeklifID
-      ORDER BY ID DESC
-    `);
+
+  // 1) Bu teklifin TeklifNo'sunu bul — aynı TeklifNo'ya sahip TÜM kayıtların
+  //    (tüm revizyonlar) ID'lerini topla. Geçmiş bu birleşik küme üzerinden döner,
+  //    böylece yeni revizyon açıldığında eski revizyonların log'ları da görünür.
+  const idRow = await pool.request()
+    .input("ID", Number(id))
+    .query(`SELECT TeklifNo FROM TeklifX1 WHERE ID = @ID`);
+
+  const teklifNo = idRow.recordset[0]?.TeklifNo as number | null | undefined;
+
+  // Family IDs (tüm revizyonlar) — TeklifNo varsa ona göre, yoksa sadece bu ID
+  let familyIds: number[] = [Number(id)];
+  if (teklifNo) {
+    const famRes = await pool.request()
+      .input("TeklifNo", teklifNo)
+      .query(`SELECT ID FROM TeklifX1 WHERE TeklifNo = @TeklifNo ORDER BY ID`);
+    familyIds = famRes.recordset.map((r: { ID: number }) => Number(r.ID)).filter(Boolean);
+    if (familyIds.length === 0) familyIds = [Number(id)];
+  }
+
+  // IN list — parametrize edilmediği için inline güvenli sayı listesi
+  const idList = familyIds.map(n => Number(n)).filter(Number.isFinite).join(",") || String(Number(id));
+
+  // 2) Log query — explicit AS alias HER kolon için (recordset mapper aliases'ı
+  //    JS tarafına aynı case ile yansıtsın). Saat dilimi PG için 'Europe/Istanbul'
+  //    olarak çevriliyor (NOW() UTC saklıyor, kullanıcı TR saatini görmeli).
+  const res = await pool.request().query(`
+    SELECT TOP 200
+      ID                            AS ID,
+      TeklifID                      AS TeklifID,
+      TeklifNo                      AS TeklifNo,
+      ISNULL(Aksiyon, '')           AS Aksiyon,
+      ISNULL(Aciklama, '')          AS Aciklama,
+      ISNULL(IpAdresi, '')          AS IpAdresi,
+      ISNULL(UserAgent, '')         AS UserAgent,
+      ISNULL(MusteriAd, '')         AS MusteriAd,
+      ISNULL(MusteriEmail, '')      AS MusteriEmail,
+      ISNULL(MusteriYetkili, '')    AS MusteriYetkili,
+      ISNULL(kullaniciid, 0)        AS KullaniciID,
+      ISNULL(kullaniciad, '')       AS KullaniciAd,
+      ${isPostgres
+        ? `TO_CHAR(Tarih AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Istanbul', 'DD.MM.YYYY HH24:MI:SS') AS Tarih`
+        : `FORMAT(Tarih, 'dd.MM.yyyy HH:mm:ss') AS Tarih`}
+    FROM TeklifOnayLog
+    WHERE TeklifID IN (${idList})
+    ORDER BY ID DESC
+  `);
 
   return Response.json({ logs: res.recordset });
 }
