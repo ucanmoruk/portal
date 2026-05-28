@@ -207,7 +207,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { musteriId, satirlar, notlar, revizeOfId, teklifKonusu, teklifVeren, kdvOran, genelIskonto } = body;
+    const { musteriId, satirlar, notlar, revizeOfId, teklifKonusu, teklifVeren, kdvOran, genelIskonto, revisionReason } = body;
 
     if (!musteriId) {
       return Response.json({ error: "Müşteri seçimi zorunludur." }, { status: 400 });
@@ -265,18 +265,31 @@ export async function POST(request: Request) {
     await insertSatirlar(pool, teklifId, satirlar);
 
     // Log: Oluşturuldu (revize ise farklı aksiyon)
+    const reason = String(revisionReason || "").trim();
     try {
       await writeInternalTeklifLog({
         teklifId,
         teklifNo: teklifNoLabel(teklifNo, revNo),
         aksiyon: revizeOfId ? "Revize" : "Oluşturuldu",
-        aciklama: revizeOfId ? `Önceki teklif #${revizeOfId} üzerinden revize edildi.` : null,
+        aciklama: revizeOfId ? (reason || null) : null,
         kullaniciId: userId ? parseInt(userId) : null,
         kullaniciAd: userName,
         ipAdresi: clientIpFromRequest(request.headers),
       });
+      // Revize ise eski teklifin history'sinde de görünsün — link açıklamasıyla
+      if (revizeOfId) {
+        await writeInternalTeklifLog({
+          teklifId: Number(revizeOfId),
+          teklifNo: teklifNoLabel(teklifNo, revNo),
+          aksiyon: "Revize",
+          aciklama: `Yeni revizyon (#${teklifId}) oluşturuldu${reason ? ` — ${reason}` : ""}.`,
+          kullaniciId: userId ? parseInt(userId) : null,
+          kullaniciAd: userName,
+          ipAdresi: clientIpFromRequest(request.headers),
+        });
+      }
     } catch (logErr) {
-      console.error("[teklif log] Oluşturuldu logu yazılamadı:", logErr);
+      console.error("[teklif log] Oluşturuldu/Revize logu yazılamadı:", logErr);
     }
 
     return Response.json({ id: teklifId }, { status: 201 });

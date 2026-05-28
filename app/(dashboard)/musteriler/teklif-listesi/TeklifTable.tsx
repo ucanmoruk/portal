@@ -141,6 +141,9 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   const [teklifNotlar, setTeklifNotlar] = useState("");
   const [kdvOran,      setKdvOran]      = useState("20");
   const [genelIskonto, setGenelIskonto] = useState("0");
+  // Teklif global para birimi — değiştiğinde TÜM satırların paraBirimi'ni override eder.
+  // Yeni eklenen hizmet/paket satırları da bu değeri alır (liste fiyatının PB'si yoksayılır).
+  const [teklifParaBirimi, setTeklifParaBirimi] = useState<string>("TRY");
   const [revizeOfId,   setRevizeOfId]   = useState<number | null>(null);
 
   // ── müşteri dropdown ──
@@ -280,11 +283,19 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
     if (mode === "paket"  && paketler.length === 0)   loadPaketler();
   }
 
-  function addHizmet(h: HizmetOpt)   { setSatirlar(p => [...p, makeSatir(h)]); }
-  function addPaket(pk: PaketOpt)    { setSatirlar(p => [...p, ...pk.items.map(makeSatir)]); }
+  // Yeni satır eklerken liste fiyatının para birimini değil, teklifin global
+  // para birimini kullan — kullanıcı paraBirimi seçicisini sonradan değiştirirse
+  // de tüm satırlar otomatik güncellenir (changeTeklifParaBirimi).
+  function addHizmet(h: HizmetOpt)   { setSatirlar(p => [...p, { ...makeSatir(h), paraBirimi: teklifParaBirimi }]); }
+  function addPaket(pk: PaketOpt)    { setSatirlar(p => [...p, ...pk.items.map(it => ({ ...makeSatir(it), paraBirimi: teklifParaBirimi }))]); }
   function removeSatir(key: string)  { setSatirlar(p => p.filter(s => s._key !== key)); }
   function updateSatir(key: string, field: keyof Omit<Satir, "_key">, val: string) {
     setSatirlar(p => p.map(s => s._key === key ? { ...s, [field]: val } : s));
+  }
+
+  function changeTeklifParaBirimi(yeni: string) {
+    setTeklifParaBirimi(yeni);
+    setSatirlar(p => p.map(s => ({ ...s, paraBirimi: yeni })));
   }
 
   // ── open modal ─────────────────────────────────────────────────────────────
@@ -292,6 +303,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
     setMusteri(null); setMusteriQ(""); setMusteriOpts([]);
     setSatirlar([]); setTeklifNotlar("");
     setKdvOran("20"); setGenelIskonto("0");
+    setTeklifParaBirimi("TRY");
     setAddMode(null); setHizmetQ(""); setHizmetOpts([]); setPaketler([]);
     setSaveErr(""); setRevizeOfId(null);
   }
@@ -320,14 +332,25 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
         setGenelIskonto(String(j.header.GenelIskonto ?? 0));
         setTeklifNotlar(j.header.Notlar || "");
       }
-      if (j.satirlar) setSatirlar((j.satirlar as TeklifApiSatir[]).map((s) => ({
-        _key: nextKey(), hizmetId: s.HizmetID, hizmetAdi: s.HizmetAdi || "",
-        hizmetKod: "", adet: s.Adet != null ? String(s.Adet) : "1",
-        fiyat: s.Fiyat != null ? String(s.Fiyat) : "",
-        paraBirimi: s.ParaBirimi || "TRY", iskonto: s.Iskonto != null ? String(s.Iskonto) : "0",
-        metot: s.Metot || "", akreditasyon: s.Akreditasyon || "",
-        notlar: s.Notlar || "",
-      })));
+      if (j.satirlar) {
+        const apiSatirlar = j.satirlar as TeklifApiSatir[];
+        // Mevcut teklifte en yaygın para birimini global'e koy ve TÜM satırları o birime senkronla
+        const pbVotes: Record<string, number> = {};
+        for (const s of apiSatirlar) {
+          const p = s.ParaBirimi || "TRY";
+          pbVotes[p] = (pbVotes[p] || 0) + 1;
+        }
+        const pbMajority = Object.entries(pbVotes).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "TRY";
+        setTeklifParaBirimi(pbMajority);
+        setSatirlar(apiSatirlar.map((s) => ({
+          _key: nextKey(), hizmetId: s.HizmetID, hizmetAdi: s.HizmetAdi || "",
+          hizmetKod: "", adet: s.Adet != null ? String(s.Adet) : "1",
+          fiyat: s.Fiyat != null ? String(s.Fiyat) : "",
+          paraBirimi: pbMajority, iskonto: s.Iskonto != null ? String(s.Iskonto) : "0",
+          metot: s.Metot || "", akreditasyon: s.Akreditasyon || "",
+          notlar: s.Notlar || "",
+        })));
+      }
     } catch {} finally { setSatirLoading(false); }
   }
 
@@ -385,6 +408,10 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   async function executeSave(opts: { isRevision: boolean; revisionReason?: string }) {
     if (!musteri) return;
 
+    // Revize seçimi → yeni satır oluştur (POST + revizeOfId), liste'de hem eski
+    // hem yeni görünür. Düzeltme seçimi → mevcut satırı güncelle (PUT in-place).
+    const willCreateNewRow = modalMode === "edit" && opts.isRevision;
+
     const payload = {
       musteriId:    musteri.ID,
       satirlar:     satirlar.map(s => ({
@@ -398,15 +425,21 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
       teklifVeren:  userName,
       kdvOran:      kdvOran,
       genelIskonto: genelIskonto,
-      revizeOfId:   revizeOfId ?? undefined,
-      isRevision:   opts.isRevision,
+      // Revize: POST'a revizeOfId gönder, server yeni satır oluştursun + RevNo+1
+      revizeOfId:   willCreateNewRow ? editId : (revizeOfId ?? undefined),
       revisionReason: opts.revisionReason || "",
+      // PUT akışı için (düzeltme): isRevision = false sabit; bu sadece PUT'da kullanılır
+      isRevision:   false,
     };
 
     setSaving(true);
     try {
-      const url    = modalMode === "edit" ? `/api/teklifler/${editId}` : "/api/teklifler";
-      const method = modalMode === "edit" ? "PUT" : "POST";
+      const url    = willCreateNewRow
+        ? "/api/teklifler"
+        : (modalMode === "edit" ? `/api/teklifler/${editId}` : "/api/teklifler");
+      const method = willCreateNewRow
+        ? "POST"
+        : (modalMode === "edit" ? "PUT" : "POST");
       const r      = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const j      = await r.json();
       if (!r.ok) { setSaveErr(j.error || "Kayıt başarısız."); return; }
@@ -788,10 +821,19 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
 
               {/* Hizmet satırları */}
               <section style={{ marginBottom: 24 }}>
-                {/* Başlık + KDV seçimi */}
+                {/* Başlık + Para Birimi + KDV seçimi */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                   <label style={{ ...labelStyle, marginBottom: 0 }}>Hizmet Satırları <span className={styles.required}>*</span></label>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 600 }}>Para Birimi</span>
+                    <select
+                      style={{ ...cellInputStyle, width: 80 }}
+                      value={teklifParaBirimi}
+                      onChange={e => changeTeklifParaBirimi(e.target.value)}
+                      title="Tüm satırlara uygulanır"
+                    >
+                      {PB_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
                     <span style={{ fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 600 }}>KDV %</span>
                     <select style={{ ...cellInputStyle, width: 72 }} value={kdvOran} onChange={e => setKdvOran(e.target.value)}>
                       {["0","1","8","10","18","20"].map(v => <option key={v} value={v}>{v}</option>)}
