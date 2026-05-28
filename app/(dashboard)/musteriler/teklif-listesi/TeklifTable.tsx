@@ -17,6 +17,7 @@ interface Teklif {
   Notlar: string | null;
   Durum: string;
   TeklifDurum: string;
+  OlusturanAd?: string;
 }
 
 interface Satir {
@@ -54,6 +55,8 @@ interface TeklifOnayLog {
   MusteriAd: string | null;
   MusteriEmail: string | null;
   MusteriYetkili: string | null;
+  KullaniciID?: number;
+  KullaniciAd?: string;
   Tarih: string;
 }
 
@@ -180,6 +183,25 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   const [deleteTarget, setDeleteTarget] = useState<Teklif | null>(null);
   const [deleting,     setDeleting]     = useState(false);
 
+  // ── edit modal tabs (Düzenleme / Geçmiş) ──
+  const [editTab,        setEditTab]        = useState<"edit" | "logs">("edit");
+  const [editLogs,       setEditLogs]       = useState<TeklifOnayLog[]>([]);
+  const [editLogsLoading, setEditLogsLoading] = useState(false);
+
+  const fetchEditLogs = useCallback(async (teklifId: number) => {
+    setEditLogsLoading(true);
+    try {
+      const r = await fetch(`/api/teklifler/${teklifId}/onay-log`);
+      const j = await r.json();
+      if (r.ok && Array.isArray(j.logs)) setEditLogs(j.logs);
+      else setEditLogs([]);
+    } catch {
+      setEditLogs([]);
+    } finally {
+      setEditLogsLoading(false);
+    }
+  }, []);
+
   // ── fetch ──────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async (s: string, p: number, lim: number) => {
     setLoading(true);
@@ -286,6 +308,8 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
     setKdvOran("20"); setGenelIskonto("0");
     setAddMode(null); setHizmetQ(""); setHizmetOpts([]); setPaketler([]);
     setSaveErr(""); setRevizeOfId(null);
+    setEditTab("edit"); setEditLogs([]);
+    fetchEditLogs(t.ID);
     setModalOpen(true);
     setSatirLoading(true);
     try {
@@ -335,10 +359,31 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   }
 
   // ── save ──────────────────────────────────────────────────────────────────
+  // Düzenleme modunda kullanıcıya "Revizyon yapılsın mı?" sorulur:
+  //   Evet → revizyon nedeni alınır, RevNo+1, log = "Revize"
+  //   Hayır → log = "Düzeltildi"
+  // Yeni teklif (add) modunda direkt kaydedilir, ek diyalog yok.
+  const [revPromptOpen, setRevPromptOpen] = useState(false);
+  const [revPromptReason, setRevPromptReason] = useState("");
+  const [revPromptStage, setRevPromptStage] = useState<"ask" | "reason">("ask");
+
   async function handleSave() {
     setSaveErr("");
     if (!musteri)               { setSaveErr("Müşteri seçimi zorunludur."); return; }
     if (satirlar.length === 0)  { setSaveErr("En az bir hizmet eklemelisiniz."); return; }
+
+    if (modalMode === "edit") {
+      // İlk Kaydet tıklamasında revize diyaloğunu aç
+      setRevPromptStage("ask");
+      setRevPromptReason("");
+      setRevPromptOpen(true);
+      return;
+    }
+    await executeSave({ isRevision: false });
+  }
+
+  async function executeSave(opts: { isRevision: boolean; revisionReason?: string }) {
+    if (!musteri) return;
 
     const payload = {
       musteriId:    musteri.ID,
@@ -354,6 +399,8 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
       kdvOran:      kdvOran,
       genelIskonto: genelIskonto,
       revizeOfId:   revizeOfId ?? undefined,
+      isRevision:   opts.isRevision,
+      revisionReason: opts.revisionReason || "",
     };
 
     setSaving(true);
@@ -363,6 +410,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
       const r      = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const j      = await r.json();
       if (!r.ok) { setSaveErr(j.error || "Kayıt başarısız."); return; }
+      setRevPromptOpen(false);
       setModalOpen(false);
       setPage(1); fetchData(search, 1, limit);
     } catch { setSaveErr("Sunucu hatası."); }
@@ -502,6 +550,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                 <th style={{ width: 140 }}>Teklif No</th>
                 <th style={{ width: 90 }}>Tarih</th>
                 <th>Müşteri</th>
+                <th style={{ width: 150 }}>Teklifi Oluşturan</th>
                 <th style={{ width: 80, textAlign: "center" }}>Hizmet</th>
                 <th style={{ width: 120, textAlign: "right" }}>Toplam</th>
                 <th style={{ width: 110, textAlign: "center" }}>Durum</th>
@@ -511,12 +560,12 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
             <tbody>
               {loading
                 ? Array.from({ length: 6 }).map((_, i) => (
-                    <tr key={i}>{Array.from({ length: 7 }).map((_, j) => (
+                    <tr key={i}>{Array.from({ length: 8 }).map((_, j) => (
                       <td key={j}><div className={styles.skeleton} style={{ height: 14 }} /></td>
                     ))}</tr>
                   ))
                 : data.length === 0
-                  ? <tr><td colSpan={7} className={styles.empty}>
+                  ? <tr><td colSpan={8} className={styles.empty}>
                       {search ? "Arama sonucu bulunamadı." : "Henüz teklif oluşturulmamış."}
                     </td></tr>
                   : data.map(t => {
@@ -529,6 +578,9 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                           <td className={styles.tdSecondary}>{t.Tarih}</td>
                           <td className={styles.tdName}>
                             {t.MusteriAd || <em style={{ color: "var(--color-text-tertiary)" }}>—</em>}
+                          </td>
+                          <td className={styles.tdSecondary}>
+                            {t.OlusturanAd || <em style={{ color: "var(--color-text-tertiary)" }}>—</em>}
                           </td>
                           <td style={{ textAlign: "center" }}>
                             <span className={`${styles.badge} ${styles.badgeGray}`}>{t.HizmetSayisi}</span>
@@ -583,7 +635,6 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                           <td>
                             <div style={{ display: "flex", gap: 3, justifyContent: "flex-end" }}>
                               <button className={styles.editBtn}   onClick={() => openEdit(t)}         title="Düzenle">✏️</button>
-                              <button className={styles.editBtn}   onClick={() => openRevize(t)}        title="Revizyon" style={{ filter: "sepia(1) hue-rotate(180deg)" }}>🔄</button>
                               <button className={styles.editBtn}   onClick={() => openMail(t)}          title="Mail gönder">✉️</button>
                               <button className={styles.editBtn}   onClick={() => window.open(`/teklif-print/${t.ID}`, "_blank")} title="Teklif önizleme / PDF indir">🖨️</button>
                               <button className={styles.deleteBtn} onClick={() => setDeleteTarget(t)}   title="Sil">🗑</button>
@@ -633,6 +684,80 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
               <button className={styles.modalClose} onClick={() => !saving && setModalOpen(false)}>✕</button>
             </div>
 
+            {/* Edit modunda tab çubuğu — yeni teklifte tab yok */}
+            {modalMode === "edit" && (
+              <div style={{ display: "flex", gap: 8, padding: "10px 24px 0", borderBottom: "1px solid var(--color-border)" }}>
+                <button
+                  type="button"
+                  onClick={() => setEditTab("edit")}
+                  style={{
+                    ...mailTabBtnStyle,
+                    ...(editTab === "edit" ? mailTabBtnActiveStyle : {}),
+                  }}
+                >Düzenleme</button>
+                <button
+                  type="button"
+                  onClick={() => setEditTab("logs")}
+                  style={{
+                    ...mailTabBtnStyle,
+                    ...(editTab === "logs" ? mailTabBtnActiveStyle : {}),
+                  }}
+                >Geçmiş ({editLogs.length})</button>
+              </div>
+            )}
+
+            {modalMode === "edit" && editTab === "logs" ? (
+              <div className={styles.modalBody}>
+                {editLogsLoading
+                  ? <p style={{ color: "var(--color-text-tertiary)" }}>Yükleniyor…</p>
+                  : editLogs.length === 0
+                    ? <p style={{ color: "var(--color-text-tertiary)" }}>Bu teklif için henüz log kaydı bulunmamaktadır.</p>
+                    : (
+                      <div style={{ maxHeight: "60vh", overflowY: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead>
+                            <tr style={{ borderBottom: "1px solid var(--color-border)", background: "var(--color-bg)" }}>
+                              <th style={{ ...thStyle, width: 150 }}>Tarih</th>
+                              <th style={{ ...thStyle, width: 110 }}>Aksiyon</th>
+                              <th style={{ ...thStyle, width: 170 }}>Yapan</th>
+                              <th style={thStyle}>Açıklama</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {editLogs.map(log => {
+                              const internalActions = ["Oluşturuldu", "Düzeltildi", "Revize"];
+                              const isInternal = internalActions.includes(log.Aksiyon);
+                              const yapan = isInternal
+                                ? (log.KullaniciAd || "-")
+                                : (log.MusteriAd || log.MusteriYetkili || log.MusteriEmail || "Müşteri");
+                              const aksiyonColor = log.Aksiyon === "Onaylandı" ? "#1a7f4b"
+                                : log.Aksiyon === "Reddedildi" ? "#c0392b"
+                                : log.Aksiyon === "Revize" ? "#7c3aed"
+                                : log.Aksiyon === "Oluşturuldu" ? "#0071e3"
+                                : "var(--color-text-secondary)";
+                              return (
+                                <tr key={log.ID} style={{ borderBottom: "1px solid var(--color-border-light)" }}>
+                                  <td style={{ ...tdStyle, color: "var(--color-text-tertiary)", whiteSpace: "nowrap" }}>{log.Tarih}</td>
+                                  <td style={{ ...tdStyle, fontWeight: 600, color: aksiyonColor }}>{log.Aksiyon}</td>
+                                  <td style={tdStyle}>
+                                    <div>{yapan}</div>
+                                    {!isInternal && log.MusteriEmail && (
+                                      <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{log.MusteriEmail}</div>
+                                    )}
+                                  </td>
+                                  <td style={{ ...tdStyle, whiteSpace: "pre-wrap" }}>
+                                    {log.Aciklama || <em style={{ color: "var(--color-text-tertiary)" }}>—</em>}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                }
+              </div>
+            ) : (
             <div className={styles.modalBody}>
               {/* Müşteri */}
               <section style={{ marginBottom: 24 }}>
@@ -867,12 +992,76 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
 
               {saveErr && <p className={styles.formError} style={{ marginTop: 12 }}>{saveErr}</p>}
             </div>
+            )}
 
             <div className={styles.modalFooter}>
               <button className={styles.cancelBtn} onClick={() => !saving && setModalOpen(false)} disabled={saving}>İptal</button>
-              <button className={styles.saveBtn}   onClick={handleSave} disabled={saving}>
-                {saving ? <span className={styles.loader} /> : "KAYDET"}
-              </button>
+              {/* Logs sekmesindeyken Kaydet butonu gizli; sadece düzenleme sekmesinde anlam taşır */}
+              {!(modalMode === "edit" && editTab === "logs") && (
+                <button className={styles.saveBtn}   onClick={handleSave} disabled={saving}>
+                  {saving ? <span className={styles.loader} /> : "KAYDET"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revize / Düzeltme onay diyaloğu */}
+      {revPromptOpen && (
+        <div className={styles.modalOverlay} onClick={() => !saving && setRevPromptOpen(false)}>
+          <div className={styles.modal} style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>{revPromptStage === "ask" ? "Revizyon yapılsın mı?" : "Revizyon açıklaması"}</h2>
+              <button className={styles.modalClose} onClick={() => !saving && setRevPromptOpen(false)}>✕</button>
+            </div>
+            <div className={styles.modalBody}>
+              {revPromptStage === "ask" ? (
+                <p style={{ marginBottom: 16, color: "var(--color-text-secondary)" }}>
+                  Bu kaydetme bir <strong>revizyon</strong> mı yoksa basit bir <strong>düzeltme</strong> mi olarak işlensin?
+                  Revizyon, teklif numarasının revizyon sayısını bir artırır ve geçmişe açıklamayla beraber işlenir.
+                </p>
+              ) : (
+                <>
+                  <label style={labelStyle}>Revizyon Açıklaması <span className={styles.required}>*</span></label>
+                  <textarea
+                    style={{ ...inputStyle, minHeight: 100, resize: "vertical" }}
+                    value={revPromptReason}
+                    onChange={e => setRevPromptReason(e.target.value)}
+                    placeholder="Bu revizyonun nedenini kısaca yazın..."
+                    autoFocus
+                  />
+                </>
+              )}
+            </div>
+            <div className={styles.modalFooter}>
+              {revPromptStage === "ask" ? (
+                <>
+                  <button
+                    className={styles.cancelBtn}
+                    disabled={saving}
+                    onClick={() => executeSave({ isRevision: false })}
+                  >Hayır (Düzeltme)</button>
+                  <button
+                    className={styles.saveBtn}
+                    disabled={saving}
+                    onClick={() => setRevPromptStage("reason")}
+                  >Evet (Revize)</button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className={styles.cancelBtn}
+                    disabled={saving}
+                    onClick={() => setRevPromptStage("ask")}
+                  >Geri</button>
+                  <button
+                    className={styles.saveBtn}
+                    disabled={saving || !revPromptReason.trim()}
+                    onClick={() => executeSave({ isRevision: true, revisionReason: revPromptReason.trim() })}
+                  >{saving ? <span className={styles.loader} /> : "Kaydet"}</button>
+                </>
+              )}
             </div>
           </div>
         </div>

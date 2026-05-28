@@ -69,6 +69,8 @@ async function ensureLogTable() {
         MusteriAd VARCHAR(255) NULL,
         MusteriEmail VARCHAR(255) NULL,
         MusteriYetkili VARCHAR(255) NULL,
+        KullaniciID INTEGER NULL,
+        KullaniciAd VARCHAR(255) NULL,
         Tarih TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
@@ -88,6 +90,8 @@ async function ensureLogTable() {
         [MusteriAd] NVARCHAR(255) NULL,
         [MusteriEmail] NVARCHAR(255) NULL,
         [MusteriYetkili] NVARCHAR(255) NULL,
+        [KullaniciID] INT NULL,
+        [KullaniciAd] NVARCHAR(255) NULL,
         [Tarih] DATETIME NOT NULL DEFAULT GETDATE()
       )
     END
@@ -171,11 +175,11 @@ function invalidLinkPage() {
   return page("Gecersiz baglanti", `
     <div class="header">
       <img class="logo" src="/unique-logo.png" alt="Unique">
-      <div class="title">TEKLIF ONAYI</div>
+      <div class="title">TEKLİF ONAYI</div>
     </div>
     <div class="box">
-      <h1 style="margin:0 0 8px;font-size:18px;color:#b42318;">Baglanti gecersiz veya suresi dolmus</h1>
-      <p style="margin:0;">Guvenlik nedeniyle teklif bilgileri yalnizca size gonderilen onay baglantisi ile goruntulenebilir.</p>
+      <h1 style="margin:0 0 8px;font-size:18px;color:#b42318;">Bağlantı geçersiz veya süresi dolmuş</h1>
+      <p style="margin:0;">Güvenlik nedeniyle teklif bilgileri yalnızca size gönderilen onay bağlantısı ile görüntülenebilir.</p>
     </div>
   `, 403);
 }
@@ -194,7 +198,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   return page("Teklif Onayi", `
     <div class="header">
       <img class="logo" src="/unique-logo.png" alt="Unique">
-      <div class="title">TEKLIF ONAYI</div>
+      <div class="title">TEKLİF ONAYI</div>
     </div>
     <table class="meta">
       <tr><td class="label">Referans No:</td><td>${escHtml(no)}</td><td style="text-align:right;">${escHtml(teklif.Tarih || "-")}</td></tr>
@@ -279,27 +283,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         <p><strong>Firma:</strong> ${escHtml(teklif.MusteriAd)}</p>
         <p><strong>Yetkili:</strong> ${escHtml(teklif.MusteriYetkili)}</p>
         <p><strong>E-posta:</strong> ${escHtml(teklif.MusteriEmail)}</p>
-        ${aciklama ? `<p><strong>Aciklama:</strong><br>${escHtml(aciklama).replace(/\n/g, "<br>")}</p>` : ""}
+        ${aciklama ? `<p><strong>Açıklama:</strong><br>${escHtml(aciklama).replace(/\n/g, "<br>")}</p>` : ""}
       `,
     });
   }
 
-  const okTitle = action === "reject" ? "Talep alindi" : "Teklif onaylandi";
+  const okTitle = action === "reject" ? "Talep alindi" : "Teklif onaylandı";
   const color = action === "reject" ? "#b42318" : "#15803d";
   const message = action === "reject"
-    ? "Red / revizyon talebiniz kayit altina alindi ve bize iletildi."
-    : "Tesekkur ederiz. Teklif onayiniz kayit altina alindi ve bize iletildi.";
+    ? "Red / revizyon talebiniz kayit altına alındı ve bize iletildi."
+    : "Teşekkür ederiz. Teklif onayınız kayıt altına alındı ve bize iletildi.";
 
   return page(okTitle, `
     <div class="header">
       <img class="logo" src="/unique-logo.png" alt="Unique">
-      <div class="title">TEKLIF ONAYI</div>
+      <div class="title">TEKLİF ONAYI</div>
     </div>
     <div class="box">
       <h1 style="margin:0 0 8px;font-size:18px;color:${color};">${escHtml(okTitle)}</h1>
-      <p style="margin:0;"><strong>${escHtml(no)}</strong> referansli teklif icin isleminiz tamamlandi.</p>
+      <p style="margin:0;"><strong>${escHtml(no)}</strong> referanslı teklif icin işleminiz tamamlandı.</p>
       <p style="margin:12px 0 0;">${escHtml(message)}</p>
-      ${aciklama ? `<p style="margin:12px 0 0;"><strong>Aciklama:</strong><br>${escHtml(aciklama).replace(/\n/g, "<br>")}</p>` : ""}
+      ${aciklama ? `<p style="margin:12px 0 0;"><strong>Açıklama:</strong><br>${escHtml(aciklama).replace(/\n/g, "<br>")}</p>` : ""}
     </div>
   `);
 }

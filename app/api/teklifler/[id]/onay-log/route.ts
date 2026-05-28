@@ -23,6 +23,8 @@ async function ensureLogTable() {
         MusteriAd VARCHAR(255) NULL,
         MusteriEmail VARCHAR(255) NULL,
         MusteriYetkili VARCHAR(255) NULL,
+        KullaniciID INTEGER NULL,
+        KullaniciAd VARCHAR(255) NULL,
         Tarih TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
@@ -42,6 +44,8 @@ async function ensureLogTable() {
         [MusteriAd] NVARCHAR(255) NULL,
         [MusteriEmail] NVARCHAR(255) NULL,
         [MusteriYetkili] NVARCHAR(255) NULL,
+        [KullaniciID] INT NULL,
+        [KullaniciAd] NVARCHAR(255) NULL,
         [Tarih] DATETIME NOT NULL DEFAULT GETDATE()
       )
     END
@@ -62,9 +66,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const res = await pool.request()
     .input("TeklifID", Number(id))
     .query(`
-      SELECT TOP 50
+      SELECT TOP 200
         ID, TeklifID, TeklifNo, Aksiyon, Aciklama, IpAdresi, UserAgent,
-        MusteriAd, MusteriEmail, MusteriYetkili,
+        ISNULL(MusteriAd, '')      AS MusteriAd,
+        ISNULL(MusteriEmail, '')   AS MusteriEmail,
+        ISNULL(MusteriYetkili, '') AS MusteriYetkili,
+        ISNULL(KullaniciID, 0)     AS KullaniciID,
+        ISNULL(KullaniciAd, '')    AS KullaniciAd,
         FORMAT(Tarih, 'dd.MM.yyyy HH:mm:ss') AS Tarih
       FROM TeklifOnayLog
       WHERE TeklifID = @TeklifID

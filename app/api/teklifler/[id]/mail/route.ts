@@ -539,7 +539,7 @@ function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Teklif ${escHtml(no)}</title>
+  <title>Fiyat Teklifimiz ${escHtml(no)}</title>
 </head>
 <body style="margin:0;padding:24px;background:#f5f5f7;font-family:'JetBrains Mono','Cascadia Mono',Consolas,'Courier New',monospace;color:#1d1d1f;font-size:10.5px;line-height:1.5;">
   <div style="width:720px;max-width:100%;margin:0 auto;background:#ffffff;padding:48px 42px 28px;box-sizing:border-box;">
@@ -596,10 +596,10 @@ function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
     </div>
     <div style="margin-top:34px;text-align:right;">
       <div style="text-align:right;min-width:200px;margin-left:auto;display:inline-block;">
+        <a href="${onayUrl}" style="display:inline-block;margin-top:14px;padding:10px 18px;background:#4A46E5;color:#ffffff;text-decoration:none;font-weight:700;border-radius:6px;font-size:12px;">Onaylıyorum</a>
         <div style="font-size:13px;letter-spacing:-1px;">_______________</div>
         <div style="font-weight:700;font-size:11px;letter-spacing:.5px;">ONAYLAYAN</div>
-        <div style="font-size:10px;color:#6e6e73;">Kaşe / İmza</div>
-        <a href="${onayUrl}" style="display:inline-block;margin-top:14px;padding:10px 18px;background:#4A46E5;color:#ffffff;text-decoration:none;font-weight:700;border-radius:6px;font-size:12px;">Onaylıyorum</a>
+        <div style="font-size:10px;color:#6e6e73;">Kaşe / İmza</div> 
       </div>
     </div>
     <div style="margin-top:30px;display:flex;align-items:flex-end;">

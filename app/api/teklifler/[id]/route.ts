@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
+import { writeInternalTeklifLog, teklifNoLabel, clientIpFromRequest } from "@/lib/teklifLog";
 
 // ----------------------------------------------------------------
 // GET  /api/teklifler/[id]  — header + satirlar
@@ -115,6 +116,8 @@ export async function PUT(
 ) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
+  const userId = (session.user as any)?.userId ?? null;
+  const userName = (session.user as any)?.name || (session.user as any)?.email || "";
 
   const { id } = await params;
   if (!id || isNaN(Number(id))) {
@@ -123,13 +126,20 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { musteriId, satirlar, notlar, teklifKonusu, teklifVeren, kdvOran, genelIskonto } = body;
+    const {
+      musteriId, satirlar, notlar, teklifKonusu, teklifVeren, kdvOran, genelIskonto,
+      isRevision = false,         // Yeni: revizyon mı düzeltme mi
+      revisionReason = "",        // Yeni: revizyon açıklaması
+    } = body;
 
     if (!musteriId) {
       return Response.json({ error: "Müşteri seçimi zorunludur." }, { status: 400 });
     }
     if (!Array.isArray(satirlar) || satirlar.length === 0) {
       return Response.json({ error: "En az bir hizmet eklemelisiniz." }, { status: 400 });
+    }
+    if (isRevision && !String(revisionReason).trim()) {
+      return Response.json({ error: "Revizyon için açıklama zorunludur." }, { status: 400 });
     }
 
     const toplam = satirlar.reduce((sum: number, s: any) => {
@@ -140,6 +150,17 @@ export async function PUT(
     const pool     = await poolPromise;
     const teklifId = Number(id);
 
+    // Mevcut TeklifNo + RevNo'yu al (log için)
+    const curRes = await pool.request()
+      .input("ID", teklifId)
+      .query(`SELECT TeklifNo, ISNULL(RevNo, 0) AS RevNo FROM TeklifX1 WHERE ID = @ID`);
+    if (!curRes.recordset.length) {
+      return Response.json({ error: "Teklif bulunamadı" }, { status: 404 });
+    }
+    const currentTeklifNo: number | null = curRes.recordset[0].TeklifNo ?? null;
+    const currentRev: number = Number(curRes.recordset[0].RevNo) || 0;
+    const nextRev = isRevision ? currentRev + 1 : currentRev;
+
     await pool.request()
       .input("ID",           teklifId)
       .input("MusteriID",    Number(musteriId))
@@ -149,11 +170,13 @@ export async function PUT(
       .input("TeklifVeren",   teklifVeren   || null)
       .input("KdvOran",       parseInt(kdvOran) || 20)
       .input("GenelIskonto",  parseFloat(genelIskonto) || 0)
+      .input("RevNo",        nextRev)
       .query(`
         UPDATE TeklifX1
         SET MusteriID = @MusteriID, Toplam = @Toplam, Notlar = @Notlar,
             TeklifKonusu = @TeklifKonusu, TeklifVeren = @TeklifVeren,
-            KdvOran = @KdvOran, GenelIskonto = @GenelIskonto
+            KdvOran = @KdvOran, GenelIskonto = @GenelIskonto,
+            RevNo = @RevNo
         WHERE ID = @ID
       `);
 
@@ -179,7 +202,22 @@ export async function PUT(
         `);
     }
 
-    return Response.json({ success: true });
+    // Log: Revize veya Düzeltildi
+    try {
+      await writeInternalTeklifLog({
+        teklifId,
+        teklifNo: teklifNoLabel(currentTeklifNo, nextRev),
+        aksiyon: isRevision ? "Revize" : "Düzeltildi",
+        aciklama: isRevision ? String(revisionReason).trim() : null,
+        kullaniciId: userId ? parseInt(userId) : null,
+        kullaniciAd: userName,
+        ipAdresi: clientIpFromRequest(request.headers),
+      });
+    } catch (logErr) {
+      console.error("[teklif log] PUT logu yazılamadı:", logErr);
+    }
+
+    return Response.json({ success: true, revNo: nextRev });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

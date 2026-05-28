@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
 import { type NextRequest } from "next/server";
+import { writeInternalTeklifLog, teklifNoLabel, clientIpFromRequest } from "@/lib/teklifLog";
 
 async function ensureTables() {
   const pool = await poolPromise;
@@ -39,6 +40,7 @@ async function ensureTables() {
   if (!c1.has("TeklifKonusu"))  await pool.request().query(`ALTER TABLE TeklifX1 ADD TeklifKonusu  NVARCHAR(500) NULL`);
   if (!c1.has("TeklifVeren"))   await pool.request().query(`ALTER TABLE TeklifX1 ADD TeklifVeren   NVARCHAR(200) NULL`);
   if (!c1.has("GenelIskonto")) await pool.request().query(`ALTER TABLE TeklifX1 ADD GenelIskonto  DECIMAL(5,2)  NOT NULL DEFAULT 0`);
+  if (!c1.has("OlusturanAd"))  await pool.request().query(`ALTER TABLE TeklifX1 ADD OlusturanAd   NVARCHAR(255) NULL`);
 
   // TeklifX2 — oluştur
   await pool.request().query(`
@@ -168,12 +170,13 @@ export async function GET(request: NextRequest) {
           ISNULL(m.Ad, '') AS MusteriAd,
           t.Toplam, t.Notlar, t.Durum,
           ISNULL(t.TeklifDurum, 'Taslak') AS TeklifDurum,
+          ISNULL(t.OlusturanAd, '') AS OlusturanAd,
           COUNT(x2.ID) AS HizmetSayisi
         FROM TeklifX1 t
         LEFT JOIN RootTedarikci m ON m.ID = t.MusteriID
         LEFT JOIN TeklifX2 x2 ON x2.TeklifID = t.ID
         WHERE t.Durum = 'Aktif' ${searchClause}
-        GROUP BY t.ID, t.TeklifNo, t.RevNo, t.Tarih, t.MusteriID, m.Ad, t.Toplam, t.Notlar, t.Durum, t.TeklifDurum
+        GROUP BY t.ID, t.TeklifNo, t.RevNo, t.Tarih, t.MusteriID, m.Ad, t.Toplam, t.Notlar, t.Durum, t.TeklifDurum, t.OlusturanAd
         ORDER BY t.ID DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
@@ -198,6 +201,7 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
   const userId = (session.user as any)?.userId ?? null;
+  const userName = (session.user as any)?.name || (session.user as any)?.email || "";
 
   await ensureTables();
 
@@ -250,14 +254,30 @@ export async function POST(request: Request) {
       .input("KdvOran",       parseInt(kdvOran) || 20)
       .input("GenelIskonto",  parseFloat(genelIskonto) || 0)
       .input("KID",           userId ? parseInt(userId) : null)
+      .input("OlusturanAd",   userName || null)
       .query(`
-        INSERT INTO TeklifX1 (TeklifNo, RevNo, MusteriID, Tarih, Toplam, Notlar, TeklifKonusu, TeklifVeren, KdvOran, GenelIskonto, Durum, KID)
+        INSERT INTO TeklifX1 (TeklifNo, RevNo, MusteriID, Tarih, Toplam, Notlar, TeklifKonusu, TeklifVeren, KdvOran, GenelIskonto, Durum, KID, OlusturanAd)
         OUTPUT INSERTED.ID
-        VALUES (@TeklifNo, @RevNo, @MusteriID, @Tarih, @Toplam, @Notlar, @TeklifKonusu, @TeklifVeren, @KdvOran, @GenelIskonto, 'Aktif', @KID)
+        VALUES (@TeklifNo, @RevNo, @MusteriID, @Tarih, @Toplam, @Notlar, @TeklifKonusu, @TeklifVeren, @KdvOran, @GenelIskonto, 'Aktif', @KID, @OlusturanAd)
       `);
 
     const teklifId = insertRes.recordset[0].ID;
     await insertSatirlar(pool, teklifId, satirlar);
+
+    // Log: Oluşturuldu (revize ise farklı aksiyon)
+    try {
+      await writeInternalTeklifLog({
+        teklifId,
+        teklifNo: teklifNoLabel(teklifNo, revNo),
+        aksiyon: revizeOfId ? "Revize" : "Oluşturuldu",
+        aciklama: revizeOfId ? `Önceki teklif #${revizeOfId} üzerinden revize edildi.` : null,
+        kullaniciId: userId ? parseInt(userId) : null,
+        kullaniciAd: userName,
+        ipAdresi: clientIpFromRequest(request.headers),
+      });
+    } catch (logErr) {
+      console.error("[teklif log] Oluşturuldu logu yazılamadı:", logErr);
+    }
 
     return Response.json({ id: teklifId }, { status: 201 });
   } catch (e: any) {
