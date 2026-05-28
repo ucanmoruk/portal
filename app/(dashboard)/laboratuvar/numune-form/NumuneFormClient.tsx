@@ -7,12 +7,11 @@ import styles from "@/app/styles/table.module.css";
 import nf from "./numune-form.module.css";
 import Tab1Bilgiler from "./Tab1Bilgiler";
 import Tab2Hizmetler from "./Tab2Hizmetler";
-import Tab3Formul from "./Tab3Formul";
 import Tab4Gecmis from "./Tab4Gecmis";
-import type { LookupData, NkrFormData, HizmetRow, FormulRow } from "./numuneFormTypes";
+import type { LookupData, NkrFormData, HizmetRow } from "./numuneFormTypes";
 import { emptyForm, emptyRaporMetinleri } from "./numuneFormTypes";
 
-const TABS = ["Numune bilgileri", "Hizmetler", "Ürün formülü", "Ürün geçmişi"] as const;
+const TABS = ["Numune bilgileri", "Hizmetler", "Ürün geçmişi"] as const;
 
 async function uploadFoto(nkrId: number, file: File) {
   const fd = new FormData();
@@ -105,24 +104,12 @@ function mapHizmetler(rows: Record<string, unknown>[]): HizmetRow[] {
   }));
 }
 
-function mapFormul(rows: Record<string, unknown>[]): FormulRow[] {
-  return rows.map((f, i) => ({
-    key: `g-${f.ID ?? i}`,
-    HammaddeID: di(f.HammaddeID),
-    INCIName: d(f.INCIName),
-    Miktar: f.Miktar != null ? String(f.Miktar) : "",
-    DaP: f.DaP != null ? String(f.DaP) : "",
-    Noael: f.Noael != null ? String(f.Noael) : "",
-  }));
-}
-
 export default function NumuneFormClient({ recordId }: { recordId?: string }) {
   const router = useRouter();
   const [tab, setTab]       = useState(0);
   const [lookup, setLookup] = useState<LookupData>({ grupTurleri: [], rUGDTipler: [], paketler: [] });
   const [form, setForm]     = useState<NkrFormData>(() => emptyForm());
   const [hizmetler, setHizmetler] = useState<HizmetRow[]>([]);
-  const [formul, setFormul] = useState<FormulRow[]>([]);
   const [loadingNos, setLoadingNos] = useState(false);
   const [loadErr, setLoadErr]       = useState("");
   const [saving, setSaving]         = useState(false);
@@ -159,7 +146,6 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
         }
         setForm(mapApiToForm(data.nkr, data.detay, data.fotoPath ?? null, data.raporMetinleri ?? null));
         setHizmetler(mapHizmetler(data.hizmetler || []));
-        setFormul(mapFormul(data.formul || []));
       })
       .catch(() => { if (!cancelled) setLoadErr("Yüklenemedi"); });
     return () => { cancelled = true; };
@@ -224,13 +210,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
       Limit: Limit || null,
       Birim: Birim || null,
     })),
-    formul: formul.map(f => ({
-      HammaddeID: f.HammaddeID,
-      INCIName: f.INCIName || null,
-      Miktar: f.Miktar || null,
-      DaP: f.DaP || null,
-      Noael: f.Noael || null,
-    })),
+    formul: [],
     raporMetinleri: form.RaporMetinleri,
   });
 
@@ -287,7 +267,6 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
               Hedef_Grup: f.Hedef_Grup,
             }));
             setHizmetler([]);
-            setFormul([]);
             setCreatedId(null);
             setTab1Saved(false);
             setTab(0);
@@ -381,11 +360,32 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
         {tab === 1 && (
           <Tab2Hizmetler tarih={form.Tarih} rows={hizmetler} onChange={setHizmetler} />
         )}
-        {tab === 2 && <Tab3Formul rows={formul} onChange={setFormul} form={form} onFormChange={patchForm} lookup={lookup} />}
-        {tab === 3 && <Tab4Gecmis recordId={recordId ?? null} />}
+        {tab === 2 && <Tab4Gecmis recordId={recordId ?? null} />}
       </div>
 
       <footer className={nf.saveBar}>
+        {isEdit && effectiveId != null && (
+          <button
+            type="button"
+            className={styles.saveBtn}
+            style={{ background: "var(--color-surface)", color: "var(--color-text-primary)", border: "1px solid var(--color-border)", marginRight: 8 }}
+            onClick={async () => {
+              try {
+                const r = await fetch(`/api/numune-form/barcode-data?ids=${effectiveId}`);
+                const j = await r.json();
+                if (!r.ok) throw new Error(j.error || "Barkod verisi alınamadı");
+                const mod = await import("../yeni-numune/printBarcode");
+                mod.printBarcodes(j.data || []);
+              } catch (e: any) {
+                setSaveErr(e.message || "Barkod yazdırılamadı");
+              }
+            }}
+            disabled={saving}
+            title="Bu numune için bölüme göre barkod yazdır"
+          >
+            🏷  Barkod Yazdır
+          </button>
+        )}
         <button type="button" className={styles.saveBtn} onClick={() => void handleSave()} disabled={saving}>
           {saving ? "Kaydediliyor…" : isEdit ? "Güncelle" : "Kaydet"}
         </button>

@@ -21,6 +21,7 @@ interface Hizmet {
   Durumu: string;
   RaporFormati: string;        // comma-separated: "Genel,Stabilite"
   YetkiliID: number | null;
+  BolumID: number | null;
   Limit?: string;              // NEW: Test limit range (e.g., "0-100")
   Birim?: string;              // NEW: Unit (e.g., "ppm", "mg/L")
   LOQ?: string;                // NEW: Limit of Quantification
@@ -29,16 +30,16 @@ interface Hizmet {
   LOQEn?: string;              // NEW: English LOQ
 }
 
-interface Kullanici { ID: number; Ad: string; }
+interface Birim { ID: number; Birim: string; }
 
-const RAPOR_FORMATLARI = ["Genel", "Stabilite", "Challenge", "Dermatoloji", "ÜGDR"] as const;
+const RAPOR_FORMATLARI = ["Genel", "Stabilite", "Challenge", "Dermatoloji", "ÜGDR", "Diğer"] as const;
 
 const EMPTY: Partial<Hizmet> = {
   Kod: "", Ad: "", AdEn: "", Method: "", MethodEn: "",
   Matriks: "", Akreditasyon: "Yok", Sure: undefined,
   NumGereklilik: "", NumDipnot: "", NumDipnotEn: "",
   Fiyat: undefined, ParaBirimi: "₺", Durumu: "Aktif",
-  RaporFormati: "", YetkiliID: null,
+  RaporFormati: "", YetkiliID: null, BolumID: null,
   Limit: "", Birim: "", LOQ: "", LimitEn: "", BirimEn: "", LOQEn: "",
 };
 
@@ -60,7 +61,7 @@ export default function HizmetTable() {
   const [formError, setFormError]   = useState("");
   const [modalTab, setModalTab]     = useState(0);  // 0: Genel, 1: Teknik
 
-  const [kullanicilar, setKullanicilar] = useState<Kullanici[]>([]);
+  const [birimler, setBirimler] = useState<Birim[]>([]);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -86,9 +87,11 @@ export default function HizmetTable() {
   useEffect(() => { fetchData(page, search, limit); }, [page, limit]);
 
   useEffect(() => {
-    fetch("/api/kullanicilar")
+    fetch("/api/admin/birimler")
       .then(r => r.json())
-      .then((d: { data?: Kullanici[] }) => { if (d.data) setKullanicilar(d.data); })
+      .then((d: Birim[] | { error?: string }) => {
+        if (Array.isArray(d)) setBirimler(d);
+      })
       .catch(() => {});
   }, []);
 
@@ -326,7 +329,7 @@ export default function HizmetTable() {
                 ["Dipnot",       detailRow.NumDipnot || "—"],
                 ["Fiyat",        fiyatLabel(detailRow) || "—"],
                 ["Rapor Formatı", detailRow.RaporFormati?.split(",").filter(Boolean).join(", ") || "—"],
-                ["Yetkili",      kullanicilar.find(k => k.ID === detailRow.YetkiliID)?.Ad || (detailRow.YetkiliID ? `#${detailRow.YetkiliID}` : "—")],
+                ["Bölüm",        birimler.find(b => b.ID === detailRow.BolumID)?.Birim || (detailRow.BolumID ? `#${detailRow.BolumID}` : "—")],
               ]} />
               <div style={{ height: 16 }} />
               <DetailSection label="English" items={[
@@ -548,15 +551,15 @@ export default function HizmetTable() {
                 </div>
               </div>
 
-              {/* Satır 4: Yetkili Kişi */}
+              {/* Satır 4: Bölüm */}
               <div className={styles.formGroup} style={{ marginBottom: 14 }}>
-                <label>Yetkili Kişi</label>
+                <label>Bölüm</label>
                 <select
-                  value={editRow.YetkiliID != null ? String(editRow.YetkiliID) : ""}
-                  onChange={e => setEditRow(p => ({ ...p!, YetkiliID: e.target.value ? Number(e.target.value) : null }))}
+                  value={editRow.BolumID != null ? String(editRow.BolumID) : ""}
+                  onChange={e => setEditRow(p => ({ ...p!, BolumID: e.target.value ? Number(e.target.value) : null }))}
                 >
                   <option value="">— Seçilmedi —</option>
-                  {kullanicilar.map(k => <option key={k.ID} value={k.ID}>{k.Ad}</option>)}
+                  {birimler.map(b => <option key={b.ID} value={b.ID}>{b.Birim}</option>)}
                 </select>
               </div>
 

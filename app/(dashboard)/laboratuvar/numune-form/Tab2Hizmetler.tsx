@@ -36,6 +36,8 @@ interface HizmetOpt {
   LimitEn?: string;
   BirimEn?: string;
   LOQEn?: string;
+  BolumID?: number | null;
+  BolumAdi?: string;
 }
 
 interface PaketItem {
@@ -220,6 +222,8 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
         BirimEn: h.BirimEn,
         LOQ: h.LOQ,
         LOQEn: h.LOQEn,
+        BolumID: h.BolumID ?? null,
+        BolumAdi: h.BolumAdi ?? "",
       },
     ];
     onChange(next);
@@ -267,6 +271,8 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
           BirimEn: limitBirimEn,
           LOQ: loq,
           LOQEn: loqEn,
+          BolumID: it.BolumID ?? null,
+          BolumAdi: it.BolumAdi ?? "",
         });
       }
       onChange(next);
@@ -311,6 +317,8 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
       BirimEn: limitBirimEn,
       LOQ: loq,
       LOQEn: loqEn,
+      BolumID: item.BolumID ?? null,
+      BolumAdi: item.BolumAdi ?? "",
     });
 
     onChange(next);

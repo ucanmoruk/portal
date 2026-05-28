@@ -2,15 +2,17 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
 
-// Module-level col cache (shared with parent route in same process via import)
-let _colCache: Set<string> | null = null;
+// Module-level col cache — 30s TTL (ALTER TABLE sonrası sunucu restart gerektirmesin)
+let _colCache: { cols: Set<string>; ts: number } | null = null;
+const COL_CACHE_TTL_MS = 30_000;
 async function getStokCols(pool: any): Promise<Set<string>> {
-  if (_colCache) return _colCache;
+  if (_colCache && Date.now() - _colCache.ts < COL_CACHE_TTL_MS) return _colCache.cols;
   const r = await pool.request().query(
     "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='StokAnalizListesi'"
   );
-  _colCache = new Set<string>(r.recordset.map((row: any) => row.COLUMN_NAME as string));
-  return _colCache;
+  const cols = new Set<string>(r.recordset.map((row: any) => row.COLUMN_NAME as string));
+  _colCache = { cols, ts: Date.now() };
+  return cols;
 }
 
 // ----------------------------------------------------------------
@@ -29,10 +31,12 @@ export async function GET(
     const cols = await getStokCols(pool);
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
+    const hasBL = cols.has("BolumID");
 
     const optCols = [
       hasRF ? "ISNULL(RaporFormati, '') AS RaporFormati" : "'' AS RaporFormati",
       hasYK ? "YetkiliID" : "NULL AS YetkiliID",
+      hasBL ? "BolumID"   : "NULL AS BolumID",
     ].join(", ");
 
     const result = await pool.request()
@@ -78,7 +82,7 @@ export async function PUT(
     const {
       Kod, Ad, AdEn, Method, MethodEn, Matriks,
       Akreditasyon, Sure, NumGereklilik, NumDipnot, NumDipnotEn,
-      Fiyat, ParaBirimi, Durumu, RaporFormati, YetkiliID,
+      Fiyat, ParaBirimi, Durumu, RaporFormati, YetkiliID, BolumID,
       Limit, Birim, LOQ, LimitEn, BirimEn, LOQEn,
     } = body;
 
@@ -86,6 +90,7 @@ export async function PUT(
     const cols = await getStokCols(pool);
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
+    const hasBL = cols.has("BolumID");
 
     const req = pool.request()
       .input("id",            id)
@@ -119,6 +124,10 @@ export async function PUT(
     if (hasYK) {
       req.input("YetkiliID", YetkiliID ? parseInt(YetkiliID) : null);
       extraSets.push("YetkiliID = @YetkiliID");
+    }
+    if (hasBL) {
+      req.input("BolumID", BolumID ? parseInt(BolumID) : null);
+      extraSets.push("BolumID = @BolumID");
     }
 
     const extraSetStr = extraSets.length ? `,\n          ${extraSets.join(",\n          ")}` : "";

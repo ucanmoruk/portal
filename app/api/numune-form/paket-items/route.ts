@@ -14,6 +14,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const pool = await poolPromise;
+    const hasBolumCol = await pool.request().query(
+      "SELECT 1 AS hasIt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='StokAnalizListesi' AND COLUMN_NAME='BolumID'"
+    );
+    const hasBL = hasBolumCol.recordset.length > 0;
+    const bolumSelect = hasBL
+      ? "s.BolumID AS BolumID, ISNULL(b.Birim, '') AS BolumAdi"
+      : "NULL AS BolumID, '' AS BolumAdi";
+    const bolumJoin = hasBL ? "LEFT JOIN RootFirmaBirim b ON b.ID = s.BolumID" : "";
+
     const result = await pool.request()
       .input("x3id", parseInt(x3id))
       .query(`
@@ -31,9 +40,11 @@ export async function GET(request: NextRequest) {
           ISNULL(x4.LimitDegerEn,  '')                      AS LimitDegerEn,
           ISNULL(x4.LimitBirimiEn, '')                      AS LimitBirimiEn,
           ISNULL(NULLIF(x4.LOQ,   ''), ISNULL(s.LOQ,   '')) AS LOQ,
-          ISNULL(NULLIF(x4.LOQEn, ''), ISNULL(s.LOQEn, '')) AS LOQEn
+          ISNULL(NULLIF(x4.LOQEn, ''), ISNULL(s.LOQEn, '')) AS LOQEn,
+          ${bolumSelect}
         FROM NumuneX4 x4
         LEFT JOIN StokAnalizListesi s ON s.ID = x4.AltAnalizID
+        ${bolumJoin}
         WHERE x4.ListeID = @x3id
         ORDER BY x4.ID
       `);

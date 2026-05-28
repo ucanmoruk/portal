@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import styles from "@/app/styles/table.module.css";
+import { printBarcodes, type BarcodeNumune } from "../yeni-numune/printBarcode";
 
 // ── Tipler ──────────────────────────────────────────────────────
 interface NumuneItem {
@@ -102,6 +103,35 @@ export default function NumuneKabulTable() {
   const handlePrint = (ids: number[], lang: "tr" | "en") => {
     window.open(`/laboratuvar/rapor-yazdir?ids=${ids.join(",")}&lang=${lang}`, "_blank", "noopener,noreferrer");
     setPrintMenuEvrak(null);
+  };
+
+  const [barcodeBusy, setBarcodeBusy] = useState(false);
+
+  const handlePrintBarcodes = async (ids: number[]) => {
+    if (ids.length === 0 || barcodeBusy) return;
+    setBarcodeBusy(true);
+    try {
+      const res = await fetch(`/api/numune-form/barcode-data?ids=${ids.join(",")}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Barkod verisi alınamadı");
+      const data: BarcodeNumune[] = (json.data || []).map((d: any) => ({
+        RaporNo: d.RaporNo,
+        NumuneAd: d.NumuneAd,
+        FirmaAd: d.FirmaAd,
+        Tarih: d.Tarih,
+        hizmetler: d.hizmetler || [],
+      }));
+      if (data.length === 0) {
+        alert("Seçili numune bulunamadı.");
+        return;
+      }
+      printBarcodes(data);
+      setPrintMenuEvrak(null);
+    } catch (e: any) {
+      alert(e.message || "Barkod yazdırılamadı");
+    } finally {
+      setBarcodeBusy(false);
+    }
   };
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -439,8 +469,13 @@ export default function NumuneKabulTable() {
                           position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 400,
                           background: "var(--color-surface)", border: "1px solid var(--color-border)",
                           borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-                          minWidth: 140, overflow: "hidden",
+                          minWidth: 180, overflow: "hidden",
                         }}>
+                          <div style={{
+                            padding: "6px 14px", fontSize: "0.68rem", textTransform: "uppercase",
+                            letterSpacing: "0.06em", color: "var(--color-text-tertiary)",
+                            background: "var(--color-surface-2)", fontWeight: 600,
+                          }}>Rapor</div>
                           {([["tr", "Türkçe"], ["en", "İngilizce"]] as const).map(([lang, label]) => (
                             <button
                               key={lang}
@@ -457,6 +492,28 @@ export default function NumuneKabulTable() {
                               {label}
                             </button>
                           ))}
+                          <div style={{
+                            padding: "6px 14px", fontSize: "0.68rem", textTransform: "uppercase",
+                            letterSpacing: "0.06em", color: "var(--color-text-tertiary)",
+                            background: "var(--color-surface-2)", fontWeight: 600,
+                            borderTop: "1px solid var(--color-border-light)",
+                          }}>Etiket</div>
+                          <button
+                            type="button"
+                            disabled={barcodeBusy}
+                            onClick={() => void handlePrintBarcodes(groupSelectedIds(group.numuneler))}
+                            style={{
+                              display: "block", width: "100%", textAlign: "left",
+                              padding: "9px 14px", border: "none", background: "transparent",
+                              fontSize: "0.8125rem", cursor: barcodeBusy ? "not-allowed" : "pointer",
+                              color: "var(--color-text-primary)",
+                              opacity: barcodeBusy ? 0.5 : 1,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-2)")}
+                            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                          >
+                            🏷  Barkod (bölüme göre)
+                          </button>
                         </div>
                       )}
                     </div>
@@ -562,7 +619,17 @@ export default function NumuneKabulTable() {
                             <td style={{ padding: "9px 12px", color: "var(--color-text-secondary)" }}>
                               {[n.Grup, n.Tur].filter(Boolean).join(" / ") || "—"}
                             </td>
-                            <td style={{ padding: "9px 8px" }}>
+                            <td style={{ padding: "9px 8px", display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
+                              <button
+                                className={styles.editBtn} title="Barkod yazdır (bölüme göre)"
+                                style={{ color: "var(--color-accent)" }}
+                                disabled={barcodeBusy}
+                                onClick={() => void handlePrintBarcodes([n.ID])}
+                              >
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+                                  <path d="M2 4h1v12H2V4Zm2 0h2v12H4V4Zm3 0h1v12H7V4Zm2 0h2v12H9V4Zm3 0h1v12h-1V4Zm2 0h2v12h-2V4Zm3 0h1v12h-1V4Z" />
+                                </svg>
+                              </button>
                               <button
                                 className={styles.editBtn} title="Pasife Al"
                                 style={{ color: "#ff3b30" }}

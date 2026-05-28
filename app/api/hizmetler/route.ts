@@ -3,15 +3,18 @@ import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
 import { type NextRequest } from "next/server";
 
-// Hangi kolonların mevcut olduğunu kontrol et (module-level cache)
-let _colCache: Set<string> | null = null;
+// Hangi kolonların mevcut olduğunu kontrol et (30s TTL cache — ALTER TABLE sonrası
+// sunucu restart gerektirmesin)
+let _colCache: { cols: Set<string>; ts: number } | null = null;
+const COL_CACHE_TTL_MS = 30_000;
 async function getStokCols(pool: any): Promise<Set<string>> {
-  if (_colCache) return _colCache;
+  if (_colCache && Date.now() - _colCache.ts < COL_CACHE_TTL_MS) return _colCache.cols;
   const r = await pool.request().query(
     "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='StokAnalizListesi'"
   );
-  _colCache = new Set<string>(r.recordset.map((row: any) => row.COLUMN_NAME as string));
-  return _colCache;
+  const cols = new Set<string>(r.recordset.map((row: any) => row.COLUMN_NAME as string));
+  _colCache = { cols, ts: Date.now() };
+  return cols;
 }
 
 // ----------------------------------------------------------------
@@ -32,6 +35,7 @@ export async function GET(request: NextRequest) {
     const cols = await getStokCols(pool);
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
+    const hasBL = cols.has("BolumID");
 
     const whereClauses: string[] = ["Durumu = 'Aktif'"];
 
@@ -60,6 +64,7 @@ export async function GET(request: NextRequest) {
     const optCols = [
       hasRF ? "ISNULL(RaporFormati, '') AS RaporFormati" : "'' AS RaporFormati",
       hasYK ? "YetkiliID" : "NULL AS YetkiliID",
+      hasBL ? "BolumID"   : "NULL AS BolumID",
     ].join(", ");
 
     const dataResult = await req.query(`
@@ -104,7 +109,7 @@ export async function POST(request: Request) {
     const {
       Kod, Ad, AdEn, Method, MethodEn, Matriks,
       Akreditasyon, Sure, NumGereklilik, NumDipnot, NumDipnotEn,
-      Fiyat, ParaBirimi, RaporFormati, YetkiliID,
+      Fiyat, ParaBirimi, RaporFormati, YetkiliID, BolumID,
       Limit, Birim, LOQ, LimitEn, BirimEn, LOQEn,
     } = body;
 
@@ -115,6 +120,7 @@ export async function POST(request: Request) {
     const cols = await getStokCols(pool);
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
+    const hasBL = cols.has("BolumID");
 
     const req = pool.request()
       .input("Kod",           Kod.trim())
@@ -150,6 +156,11 @@ export async function POST(request: Request) {
       req.input("YetkiliID", YetkiliID ? parseInt(YetkiliID) : null);
       extraCols.push("YetkiliID");
       extraVals.push("@YetkiliID");
+    }
+    if (hasBL) {
+      req.input("BolumID", BolumID ? parseInt(BolumID) : null);
+      extraCols.push("BolumID");
+      extraVals.push("@BolumID");
     }
 
     const colsPart = extraCols.length ? `, ${extraCols.join(", ")}` : "";

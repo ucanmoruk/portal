@@ -453,7 +453,9 @@ export default async function TeklifPrintPage({
                 const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
                 const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
                 const net = adet * fiyat * (1 - iskonto / 100);
-                const akr = s.Akreditasyon ? "*" : "";
+                // Sadece Akreditasyon === "Var" olan hizmetlere * gelir (case-insensitive).
+                // Eski truthy check "Yok" / "Hayır" gibi non-empty değerleri de yanlışlıkla yakalıyordu.
+                const akr = String(s.Akreditasyon || "").trim().toLowerCase() === "var" ? "*" : "";
                 const adi = `${akr}${s.HizmetAdi || ""}${s.Metot ? ` / ${s.Metot}` : ""}`;
                 return (
                   <tr key={i}>

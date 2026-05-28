@@ -34,24 +34,35 @@ export async function GET(request: NextRequest) {
 
     // ── Hizmet listesi (StokAnalizListesi) ────────────────────────
     if (type === "hizmetler") {
+      const hasBolumCol = await pool.request().query(
+        "SELECT 1 AS hasIt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='StokAnalizListesi' AND COLUMN_NAME='BolumID'"
+      );
+      const hasBL = hasBolumCol.recordset.length > 0;
+      const bolumSelect = hasBL
+        ? "s.BolumID AS BolumID, ISNULL(b.Birim, '') AS BolumAdi"
+        : "NULL AS BolumID, '' AS BolumAdi";
+      const bolumJoin = hasBL ? "LEFT JOIN RootFirmaBirim b ON b.ID = s.BolumID" : "";
+
       const res = await pool.request()
         .input("qLike", `%${q}%`)
         .query(`
-          SELECT TOP 100 ID, Kod, Ad, Fiyat, ParaBirimi,
-                 ISNULL(Method,'')       AS Metot,
-                 ISNULL(Akreditasyon,'') AS Akreditasyon,
-                 ISNULL(Matriks,'')      AS Matriks,
-                 Sure,
-                 ISNULL([Limit],'')      AS [Limit],
-                 ISNULL(Birim,'')        AS Birim,
-                 ISNULL(LOQ,'')          AS LOQ,
-                 ISNULL(LimitEn,'')      AS LimitEn,
-                 ISNULL(BirimEn,'')      AS BirimEn,
-                 ISNULL(LOQEn,'')        AS LOQEn
-          FROM StokAnalizListesi
-          WHERE Durumu = 'Aktif'
-          ${q ? "AND (LOWER(ISNULL(Ad,'')) LIKE LOWER(@qLike) OR LOWER(ISNULL(Kod,'')) LIKE LOWER(@qLike))" : ""}
-          ORDER BY Ad
+          SELECT TOP 100 s.ID, s.Kod, s.Ad, s.Fiyat, s.ParaBirimi,
+                 ISNULL(s.Method,'')       AS Metot,
+                 ISNULL(s.Akreditasyon,'') AS Akreditasyon,
+                 ISNULL(s.Matriks,'')      AS Matriks,
+                 s.Sure,
+                 ISNULL(s.[Limit],'')      AS [Limit],
+                 ISNULL(s.Birim,'')        AS Birim,
+                 ISNULL(s.LOQ,'')          AS LOQ,
+                 ISNULL(s.LimitEn,'')      AS LimitEn,
+                 ISNULL(s.BirimEn,'')      AS BirimEn,
+                 ISNULL(s.LOQEn,'')        AS LOQEn,
+                 ${bolumSelect}
+          FROM StokAnalizListesi s
+          ${bolumJoin}
+          WHERE s.Durumu = 'Aktif'
+          ${q ? "AND (LOWER(ISNULL(s.Ad,'')) LIKE LOWER(@qLike) OR LOWER(ISNULL(s.Kod,'')) LIKE LOWER(@qLike))" : ""}
+          ORDER BY s.Ad
         `);
       return Response.json({ data: res.recordset });
     }

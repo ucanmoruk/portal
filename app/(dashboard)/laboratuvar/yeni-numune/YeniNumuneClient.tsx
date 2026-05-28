@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import yn from "./yeni-numune.module.css";
 import type { HizmetRow, LookupData } from "../numune-form/numuneFormTypes";
+import { printBarcodes, type BarcodeNumune } from "./printBarcode";
 
 // ── Tipler ────────────────────────────────────────────────
 interface EvrakForm {
@@ -277,7 +278,11 @@ function HizmetPanel({ tarih, rows, onChange }: { tarih: string; rows: HizmetRow
 
   const addHizmet = (h: any) => {
     if (rows.some(x => x.AnalizID === h.ID && !x.x3ID)) return;
-    onChange([...rows, { key: newHizmetKey(), AnalizID: h.ID, Termin: addFromDate(tarih, h.Sure ?? 0), x3ID: null, Kod: h.Kod, Ad: h.Ad, Metot: h.Metot ?? "", Sure: h.Sure ?? null }]);
+    onChange([...rows, {
+      key: newHizmetKey(), AnalizID: h.ID, Termin: addFromDate(tarih, h.Sure ?? 0),
+      x3ID: null, Kod: h.Kod, Ad: h.Ad, Metot: h.Metot ?? "", Sure: h.Sure ?? null,
+      BolumID: h.BolumID ?? null, BolumAdi: h.BolumAdi ?? "",
+    }]);
     setQ(""); setOpts([]); setMode(null);
   };
 
@@ -293,7 +298,12 @@ function HizmetPanel({ tarih, rows, onChange }: { tarih: string; rows: HizmetRow
         if (!aid || !isFinite(aid)) continue;
         if (next.some(x => x.AnalizID === aid && x.x3ID === x3id)) continue;
         const sure = it.Sure != null ? Number(it.Sure) : 0;
-        next.push({ key: newHizmetKey(), AnalizID: aid, Termin: addFromDate(tarih, isFinite(sure) ? sure : 0), x3ID: x3id, Kod: String(it.Kod || ""), Ad: String(it.Ad || ""), Metot: String(it.Metot || ""), Sure: isFinite(sure) ? sure : null });
+        next.push({
+          key: newHizmetKey(), AnalizID: aid, Termin: addFromDate(tarih, isFinite(sure) ? sure : 0),
+          x3ID: x3id, Kod: String(it.Kod || ""), Ad: String(it.Ad || ""), Metot: String(it.Metot || ""),
+          Sure: isFinite(sure) ? sure : null,
+          BolumID: it.BolumID ?? null, BolumAdi: it.BolumAdi ?? "",
+        });
       }
       onChange(next);
     } finally { setLoadingPaketId(null); }
@@ -550,6 +560,31 @@ export default function YeniNumuneClient() {
     setNumuneler(prev => prev.filter(c => c.cardId !== cardId));
   };
 
+  const cardToBarcode = (card: NumuneCard): BarcodeNumune => ({
+    RaporNo: card.RaporNo.trim(),
+    NumuneAd: card.Numune_Adi.trim(),
+    FirmaAd: evrak.FirmaAd,
+    Tarih: evrak.Tarih,
+    hizmetler: card.hizmetler,
+  });
+
+  const printCard = (card: NumuneCard) => {
+    if (card.hizmetler.length === 0) {
+      alert("Önce hizmet ekleyin.");
+      return;
+    }
+    printBarcodes([cardToBarcode(card)]);
+  };
+
+  const printAll = () => {
+    const targets = numuneler.filter(c => c.hizmetler.length > 0);
+    if (targets.length === 0) {
+      alert("Barkod basılacak (hizmeti olan) numune yok.");
+      return;
+    }
+    printBarcodes(targets.map(cardToBarcode));
+  };
+
   const saveCard = async (card: NumuneCard) => {
     if (!card.Numune_Adi.trim()) { patchCard(card.cardId, { error: "Numune Adı zorunludur." }); return; }
     if (!card.RaporNo.trim()) { patchCard(card.cardId, { error: "Rapor No zorunludur." }); return; }
@@ -710,12 +745,28 @@ export default function YeniNumuneClient() {
             </span>
           )}
         </div>
-        <button type="button" className={yn.addBtn} onClick={() => void addNumune()}>
-          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-            <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
-          </svg>
-          Numune Ekle
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          {numuneler.some(c => c.hizmetler.length > 0) && (
+            <button
+              type="button"
+              className={yn.addBtn}
+              style={{ background: "var(--color-surface)", color: "var(--color-text-primary)", border: "1px solid var(--color-border)" }}
+              onClick={printAll}
+              title="Tüm numunelerin barkodlarını bölüme göre yazdır"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                <path d="M5 2.75A.75.75 0 0 1 5.75 2h8.5a.75.75 0 0 1 .75.75V5h-10V2.75Zm-1.5 5A1.5 1.5 0 0 0 2 9.25v3.5A1.5 1.5 0 0 0 3.5 14.25H5v3.25c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75V14.25h1.5A1.5 1.5 0 0 0 18 12.75v-3.5A1.5 1.5 0 0 0 16.5 7.75h-13Zm10 9.5h-7V12h7v5.25Z" />
+              </svg>
+              Tüm Barkodları Yazdır
+            </button>
+          )}
+          <button type="button" className={yn.addBtn} onClick={() => void addNumune()}>
+            <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+              <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+            </svg>
+            Numune Ekle
+          </button>
+        </div>
       </div>
 
       {numuneler.length === 0 && (
@@ -884,6 +935,16 @@ export default function YeniNumuneClient() {
                 <div className={yn.numuneCardFooter}>
                   <button type="button" className={yn.deleteCardBtn} onClick={() => removeCard(card.cardId)} disabled={card.saving}>
                     Kartı Kaldır
+                  </button>
+                  <button
+                    type="button"
+                    className={yn.deleteCardBtn}
+                    style={{ background: "var(--color-surface)", color: "var(--color-text-primary)", border: "1px solid var(--color-border)" }}
+                    onClick={() => printCard(card)}
+                    disabled={card.saving || card.hizmetler.length === 0}
+                    title={card.hizmetler.length === 0 ? "Önce hizmet ekleyin" : "Bu numune için barkod yazdır (bölüme göre)"}
+                  >
+                    🏷  Barkod Yazdır
                   </button>
                   <button type="button" className={yn.saveCardBtn} onClick={() => void saveCard(card)} disabled={card.saving}>
                     {card.saving ? "Kaydediliyor…" : card.savedId ? "Güncelle" : "Kaydet"}

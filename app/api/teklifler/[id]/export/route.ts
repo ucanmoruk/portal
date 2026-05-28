@@ -78,8 +78,9 @@ function fillHizmetRows(xml: string, satirlar: any[]): string {
       : `${fmt(fiyat)} ${pb}`;
 
     // Hizmet adı kombinasyonu: [* ][HizmetAdı][ / Metot]
+    // * sadece Akreditasyon === "Var" olan hizmetlerde (case-insensitive)
     const parts: string[] = [];
-    if (s.Akreditasyon) parts.push("*");
+    if (String(s.Akreditasyon || "").trim().toLowerCase() === "var") parts.push("*");
     parts.push(s.HizmetAdi || "");
     if (s.Metot) parts.push(`/ ${s.Metot}`);
     const hizmetLabel = parts.join(" ");

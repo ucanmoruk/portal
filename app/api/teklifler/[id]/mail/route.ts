@@ -141,9 +141,10 @@ export async function POST(
       const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
       const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
       const net     = adet * fiyat * (1 - iskonto / 100);
-      // Hizmet adı: akreditasyon varsa * öne, metot varsa sona
+      // Hizmet adı: akreditasyon "Var" ise * öne, metot varsa sona
+      // (case-insensitive — "Yok" / "Hayır" gibi non-empty değerler * eklenmez)
       const parts: string[] = [];
-      if (s.Akreditasyon) parts.push("*");
+      if (String(s.Akreditasyon || "").trim().toLowerCase() === "var") parts.push("*");
       parts.push(escHtml(s.HizmetAdi || ""));
       if (s.Metot) parts.push(`/ ${escHtml(s.Metot)}`);
       const hizmetLabel = parts.join(" ");
@@ -309,7 +310,7 @@ async function buildPreviewHtml(id: string, mesaj: string) {
     const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
     const net = adet * fiyat * (1 - iskonto / 100);
     const parts: string[] = [];
-    if (s.Akreditasyon) parts.push("*");
+    if (String(s.Akreditasyon || "").trim().toLowerCase() === "var") parts.push("*");
     parts.push(escHtml(s.HizmetAdi || ""));
     if (s.Metot) parts.push(`/ ${escHtml(s.Metot)}`);
     const hizmetLabel = parts.join(" ");

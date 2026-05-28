@@ -74,6 +74,8 @@ export interface HizmetRow {
   BirimEn?: string;
   LOQ?: string;
   LOQEn?: string;
+  BolumID?: number | null;
+  BolumAdi?: string;
 }
 
 export interface FormulRow {
