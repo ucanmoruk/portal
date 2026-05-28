@@ -23,8 +23,8 @@ async function ensureLogTable() {
         MusteriAd VARCHAR(255) NULL,
         MusteriEmail VARCHAR(255) NULL,
         MusteriYetkili VARCHAR(255) NULL,
-        KullaniciID INTEGER NULL,
-        KullaniciAd VARCHAR(255) NULL,
+        kullaniciid INTEGER NULL,
+        kullaniciad VARCHAR(255) NULL,
         Tarih TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
@@ -71,8 +71,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         ISNULL(MusteriAd, '')      AS MusteriAd,
         ISNULL(MusteriEmail, '')   AS MusteriEmail,
         ISNULL(MusteriYetkili, '') AS MusteriYetkili,
-        ISNULL(KullaniciID, 0)     AS KullaniciID,
-        ISNULL(KullaniciAd, '')    AS KullaniciAd,
+        ISNULL(kullaniciid, 0)     AS KullaniciID,
+        ISNULL(kullaniciad, '')    AS KullaniciAd,
         FORMAT(Tarih, 'dd.MM.yyyy HH:mm:ss') AS Tarih
       FROM TeklifOnayLog
       WHERE TeklifID = @TeklifID

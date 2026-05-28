@@ -69,8 +69,8 @@ async function ensureLogTable() {
         MusteriAd VARCHAR(255) NULL,
         MusteriEmail VARCHAR(255) NULL,
         MusteriYetkili VARCHAR(255) NULL,
-        KullaniciID INTEGER NULL,
-        KullaniciAd VARCHAR(255) NULL,
+        kullaniciid INTEGER NULL,
+        kullaniciad VARCHAR(255) NULL,
         Tarih TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
