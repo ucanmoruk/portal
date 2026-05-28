@@ -524,10 +524,12 @@ function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
   const {
     sirketAdi, sirketEmail,
     no, tarih, musteriAd, musteriYetkili, teklifVeren,
-    mesaj, notlar, satirHtml, iskontoSatirHtml,
-    pb, araToplam, kdvOran, kdvTutar, genelToplam,
+    mesaj, notlar, satirHtml,
+    iskontoSatirHtml: _iskontoSatirHtml,  // V4 totals 2-sütunlu — iskontoSatirHtml inline yazıldı, kullanılmıyor
+    pb, araToplam, genelIsk, kdvOran, kdvTutar, genelToplam,
     baseUrl, teklifId, logoSrc, sealSrc,
   } = p;
+  void _iskontoSatirHtml;
 
   const approvalToken = createTeklifApprovalToken(teklifId);
   const onayUrl = baseUrl ? `${baseUrl}/api/teklifler/${teklifId}/onay?token=${encodeURIComponent(approvalToken)}` : "#";
@@ -540,13 +542,27 @@ function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Fiyat Teklifimiz ${escHtml(no)}</title>
+  <style>
+    /* Mobil — küçük ekranlarda logo + başlık alt alta, footer alt alta */
+    @media only screen and (max-width: 540px) {
+      .v4-header-table td { display:block !important; width:100% !important; text-align:left !important; padding:0 !important; }
+      .v4-header-title { text-align:left !important; padding-top:14px !important; font-size:18px !important; }
+      .v4-footer-table td { display:block !important; width:100% !important; text-align:center !important; padding:4px 0 !important; }
+    }
+  </style>
 </head>
 <body style="margin:0;padding:24px;background:#f5f5f7;font-family:'JetBrains Mono','Cascadia Mono',Consolas,'Courier New',monospace;color:#1d1d1f;font-size:10.5px;line-height:1.5;">
   <div style="width:720px;max-width:100%;margin:0 auto;background:#ffffff;padding:48px 42px 28px;box-sizing:border-box;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:34px;">
-      <div>${logoUrl ? `<img src="${logoUrl}" alt="${escHtml(sirketAdi)}" style="height:45px;width:auto;display:block;">` : `<div style="font-weight:800;font-size:18px;">${escHtml(sirketAdi)}</div>`}</div>
-      <div style="font-size:21px;font-weight:900;letter-spacing:.8px;padding-top:15px;">FİYAT TEKLİFİ</div>
-    </div>
+    <table class="v4-header-table" role="presentation" style="width:100%;border-collapse:collapse;padding-bottom:34px;">
+      <tr>
+        <td style="vertical-align:top;width:50%;">
+          ${logoUrl ? `<img src="${logoUrl}" alt="${escHtml(sirketAdi)}" style="height:45px;width:auto;display:block;">` : `<div style="font-weight:800;font-size:18px;">${escHtml(sirketAdi)}</div>`}
+        </td>
+        <td class="v4-header-title" style="vertical-align:top;width:50%;text-align:right;font-size:21px;font-weight:900;letter-spacing:.8px;padding-top:15px;">
+          FİYAT TEKLİFİ
+        </td>
+      </tr>
+    </table>
     <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px;">
       <tr>
         <td style="font-weight:700;width:120px;padding:2px 8px 2px 0;">Referans No:</td>
@@ -576,7 +592,11 @@ function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
         <td style="padding:12px 14px 3px;">Ara Toplam:</td>
         <td style="padding:12px 14px 3px;text-align:right;">${fmt(araToplam)} ${escHtml(pb)}</td>
       </tr>
-      ${iskontoSatirHtml}
+      ${genelIsk > 0 ? `
+      <tr>
+        <td style="padding:3px 14px;">İskonto (%${genelIsk}):</td>
+        <td style="padding:3px 14px;text-align:right;">${fmt(araToplam * genelIsk / 100)} ${escHtml(pb)}</td>
+      </tr>` : ""}
       <tr>
         <td style="padding:3px 14px;">KDV (%${kdvOran}):</td>
         <td style="padding:3px 14px;text-align:right;">${fmt(kdvTutar)} ${escHtml(pb)}</td>
@@ -610,11 +630,13 @@ function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
       </div>
       ${sealUrl ? `<div style="margin-left:auto;text-align:right;"><img src="${sealUrl}" alt="" style="height:90px;width:auto;"></div>` : ""}
     </div>
-    <div style="margin-top:30px;display:table;width:100%;font-size:8.5px;color:#6e6e73;text-align:center;">
-      <span style="display:table-cell;width:33.33%;text-align:left;">${escHtml(sirketEmail || "info@uniqueanalyse.com")}</span>
-      <span style="display:table-cell;width:33.33%;text-align:center;">F.01.PR.03 – Yayın Tarihi: 27.09.2023</span>
-      <span style="display:table-cell;width:33.33%;text-align:right;">Sayfa: 1 / 1</span>
-    </div>
+    <table class="v4-footer-table" role="presentation" style="width:100%;border-collapse:collapse;margin-top:30px;font-size:8.5px;color:#6e6e73;">
+      <tr>
+        <td style="width:33.33%;text-align:left;">${escHtml(sirketEmail || "info@uniqueanalyse.com")}</td>
+        <td style="width:33.33%;text-align:center;">F.01.PR.03 – Yayın Tarihi: 27.09.2023</td>
+        <td style="width:33.33%;text-align:right;">Sayfa: 1 / 1</td>
+      </tr>
+    </table>
   </div>
 </body>
 </html>`;

@@ -184,12 +184,64 @@ function invalidLinkPage() {
   `, 403);
 }
 
+// Tek-kullanımlık token kontrolü: TeklifOnayLog'da bu teklif için zaten
+// "Onaylandı" veya "Reddedildi" kaydı varsa, mevcut karar bilgisini bir sayfa
+// olarak döner. Yoksa null döner.
+async function findFinalDecision(teklifId: number) {
+  const pool = await poolPromise;
+  const res = await pool.request()
+    .input("ID", teklifId)
+    .query(`
+      SELECT TOP 1
+        ISNULL(Aksiyon, '')        AS Aksiyon,
+        ISNULL(MusteriAd, '')      AS MusteriAd,
+        ISNULL(MusteriYetkili, '') AS MusteriYetkili,
+        ISNULL(IpAdresi, '')       AS IpAdresi,
+        ${isPostgres
+          ? "TO_CHAR(Tarih AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Istanbul', 'DD.MM.YYYY HH24:MI:SS')"
+          : "FORMAT(Tarih, 'dd.MM.yyyy HH:mm:ss')"} AS Tarih
+      FROM TeklifOnayLog
+      WHERE TeklifID = @ID AND Aksiyon IN ('Onaylandı', 'Reddedildi')
+      ORDER BY ID DESC
+    `);
+  return res.recordset[0] as { Aksiyon: string; MusteriAd: string; MusteriYetkili: string; IpAdresi: string; Tarih: string } | undefined;
+}
+
+function alreadyDecidedPage(d: { Aksiyon: string; MusteriAd: string; MusteriYetkili: string; IpAdresi: string; Tarih: string }) {
+  const isReject = d.Aksiyon === "Reddedildi";
+  const color = isReject ? "#b42318" : "#15803d";
+  const baslik = isReject ? "Teklif daha önce reddedildi" : "Teklif daha önce onaylandı";
+  return page("Karar verilmiş", `
+    <div class="header">
+      <img class="logo" src="/unique-logo.png" alt="Unique">
+      <div class="title">TEKLİF ONAYI</div>
+    </div>
+    <div class="box">
+      <h1 style="margin:0 0 14px;font-size:18px;color:${color};">${baslik}</h1>
+      <p style="margin:0 0 8px;">Bu teklif için karar daha önce verilmiş ve kayıt altına alınmıştır. Aynı bağlantı tekrar kullanılamaz.</p>
+      <div style="margin-top:14px;font-size:11px;line-height:1.7;color:#1d1d1f;">
+        <div><strong>Karar:</strong> ${escHtml(d.Aksiyon)}</div>
+        <div><strong>Tarih:</strong> ${escHtml(d.Tarih)}</div>
+        ${d.MusteriAd ? `<div><strong>Firma:</strong> ${escHtml(d.MusteriAd)}</div>` : ""}
+        ${d.MusteriYetkili ? `<div><strong>Yetkili:</strong> ${escHtml(d.MusteriYetkili)}</div>` : ""}
+        ${d.IpAdresi ? `<div><strong>IP:</strong> ${escHtml(d.IpAdresi)}</div>` : ""}
+      </div>
+      <p style="margin:14px 0 0;font-size:10.5px;color:#6e6e73;">Sorularınız için bize iletişim adresinden ulaşabilirsiniz.</p>
+    </div>
+  `, 410);
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!id || Number.isNaN(Number(id))) return page("Gecersiz teklif", "<h1>Gecersiz teklif baglantisi.</h1>", 400);
 
   const token = req.nextUrl.searchParams.get("token");
   if (!verifyTeklifApprovalToken(token, id)) return invalidLinkPage();
+
+  // Tek-kullanımlık: aynı teklif için zaten Onaylandı/Reddedildi log'u varsa
+  // mevcut kararı göster, formu tekrar açma.
+  const existing = await findFinalDecision(Number(id));
+  if (existing) return alreadyDecidedPage(existing);
 
   const teklif = await getTeklif(id);
   if (!teklif) return page("Teklif bulunamadi", "<h1>Teklif bulunamadi.</h1>", 404);
@@ -237,6 +289,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const form = await req.formData();
   const token = String(form.get("token") || "");
   if (!verifyTeklifApprovalToken(token, id)) return invalidLinkPage();
+
+  // Tek-kullanımlık: race condition'lara karşı POST'ta da kontrol et
+  const existing = await findFinalDecision(Number(id));
+  if (existing) return alreadyDecidedPage(existing);
 
   const action = String(form.get("action") || "approve") === "reject" ? "reject" : "approve";
   const aciklama = String(form.get("aciklama") || "").trim();
