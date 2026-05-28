@@ -73,7 +73,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         ISNULL(MusteriYetkili, '') AS MusteriYetkili,
         ISNULL(kullaniciid, 0)     AS KullaniciID,
         ISNULL(kullaniciad, '')    AS KullaniciAd,
-        FORMAT(Tarih, 'dd.MM.yyyy HH:mm:ss') AS Tarih
+        ${isPostgres
+          ? `TO_CHAR(Tarih, 'DD.MM.YYYY HH24:MI:SS') AS Tarih`
+          : `FORMAT(Tarih, 'dd.MM.yyyy HH:mm:ss') AS Tarih`}
       FROM TeklifOnayLog
       WHERE TeklifID = @TeklifID
       ORDER BY ID DESC
