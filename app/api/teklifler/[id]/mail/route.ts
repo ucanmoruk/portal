@@ -153,8 +153,8 @@ export async function POST(
           <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:center;color:#6e6e73;">${i + 1}.</td>
           <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;color:#1d1d1f;">${hizmetLabel}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:center;color:#1d1d1f;">${adet}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:right;color:#1d1d1f;">${fmt(fiyat)} ${escHtml(s.ParaBirimi)}${iskonto > 0 ? ` (-%${iskonto})` : ""}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(net)} ${escHtml(s.ParaBirimi)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:right;color:#1d1d1f;">${fmt(fiyat)} ${escHtml(fmtPb(s.ParaBirimi))}${iskonto > 0 ? ` (-%${iskonto})` : ""}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(net)} ${escHtml(fmtPb(s.ParaBirimi))}</td>
         </tr>`;
     }).join("");
 
@@ -162,7 +162,7 @@ export async function POST(
     const iskontoSatirHtml = genelIsk > 0 ? `
       <tr>
         <td colspan="4" style="padding:3px 4px;text-align:left;color:#1d1d1f;">İskonto (%${genelIsk}):</td>
-        <td style="padding:3px 4px;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(araToplam * genelIsk / 100)} ${escHtml(pb)}</td>
+        <td style="padding:3px 4px;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(araToplam * genelIsk / 100)} ${escHtml(fmtPb(pb))}</td>
       </tr>` : "";
 
     const html = buildHtmlV4({
@@ -319,15 +319,15 @@ async function buildPreviewHtml(id: string, mesaj: string) {
         <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:center;color:#6e6e73;">${i + 1}.</td>
         <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;color:#1d1d1f;">${hizmetLabel}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:center;color:#1d1d1f;">${adet}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:right;color:#1d1d1f;">${fmt(fiyat)} ${escHtml(s.ParaBirimi)}${iskonto > 0 ? ` (-%${iskonto})` : ""}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(net)} ${escHtml(s.ParaBirimi)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:right;color:#1d1d1f;">${fmt(fiyat)} ${escHtml(fmtPb(s.ParaBirimi))}${iskonto > 0 ? ` (-%${iskonto})` : ""}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eaeaea;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(net)} ${escHtml(fmtPb(s.ParaBirimi))}</td>
       </tr>`;
   }).join("");
 
   const iskontoSatirHtml = genelIsk > 0 ? `
     <tr>
       <td colspan="4" style="padding:3px 4px;text-align:left;color:#1d1d1f;">İskonto (%${genelIsk}):</td>
-      <td style="padding:3px 4px;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(araToplam * genelIsk / 100)} ${escHtml(pb)}</td>
+      <td style="padding:3px 4px;text-align:right;font-weight:600;color:#1d1d1f;">${fmt(araToplam * genelIsk / 100)} ${escHtml(fmtPb(pb))}</td>
     </tr>` : "";
 
   const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "");
@@ -468,16 +468,16 @@ function buildHtml(p: {
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <tr>
           <td style="padding:8px 14px;color:#6e6e73;text-align:right;">Ara Toplam</td>
-          <td style="padding:8px 14px;text-align:right;font-weight:500;color:#1d1d1f;width:160px;">${fmt(araToplam)} ${escHtml(pb)}</td>
+          <td style="padding:8px 14px;text-align:right;font-weight:500;color:#1d1d1f;width:160px;">${fmt(araToplam)} ${escHtml(fmtPb(pb))}</td>
         </tr>
         ${iskontoSatirHtml}
         <tr>
           <td style="padding:8px 14px;color:#6e6e73;text-align:right;">KDV (%${kdvOran})</td>
-          <td style="padding:8px 14px;text-align:right;font-weight:500;color:#1d1d1f;">${fmt(kdvTutar)} ${escHtml(pb)}</td>
+          <td style="padding:8px 14px;text-align:right;font-weight:500;color:#1d1d1f;">${fmt(kdvTutar)} ${escHtml(fmtPb(pb))}</td>
         </tr>
         <tr>
           <td style="padding:10px 14px;text-align:right;font-size:15px;font-weight:700;color:#1a4f8a;border-top:2px solid #e2e6ed;">Genel Toplam</td>
-          <td style="padding:10px 14px;text-align:right;font-size:15px;font-weight:700;color:#1a4f8a;border-top:2px solid #e2e6ed;">${fmt(genelToplam)} ${escHtml(pb)}</td>
+          <td style="padding:10px 14px;text-align:right;font-size:15px;font-weight:700;color:#1a4f8a;border-top:2px solid #e2e6ed;">${fmt(genelToplam)} ${escHtml(fmtPb(pb))}</td>
         </tr>
       </table>
     </div>
@@ -563,7 +563,7 @@ function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
         </td>
       </tr>
     </table>
-    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px;">
+    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:18px;">
       <tr>
         <td style="font-weight:700;width:120px;padding:2px 8px 2px 0;">Referans No:</td>
         <td style="padding:2px 8px;">${escHtml(no)}</td>
@@ -590,20 +590,20 @@ function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
     <table style="width:100%;border-collapse:collapse;margin-top:18px;border:2px solid #4A46E5;font-size:11.5px;">
       <tr>
         <td style="padding:12px 14px 3px;">Ara Toplam:</td>
-        <td style="padding:12px 14px 3px;text-align:right;">${fmt(araToplam)} ${escHtml(pb)}</td>
+        <td style="padding:12px 14px 3px;text-align:right;">${fmt(araToplam)} ${escHtml(fmtPb(pb))}</td>
       </tr>
       ${genelIsk > 0 ? `
       <tr>
         <td style="padding:3px 14px;">İskonto (%${genelIsk}):</td>
-        <td style="padding:3px 14px;text-align:right;">${fmt(araToplam * genelIsk / 100)} ${escHtml(pb)}</td>
+        <td style="padding:3px 14px;text-align:right;">${fmt(araToplam * genelIsk / 100)} ${escHtml(fmtPb(pb))}</td>
       </tr>` : ""}
       <tr>
         <td style="padding:3px 14px;">KDV (%${kdvOran}):</td>
-        <td style="padding:3px 14px;text-align:right;">${fmt(kdvTutar)} ${escHtml(pb)}</td>
+        <td style="padding:3px 14px;text-align:right;">${fmt(kdvTutar)} ${escHtml(fmtPb(pb))}</td>
       </tr>
       <tr>
         <td style="padding:8px 14px 12px;font-weight:700;border-top:1px solid #d6dee8;">Genel Toplam:</td>
-        <td style="padding:8px 14px 12px;text-align:right;font-weight:700;border-top:1px solid #d6dee8;">${fmt(genelToplam)} ${escHtml(pb)}</td>
+        <td style="padding:8px 14px 12px;text-align:right;font-weight:700;border-top:1px solid #d6dee8;">${fmt(genelToplam)} ${escHtml(fmtPb(pb))}</td>
       </tr>
     </table>
     <div style="margin-top:22px;font-size:9.5px;line-height:1.5;">
@@ -647,6 +647,14 @@ function teklifLabel(no: number | null, rev: number) {
   const yy  = String(no).slice(0, 2);
   const seq = String(no).slice(2).padStart(4, "0");
   return rev > 0 ? `${yy}${seq}/${rev}` : `${yy}${seq}`;
+}
+
+// Para birimi normalize — DB "TRY" veya "₺" → "TL" (JetBrains Mono ₺ glyph'i yok)
+function fmtPb(pb: string | null | undefined) {
+  const v = String(pb ?? "").trim();
+  if (!v) return "TL";
+  if (v === "₺" || v.toUpperCase() === "TRY" || v.toUpperCase() === "TL") return "TL";
+  return v;
 }
 
 function fmt(n: unknown) {

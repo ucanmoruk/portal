@@ -57,6 +57,16 @@ function fmt(n: unknown) {
   return num.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Para birimi gösterim normalizasyonu.
+// JetBrains Mono'da ₺ (U+20BA) glyph'i yok — PDF'te kutu (􀀀) görünüyor.
+// "₺" veya "TRY" ise "TL" göster; diğerleri olduğu gibi.
+function fmtPb(pb: string | null | undefined) {
+  const v = String(pb ?? "").trim();
+  if (!v) return "TL";
+  if (v === "₺" || v.toUpperCase() === "TRY" || v.toUpperCase() === "TL") return "TL";
+  return v;
+}
+
 export default async function TeklifPrintPage({
   params,
   searchParams,
@@ -452,11 +462,11 @@ export default async function TeklifPrintPage({
                     <td className="center">{adet}</td>
                     <td className="right">
                       {fiyat > 0
-                        ? <>{fmt(fiyat)} {s.ParaBirimi || pb}{iskonto > 0 ? ` (-%${iskonto})` : ""}</>
+                        ? <>{fmt(fiyat)} {fmtPb(s.ParaBirimi || pb)}{iskonto > 0 ? ` (-%${iskonto})` : ""}</>
                         : "—"}
                     </td>
                     <td className="right">
-                      {net > 0 ? <>{fmt(net)} {s.ParaBirimi || pb}</> : "—"}
+                      {net > 0 ? <>{fmt(net)} {fmtPb(s.ParaBirimi || pb)}</> : "—"}
                     </td>
                   </tr>
                 );
@@ -475,21 +485,21 @@ export default async function TeklifPrintPage({
           <div className="totals">
             <div className="totals-row" style={{paddingTop:"12px"}}>
               <span className="totals-label">Ara Toplam:</span>
-              <span className="totals-value">{fmt(araToplam)} {pb}</span>
+              <span className="totals-value">{fmt(araToplam)} {fmtPb(pb)}</span>
             </div>
             {genelIsk > 0 && (
               <div className="totals-row">
                 <span className="totals-label">İskonto (%{genelIsk}):</span>
-                <span className="totals-value">{fmt(iskontoTutar)} {pb}</span>
+                <span className="totals-value">{fmt(iskontoTutar)} {fmtPb(pb)}</span>
               </div>
             )}
             <div className="totals-row">
               <span className="totals-label">KDV (%{kdvOran}):</span>
-              <span className="totals-value">{fmt(kdvTutar)} {pb}</span>
+              <span className="totals-value">{fmt(kdvTutar)} {fmtPb(pb)}</span>
             </div>
             <div className="totals-row grand" style={{paddingBottom:"12px"}}>
               <span className="totals-label">Genel Toplam:</span>
-              <span className="totals-value">{fmt(genelToplam)} {pb}</span>
+              <span className="totals-value">{fmt(genelToplam)} {fmtPb(pb)}</span>
             </div>
           </div>
 
