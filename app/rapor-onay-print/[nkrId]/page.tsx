@@ -2,12 +2,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import poolPromise from "@/lib/db";
-import { JetBrains_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import OnayToolbar from "./OnayToolbar";
 
 export const metadata = { title: "Analiz Raporu — Onay Önizleme" };
 
-const jetBrainsMono = JetBrains_Mono({
+const inter = Inter({
   subsets: ["latin", "latin-ext"],
   weight: ["400", "500", "600", "700", "800"],
   display: "swap",
@@ -20,6 +20,7 @@ interface HizmetRow {
   Metot: string;
   Birim: string;
   LimitDeger: string | null;
+  LOQ: string | null;
   Sonuc: string | null;
   Degerlendirme: string | null;
   Termin: string | null;
@@ -31,13 +32,20 @@ interface RaporHeader {
   Tarih: string | null;
   Numune_Adi: string;
   Numune_Adi_En: string | null;
+  Urun_Tipi: string | null;
+  TesteMiktar: string | null;
+  TesteMiktarBirim: string | null;
   FirmaAd: string;
-  ProjeAd: string;
+  FirmaAdres: string;
+  FirmaYetkili: string;
+  FirmaEmail: string;
+  FirmaTelefon: string;
   Karar: string | null;
   Dil: string | null;
   SeriNo: string | null;
   UretimTarihi: string | null;
   SKT: string | null;
+  Evrak_No: string;
 }
 
 interface OnayInfo {
@@ -68,6 +76,15 @@ function fmtDate(d: Date | string | null | undefined): string {
   } catch { return String(d); }
 }
 
+// Test sonucu değerlendirme metnine göre etiket
+function degerlendirmeLabel(d: string | null): { text: string; cls: string } {
+  if (!d || !d.trim()) return { text: "—", cls: "deg-other" };
+  const v = d.trim();
+  if (v === "Uygun") return { text: "GEÇER", cls: "deg-gecer" };
+  if (v === "Uygun Değil") return { text: "KALDI", cls: "deg-kaldi" };
+  return { text: v, cls: "deg-other" };
+}
+
 export default async function RaporOnayPrintPage({
   params,
   searchParams,
@@ -89,7 +106,6 @@ export default async function RaporOnayPrintPage({
 
   const pool = await poolPromise;
 
-  // Rapor başlık + numune
   const headerRes = await pool.request()
     .input("id", nkrIdNum)
     .query(`
@@ -97,10 +113,17 @@ export default async function RaporOnayPrintPage({
         n.ID AS NkrID,
         n.RaporNo,
         n.Tarih,
+        n.Evrak_No,
         n.Numune_Adi,
         n.Numune_Adi_En,
-        ISNULL(f.Ad, '')  AS FirmaAd,
-        ISNULL(p.Ad, '')  AS ProjeAd,
+        n.Urun_Tipi,
+        n.TesteMiktar,
+        n.TesteMiktarBirim,
+        ISNULL(f.Ad, '')        AS FirmaAd,
+        ISNULL(f.Adres, '')     AS FirmaAdres,
+        ISNULL(f.Yetkili, '')   AS FirmaYetkili,
+        ISNULL(f.Email, '')     AS FirmaEmail,
+        ISNULL(f.Telefon, '')   AS FirmaTelefon,
         n.Karar,
         n.Dil,
         nd.SeriNo,
@@ -109,7 +132,6 @@ export default async function RaporOnayPrintPage({
       FROM NKR n
       LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
       LEFT JOIN NumuneDetay   nd ON nd.RaporID = n.ID
-      LEFT JOIN RootTedarikci p  ON p.ID = nd.ProjeID
       WHERE n.ID = @id AND n.Durum = 'Aktif'
     `);
   const header = headerRes.recordset[0] as RaporHeader | undefined;
@@ -117,7 +139,6 @@ export default async function RaporOnayPrintPage({
     return <div style={{ padding: 40, fontFamily: "system-ui" }}>Rapor bulunamadı.</div>;
   }
 
-  // Hizmet satırları (sadece bu rapor formatı için)
   const hizmetRes = await pool.request()
     .input("nkrId", nkrIdNum)
     .input("format", format)
@@ -129,6 +150,7 @@ export default async function RaporOnayPrintPage({
         ISNULL(s.Method, '')       AS Metot,
         ISNULL(x1.Birim, ISNULL(s.Matriks, '')) AS Birim,
         x1.[Limit]                  AS LimitDeger,
+        ISNULL(s.LOQ, '')          AS LOQ,
         x1.Sonuc                    AS Sonuc,
         x1.Degerlendirme            AS Degerlendirme,
         CONVERT(varchar(10), x1.Termin, 23) AS Termin
@@ -140,7 +162,14 @@ export default async function RaporOnayPrintPage({
     `);
   const hizmetler = hizmetRes.recordset as HizmetRow[];
 
-  // Onay durumu (varsa)
+  // Test başlangıç ve bitiş tarihi (min/max termin)
+  const terminTarihler = hizmetler
+    .map(h => h.Termin)
+    .filter((t): t is string => !!t)
+    .sort();
+  const testBaslangic = terminTarihler[0] || null;
+  const testBitis = terminTarihler[terminTarihler.length - 1] || null;
+
   let onay: OnayInfo | null = null;
   const onayTblCheck = await pool.request().query(
     `SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
@@ -162,19 +191,32 @@ export default async function RaporOnayPrintPage({
     if (r) {
       const ad = String(r.OnaylayanAd ?? "").trim();
       const soyad = String(r.OnaylayanSoyad ?? "").trim();
-      const fullName = [ad, soyad].filter(Boolean).join(" ");
       onay = {
         token: r.KarekodToken,
         durum: r.Durum,
         onayTarihi: r.OnayTarihi,
         yayinTarihi: r.YayinTarihi,
         yayinUrl: r.YayinUrl,
-        onaylayanAd: fullName || null,
+        onaylayanAd: [ad, soyad].filter(Boolean).join(" ") || null,
       };
     }
   }
 
-  const sirketAdi = process.env.SIRKET_ADI || "UNIQUE ANALYSE";
+  const sirketAdi = process.env.SIRKET_ADI || "UNIQUE Analiz Belgelendirme ve Gözetim Hizmetleri Ltd. Şti.";
+
+  // ───── Üst meta + imza değerleri ─────
+  const revNo = "0";
+  const kabulTarihi = fmtDate(header.Tarih);
+  const yayinTarihi = onay?.yayinTarihi
+    ? fmtDate(onay.yayinTarihi)
+    : onay?.onayTarihi
+      ? fmtDate(onay.onayTarihi)
+      : "—";
+  const hazirlayanAd = process.env.RAPOR_HAZIRLAYAN || "Büşra ALBAYRAK";
+  const hazirlayanUnvan = process.env.RAPOR_HAZIRLAYAN_UNVAN || "Raportör";
+  const onaylayanAd = onay?.onaylayanAd || process.env.RAPOR_ONAYLAYAN || "Alaettin ÖZDEMİR";
+  const onaylayanUnvan = process.env.RAPOR_ONAYLAYAN_UNVAN || "Laboratuvar Müdürü";
+  const docKodu = process.env.RAPOR_DOC_KODU || "Ek-1.PR.20 Yayın Tarihi: 27.09.2023   Revizyon Tarih / No: 25.11.2024 / 01";
 
   return (
     <>
@@ -182,116 +224,269 @@ export default async function RaporOnayPrintPage({
         @page { size: A4; margin: 0; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         .root {
-          font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
-          background: #f5f5f7;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          background: #e9ecef;
           color: #1d1d1f;
           font-size: 10.5px;
-          line-height: 1.5;
+          line-height: 1.45;
           min-height: 100vh;
-          -webkit-font-feature-settings: "calt" 0, "liga" 0;
-          font-feature-settings: "calt" 0, "liga" 0;
         }
         .page {
           max-width: 210mm;
           min-height: 297mm;
           margin: 24px auto 64px;
           background: #fff;
-          padding: 10mm 12mm 8mm 12mm;
+          padding: 12mm 12mm 8mm 12mm;
           box-shadow: 0 4px 24px rgba(0,0,0,0.08);
           display: flex;
           flex-direction: column;
         }
-        .top {
-          display: flex; justify-content: space-between; align-items: flex-start;
-          padding-bottom: 5mm;
-        }
-        .logo-img { height: 45px; width: auto; object-fit: contain; }
-        .title {
-          font-size: 21px; font-weight: 900; color: #1d1d1f;
-          letter-spacing: 0.8px; line-height: 1; padding-top: 15px;
-        }
-        .meta {
-          margin-top: 6mm;
-          display: grid; grid-template-columns: 1fr 1fr;
-          gap: 2mm 12mm; font-size: 11px;
-        }
-        .meta-row {
-          display: grid; grid-template-columns: 130px 1fr;
-          gap: 8px; padding: 2px 0;
-        }
-        .meta-label { color: #1d1d1f; font-weight: 700; }
-        .meta-value { color: #1d1d1f; }
 
-        .section-label {
-          font-weight: 700; font-size: 11px;
-          margin-top: 8mm; margin-bottom: 2mm; color: #1d1d1f;
+        /* ───── HEADER ───── */
+        .header {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          gap: 16mm;
+          padding-bottom: 4mm;
         }
-        .firma-box { font-size: 11px; line-height: 1.6; color: #1d1d1f; }
-        .firma-box .firma { font-weight: 800; }
+        .header-logo img {
+          width: 84mm;
+          height: auto;
+          object-fit: contain;
+        }
+        .header-akredite img {
+          height: 30mm;
+          width: auto;
+          object-fit: contain;
+        }
 
-        .services {
-          width: 100%; border-collapse: collapse; margin-top: 6mm; font-size: 10.5px;
+        /* ───── DENEY RAPORU BAŞLIK ───── */
+        .report-title {
+          text-align: center;
+          font-size: 26px;
+          font-weight: 800;
+          letter-spacing: 2px;
+          margin: 4mm 0 2mm;
+          color: #1d1d1f;
         }
-        .services thead th {
-          font-weight: 700; font-size: 11px; color: #1d1d1f;
-          text-align: left; padding: 4px 6px;
-          border-bottom: 1.5px solid #444;
+
+        /* ───── ÜST META BAR (2x2: Rapor No/Rev · Sayfa · Kabul · Yayın) ───── */
+        .meta-box {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          margin-top: 2mm;
+          border: 1px solid #1d1d1f;
+          font-size: 10px;
         }
-        .services thead th.center { text-align: center; }
-        .services tbody td {
-          padding: 6px 6px;
-          border-bottom: 1px solid #eaeaea;
+        .meta-box > div {
+          padding: 4px 8px;
+          border-right: 1px solid #1d1d1f;
+          border-bottom: 1px solid #1d1d1f;
+        }
+        .meta-box > div:nth-child(2n) { border-right: none; }
+        .meta-box > div:nth-child(n+3) { border-bottom: none; }
+        .meta-box strong { font-weight: 700; }
+
+        /* ───── MÜŞTERİ / NUMUNE TABLOSU (2 sütun) ───── */
+        .info-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 3mm;
+          font-size: 10px;
+        }
+        .info-table th {
+          background: #1d1d1f;
+          color: #fff;
+          padding: 5px 8px;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+          text-align: left;
+          border: 1px solid #1d1d1f;
+          width: 50%;
+        }
+        .info-table td {
+          padding: 6px 10px;
+          border: 1px solid #1d1d1f;
           vertical-align: top;
+          line-height: 1.55;
         }
-        .services tbody td.center { text-align: center; }
-        .services tbody td.no { color: #6e6e73; }
-        .services tbody td.muted { color: #6e6e73; font-size: 10px; }
-        .deg-uygun { color: #248a3d; font-weight: 700; }
-        .deg-uygunsuz { color: #c00; font-weight: 700; }
-        .deg-other { color: #6e6e73; }
+        .info-table .firma-ad {
+          font-weight: 700;
+          font-size: 11px;
+          letter-spacing: 0.3px;
+        }
+        .info-table .info-line {
+          color: #1d1d1f;
+        }
+        .info-table .info-label {
+          color: #6e6e73;
+          font-weight: 600;
+          display: inline-block;
+          min-width: 50mm;
+        }
 
+        /* ───── TEST SONUÇLARI SECTION ───── */
+        .results-section {
+          margin-top: 4mm;
+        }
+        .results-title {
+          background: #1d1d1f;
+          color: #fff;
+          padding: 5px 10px;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.8px;
+          text-align: left;
+          border: 1px solid #1d1d1f;
+        }
+        .results-subtitle {
+          border-left: 1px solid #1d1d1f;
+          border-right: 1px solid #1d1d1f;
+          padding: 5px 10px;
+          font-size: 9.5px;
+          color: #1d1d1f;
+          line-height: 1.5;
+          background: #fafafa;
+        }
+        .results {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 9.5px;
+        }
+        .results thead th {
+          background: #f2f2f2;
+          font-weight: 700;
+          color: #1d1d1f;
+          padding: 5px 4px;
+          border: 1px solid #1d1d1f;
+          text-align: center;
+          font-size: 11px;
+        }
+        .results tbody td {
+          padding: 5px 5px;
+          border: 1px solid #1d1d1f;
+          vertical-align: middle;
+        }
+        .results tbody td.center { text-align: center; }
+        .results tbody td.muted { color: #6e6e73; font-size: 9px; }
+        .results tbody td.bold { font-weight: 700; }
+        .deg-gecer { color: #1a7e3a; font-weight: 700; text-align: center; }
+        .deg-kaldi { color: #b00020; font-weight: 700; text-align: center; }
+        .deg-other { color: #6e6e73; text-align: center; }
+
+        /* ───── NOTLAR ───── */
         .notlar {
-          margin-top: 6mm; margin-left: 2mm; font-size: 8.5px;
-          color: #1d1d1f; line-height: 1.55;
+          margin-top: 4mm;
+          border: 1px solid #1d1d1f;
+          font-size: 9px;
+          line-height: 1.55;
+          color: #1d1d1f;
         }
-        .notlar-title { font-weight: 700; font-size: 10px; margin-bottom: 1mm; }
-        .notlar p { margin-bottom: 0; }
+        .notlar-title {
+          background: #1d1d1f;
+          color: #fff;
+          padding: 4px 10px;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+        }
+        .notlar-body {
+          padding: 7px 10px;
+        }
+        .notlar-body p { margin-bottom: 4px; }
+        .notlar-body p:last-child { margin-bottom: 0; }
+        .notlar-body .legend {
+          font-weight: 700;
+          color: #1d1d1f;
+        }
 
-        .bottom {
-          margin-top: auto; padding-top: 8mm;
-          display: flex; justify-content: space-between; align-items: flex-end;
+        /* ───── ONAY BLOĞU ───── */
+        .approval-block {
+          margin-top: auto;
+          padding-top: 6mm;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 6mm;
+          align-items: end;
         }
-        .prep { text-align: center; }
-        .prep-title { font-weight: 700; font-size: 11px; margin-bottom: 3mm; }
-        .e-imza {
-          display: inline-flex; align-items: center; gap: 4px;
-          background: #e8f4f8; color: #4A46E5;
-          border: 1px solid #b8dbe3; padding: 2px 8px;
-          border-radius: 999px; font-size: 10px; font-weight: 600;
-          margin-bottom: 2mm;
+        .approval-cell {
+          border: 1px solid #1d1d1f;
+          min-height: 28mm;
+          display: flex;
+          flex-direction: column;
         }
-        .prep-name { font-weight: 600; font-size: 11px; margin-top: 1mm; }
-        .seal img { height: 90px; }
+        .approval-cell-title {
+          background: #1d1d1f;
+          color: #fff;
+          padding: 3px 8px;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+          text-align: center;
+        }
+        .approval-cell-body {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          padding: 5px;
+          text-align: center;
+        }
+        .e-imza-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          background: #e8f4f8;
+          color: #4A46E5;
+          border: 1px solid #b8dbe3;
+          padding: 2px 8px;
+          border-radius: 999px;
+          font-size: 9px;
+          font-weight: 600;
+        }
+        .approval-name {
+          font-weight: 700;
+          font-size: 10.5px;
+          margin-top: 2mm;
+        }
+        .approval-date {
+          font-size: 8.5px;
+          color: #6e6e73;
+          margin-top: 1px;
+        }
+        .approval-role {
+          font-size: 9px;
+          color: #6e6e73;
+          margin-top: 1px;
+        }
 
+        /* ───── FOOTER ───── */
         .footer {
-          display: flex; justify-content: space-between; align-items: flex-end;
-          font-size: 8.5px; color: #6e6e73; margin-top: 20px;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          font-size: 9px;
+          color: #6e6e73;
+          margin-top: 4mm;
+          padding-top: 3mm;
+          border-top: 1px solid #d2d2d7;
         }
 
         @media print {
           body { background: #fff; }
           .onay-toolbar { display: none !important; }
-          .page-number { visibility: hidden; }
           .page {
             width: 210mm; max-width: 210mm; min-height: 297mm;
             margin: 0 auto; box-shadow: none;
-            padding: 10mm 12mm 6mm 12mm;
+            padding: 12mm 12mm 8mm 12mm;
           }
         }
       `}</style>
 
-      <div className={`root ${jetBrainsMono.className}`}>
-        {/* Sticky toolbar — print'te gizli */}
+      <div className={`root ${inter.className}`}>
         <OnayToolbar
           nkrId={nkrIdNum}
           format={format}
@@ -300,150 +495,188 @@ export default async function RaporOnayPrintPage({
         />
 
         <div className="page">
-          {/* ───── Üst başlık ───── */}
-          <div className="top">
-            <div className="logo-wrap">
-              <img src="/unique-logo.png" alt={sirketAdi} className="logo-img" />
+          {/* ───── HEADER: Sol logo + Sağ Türkak/ilac-MRA ───── */}
+          <div className="header">
+            <div className="header-logo">
+              <img src="/unique-logo-wide.png" alt="UNIQUE ANALYSE" />
             </div>
-            <div className="title">ANALİZ RAPORU</div>
-          </div>
-
-          {/* ───── Meta ───── */}
-          <div className="meta">
-            <div>
-              <div className="meta-row">
-                <span className="meta-label">Rapor No:</span>
-                <span className="meta-value">{header.RaporNo}</span>
-              </div>
-              <div className="meta-row">
-                <span className="meta-label">Rapor Tarihi:</span>
-                <span className="meta-value">{fmtDate(header.Tarih)}</span>
-              </div>
-              <div className="meta-row">
-                <span className="meta-label">Rapor Formatı:</span>
-                <span className="meta-value">{format}</span>
-              </div>
-            </div>
-            <div>
-              {header.SeriNo && (
-                <div className="meta-row">
-                  <span className="meta-label">Seri/Lot:</span>
-                  <span className="meta-value">{header.SeriNo}</span>
-                </div>
-              )}
-              {header.UretimTarihi && (
-                <div className="meta-row">
-                  <span className="meta-label">Üretim Tarihi:</span>
-                  <span className="meta-value">{fmtTarih(String(header.UretimTarihi))}</span>
-                </div>
-              )}
-              {header.SKT && (
-                <div className="meta-row">
-                  <span className="meta-label">SKT:</span>
-                  <span className="meta-value">{fmtTarih(String(header.SKT))}</span>
-                </div>
-              )}
+            <div className="header-akredite">
+              <img src="/turkak-ilac.jpg" alt="TÜRKAK AB-2015-T · ilac-MRA" />
             </div>
           </div>
 
-          {/* ───── Müşteri ───── */}
-          <div className="section-label">Sayın,</div>
-          <div className="firma-box">
-            {header.FirmaAd && <div className="firma">{header.FirmaAd}</div>}
-            {header.ProjeAd && <div style={{ color: "#6e6e73" }}>Proje: {header.ProjeAd}</div>}
-          </div>
-          <br />
+          {/* ───── DENEY RAPORU BAŞLIK ───── */}
+          <div className="report-title">DENEY RAPORU</div>
 
-          {/* ───── Numune ───── */}
-          <div className="section-label">Numune Bilgisi</div>
-          <div className="firma-box">
-            <div><strong>{header.Numune_Adi}</strong>{header.Numune_Adi_En ? ` / ${header.Numune_Adi_En}` : ""}</div>
+          {/* ───── ÜST META: Rapor No/Rev · Sayfa · Kabul · Yayın ───── */}
+          <div className="meta-box">
+            <div><strong>Rapor No / Rev. No:</strong> {header.RaporNo} / {revNo}</div>
+            <div><strong>Numune Kabul Tarihi:</strong> {kabulTarihi}</div>
+            <div><strong>Sayfa:</strong> 1 / 1</div>
+            <div><strong>Rapor Yayın Tarihi:</strong> {yayinTarihi}</div>
           </div>
 
-          {/* ───── Hizmet tablosu ───── */}
-          <table className="services">
+          {/* ───── MÜŞTERİ / NUMUNE BİLGİLERİ (2 sütun) ───── */}
+          <table className="info-table">
             <thead>
               <tr>
-                <th className="center" style={{ width: 30 }}>No</th>
-                <th style={{ width: 70 }}>Kod</th>
-                <th>Hizmet Adı</th>
-                <th>Metot</th>
-                <th style={{ width: 60 }}>Birim</th>
-                <th style={{ width: 120 }}>Sonuç</th>
-                <th style={{ width: 100 }}>Limit</th>
-                <th style={{ width: 90 }}>Değerlendirme</th>
+                <th>MÜŞTERİ BİLGİLERİ</th>
+                <th>NUMUNE BİLGİLERİ</th>
               </tr>
             </thead>
             <tbody>
-              {hizmetler.length === 0 ? (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: "center", color: "#6e6e73", padding: "20px" }}>
-                    Bu rapor formatına ait hizmet bulunamadı.
-                  </td>
-                </tr>
-              ) : (
-                hizmetler.map((h, i) => {
-                  const akr = String(h.Akreditasyon || "").trim().toLowerCase() === "var" ? "*" : "";
-                  const degCls = h.Degerlendirme === "Uygun"
-                    ? "deg-uygun"
-                    : h.Degerlendirme === "Uygun Değil"
-                    ? "deg-uygunsuz"
-                    : "deg-other";
-                  return (
-                    <tr key={i}>
-                      <td className="center no">{i + 1}.</td>
-                      <td className="muted">{h.Kod}</td>
-                      <td><strong>{akr}{h.Ad}</strong></td>
-                      <td className="muted">{h.Metot || "—"}</td>
-                      <td>{h.Birim || "—"}</td>
-                      <td><strong>{h.Sonuc || "—"}</strong></td>
-                      <td className="muted">{h.LimitDeger || "—"}</td>
-                      <td className={degCls}>{h.Degerlendirme || "—"}</td>
-                    </tr>
-                  );
-                })
-              )}
+              <tr>
+                <td>
+                  <div className="firma-ad">{header.FirmaAd || "—"}</div>
+                  {header.FirmaAdres && <div className="info-line">{header.FirmaAdres}</div>}
+                  {header.FirmaYetkili && <div className="info-line">{header.FirmaYetkili}</div>}
+                  {header.FirmaEmail && <div className="info-line">{header.FirmaEmail}</div>}
+                  {header.FirmaTelefon && <div className="info-line">{header.FirmaTelefon}</div>}
+                </td>
+                <td>
+                  <div className="firma-ad">
+                    {header.Numune_Adi}
+                    {header.Numune_Adi_En ? <span style={{ color: "#6e6e73", fontWeight: 500 }}> / {header.Numune_Adi_En}</span> : null}
+                  </div>
+                  {(header.TesteMiktar || header.TesteMiktarBirim) && (
+                    <div className="info-line">
+                      {header.TesteMiktar} {header.TesteMiktarBirim}
+                    </div>
+                  )}
+                  <div className="info-line">
+                    <span className="info-label">Üretim Tarihi:</span>
+                    {fmtTarih(String(header.UretimTarihi || ""))}
+                  </div>
+                  <div className="info-line">
+                    <span className="info-label">Son Kullanım Tarihi:</span>
+                    {fmtTarih(String(header.SKT || ""))}
+                  </div>
+                  <div className="info-line">
+                    <span className="info-label">Seri / Lot No / Ürün Kodu:</span>
+                    {header.SeriNo || "—"}
+                  </div>
+                </td>
+              </tr>
             </tbody>
           </table>
 
-          {/* ───── Notlar ───── */}
+          {/* ───── TEST SONUÇLARI ───── */}
+          <div className="results-section">
+            <div className="results-title">TEST SONUÇLARI</div>
+            <div className="results-subtitle">
+              {testBaslangic && testBitis ? (
+                <>
+                  Müşteri talebi doğrultusunda yapılan testlerin uygulama periyodu{" "}
+                  <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong> aralığındadır.{" "}
+                </>
+              ) : null}
+              Testler müşteri spesifikasyonuna göre değerlendirilmiştir.
+            </div>
+            <table className="results">
+              <thead>
+                <tr>
+                  <th style={{ width: "auto", textAlign: "left", paddingLeft: 10 }}>Analiz Adı</th>
+                  <th style={{ width: 55 }}>Birim</th>
+                  <th style={{ width: 75 }}>Sonuç</th>
+                  <th style={{ width: 50 }}>LOQ</th>
+                  <th style={{ width: 50 }}>Ö.B.</th>
+                  <th style={{ width: 110 }}>Metot</th>
+                  <th style={{ width: 70 }}>Limit</th>
+                  <th style={{ width: 80 }}>Değerlendirme</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hizmetler.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: "center", color: "#6e6e73", padding: "16px" }}>
+                      Bu rapor formatına ait hizmet bulunamadı.
+                    </td>
+                  </tr>
+                ) : (
+                  hizmetler.map((h, i) => {
+                    const isAkr = String(h.Akreditasyon || "").trim().toLowerCase() === "var";
+                    const deg = degerlendirmeLabel(h.Degerlendirme);
+                    return (
+                      <tr key={i}>
+                        <td style={{ paddingLeft: 10 }}>
+                          {isAkr ? "*" : ""}{h.Ad}
+                        </td>
+                        <td className="center">{h.Birim || "-"}</td>
+                        <td className="center bold">{h.Sonuc || "-"}</td>
+                        <td className="center">{h.LOQ || "-"}</td>
+                        <td className="center muted">-</td>
+                        <td className="center">{h.Metot || "-"}</td>
+                        <td className="center">{h.LimitDeger || "-"}</td>
+                        <td className={deg.cls}>{deg.text}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ───── NOTLAR ───── */}
           <div className="notlar">
-            <div className="notlar-title">Notlar:</div>
-            <p>&ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akreditasyon kapsamımızda yer almaktadır.</p>
-            <p>Bu rapor sadece test edilen numuneye aittir ve bir bütünlük arz eder; bölünerek çoğaltılamaz.</p>
-            <p>{sirketAdi} verilerinin yetkisiz kopyalanması, dağıtılması veya başka amaçla kullanılması yasaktır.</p>
-            {header.Karar && <p style={{ marginTop: "3mm" }}><strong>Karar Kuralı:</strong> {header.Karar}</p>}
-          </div>
-
-          {/* ───── Alt kısım — onay + seal ───── */}
-          <div className="bottom">
-            <div className="prep">
-              <div className="prep-title">Raporu Onaylayan</div>
-              {onay ? (
-                <>
-                  <div className="e-imza">✓ E-İmzalıdır</div>
-                  <div className="prep-name">{onay.onaylayanAd || "—"}</div>
-                  <div style={{ fontSize: 9, color: "#6e6e73", marginTop: 2 }}>
-                    {new Date(onay.onayTarihi).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" })}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={{ height: 18, borderBottom: "1px solid #888", width: 180 }} />
-                  <div className="prep-name" style={{ color: "#888" }}>Onay bekleniyor</div>
-                </>
-              )}
-            </div>
-            <div className="seal">
-              <img src="/unique-seal.png" alt={sirketAdi} />
+            <div className="notlar-title">NOTLAR</div>
+            <div className="notlar-body">
+              <p><span className="legend">LOQ:</span> Tespit Limiti, <span className="legend">Ö.B.:</span> Ölçüm Belirsizliği</p>
+              <p>&ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.</p>
+              <p>
+                Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Analiz Raporları geçersizdir.
+                {" "}{sirketAdi}&apos;nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya
+                herhangi bir başka amaçla kullanılamaz.
+              </p>
+              <p>
+                Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.
+                Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından
+                beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal
+                zorunluluklardan laboratuvarımız sorumlu değildir.
+              </p>
+              <p>
+                <span className="legend">Karar Kuralı:</span>{" "}
+                {header.Karar
+                  ? header.Karar
+                  : "Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır."}
+              </p>
             </div>
           </div>
 
-          {/* ───── Footer ───── */}
+          {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ───── */}
+          <div className="approval-block">
+            <div className="approval-cell">
+              <div className="approval-cell-title">RAPORU HAZIRLAYAN</div>
+              <div className="approval-cell-body">
+                <div className="approval-name">{hazirlayanAd}</div>
+                <div className="approval-role">{hazirlayanUnvan}</div>
+              </div>
+            </div>
+            <div className="approval-cell">
+              <div className="approval-cell-title">ONAYLAYAN</div>
+              <div className="approval-cell-body">
+                {onay ? (
+                  <>
+                    <div className="e-imza-pill">✓ E-İmzalıdır</div>
+                    <div className="approval-name">{onaylayanAd}</div>
+                    <div className="approval-role">{onaylayanUnvan}</div>
+                    <div className="approval-date">
+                      {new Date(onay.onayTarihi).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" })}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="approval-name">{onaylayanAd}</div>
+                    <div className="approval-role">{onaylayanUnvan}</div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ───── FOOTER ───── */}
           <div className="footer">
+            <span>{docKodu}</span>
             <span>{process.env.SIRKET_EMAIL || "info@uniqueanalyse.com"}</span>
-            <span>F.01.PR.04 – Yayın Tarihi: 27.09.2023</span>
-            <span className="page-number">Sayfa: 1 / 1</span>
           </div>
         </div>
       </div>
