@@ -8,8 +8,8 @@ export const metadata = {
 };
 
 export default async function RaporTakipPage() {
-  const session = await getServerSession(authOptions);
-  
+  await getServerSession(authOptions);
+
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
@@ -19,7 +19,9 @@ export default async function RaporTakipPage() {
         </div>
       </div>
 
-      <RaporTakipTable />
+      {/* phase="approval" — sadece "Onaya Gönder" basılmış (Onay Bekleniyor)
+          ve laboratuvar kabulü yapılmış raporlar görünsün. */}
+      <RaporTakipTable acceptedOnly phase="approval" />
     </div>
   );
 }

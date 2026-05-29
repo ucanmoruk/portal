@@ -25,7 +25,9 @@ export async function GET(request: NextRequest) {
 
     // Dinamik kolon tespiti — BolumID varsa Bölüm JOIN'i yap
     const hasBolumCol = await pool.request().query(
-      "SELECT 1 AS hasIt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='StokAnalizListesi' AND COLUMN_NAME='BolumID'"
+      `SELECT 1 AS hasIt FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_NAME='StokAnalizListesi' AND COLUMN_NAME='BolumID'
+         AND TABLE_SCHEMA IN ('dbo','cosmoroot')`
     );
     const hasBL = hasBolumCol.recordset.length > 0;
     const bolumSelect = hasBL

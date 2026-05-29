@@ -32,7 +32,7 @@ interface Hizmet {
 
 interface Birim { ID: number; Birim: string; }
 
-const RAPOR_FORMATLARI = ["Genel", "Stabilite", "Challenge", "Dermatoloji", "ÜGDR", "Diğer"] as const;
+const RAPOR_FORMATLARI = ["Genel", "Stabilite", "Challenge", "Claim", "ÜGDR", "Diğer"] as const;
 
 const EMPTY: Partial<Hizmet> = {
   Kod: "", Ad: "", AdEn: "", Method: "", MethodEn: "",

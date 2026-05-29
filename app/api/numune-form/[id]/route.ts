@@ -331,6 +331,8 @@ export async function PUT(
         const loqEn = stal.LOQEn;
         const auto  = computeSonucAuto(limitVal, loq);
 
+        // Sonuc/Degerlendirme auto-fill (LOQ tabanlı) — kolaylık için.
+        // "Kayıtlı" sayılması SonucKayitTarihi kolonuna bağlı (NULL = henüz Kaydet basılmadı).
         const extraVals = [
           ...(x1Cols.has("Sonuc")            ? [q(auto.sonuc)]                      : []),
           ...(x1Cols.has("SonucEn")          ? [q(auto.sonucEn)]                    : []),

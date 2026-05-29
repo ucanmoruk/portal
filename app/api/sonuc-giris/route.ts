@@ -28,6 +28,14 @@ export async function GET(request: Request) {
     const hasLimitEn    = x1Cols.has("LimitEn");
     const hasBirimEn    = x1Cols.has("BirimEn");
     const hasHizmetDurum = x1Cols.has("HizmetDurum");
+
+    // NKR_LabKabul tablosu var mı? Varsa "Kabul Et" tıklanmamış kayıtları gizle.
+    // Schema filtresi: Postgres mirror lowercase legacy tablolarından kaçınmak için.
+    const labKabulCheck = await pool.request().query(
+      `SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
+       WHERE TABLE_NAME = 'NKR_LabKabul' AND TABLE_SCHEMA IN ('dbo', 'cosmoroot')`
+    );
+    const hasLabKabul = labKabulCheck.recordset.length > 0;
     const aktifDurumlar = "'Yeni','YeniAnaliz','Devam','Devam Ediyor'";
     const hizmetDurumPriorityExpr = hasHizmetDurum
       ? `CASE
@@ -60,6 +68,19 @@ export async function GET(request: Request) {
       whereClauses.push(`x1.HizmetDurum = 'Tamamlandı'`);
     } else if (durum === "YeniDevam" && hasHizmetDurum) {
       whereClauses.push(`(x1.HizmetDurum IS NULL OR x1.HizmetDurum IN (${aktifDurumlar}))`);
+    }
+
+    // Kabul Et filtresi: bir hizmetin rapor formatı varsa, o (NkrID, RaporFormati)
+    // için NKR_LabKabul'da kayıt olmalı. Rapor formatı olmayan hizmetler dışarıda
+    // tutulmaz (eski davranış korunur).
+    if (hasLabKabul) {
+      whereClauses.push(`(
+        s.RaporFormati IS NULL OR s.RaporFormati = ''
+        OR EXISTS (
+          SELECT 1 FROM NKR_LabKabul lk
+          WHERE lk.NkrID = n.ID AND lk.RaporFormati = s.RaporFormati
+        )
+      )`);
     }
 
     const where = whereClauses.join(" AND ");

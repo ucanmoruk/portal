@@ -72,11 +72,12 @@ const navGroups: NavGroup[] = [
       </svg>
     ),
     items: [
-      { label: "Numune Kabul",      href: "/laboratuvar/numune-takip",    menuKey: "laboratuvar.numune-takip"    },
-      { label: "Hizmet Listesi",    href: "/laboratuvar/hizmet-listesi",  menuKey: "laboratuvar.hizmet-listesi"  },
+      { label: "Numune Kabul",      href: "/laboratuvar/numune-takip",     menuKey: "laboratuvar.numune-takip"     },
+      { label: "Numune Takip",      href: "/laboratuvar/numune-takip-lab", menuKey: "laboratuvar.numune-takip-lab" },
+      { label: "Rapor Takip",       href: "/laboratuvar/rapor-takip",      menuKey: "laboratuvar.rapor-takip"      },
+      { label: "Hizmet Listesi",    href: "/laboratuvar/hizmet-listesi",   menuKey: "laboratuvar.hizmet-listesi"   },
       { label: "Hizmet Paketleri",  href: "/laboratuvar/hizmet-paketleri", menuKey: "laboratuvar.hizmet-paketleri" },
-      { label: "Sonuç Girişi",      href: "/laboratuvar/sonuc-giris",     menuKey: "laboratuvar.sonuc-giris"     },
-      { label: "Rapor Takip",       href: "/laboratuvar/rapor-takip",     menuKey: "laboratuvar.rapor-takip"     },
+      { label: "Sonuç Girişi",      href: "/laboratuvar/sonuc-giris",      menuKey: "laboratuvar.sonuc-giris"      },
     ],
   },
   {

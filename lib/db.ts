@@ -51,6 +51,12 @@ interface DbMetadata {
 
 let pgPool: ReturnType<typeof createPool> | undefined;
 let metadataPromise: Promise<DbMetadata> | undefined;
+let metadataLoadedAt = 0;
+// 60s TTL — DDL (ALTER TABLE, CREATE TABLE) sonrası sunucu restart gerektirmesin.
+// Önceki davranış: bir kez yüklenir hiç tazelenmezdi → yeni kolon/tablo
+// metadata'da görünmediği için unquoted kalıyor, Postgres lowercase'liyor,
+// "relation/column does not exist" hatası veriyordu.
+const METADATA_TTL_MS = 60_000;
 
 const getPgPool = () => {
   const connectionString = process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL;
@@ -63,7 +69,11 @@ const getPgPool = () => {
 };
 
 const getMetadata = async (): Promise<DbMetadata> => {
-  metadataPromise ??= getPgPool()
+  if (metadataPromise && Date.now() - metadataLoadedAt < METADATA_TTL_MS) {
+    return metadataPromise;
+  }
+  metadataLoadedAt = Date.now();
+  metadataPromise = getPgPool()
     .query(`
       SELECT table_schema, table_name
       FROM information_schema.tables
@@ -90,6 +100,12 @@ const getMetadata = async (): Promise<DbMetadata> => {
         .sort((a, b) => b.length - a.length);
 
       return { tables, columns };
+    })
+    .catch((err) => {
+      // Hata olursa cache'i temizle, bir sonraki çağrı tekrar denesin
+      metadataPromise = undefined;
+      metadataLoadedAt = 0;
+      throw err;
     });
 
   return metadataPromise;

@@ -17,14 +17,37 @@ export async function GET(request: Request) {
     const year        = searchParams.get("year")?.trim() || "";
     const raporDurumu = searchParams.get("raporDurumu")?.trim() || "";
     const raporTuru   = searchParams.get("raporTuru")?.trim() || "";
+    const acceptedOnly = searchParams.get("acceptedOnly") === "1";
+    // phase: "lab" → sonuç giriş aşamasındaki kayıtlar (Bekliyor + Analiz Devam Ediyor),
+    //        "approval" → Onaya Gönder'le gelmiş kayıtlar (Onay Bekleniyor)
+    const phase = (searchParams.get("phase") || "").trim();
     const offset      = (page - 1) * limit;
 
     const pool = await poolPromise;
 
+    // NKR_LabKabul tablosu opsiyonel — yoksa acceptedOnly filtresi yok sayılır.
+    // Schema filtresi: Postgres mirror'da lowercase legacy tablolardan kaçınılır.
+    const labKabulTblCheck = await pool.request().query(`
+      SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_NAME = 'NKR_LabKabul' AND TABLE_SCHEMA IN ('dbo', 'cosmoroot')
+    `);
+    const hasLabKabul = labKabulTblCheck.recordset.length > 0;
+
+    // NKR_RaporOnay (Onayla/Yayınla) opsiyonel
+    const raporOnayTblCheck = await pool.request().query(`
+      SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_NAME = 'NKR_RaporOnay' AND TABLE_SCHEMA IN ('dbo', 'cosmoroot')
+    `);
+    const hasRaporOnay = raporOnayTblCheck.recordset.length > 0;
+
+    // NOT: Postgres mirror'da public şemasında lowercase legacy tablolar olabilir;
+    // bizim hedeflediğimiz CamelCase kolonlu tablo dbo şemasındadır. Schema filtresi
+    // olmazsa "tablo var" sanılıp sonra `o.NkrID does not exist` hatası alınır.
     const overrideTableCheck = await pool.request().query(`
       SELECT 1 AS x
       FROM INFORMATION_SCHEMA.TABLES
-      WHERE LOWER(TABLE_NAME) = LOWER('NKR_RaporDurumOverride')
+      WHERE TABLE_NAME = 'NKR_RaporDurumOverride'
+        AND TABLE_SCHEMA IN ('dbo', 'cosmoroot')
     `);
     const hasOverrideTable = overrideTableCheck.recordset.length > 0;
 
@@ -34,6 +57,13 @@ export async function GET(request: Request) {
       WHERE TABLE_NAME = 'NumuneX1' AND COLUMN_NAME = 'Sonuc'
     `);
     const hasSonuc = sonucCheck.recordset.length > 0;
+
+    // SonucKayitTarihi var mı? Saved-state'in yeni göstergesi
+    const kayitCheck = await pool.request().query(`
+      SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = 'NumuneX1' AND COLUMN_NAME = 'SonucKayitTarihi'
+    `);
+    const hasKayitTarihi = kayitCheck.recordset.length > 0;
 
     const searchFilter = search
       ? `AND (
@@ -57,13 +87,43 @@ export async function GET(request: Request) {
 
     const raporDurumuFilter = raporDurumu === "Bekliyor"
       ? "AND EffectiveDurum = N'Bekliyor'"
-      : raporDurumu === "Devam Ediyor"
-      ? "AND EffectiveDurum = N'Devam Ediyor'"
+      : raporDurumu === "Analiz Devam Ediyor" || raporDurumu === "Devam Ediyor"
+      ? "AND EffectiveDurum = N'Analiz Devam Ediyor'"
+      : raporDurumu === "Onay Bekleniyor"
+      ? "AND EffectiveDurum = N'Onay Bekleniyor'"
+      : raporDurumu === "Onayland\u0131"
+      ? "AND EffectiveDurum = N'Onayland\u0131'"
+      : raporDurumu === "Yay\u0131nland\u0131"
+      ? "AND EffectiveDurum = N'Yay\u0131nland\u0131'"
+      : raporDurumu === "Geri G\u00f6nderildi"
+      ? "AND EffectiveDurum = N'Geri G\u00f6nderildi'"
       : raporDurumu === "Tamamland\u0131"
       ? "AND (EffectiveDurum = N'Tamamland\u0131' OR EffectiveDurum = N'Tamamlandi')"
       : "";
 
-    const sonucCountExpr = hasSonuc
+    // Phase filtresi \u2014 geni\u015f kapsam, raporDurumu (filter dropdown) ile daralt\u0131l\u0131r.
+    // lab \u2192 Bekliyor + Analiz Devam Ediyor (Onay Bekleniyor "Onay Bekleyenler"de)
+    // approval \u2192 Onay Bekleniyor + Onayland\u0131 + Yay\u0131nland\u0131 (UI default Onay Bekleniyor)
+    // returned \u2192 Geri G\u00f6nderildi
+    const phaseFilter = phase === "lab"
+      ? "AND EffectiveDurum IN (N'Bekliyor', N'Analiz Devam Ediyor')"
+      : phase === "approval"
+      ? "AND EffectiveDurum IN (N'Onay Bekleniyor', N'Onayland\u0131', N'Yay\u0131nland\u0131')"
+      : phase === "returned"
+      ? "AND EffectiveDurum = N'Geri G\u00f6nderildi'"
+      : phase === "approved"
+      ? "AND EffectiveDurum IN (N'Onayland\u0131', N'Yay\u0131nland\u0131')"
+      : "";
+
+    // Kayıtlı (Kullanıcı Kaydet bastı) sonuç sayısı:
+    // - SonucKayitTarihi kolonu varsa → NULL olmayanlar
+    // - Yoksa eski davranış: Sonuc dolu olanlar
+    const sonucCountExpr = hasKayitTarihi
+      ? `(SELECT COUNT(*) FROM NumuneX1 x2
+           INNER JOIN StokAnalizListesi s2 ON s2.ID = x2.AnalizID
+           WHERE x2.RaporID = r.NkrID AND s2.RaporFormati = r.RaporFormati
+             AND x2.[SonucKayitTarihi] IS NOT NULL)`
+      : hasSonuc
       ? `(SELECT COUNT(*) FROM NumuneX1 x2
            INNER JOIN StokAnalizListesi s2 ON s2.ID = x2.AnalizID
            WHERE x2.RaporID = r.NkrID AND s2.RaporFormati = r.RaporFormati
@@ -73,6 +133,25 @@ export async function GET(request: Request) {
     const overrideSelectExpr = hasOverrideTable
       ? `(
             SELECT MAX(o.Durum)
+            FROM NKR_RaporDurumOverride o
+            WHERE o.NkrID = r.NkrID
+              AND UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(r.RaporFormati, N'Ü', N'U'))
+          )`
+      : `NULL`;
+
+    // Override tablosunda Notlar kolonu var mı? (Geri Gönder notu için)
+    let hasOverrideNotlar = false;
+    if (hasOverrideTable) {
+      const r = await pool.request().query(
+        `SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA IN ('dbo','cosmoroot')
+           AND TABLE_NAME='NKR_RaporDurumOverride' AND COLUMN_NAME='Notlar'`
+      );
+      hasOverrideNotlar = r.recordset.length > 0;
+    }
+    const overrideNotluSelectExpr = hasOverrideNotlar
+      ? `(
+            SELECT MAX(o.Notlar)
             FROM NKR_RaporDurumOverride o
             WHERE o.NkrID = r.NkrID
               AND UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(r.RaporFormati, N'Ü', N'U'))
@@ -98,6 +177,7 @@ export async function GET(request: Request) {
         INNER JOIN NumuneX1         x1 ON x1.RaporID  = n.ID
         INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
           AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
+        ${acceptedOnly && hasLabKabul ? `INNER JOIN NKR_LabKabul lk ON lk.NkrID = n.ID AND lk.RaporFormati = s.RaporFormati` : ""}
         WHERE n.Durum = 'Aktif'
           ${searchFilter}
           ${raporTuruFilter}
@@ -110,6 +190,12 @@ export async function GET(request: Request) {
              WHERE x2.RaporID = r.NkrID AND s2.RaporFormati = r.RaporFormati) AS HizmetSayisi,
           ${sonucCountExpr} AS SonucluSayisi,
           ${overrideSelectExpr} AS OverrideDurum,
+          ${overrideNotluSelectExpr} AS GeriGonderNotu,
+          ${hasRaporOnay ? `(
+            SELECT MAX(ro.Durum) FROM NKR_RaporOnay ro
+            WHERE ro.NkrID = r.NkrID
+              AND UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(r.RaporFormati, N'Ü', N'U'))
+          )` : `NULL`} AS RaporOnayDurum,
           (SELECT MAX(CONVERT(varchar(10), x3.Termin, 23)) FROM NumuneX1 x3
              INNER JOIN StokAnalizListesi s3 ON s3.ID = x3.AnalizID
              WHERE x3.RaporID = r.NkrID AND s3.RaporFormati = r.RaporFormati
@@ -118,12 +204,19 @@ export async function GET(request: Request) {
       ),
       WithEffectiveDurum AS (
         SELECT *,
+          -- NKR_RaporOnay (varsa) override'dan ÖNCE gelir: Onaylandı/Yayınlandı
+          -- aksi halde override'tan Geri Gönderildi/Onay Bekleniyor
+          -- aksi halde otomatik (Bekliyor / Analiz Devam Ediyor)
           COALESCE(
-            OverrideDurum,
+            RaporOnayDurum,
+            CASE
+              WHEN OverrideDurum IN (N'Tamamlandı', N'Tamamlandi') THEN N'Onay Bekleniyor'
+              WHEN OverrideDurum = N'Devam Ediyor' THEN N'Analiz Devam Ediyor'
+              ELSE OverrideDurum
+            END,
             CASE
               WHEN HizmetSayisi = 0 OR SonucluSayisi = 0 THEN N'Bekliyor'
-              WHEN SonucluSayisi >= HizmetSayisi THEN N'Tamamlandı'
-              ELSE N'Devam Ediyor'
+              ELSE N'Analiz Devam Ediyor'
             END
           ) AS EffectiveDurum
         FROM WithStats
@@ -134,6 +227,7 @@ export async function GET(request: Request) {
         WHERE 1=1
           ${yearFilter}
           ${raporDurumuFilter}
+          ${phaseFilter}
       )
       SELECT *, COUNT(*) OVER() AS TotalCount
       FROM Filtered
@@ -156,13 +250,19 @@ export async function GET(request: Request) {
 
     const total = result.recordset[0]?.TotalCount ?? 0;
 
-    const data = result.recordset.map(({ TotalCount: _, HizmetSayisi, SonucluSayisi, EffectiveDurum, ...row }) => ({
+    const data = result.recordset.map(({ TotalCount: _t, HizmetSayisi, SonucluSayisi, EffectiveDurum, ...row }) => ({
       ...row,
-      RaporDurumu: (EffectiveDurum === "Tamamlandi" ? "Tamamlandı" : EffectiveDurum)
-        ?? (HizmetSayisi === 0      ? "Bekliyor"
-        : SonucluSayisi === 0   ? "Bekliyor"
-        : SonucluSayisi >= HizmetSayisi ? "Tamamland\u0131"
-        : "Devam Ediyor"),
+      RaporDurumu:
+        EffectiveDurum === "Tamamlandi" || EffectiveDurum === "Tamamlandı"
+          ? "Onay Bekleniyor"
+          : EffectiveDurum === "Devam Ediyor"
+          ? "Analiz Devam Ediyor"
+          : (EffectiveDurum
+              ?? (HizmetSayisi === 0      ? "Bekliyor"
+              : SonucluSayisi === 0   ? "Bekliyor"
+              : "Analiz Devam Ediyor")),
+      HizmetSayisi:  Number(HizmetSayisi  ?? 0),
+      SonucluSayisi: Number(SonucluSayisi ?? 0),
     }));
 
     return Response.json({ data, total, totalPages: Math.ceil(total / limit) });

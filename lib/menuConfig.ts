@@ -5,6 +5,8 @@ export interface MenuItem {
   label: string;
   href?: string;
   children?: MenuItem[];
+  /** true → Sadece yetki yönetiminde görünür, sidebar'da gizli (sayfa değil, aksiyon yetkisi) */
+  virtual?: boolean;
 }
 
 export const MENU_TREE: MenuItem[] = [
@@ -46,10 +48,12 @@ export const MENU_TREE: MenuItem[] = [
     label: "Laboratuvar",
     children: [
       { key: "laboratuvar.numune-takip",     label: "Numune Kabul",     href: "/laboratuvar/numune-takip"     },
+      { key: "laboratuvar.numune-takip-lab", label: "Numune Takip",     href: "/laboratuvar/numune-takip-lab" },
       { key: "laboratuvar.rapor-takip",      label: "Rapor Takip",      href: "/laboratuvar/rapor-takip"      },
-      { key: "laboratuvar.sonuc-giris",      label: "Sonuç Girişi",     href: "/laboratuvar/sonuc-giris"      },
       { key: "laboratuvar.hizmet-listesi",   label: "Hizmet Listesi",   href: "/laboratuvar/hizmet-listesi"   },
       { key: "laboratuvar.hizmet-paketleri", label: "Hizmet Paketleri", href: "/laboratuvar/hizmet-paketleri" },
+      { key: "laboratuvar.sonuc-giris",      label: "Sonuç Girişi",     href: "/laboratuvar/sonuc-giris"      },
+      { key: "laboratuvar.rapor-onayla",     label: "Rapor Onaylama",   href: "#",                            virtual: true },
     ],
   },
   { key: "laboratuvar.kys", label: "KYS", href: "/laboratuvar/kys" },

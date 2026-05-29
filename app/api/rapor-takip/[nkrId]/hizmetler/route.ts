@@ -35,7 +35,7 @@ export async function GET(
     const colCheck = await pool.request().query(`
       SELECT name FROM sys.columns
       WHERE object_id = OBJECT_ID('NumuneX1')
-        AND name IN ('Sonuc', 'Degerlendirme', 'DegerlendirmeEn', 'Birim', 'SonucEn', 'BirimEn', 'LimitEn')
+        AND name IN ('Sonuc', 'Degerlendirme', 'DegerlendirmeEn', 'Birim', 'SonucEn', 'BirimEn', 'LimitEn', 'SonucKayitTarihi')
     `);
     const existingCols = new Set<string>(colCheck.recordset.map((r: any) => r.name));
 
@@ -45,6 +45,7 @@ export async function GET(
     const sonucEnSel          = existingCols.has("SonucEn")          ? "ISNULL(x1.SonucEn,'') AS SonucEn,"           : "'' AS SonucEn,";
     const limitEnSel          = existingCols.has("LimitEn")          ? "ISNULL(x1.LimitEn,'') AS LimitEn,"           : "'' AS LimitEn,";
     const birimEnSel          = existingCols.has("BirimEn")          ? "ISNULL(x1.BirimEn,'') AS BirimEn,"           : "'' AS BirimEn,";
+    const kayitTarihiSel      = existingCols.has("SonucKayitTarihi") ? "x1.[SonucKayitTarihi] AS SonucKayitTarihi,"   : "NULL AS SonucKayitTarihi,";
     // Birim: NumuneX1'den al, yoksa StokAnalizListesi.Matriks'e düş
     const birimSel            = existingCols.has("Birim")
       ? "ISNULL(x1.Birim, s.Matriks) AS Birim,"
@@ -70,6 +71,7 @@ export async function GET(
         ${sonucEnSel}
         ${degerlendirmeSel}
         ${degerlendirmeEnSel}
+        ${kayitTarihiSel}
         CONVERT(varchar(10), x1.Termin, 23)        AS Termin
       FROM NumuneX1 x1
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
@@ -109,13 +111,14 @@ export async function PATCH(
     const colCheck = await pool.request().query(`
       SELECT name FROM sys.columns
       WHERE object_id = OBJECT_ID('NumuneX1')
-        AND name IN ('Sonuc', 'Degerlendirme', 'DegerlendirmeEn', 'SonucEn')
+        AND name IN ('Sonuc', 'Degerlendirme', 'DegerlendirmeEn', 'SonucEn', 'SonucKayitTarihi')
     `);
     const existingCols = new Set<string>(colCheck.recordset.map((r: any) => r.name));
     const hasSonuc            = existingCols.has("Sonuc");
     const hasDegerlendirme    = existingCols.has("Degerlendirme");
     const hasDegerlendirmeEn  = existingCols.has("DegerlendirmeEn");
     const hasSonucEn          = existingCols.has("SonucEn");
+    const hasKayitTarihi      = existingCols.has("SonucKayitTarihi");
 
     if (!hasSonuc && !hasDegerlendirme) {
       return Response.json(
@@ -124,7 +127,29 @@ export async function PATCH(
       );
     }
 
-    // Her satırı güncelle
+    // Hizmet adlarını al (log mesajı için)
+    const x1Ids = updates.map(u => u.x1Id).filter(n => Number.isFinite(n));
+    const hizmetAdMap = new Map<number, string>();
+    if (x1Ids.length > 0) {
+      const inList = x1Ids.join(",");
+      const adRes = await pool.request().query(`
+        SELECT x1.ID, ISNULL(s.Ad, '') AS Ad
+        FROM NumuneX1 x1
+        LEFT JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
+        WHERE x1.ID IN (${inList}) AND x1.RaporID = ${nkrIdNum}
+      `);
+      for (const r of adRes.recordset) hizmetAdMap.set(Number(r.ID), String(r.Ad || ""));
+    }
+
+    // NKR_Log varlığı (Ürün Geçmişi'ne yazmak için)
+    const logCheck = await pool.request().query(
+      `SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
+       WHERE TABLE_NAME = 'NKR_Log' AND TABLE_SCHEMA IN ('dbo','cosmoroot')`
+    );
+    const hasLog = logCheck.recordset.length > 0;
+    const userId = ((session.user as any)?.userId ?? null) as number | null;
+
+    // Her satırı güncelle + log
     for (const upd of updates) {
       const sets: string[] = [];
       const req = pool.request().input("x1Id", upd.x1Id).input("nkrId", nkrIdNum);
@@ -145,6 +170,11 @@ export async function PATCH(
         sets.push("DegerlendirmeEn = @degerlendirmeEn");
         req.input("degerlendirmeEn", computeDegerlendirmeEn(upd.degerlendirme ?? null));
       }
+      // Kullanıcı Kaydet bastı → kayıt tarihini set et ("kayıtlı" işareti)
+      // Bracket syntax → metadata cache stale olsa bile Postgres'te doğru quote'lanır
+      if (hasKayitTarihi) {
+        sets.push("[SonucKayitTarihi] = GETDATE()");
+      }
 
       if (sets.length === 0) continue;
 
@@ -153,6 +183,24 @@ export async function PATCH(
         SET ${sets.join(", ")}
         WHERE ID = @x1Id AND RaporID = @nkrId
       `);
+
+      // Ürün Geçmişi log girişi
+      if (hasLog) {
+        const hizmetAd = hizmetAdMap.get(upd.x1Id) || `Hizmet #${upd.x1Id}`;
+        const sonucBilgi = (upd.sonuc ?? "").trim();
+        const aciklama = sonucBilgi
+          ? `"${hizmetAd}" hizmeti için sonuç girişi yapıldı: ${sonucBilgi}`
+          : `"${hizmetAd}" hizmeti için sonuç girişi yapıldı (boş kayıt).`;
+        await pool.request()
+          .input("NKRID", nkrIdNum)
+          .input("KullaniciID", userId)
+          .input("Eylem", "Sonuç Girişi")
+          .input("Aciklama", aciklama)
+          .query(
+            `INSERT INTO NKR_Log (NKRID, KullaniciID, Eylem, Aciklama, Tarih)
+             VALUES (@NKRID, @KullaniciID, @Eylem, @Aciklama, CURRENT_TIMESTAMP)`
+          );
+      }
     }
 
     return Response.json({ ok: true, updated: updates.length });

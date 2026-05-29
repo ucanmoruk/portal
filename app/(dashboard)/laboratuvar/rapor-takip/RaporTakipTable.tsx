@@ -16,8 +16,12 @@ interface RaporRow {
   FirmaAd: string | null;
   ProjeAd: string | null;
   RaporFormati: string;
-  RaporDurumu: "Bekliyor" | "Devam Ediyor" | "Tamamlandı";
+  RaporDurumu: "Bekliyor" | "Analiz Devam Ediyor" | "Onay Bekleniyor" | "Onaylandı" | "Yayınlandı" | "Geri Gönderildi";
   MaxTermin: string | null;
+  HizmetSayisi: number;
+  SonucluSayisi: number;
+  /** Geri Gönderildi durumdaysa: onaylayan kullanıcının yazdığı not */
+  GeriGonderNotu?: string | null;
 }
 
 interface HizmetDetay {
@@ -35,6 +39,8 @@ interface HizmetDetay {
   SonucEn: string;
   Degerlendirme: string | null;
   Termin: string | null;
+  /** NULL ise kullanıcı henüz Kaydet basmadı (Sonuc auto-fill ile dolu olabilir) */
+  SonucKayitTarihi: string | null;
 }
 
 interface LocalEdit {
@@ -49,19 +55,48 @@ const isUgdrFormat = (format: string) => ["ÜGDR", "UGDR", "ÜGD", "UGD"].includ
 
 // ── Küçük bileşenler ─────────────────────────────────────────────────────────
 
-function DurumBadge({ durum }: { durum: RaporRow["RaporDurumu"] }) {
-  const map = {
-    "Bekliyor":     { bg: "#8e8e9318", fg: "#636366" },
-    "Devam Ediyor": { bg: "#ff950018", fg: "#c06800" },
-    "Tamamlandı":   { bg: "#34c75918", fg: "#248a3d" },
-  } as const;
+function DurumBadge({
+  durum,
+  done,
+  total,
+}: {
+  durum: RaporRow["RaporDurumu"];
+  done?: number;
+  total?: number;
+}) {
+  const map: Record<string, { bg: string; fg: string }> = {
+    "Bekliyor":            { bg: "#8e8e9318", fg: "#636366" },
+    "Analiz Devam Ediyor": { bg: "#ff950018", fg: "#c06800" },
+    "Onay Bekleniyor":     { bg: "#0071e318", fg: "#0055a8" },
+    "Onaylandı":           { bg: "#34c75918", fg: "#248a3d" },
+    "Yayınlandı":          { bg: "#bf5af218", fg: "#8944ab" },
+    "Geri Gönderildi":     { bg: "#ff3b3018", fg: "#c00" },
+  };
   const c = map[durum] ?? map["Bekliyor"];
+  // İlerleme sayısı yalnız "Analiz Devam Ediyor"da anlamlı
+  const showCount = durum === "Analiz Devam Ediyor" && typeof total === "number" && total > 0;
   return (
     <span style={{
-      display: "inline-block", padding: "2px 9px", borderRadius: 10,
+      display: "inline-flex", alignItems: "center", gap: 6,
+      padding: "2px 9px", borderRadius: 10,
       fontSize: "0.72rem", fontWeight: 600, background: c.bg, color: c.fg,
-    }}>{durum}</span>
+      whiteSpace: "nowrap",
+    }}>
+      {durum}
+      {showCount && (
+        <span style={{
+          padding: "1px 6px", borderRadius: 8,
+          background: "rgba(0,0,0,0.08)", fontWeight: 700,
+          fontVariantNumeric: "tabular-nums",
+        }}>{done ?? 0}/{total}</span>
+      )}
+    </span>
   );
+}
+
+// Dermatoloji eski adı → Claim olarak göster (geri uyumluluk)
+function displayFormat(format: string): string {
+  return format === "Dermatoloji" ? "Claim" : format;
 }
 
 function FormatBadge({ format }: { format: string }) {
@@ -71,16 +106,19 @@ function FormatBadge({ format }: { format: string }) {
     "Mikrobiyoloji": { bg: "#34c75918", fg: "#248a3d" },
     "Kimya":     { bg: "#ff950018", fg: "#c06800" },
     "Stabilite": { bg: "#ff950018", fg: "#c06800" },
+    "Claim":       { bg: "#34c75918", fg: "#248a3d" },
     "Dermatoloji": { bg: "#34c75918", fg: "#248a3d" },
+    "Diğer":     { bg: "#8e8e9318", fg: "#636366" },
     "ÜGDR": { bg: "#1f478818", fg: "#1f4788" },
     "UGDR": { bg: "#1f478818", fg: "#1f4788" },
   };
-  const c = colors[format] ?? { bg: "#8e8e9318", fg: "#636366" };
+  const label = displayFormat(format);
+  const c = colors[format] ?? colors[label] ?? { bg: "#8e8e9318", fg: "#636366" };
   return (
     <span style={{
       display: "inline-block", padding: "2px 9px", borderRadius: 10,
       fontSize: "0.72rem", fontWeight: 600, background: c.bg, color: c.fg,
-    }}>{format}</span>
+    }}>{label}</span>
   );
 }
 
@@ -106,7 +144,27 @@ function IconBtn({
 
 // ── Ana bileşen ───────────────────────────────────────────────────────────────
 
-export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: string } = {}) {
+export default function RaporTakipTable({
+  fixedRaporTuru,
+  acceptedOnly = false,
+  phase,
+  hideRaporTuruTabs = false,
+  onRefresh,
+}: {
+  fixedRaporTuru?: string;
+  /** true → sadece NKR_LabKabul'da kayıtlı (laboratuvar tarafından kabul edilmiş) raporları göster */
+  acceptedOnly?: boolean;
+  /** "lab"      = Sonuç Girişi (Bekliyor + Analiz Devam Ediyor + Onay Bekleniyor)
+      "approval" = Rapor Takip onay bekleyenler (Onay Bekleniyor)
+      "returned" = Geri Gelenler (Geri Gönderildi)
+      "approved" = Onaylananlar (Onaylandı + Yayınlandı) */
+  phase?: "lab" | "approval" | "returned" | "approved";
+  /** true → üstteki rapor türü tab'larını gizle (Numune Takip alt sayfaları için) */
+  hideRaporTuruTabs?: boolean;
+  /** Bir state-değiştirici aksiyon (Onaya Gönder, Geri Al, Kaydet) sonrası çağrılır.
+      Dış sayfa tab sayıları gibi türevleri tazelemek için kullanır. */
+  onRefresh?: () => void;
+} = {}) {
   const router = useRouter();
   const [rows, setRows]           = useState<RaporRow[]>([]);
   const [total, setTotal]         = useState(0);
@@ -115,7 +173,8 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch]       = useState("");
   const [year, setYear]           = useState("2026");
-  const [raporDurumu, setRaporDurumu] = useState("Bekliyor");
+  // phase=approval → default "Onay Bekleniyor" (sadece bekleyenler görünür; Onaylandı'lar filter ile)
+  const [raporDurumu, setRaporDurumu] = useState(phase === "approval" ? "Onay Bekleniyor" : "");
   const [raporTuru, setRaporTuru] = useState(fixedRaporTuru ?? "");
   const raporTurleri = ["Genel", "Challenge", "Stabilite", "Dermatoloji", "ÜGDR"];
   const raporTabs = ["", ...raporTurleri];
@@ -172,9 +231,11 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
         page: p.toString(), limit: l.toString(),
         search: s, year: y, raporDurumu: d, raporTuru: t,
       });
+      if (acceptedOnly) params.set("acceptedOnly", "1");
+      if (phase) params.set("phase", phase);
       const res = await fetch(
         `/api/rapor-takip?${params}`,
-        { signal: ctrl.signal },
+        { signal: ctrl.signal, cache: "no-store" },
       );
       if (reqId !== latestReqId.current) return;
       if (!res.ok) throw new Error((await res.json()).error || "Hata");
@@ -190,7 +251,7 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
         setLoading(false); setTrans(false);
       }
     }
-  }, []);
+  }, [acceptedOnly, phase]);
 
   // İlk yükleme
   useEffect(() => {
@@ -263,7 +324,67 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
     }));
   };
 
-  // ── Kaydet ────────────────────────────────────────────────────────────────
+  // Per-row Kaydet için ayrı state — savingRowId (X1ID)
+  const [savingRowId, setSavingRowId] = useState<number | null>(null);
+  // Bu oturumda kullanıcının Kaydet'e bastığı satırlar (X1ID).
+  // Sayfa refresh'ten sonra server'daki h.Sonuc'a düşer.
+  const [savedRowIds, setSavedRowIds] = useState<Set<number>>(new Set());
+  // Kalem ikonuna basılıp düzenleme moduna alınmış satırlar — kilidi açılır.
+  const [editingRowIds, setEditingRowIds] = useState<Set<number>>(new Set());
+
+  const markSaved = (x1Id: number) => {
+    setSavedRowIds(prev => { const n = new Set(prev); n.add(x1Id); return n; });
+    setEditingRowIds(prev => { const n = new Set(prev); n.delete(x1Id); return n; });
+  };
+  const enterEditing = (x1Id: number) => {
+    setEditingRowIds(prev => { const n = new Set(prev); n.add(x1Id); return n; });
+  };
+
+  // ── Kaydet (tek satır) ────────────────────────────────────────────────────
+  const saveSingleRow = async (row: RaporRow, x1Id: number) => {
+    const key = rowKey(row);
+    const edit = editMap[key]?.[x1Id] ?? { sonuc: "", sonucEn: "", degerlendirme: "" };
+
+    setSavingRowId(x1Id);
+    setSaveError(prev => ({ ...prev, [key]: "" }));
+
+    try {
+      const res = await fetch(`/api/rapor-takip/${row.NkrID}/hizmetler`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          updates: [{ x1Id, sonuc: edit.sonuc, sonucEn: edit.sonucEn, degerlendirme: edit.degerlendirme }],
+          raporFormati: row.RaporFormati,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Kaydedilemedi");
+
+      // Bu satırın hizmet listesindeki değerini güncelle (SonucKayitTarihi de set edilir)
+      const now = new Date().toISOString();
+      setHizmetMap(prev => {
+        const current = prev[key] || [];
+        const updated = current.map(h =>
+          h.X1ID === x1Id
+            ? { ...h, Sonuc: edit.sonuc, SonucEn: edit.sonucEn, Degerlendirme: edit.degerlendirme, SonucKayitTarihi: now }
+            : h
+        );
+        return { ...prev, [key]: updated };
+      });
+
+      // Kullanıcı bu satırı bu oturumda kaydetti — kilitle, düzenleme modunu kapat
+      markSaved(x1Id);
+
+      // Ana listeyi refresh — durum "Analiz Devam Ediyor" olabilir
+      fetchData(page, search, limit, year, raporDurumu, raporTuru, { clearFirst: false });
+      onRefresh?.();
+    } catch (e: any) {
+      setSaveError(prev => ({ ...prev, [key]: e.message }));
+    } finally {
+      setSavingRowId(null);
+    }
+  };
+
+  // ── Kaydet (tümü) — Tüm Sonuçları Kaydet butonu için ─────────────────────
   const saveHizmetler = async (row: RaporRow) => {
     const key = rowKey(row);
     const edits = editMap[key] || {};
@@ -286,7 +407,7 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
       });
       if (!res.ok) throw new Error((await res.json()).error || "Kaydedilemedi");
 
-      // Hizmet listesini refresh et (yeni Sonuc değerleriyle)
+      const now = new Date().toISOString();
       setHizmetMap(prev => {
         const current = prev[key] || [];
         const updated = current.map(h => ({
@@ -294,12 +415,27 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
           Sonuc:         edits[h.X1ID]?.sonuc         ?? h.Sonuc,
           SonucEn:       edits[h.X1ID]?.sonucEn       ?? h.SonucEn,
           Degerlendirme: edits[h.X1ID]?.degerlendirme ?? h.Degerlendirme,
+          // Bu satır kaydedildiyse SonucKayitTarihi'yi şimdi yap → isLocked true olur, kalem görünür
+          SonucKayitTarihi: edits[h.X1ID] !== undefined ? now : h.SonucKayitTarihi,
         }));
         return { ...prev, [key]: updated };
       });
 
-      // Ana listeyi de refresh et (RaporDurumu güncellensin)
+      // Tüm güncellenen satırları savedSet'e ekle (kalem ikonu görünsün)
+      // ve editing modunu kapat
+      setSavedRowIds(prev => {
+        const n = new Set(prev);
+        for (const u of updates) n.add(u.x1Id);
+        return n;
+      });
+      setEditingRowIds(prev => {
+        const n = new Set(prev);
+        for (const u of updates) n.delete(u.x1Id);
+        return n;
+      });
+
       fetchData(page, search, limit, year, raporDurumu, raporTuru, { clearFirst: false });
+      onRefresh?.();
     } catch (e: any) {
       setSaveError(prev => ({ ...prev, [key]: e.message }));
     } finally {
@@ -385,22 +521,29 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
   };
 
   const toggleCompletion = async (row: RaporRow) => {
-    const nextDurum: RaporRow["RaporDurumu"] = row.RaporDurumu === "Tamamlandı" ? "Bekliyor" : "Tamamlandı";
+    // Onay Bekleniyor durumdayken "Geri Al" → /geri-gonder (Geri Gönderildi state)
+    // Bekliyor/Analiz Devam Ediyor iken "Onaya Gönder" → /tamamla (Onay Bekleniyor)
     try {
-      const res = await fetch(`/api/rapor-takip/${row.NkrID}/tamamla`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format: row.RaporFormati, durum: nextDurum }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "Durum guncellenemedi");
-      setRows(prev => prev.map(r =>
-        r.NkrID === row.NkrID && r.RaporFormati === row.RaporFormati
-          ? { ...r, RaporDurumu: nextDurum }
-          : r
-      ));
+      if (row.RaporDurumu === "Onay Bekleniyor") {
+        const res = await fetch(`/api/rapor-takip/${row.NkrID}/geri-gonder`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ format: row.RaporFormati }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Geri gönderilemedi");
+        // Liste yenilensin — bu satır artık Geri Gönderildi durumunda, mevcut tab'tan düşer
+      } else {
+        const res = await fetch(`/api/rapor-takip/${row.NkrID}/tamamla`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ format: row.RaporFormati, durum: "Onay Bekleniyor" }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Durum güncellenemedi");
+      }
       fetchData(page, search, limit, year, raporDurumu, raporTuru, { clearFirst: false });
+      onRefresh?.();
     } catch (e: any) {
-      setError(e.message || "Durum guncellenemedi");
+      setError(e.message || "Durum güncellenemedi");
     }
   };
 
@@ -462,7 +605,7 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {!fixedRaporTuru && (
+      {!fixedRaporTuru && !hideRaporTuruTabs && (
         <div style={{
           display: "flex",
           gap: 6,
@@ -540,16 +683,39 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
             {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
 
-          {/* Rapor Durumu Filtresi */}
+          {/* Rapor Durumu Filtresi — phase'e göre seçenekler değişir */}
           <select value={raporDurumu} onChange={e => { setRaporDurumu(e.target.value); setPage(1); }}
             style={{
               padding: "6px 8px", borderRadius: 6, border: "1px solid var(--color-border)",
               background: "var(--color-bg)", fontSize: "0.75rem", cursor: "pointer",
             }}>
-            <option value="">Tüm Durumlar</option>
-            <option value="Bekliyor">Bekliyor</option>
-            <option value="Devam Ediyor">Devam Ediyor</option>
-            <option value="Tamamlandı">Tamamlandı</option>
+            {phase !== "approval" && <option value="">Tüm Durumlar</option>}
+            {phase === "approval" ? (
+              <>
+                <option value="Onay Bekleniyor">Onay Bekleniyor</option>
+                <option value="Onaylandı">Onaylandı</option>
+              </>
+            ) : phase === "returned" ? (
+              <option value="Geri Gönderildi">Geri Gönderildi</option>
+            ) : phase === "approved" ? (
+              <>
+                <option value="Onaylandı">Onaylandı</option>
+                <option value="Yayınlandı">Yayınlandı</option>
+              </>
+            ) : phase === "lab" ? (
+              <>
+                <option value="Bekliyor">Bekliyor</option>
+                <option value="Analiz Devam Ediyor">Analiz Devam Ediyor</option>
+                <option value="Onay Bekleniyor">Onay Bekleniyor</option>
+              </>
+            ) : (
+              <>
+                <option value="Bekliyor">Bekliyor</option>
+                <option value="Analiz Devam Ediyor">Analiz Devam Ediyor</option>
+                <option value="Onay Bekleniyor">Onay Bekleniyor</option>
+                <option value="Geri Gönderildi">Geri Gönderildi</option>
+              </>
+            )}
           </select>
 
           {/* Seçili Yazdır */}
@@ -588,15 +754,17 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
         {/* Başlık satırı */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "32px 24px 80px 108px 108px 1fr 108px 100px 82px 96px 36px 36px 36px",
+          gridTemplateColumns: `${phase ? "0" : "32px"} 24px 80px 108px 108px 1fr 108px 170px 100px ${phase === "approval" ? "0" : phase === "returned" ? "180px" : "110px"} ${phase === "returned" ? "0 0 0" : "36px 36px 36px"}`,
           alignItems: "center",
           padding: "8px 16px",
           borderBottom: "1px solid var(--color-border-light)",
           background: "var(--color-surface)",
-          minWidth: 1040,
+          minWidth: 1140,
         }}>
-          <input type="checkbox" checked={selectedIds.size === rows.length && rows.length > 0}
-            onChange={toggleSelectAll} style={{ cursor: "pointer", width: 16, height: 16 }} />
+          {phase ? <div /> : (
+            <input type="checkbox" checked={selectedIds.size === rows.length && rows.length > 0}
+              onChange={toggleSelectAll} style={{ cursor: "pointer", width: 16, height: 16 }} />
+          )}
           <div />
           {["Tarih", "Evrak No", "Rapor No", "Firma / Proje · Numune", "Rapor Türü", "Durum", "Termin", "", "", "", ""].map((h, i) => (
             <div key={i} style={{
@@ -657,20 +825,22 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                 onClick={() => toggleRow(row)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "32px 24px 80px 108px 108px 1fr 108px 100px 82px 96px 36px 36px 36px",
+                  gridTemplateColumns: `${phase ? "0" : "32px"} 24px 80px 108px 108px 1fr 108px 170px 100px ${phase === "approval" ? "0" : phase === "returned" ? "180px" : "110px"} ${phase === "returned" ? "0 0 0" : "36px 36px 36px"}`,
                   alignItems: "center",
                   padding: "12px 16px",
                   cursor: "pointer",
                   background: isOpen ? "var(--color-surface-2)" : selectedIds.has(key) ? "var(--color-accent-light)" : "transparent",
                   transition: "background 0.12s",
                   userSelect: "none",
-                  minWidth: 1040,
+                  minWidth: 1140,
                 }}
               >
-                {/* Checkbox */}
-                <input type="checkbox" checked={selectedIds.has(key)}
-                  onChange={() => toggleSelectRow(key)} onClick={e => e.stopPropagation()}
-                  style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--color-accent)" }} />
+                {/* Checkbox — sadece default (Rapor Takip) modunda; Numune Takip alt tablarında gizli */}
+                {phase ? <span /> : (
+                  <input type="checkbox" checked={selectedIds.has(key)}
+                    onChange={() => toggleSelectRow(key)} onClick={e => e.stopPropagation()}
+                    style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--color-accent)" }} />
+                )}
 
                 {/* Chevron */}
                 <svg
@@ -744,88 +914,198 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                 <div><FormatBadge format={row.RaporFormati} /></div>
 
                 {/* Durum */}
-                <div><DurumBadge durum={row.RaporDurumu} /></div>
+                <div><DurumBadge durum={row.RaporDurumu} done={row.SonucluSayisi} total={row.HizmetSayisi} /></div>
 
                 {/* Termin */}
                 <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums", textAlign: "center" }}>
                   {row.MaxTermin ? `${row.MaxTermin.split("-").reverse().join(".")}` : "—"}
                 </div>
 
-                {/* Onaya Gönder */}
-                <div style={{ display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    title={row.RaporDurumu === "Tamamlandı" ? "Rapor durumunu Bekliyor yap" : "Rapor durumunu Tamamlandı yap"}
-                    onClick={() => toggleCompletion(row)}
-                    style={{
-                      border: "1px solid #0b5c8e30",
-                      borderRadius: 7,
-                      background: "#0b5c8e14",
-                      color: "#0b5c8e",
-                      fontSize: "0.68rem",
-                      fontWeight: 700,
-                      padding: "5px 8px",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {row.RaporDurumu === "Tamamlandı" ? "Geri Al" : "Tamamla"}
-                  </button>
+                {/* Onaya Gönder / Geri Al / Tekrar Onaya Gönder
+                    - phase=approval → buton yok (PDF Önizleme yeterli)
+                    - phase=returned → "Tekrar Onaya Gönder" (geniş, mavi)
+                    - Bekliyor → buton yok
+                    - Analiz Devam Ediyor (N<M) → gizli
+                    - Analiz Devam Ediyor N/N → "Onaya Gönder"
+                    - Onay Bekleniyor → "Geri Al"
+                    - Onaylandı/Yayınlandı → disabled bilgi */}
+                <div style={{ display: phase === "approval" ? "none" : "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
+                  {(() => {
+                    if (phase === "approval") return null;
+
+                    // Geri Gelenler tabı → tek bir geniş "Tekrar Onaya Gönder" butonu
+                    if (phase === "returned") {
+                      return (
+                        <button
+                          type="button"
+                          title="Bu raporu tekrar onaya gönder (Onay Bekleniyor)"
+                          onClick={() => toggleCompletion(row)}
+                          style={{
+                            border: "none",
+                            borderRadius: 8,
+                            background: "var(--color-accent)",
+                            color: "#fff",
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                            padding: "8px 14px",
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                            width: "100%",
+                            maxWidth: 170,
+                          }}
+                        >
+                          ↗ Tekrar Onaya Gönder
+                        </button>
+                      );
+                    }
+
+                    const allSaved = row.HizmetSayisi > 0 && row.SonucluSayisi >= row.HizmetSayisi;
+                    const showButton = row.RaporDurumu === "Onay Bekleniyor"  // Geri Al
+                                    || row.RaporDurumu === "Onaylandı"
+                                    || row.RaporDurumu === "Yayınlandı"
+                                    || (row.RaporDurumu === "Analiz Devam Ediyor" && allSaved);
+                    if (!showButton) return null;
+                    return (
+                    <button
+                      type="button"
+                      title={
+                        row.RaporDurumu === "Onaylandı" || row.RaporDurumu === "Yayınlandı"
+                          ? "Rapor onaylanmış — durum değiştirilemez"
+                          : row.RaporDurumu === "Onay Bekleniyor"
+                          ? "Raporu laboratuvara geri gönder (Geri Gönderildi)"
+                          : "Onaya gönder (Onay Bekleniyor)"
+                      }
+                      disabled={row.RaporDurumu === "Onaylandı" || row.RaporDurumu === "Yayınlandı"}
+                      onClick={() => toggleCompletion(row)}
+                      style={{
+                        border: "1px solid #0b5c8e30",
+                        borderRadius: 7,
+                        background: "#0b5c8e14",
+                        color: "#0b5c8e",
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                        padding: "5px 8px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {row.RaporDurumu === "Onay Bekleniyor" ? "Geri Al" : "Onaya Gönder"}
+                    </button>
+                    );
+                  })()}
                 </div>
 
-                {/* DOCX İndir */}
+                {/* 1. Slot:
+                    - phase=lab → Hamveri (PDF) sayfası
+                    - phase=returned → boş (yer Tekrar Onaya Gönder'e gitti)
+                    - phase=approval → boş (PDF Önizleme 2. slot'ta zaten)
+                    - default → Word/PDF indir */}
                 <div style={{ display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
-                  <IconBtn
-                    title="PDF indir"
-                    color="var(--color-accent)"
-                    onClick={() => isUgdrFormat(row.RaporFormati)
-                      ? downloadUgdrReport(row, "pdf")
-                      : window.open(
-                          `/api/rapor-takip/yazdir/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}&output=html`,
-                          "_blank",
-                        )}
-                  >
-                    {/* Word icon */}
-                    <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
-                      <path fillRule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm2 6a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 0 1.5h-.5A.75.75 0 0 1 6 10Zm0 2.5a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 12.5Zm0 2.5a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 15Z" clipRule="evenodd" />
-                    </svg>
-                  </IconBtn>
+                  {phase === "lab" && (
+                    <IconBtn
+                      title="Hamveri (PDF) — yeni sekmede"
+                      color="var(--color-accent)"
+                      onClick={() => window.open(
+                        `/laboratuvar/numune-takip-lab/hamveri/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}`,
+                        "_blank", "noopener,noreferrer",
+                      )}
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm2 6a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 0 1.5h-.5A.75.75 0 0 1 6 10Zm0 2.5a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 12.5Zm0 2.5a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 15Z" clipRule="evenodd" />
+                      </svg>
+                    </IconBtn>
+                  )}
+                  {!phase && !acceptedOnly && (
+                    <IconBtn
+                      title="PDF indir"
+                      color="var(--color-accent)"
+                      onClick={() => isUgdrFormat(row.RaporFormati)
+                        ? downloadUgdrReport(row, "pdf")
+                        : window.open(
+                            `/api/rapor-takip/yazdir/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}&output=html`,
+                            "_blank",
+                          )}
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm2 6a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 0 1.5h-.5A.75.75 0 0 1 6 10Zm0 2.5a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 12.5Zm0 2.5a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 15Z" clipRule="evenodd" />
+                      </svg>
+                    </IconBtn>
+                  )}
                 </div>
 
-                {/* PDF Önizleme */}
+                {/* 2. Slot: PDF Önizleme (göz) — onay sayfasını yeni sekmede aç.
+                    Lab + Approval'da görünür. Returned'da gizli (yer Tekrar Onaya Gönder'e ait). */}
                 <div style={{ display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
-                  <IconBtn
-                    title="Online Goster"
-                    color="#bf5af2"
-                    onClick={() => isUgdrFormat(row.RaporFormati)
-                      ? downloadUgdrReport(row, "preview")
-                      : window.open(
-                          `/api/rapor-takip/yazdir/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}&output=html`,
-                          "_blank",
-                        )}
-                  >
-                    {/* PDF icon */}
-                    <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
-                      <path fillRule="evenodd" d="M5 4v3H4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1v1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1V4a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1Zm2 0h6v3H7V4Zm-1 9v-2h8v2H6Zm8 2H6v-1h8v1Z" clipRule="evenodd" />
-                    </svg>
-                  </IconBtn>
+                  {(phase === "lab" || phase === "approval") ? (
+                    <IconBtn
+                      title="PDF Önizleme — rapor formatı (yeni sekmede)"
+                      color="#bf5af2"
+                      onClick={() => window.open(
+                        `/rapor-onay-print/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}`,
+                        "_blank", "noopener,noreferrer",
+                      )}
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+                        <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+                        <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" clipRule="evenodd" />
+                      </svg>
+                    </IconBtn>
+                  ) : (
+                    !acceptedOnly && (
+                      <IconBtn
+                        title="Online Goster"
+                        color="#bf5af2"
+                        onClick={() => isUgdrFormat(row.RaporFormati)
+                          ? downloadUgdrReport(row, "preview")
+                          : window.open(
+                              `/api/rapor-takip/yazdir/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}&output=html`,
+                              "_blank",
+                            )}
+                      >
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+                          <path fillRule="evenodd" d="M5 4v3H4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1v1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1V4a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1Zm2 0h6v3H7V4Zm-1 9v-2h8v2H6Zm8 2H6v-1h8v1Z" clipRule="evenodd" />
+                        </svg>
+                      </IconBtn>
+                    )
+                  )}
                 </div>
 
-                {/* Gönder */}
+                {/* 3. Slot: Mail Gönder — sadece phase yoksa (default Rapor Takip eski moddaysa) */}
                 <div style={{ display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
-                  <IconBtn
-                    title="Müşteriye mail gönder"
-                    color="#248a3d"
-                    onClick={() => openGonder(row)}
-                  >
-                    <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
-                      <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.254 4.94H9.75a.75.75 0 0 1 0 1.5H3.533l-1.254 4.94a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.288Z" />
-                    </svg>
-                  </IconBtn>
+                  {!phase && !acceptedOnly && (
+                    <IconBtn
+                      title="Müşteriye mail gönder"
+                      color="#248a3d"
+                      onClick={() => openGonder(row)}
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+                        <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.254 4.94H9.75a.75.75 0 0 1 0 1.5H3.533l-1.254 4.94a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.288Z" />
+                      </svg>
+                    </IconBtn>
+                  )}
                 </div>
               </div>
 
               {/* ── Açılır detay: hizmetler ── */}
+              {/* Geri Gönderme Notu — sadece phase=returned ve not varsa */}
+              {phase === "returned" && row.GeriGonderNotu && row.GeriGonderNotu.trim() && (
+                <div style={{
+                  margin: "0 16px 8px 56px",
+                  padding: "8px 12px",
+                  background: "#ff3b3010",
+                  borderLeft: "3px solid #ff453a",
+                  borderRadius: 6,
+                  fontSize: "0.78rem",
+                  color: "#c00",
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "flex-start",
+                }}>
+                  <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>↩ Geri Gönderme Notu:</span>
+                  <span style={{ color: "#1d1d1f", whiteSpace: "pre-wrap" }}>{row.GeriGonderNotu}</span>
+                </div>
+              )}
+
               {isOpen && (
                 <div style={{
                   background: "var(--color-surface-2)",
@@ -862,11 +1142,12 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                           <col style={{ width: 110 }} />
                           <col style={{ width: 108 }} />
                           <col style={{ width: 88 }} />
+                          <col style={{ width: 84 }} />
                         </colgroup>
                         <thead>
                           <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
                             <th />
-                            {["Kod", "Hizmet Adı", "Metot", "Birim", "Sonuç", "Limit", "Değerlendirme", "Termin"].map(h => (
+                            {["Kod", "Hizmet Adı", "Metot", "Birim", "Sonuç", "Limit", "Değerlendirme", "Termin", ""].map(h => (
                               <th key={h} style={{
                                 padding: "6px 10px", textAlign: "left",
                                 fontSize: "0.67rem", fontWeight: 700,
@@ -879,13 +1160,35 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                         <tbody>
                           {hizmetler.map((h, hi) => {
                             const edit = edits[h.X1ID] ?? { sonuc: h.Sonuc ?? "", sonucEn: h.SonucEn ?? "", degerlendirme: h.Degerlendirme ?? "" };
+                            // "Kayıtlı" = kullanıcı Kaydet bastı.
+                            // Bunun göstergesi: NumuneX1.SonucKayitTarihi NULL değil.
+                            // Sonuc kolonu auto-fill (LOQ) ile dolu gelebilir, bu yüzden
+                            // Sonuc dolu olmak "kayıtlı" anlamına gelmez.
+                            const hasServerResult = h.SonucKayitTarihi != null;
+                            const userSavedThisSession = savedRowIds.has(h.X1ID);
+                            const isExplicitlyEditing = editingRowIds.has(h.X1ID);
+                            // Onaylandı / Yayınlandı → tüm satırlar kalıcı kilit, kalem yok
+                            const isApproved = row.RaporDurumu === "Onaylandı" || row.RaporDurumu === "Yayınlandı";
+                            // Satır kilitli = sonuç var/savedSet'te VE editing değil  (onaylandıysa her zaman)
+                            const isLocked = isApproved || ((hasServerResult || userSavedThisSession) && !isExplicitlyEditing);
                             const inputBase: React.CSSProperties = {
                               width: "100%", padding: "4px 7px",
-                              border: "1px solid var(--color-border)",
+                              // border shorthand yerine longhand — borderColor'u
+                              // onFocus/onBlur'da güvenle değiştirebilelim, React
+                              // shorthand-longhand uyarısı vermesin diye.
+                              borderWidth: 1,
+                              borderStyle: "solid",
+                              borderColor: "var(--color-border)",
                               borderRadius: 6, fontSize: "0.8rem",
                               background: "var(--color-bg)",
                               color: "var(--color-text-primary)",
                               outline: "none",
+                            };
+                            const lockedInputStyle: React.CSSProperties = {
+                              background: "transparent",
+                              borderColor: "#34c75940",
+                              color: "var(--color-text-secondary)",
+                              cursor: "not-allowed",
                             };
                             return (
                               <tr
@@ -893,6 +1196,12 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                                 style={{
                                   borderBottom: hi < hizmetler.length - 1
                                     ? "1px solid var(--color-border-light)" : "none",
+                                  // Kilitli (kaydedilmiş) satır: hafif yeşil zemin + sol kenar şeridi
+                                  background: isLocked ? "#34c75908" : "transparent",
+                                  borderLeft: isLocked
+                                    ? "3px solid #34c759"
+                                    : "3px solid transparent",
+                                  transition: "background 0.15s",
                                 }}
                               >
                                 <td />
@@ -923,14 +1232,16 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                                     value={edit.sonuc}
                                     onChange={e => setFieldValue(key, h.X1ID, "sonuc", e.target.value)}
                                     placeholder="değer"
-                                    style={inputBase}
-                                    onFocus={e => (e.currentTarget.style.borderColor = "var(--color-accent)")}
-                                    onBlur={e  => (e.currentTarget.style.borderColor = "var(--color-border)")}
+                                    disabled={isLocked}
+                                    readOnly={isLocked}
+                                    style={isLocked ? { ...inputBase, ...lockedInputStyle } : inputBase}
+                                    onFocus={e => { if (!isLocked) e.currentTarget.style.borderColor = "var(--color-accent)"; }}
+                                    onBlur={e  => { if (!isLocked) e.currentTarget.style.borderColor = "var(--color-border)"; }}
                                   />
                                   <div style={{ position: "relative", marginTop: 3 }}>
                                     <span style={{
                                       position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)",
-                                      fontSize: "0.58rem", fontWeight: 700, color: "#0071e3",
+                                      fontSize: "0.58rem", fontWeight: 700, color: isLocked ? "#888" : "#0071e3",
                                       pointerEvents: "none", userSelect: "none",
                                     }}>EN</span>
                                     <input
@@ -938,13 +1249,17 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                                       value={edit.sonucEn}
                                       onChange={e => setFieldValue(key, h.X1ID, "sonucEn", e.target.value)}
                                       placeholder="result"
-                                      style={{
-                                        ...inputBase, fontSize: "0.74rem", paddingLeft: 24,
-                                        color: "#005bb5", borderColor: "#0071e340",
-                                        background: "#f0f6ff",
-                                      }}
-                                      onFocus={e => (e.currentTarget.style.borderColor = "#0071e3")}
-                                      onBlur={e  => (e.currentTarget.style.borderColor = "#0071e340")}
+                                      disabled={isLocked}
+                                      readOnly={isLocked}
+                                      style={isLocked
+                                        ? { ...inputBase, ...lockedInputStyle, fontSize: "0.74rem", paddingLeft: 24, background: "transparent" }
+                                        : {
+                                            ...inputBase, fontSize: "0.74rem", paddingLeft: 24,
+                                            color: "#005bb5", borderColor: "#0071e340",
+                                            background: "#f0f6ff",
+                                          }}
+                                      onFocus={e => { if (!isLocked) e.currentTarget.style.borderColor = "#0071e3"; }}
+                                      onBlur={e  => { if (!isLocked) e.currentTarget.style.borderColor = "#0071e340"; }}
                                     />
                                   </div>
                                 </td>
@@ -962,16 +1277,19 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                                   <select
                                     value={edit.degerlendirme}
                                     onChange={e => setFieldValue(key, h.X1ID, "degerlendirme", e.target.value)}
+                                    disabled={isLocked}
                                     style={{
                                       width: "100%", padding: "4px 7px",
-                                      border: "1px solid var(--color-border)",
+                                      border: "1px solid " + (isLocked ? "#34c75940" : "var(--color-border)"),
                                       borderRadius: 6, fontSize: "0.8rem",
-                                      background: "var(--color-bg)",
-                                      color: edit.degerlendirme === "Uygun"
-                                        ? "#248a3d"
-                                        : edit.degerlendirme === "Uygun Değil"
-                                          ? "#c00" : "var(--color-text-primary)",
-                                      outline: "none", cursor: "pointer",
+                                      background: isLocked ? "transparent" : "var(--color-bg)",
+                                      color: isLocked
+                                        ? "var(--color-text-secondary)"
+                                        : edit.degerlendirme === "Uygun"
+                                          ? "#248a3d"
+                                          : edit.degerlendirme === "Uygun Değil"
+                                            ? "#c00" : "var(--color-text-primary)",
+                                      outline: "none", cursor: isLocked ? "not-allowed" : "pointer",
                                     }}
                                   >
                                     <option value="">—</option>
@@ -984,13 +1302,61 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                                 <td style={{ padding: "8px 10px", color: "var(--color-text-secondary)", fontSize: "0.8rem", textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
                                   {h.Termin ? `${h.Termin.split("-").reverse().join(".")}` : "—"}
                                 </td>
+                                {/* Per-row Kaydet (düzenleme modu) / Kalem ikonu (kilitli)
+                                    Onaylandı/Yayınlandı → hiç buton yok, satır kalıcı kilitli */}
+                                <td style={{ padding: "6px 8px", textAlign: "center" }}>
+                                  {isApproved ? (
+                                    <span title="Rapor onaylandı — değişikliğe kapalı"
+                                      style={{ fontSize: "0.66rem", color: "var(--color-text-tertiary)" }}>
+                                      🔒
+                                    </span>
+                                  ) : isLocked ? (
+                                    // Kilitli → küçük kalem ikon (düzenlemek için tıkla)
+                                    <button
+                                      type="button"
+                                      onClick={() => enterEditing(h.X1ID)}
+                                      disabled={savingRowId === h.X1ID || isSaving}
+                                      title="Sonuç kaydedildi — düzenlemek için tıklayın"
+                                      style={{
+                                        width: 30, height: 28, padding: 0,
+                                        borderRadius: 7, border: "1px solid #34c75940",
+                                        background: "#34c75912", color: "#248a3d",
+                                        cursor: "pointer",
+                                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                      }}
+                                    >
+                                      <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+                                        <path d="M5.433 13.917l1.262-3.155A4 4 0 0 1 7.58 9.42l6.92-6.918a2.121 2.121 0 0 1 3 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 0 1-.65-.65Z"/>
+                                        <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0 0 10 3H4.75A2.75 2.75 0 0 0 2 5.75v9.5A2.75 2.75 0 0 0 4.75 18h9.5A2.75 2.75 0 0 0 17 15.25V10a.75.75 0 0 0-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5Z"/>
+                                      </svg>
+                                    </button>
+                                  ) : (
+                                    // Düzenleme modunda (ilk kez veya kalem ile açılmış) → Kaydet
+                                    <button
+                                      type="button"
+                                      onClick={() => void saveSingleRow(row, h.X1ID)}
+                                      disabled={savingRowId === h.X1ID || isSaving}
+                                      title="Sonucu kaydet"
+                                      style={{
+                                        padding: "5px 10px", borderRadius: 6, border: "none",
+                                        background: "var(--color-accent)", color: "#fff",
+                                        fontSize: "0.72rem", fontWeight: 700,
+                                        cursor: (savingRowId === h.X1ID || isSaving) ? "wait" : "pointer",
+                                        opacity: (savingRowId === h.X1ID || isSaving) ? 0.6 : 1,
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {savingRowId === h.X1ID ? "…" : "Kaydet"}
+                                    </button>
+                                  )}
+                                </td>
                               </tr>
                             );
                           })}
                         </tbody>
                       </table>
 
-                      {/* Kaydet satırı */}
+                      {/* Tümünü kaydet satırı (opsiyonel — tek tek kaydetmek isteyene gerek yok) */}
                       <div style={{
                         display: "flex", alignItems: "center", justifyContent: "flex-end",
                         gap: 10, padding: "10px 16px 2px",
@@ -1002,14 +1368,15 @@ export default function RaporTakipTable({ fixedRaporTuru }: { fixedRaporTuru?: s
                           onClick={() => saveHizmetler(row)}
                           disabled={isSaving}
                           style={{
-                            padding: "6px 16px", borderRadius: 8, border: "none",
-                            background: "var(--color-accent)", color: "#fff",
-                            fontSize: "0.82rem", fontWeight: 600, cursor: isSaving ? "wait" : "pointer",
+                            padding: "6px 16px", borderRadius: 8, border: "1px solid var(--color-border)",
+                            background: "var(--color-surface)", color: "var(--color-text-primary)",
+                            fontSize: "0.78rem", fontWeight: 500, cursor: isSaving ? "wait" : "pointer",
                             opacity: isSaving ? 0.6 : 1, display: "flex", alignItems: "center", gap: 6,
                           }}
+                          title="Tüm sonuçları toplu kaydet"
                         >
                           {isSaving && <span className={styles.loader} />}
-                          {isSaving ? "Kaydediliyor…" : "Kaydet"}
+                          {isSaving ? "Kaydediliyor…" : "Tümünü Kaydet"}
                         </button>
                       </div>
                     </>

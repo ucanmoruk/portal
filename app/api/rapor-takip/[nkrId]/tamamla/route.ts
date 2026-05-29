@@ -16,24 +16,19 @@ export async function POST(
   try {
     const body = await request.json().catch(() => ({}));
     const format = String(body?.format || "").trim();
-    const rawDurum = String(body?.durum || "Tamamlandı").trim();
-    const durum = rawDurum === "Tamamlandi" ? "Tamamlandı" : rawDurum;
-    const allowed = new Set(["Bekliyor", "Devam Ediyor", "Tamamlandı"]);
+    const rawDurum = String(body?.durum || "Onay Bekleniyor").trim();
+    // Normalize: eski "Devam Ediyor" → "Analiz Devam Ediyor", "Tamamlandı/i" → "Onay Bekleniyor"
+    const durum =
+      rawDurum === "Tamamlandi"  ? "Onay Bekleniyor" :
+      rawDurum === "Tamamlandı"  ? "Onay Bekleniyor" :
+      rawDurum === "Devam Ediyor" ? "Analiz Devam Ediyor" :
+      rawDurum;
+    const allowed = new Set(["Bekliyor", "Analiz Devam Ediyor", "Onay Bekleniyor"]);
 
     if (!format) return Response.json({ error: "Rapor formati zorunlu" }, { status: 400 });
     if (!allowed.has(durum)) return Response.json({ error: "Gecersiz durum" }, { status: 400 });
 
     const pool = await poolPromise;
-
-    await pool.request().query(`
-      CREATE TABLE NKR_RaporDurumOverride (
-        NkrID INT NOT NULL,
-        RaporFormati NVARCHAR(100) NOT NULL,
-        Durum NVARCHAR(50) NOT NULL,
-        UpdatedAt DATETIME NOT NULL,
-        PRIMARY KEY (NkrID, RaporFormati)
-      )
-    `).catch(() => undefined);
 
     await pool.request()
       .input("nkrId", nkrIdNum)
@@ -47,6 +42,28 @@ export async function POST(
         INSERT INTO NKR_RaporDurumOverride (NkrID, RaporFormati, Durum, UpdatedAt)
         VALUES (@nkrId, @format, @durum, GETDATE());
       `);
+
+    // NKR_Log girişi
+    const logCheck = await pool.request().query(
+      `SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
+       WHERE TABLE_NAME = 'NKR_Log' AND TABLE_SCHEMA IN ('dbo','cosmoroot')`
+    );
+    if (logCheck.recordset.length > 0) {
+      const userId = ((session.user as any)?.userId ?? null) as number | null;
+      const aciklama =
+        durum === "Onay Bekleniyor" ? `${format} formatı onaya gönderildi.` :
+        durum === "Bekliyor"        ? `${format} formatı için onay geri alındı.` :
+        `${format} formatı durumu güncellendi: ${durum}`;
+      await pool.request()
+        .input("NKRID", nkrIdNum)
+        .input("KullaniciID", userId)
+        .input("Eylem", durum === "Onay Bekleniyor" ? "Onaya Gönderildi" : "Durum Değişikliği")
+        .input("Aciklama", aciklama)
+        .query(
+          `INSERT INTO NKR_Log (NKRID, KullaniciID, Eylem, Aciklama, Tarih)
+           VALUES (@NKRID, @KullaniciID, @Eylem, @Aciklama, CURRENT_TIMESTAMP)`
+        );
+    }
 
     return Response.json({ ok: true, durum });
   } catch (e: any) {
