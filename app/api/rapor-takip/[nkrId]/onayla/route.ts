@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
 import { randomBytes } from "node:crypto";
 import { type NextRequest } from "next/server";
+import { imzalaVeKaydet } from "@/lib/raporImzaData";
 
 // 32 karakterlik URL-safe token
 function generateToken(): string {
@@ -54,12 +55,16 @@ export async function POST(
       `);
 
     if (existRes.recordset[0]) {
-      // İdempotent: mevcut token'ı döndür
+      // İdempotent: mevcut token'ı döndür.
+      // İmza eksikse (önceden onaylanmış ya da imza atılamamış) burada tamamla (backfill).
+      const mevcutId = existRes.recordset[0].ID;
+      const imzaHash = await imzalaVeKaydet(pool, mevcutId, nkrIdNum, format);
       return Response.json({
         ok: true,
         alreadyApproved: true,
         token: existRes.recordset[0].KarekodToken,
         durum: existRes.recordset[0].Durum,
+        imzaHash,
       });
     }
 
@@ -85,6 +90,10 @@ export async function POST(
         VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan)
       `);
 
+    // ───── Dijital imza (tamper-proof) ─────
+    // Rapor içeriğini onay anında imzala → NKR_RaporOnay.ImzaHash'e yaz.
+    const imzaHash = await imzalaVeKaydet(pool, insRes.recordset[0]?.ID, nkrIdNum, format);
+
     // Log
     const logCheck = await pool.request().query(
       `SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
@@ -107,6 +116,7 @@ export async function POST(
       onayID: insRes.recordset[0]?.ID,
       token,
       durum: "Onaylandı",
+      imzaHash,
     });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });

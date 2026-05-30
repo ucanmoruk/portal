@@ -54,6 +54,15 @@ export interface ReportMeta {
   sirketAdi: string;
 }
 
+export interface KarekodInfo {
+  /** Karekodun gösterdiği public doğrulama adresi. */
+  url: string;
+  /** QR kodun data URL'i (PNG, base64). Boşsa onay henüz yapılmamıştır. */
+  qrDataUrl: string;
+  /** Belge dijital imzası (SHA-256/HMAC hex) — varsa. */
+  imzaHash: string | null;
+}
+
 export interface ReportFormatProps {
   nkrId: number;
   format: string;
@@ -63,4 +72,5 @@ export interface ReportFormatProps {
   testBitis: string | null;
   onay: OnayInfo | null;
   meta: ReportMeta;
+  karekod: KarekodInfo | null;
 }

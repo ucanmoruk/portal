@@ -22,7 +22,7 @@ interface Props {
 export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Props) {
   const [onay, setOnay] = useState<OnayInfo | null>(initialOnay);
   const [canApprove, setCanApprove] = useState<boolean | null>(null);
-  const [busy, setBusy] = useState<"onayla" | "geri" | "yayinla" | null>(null);
+  const [busy, setBusy] = useState<"onayla" | "geri" | "yayinla" | "imzali" | null>(null);
   const [error, setError] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [showGeriModal, setShowGeriModal] = useState(false);
@@ -112,6 +112,34 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
     window.print();
   };
 
+  // Sunucuda üretilip dijital imzalı (PAdES) PDF'i indirir.
+  // İçeriği bu önizleme ile birebir aynıdır (ortak loadRaporViewData).
+  const handleDownloadSignedPdf = async () => {
+    if (busy) return;
+    setBusy("imzali"); setError("");
+    try {
+      const r = await fetch(
+        `/api/rapor-takip/${nkrId}/imzali-pdf?format=${encodeURIComponent(format)}`,
+        { cache: "no-store" },
+      );
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || "İmzalı PDF oluşturulamadı");
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Rapor-${raporNo || nkrId}-imzali.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Hata");
+    } finally { setBusy(null); }
+  };
+
   const handleClose = () => window.close();
 
   const yayinlandi = onay?.durum === "Yayınlandı";
@@ -188,6 +216,20 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
               }}
             >
               ⬇ PDF İndir
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadSignedPdf}
+              disabled={busy !== null}
+              title="Sunucuda üretilen, dijital imzalı (kurcalamaya karşı korumalı) PDF"
+              style={{
+                padding: "8px 18px", borderRadius: 8, border: "none",
+                background: "#34c759", color: "#fff",
+                fontSize: 13, fontWeight: 700, cursor: busy ? "wait" : "pointer",
+                opacity: busy ? 0.7 : 1,
+              }}
+            >
+              {busy === "imzali" ? "Hazırlanıyor…" : "🔒 İmzalı PDF İndir"}
             </button>
             {!yayinlandi && canApprove && (
               <>

@@ -11,7 +11,8 @@ export const config = {
     /*
      * Yalnızca giriş yapılmışsa erişilebilecek rotaları belirler
      * api/auth, statik dosyalar ve login sayfası hariç tüm projedeki rotalar korumaya alınır
+     * rapordogrulama + api/rapor-dogrula → public rapor doğrulama (QR ile herkes erişebilir)
      */
-    "/((?!api/auth|api/musteriler|api/teklifler/[^/]+/onay|_next/static|_next/image|favicon.ico|login).*)",
+    "/((?!api/auth|api/musteriler|api/teklifler/[^/]+/onay|rapordogrulama|api/rapor-dogrula|_next/static|_next/image|favicon.ico|login).*)",
   ],
 };

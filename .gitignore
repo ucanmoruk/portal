@@ -34,6 +34,11 @@ yarn-error.log*
 .env*
 !.env.example
 
+# digital signature certs (ASLA commit etme)
+*.p12
+*.pfx
+rapor-imza.p12
+
 # vercel
 .vercel
 

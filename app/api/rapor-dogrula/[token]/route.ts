@@ -1,5 +1,7 @@
 import poolPromise from "@/lib/db";
 import { type NextRequest } from "next/server";
+import { verifyRapor } from "@/lib/raporImza";
+import { loadImzaInput, imzaColumnExists } from "@/lib/raporImzaData";
 
 // GET /api/rapor-dogrula/[token]  (AUTH GEREKTİRMEZ)
 // QR kodun gösterdiği public URL bu endpoint'i çağırır.
@@ -25,12 +27,17 @@ export async function GET(
       return Response.json({ valid: false, error: "Doğrulama sistemi hazır değil." }, { status: 500 });
     }
 
+    // ImzaHash sütunu varsa onu da çek (migration 009).
+    const hasImza = await imzaColumnExists(pool);
+    const imzaSelect = hasImza ? "o.ImzaHash, o.ImzaTarihi," : "";
+
     const r = await pool.request()
       .input("tok", tok)
       .query(`
         SELECT
-          o.KarekodToken, o.RaporFormati, o.Durum,
+          o.NkrID, o.KarekodToken, o.RaporFormati, o.Durum,
           o.OnayTarihi, o.YayinTarihi,
+          ${imzaSelect}
           n.RaporNo, n.Numune_Adi, n.Tarih,
           ISNULL(f.Ad, '') AS FirmaAd,
           ISNULL(u.Ad, '')    AS OnaylayanAd,
@@ -45,6 +52,20 @@ export async function GET(
     const row = r.recordset[0];
     if (!row) return Response.json({ valid: false });
 
+    // ───── Belge bütünlüğü kontrolü ─────
+    // Onay anındaki imzayı, raporun GÜNCEL içeriğinden yeniden hesaplanan imzayla
+    // karşılaştır. Eşleşmezse rapor onaydan sonra değiştirilmiş demektir.
+    //   - butunluk: "gecerli" | "bozuk" | "yok"
+    let butunluk: "gecerli" | "bozuk" | "yok" = "yok";
+    if (hasImza && row.ImzaHash) {
+      try {
+        const imzaInput = await loadImzaInput(pool, Number(row.NkrID), row.RaporFormati);
+        butunluk = imzaInput && verifyRapor(imzaInput, row.ImzaHash) ? "gecerli" : "bozuk";
+      } catch {
+        butunluk = "yok";
+      }
+    }
+
     return Response.json({
       valid: true,
       durum: row.Durum,
@@ -57,6 +78,9 @@ export async function GET(
       yayinTarihi: row.YayinTarihi,
       onaylayanAd: [String(row.OnaylayanAd ?? "").trim(), String(row.OnaylayanSoyad ?? "").trim()]
         .filter(Boolean).join(" ") || null,
+      butunluk,
+      imzaHash: hasImza && row.ImzaHash ? String(row.ImzaHash) : null,
+      imzaTarihi: hasImza ? (row.ImzaTarihi ?? null) : null,
     });
   } catch (e: any) {
     return Response.json({ valid: false, error: e.message }, { status: 500 });
