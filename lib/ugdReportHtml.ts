@@ -264,11 +264,19 @@ function imageBlock(dataUrl: unknown, caption: string) {
   return `<figure class="image-block"><img src="${esc(src)}" alt="${esc(caption)}"><figcaption>${esc(caption)}</figcaption></figure>`;
 }
 
+function rawHtml(value: string) {
+  return { __rawHtml: value };
+}
+
+function isRawHtml(value: unknown): value is { __rawHtml: string } {
+  return typeof value === "object" && value !== null && "__rawHtml" in value;
+}
+
 function infoTable(rows: [string, unknown][]) {
   return `<table class="kv">${rows.map(([label, value]) => `
     <tr>
       <th>${esc(label)}</th>
-      <td>${nl2br(value, empty)}</td>
+      <td>${isRawHtml(value) ? value.__rawHtml : nl2br(value, empty)}</td>
     </tr>`).join("")}
   </table>`;
 }
@@ -391,6 +399,17 @@ export function renderUgdReportHtml(input: UGDReportInput) {
   const evaluatorName = localizedField(f, "SorumluAd", language, empty);
   const evaluatorAddress = localizedField(f, "SorumluAdres", language, empty);
   const evaluatorQualification = localizedField(f, "SorumluKanit", language, empty);
+  const isLabProfile = profile === "lab";
+  const signatureImageSrc = text(
+    f.SignatureImageUrl || f.ImzaGorselUrl,
+    isLabProfile ? "/imza-oguzhan.png" : "/imza-dilsun.png"
+  );
+  const evaluatorInfo = isLabProfile
+    ? "Oğuzhan EKER\nROOT KOZMETİK A.Ş.\nYakuplu Mah. Hürriyet Blv. Yakuplu Eval Plaza No.131 D.40 Beylikdüzü İstanbul\n+90 (212) 909 82 08 / info@rootarge.com"
+    : "Dilsun KARABULUT SEFER \n OZECO GROUP ULUSLARARASI DANIŞMANLIK TİCARET LİMİTED ŞİRKETİ \n Şehit Osman Avcı, Malazgirt 1071. Cad. No:49 A İç Kapı No:13, 06820 Eryaman/Ankara +90 (850) 308 33 51 / +90 533 450 69 05";
+  const qualificationInfo = isLabProfile
+    ? "İstanbul Üniversitesi Cerrahpaşa Fen Fakültesi // Organik Kimya Yüksek Lisans\nBkz. Ek – Güvenlilik Değerlendiricisinin Niteliği"
+    : "Gazi University Faculty Of Engineering And Architecture/ Chemical Engineer (Diploma no: 2267)\n See Annex \n– Qualification of Safety Assessor \n– University Diploma \n–University Diploma Supplement";
   const title = `UGD_Rapor_${text(f.RaporNo, "rapor")}`;
   const reportHeader = `
     <div class="report-header">
@@ -454,7 +473,8 @@ export function renderUgdReportHtml(input: UGDReportInput) {
     .image-block { box-sizing: border-box; max-width: 100%; margin: 10px 0; overflow: hidden; text-align: center; page-break-inside: avoid; }
     .image-block img { width: auto; height: auto; max-width: 100%; max-height: 150mm; display: block; margin: 0 auto; object-fit: contain; border: 1px solid #d1d5db; }
     .image-block figcaption { margin-top: 4px; color: #6b7280; font-size: 8.5pt; }
-    .signature { height: 34mm; border-bottom: 1px solid #111827; width: 70mm; margin-top: 16px; }
+    .signature { min-height: 34mm; width: 70mm; margin-top: 16px; border-bottom: 1px solid #111827; }
+    .signature img { max-width: 70mm; max-height: 28mm; object-fit: contain; display: block; }
     .print-actions { position: fixed; top: 12px; right: 12px; z-index: 20; }
     .print-actions button { padding: 8px 12px; border: 1px solid #1f4788; border-radius: 6px; background: #1f4788; color: white; font-weight: 700; cursor: pointer; }
     @media screen {
@@ -886,10 +906,10 @@ ${infoTable([
     
     <h3>B.4. Güvenlilik Değerlendirme Sorumlusu ile İlgili Bilgiler ve Kısım B'nin Onayı</h3>
     ${infoTable([
-      [copy.evaluator, "Dilsun KARABULUT SEFER \n OZECO GROUP ULUSLARARASI DANIŞMANLIK TİCARET LİMİTED ŞİRKETİ \n Şehit Osman Avcı, Malazgirt 1071. Cad. No:49 A İç Kapı No:13, 06820 Eryaman/Ankara +90 (850) 308 33 51 / +90 533 450 69 05"],
-      [copy.qualification, "Gazi University Faculty Of Engineering And Architecture/ Chemical Engineer (Diploma no: 2267)\n See Annex \n– Qualification of Safety Assessor \n– University Diploma \n–University Diploma Supplement"],
+      [copy.evaluator, evaluatorInfo],
+      [copy.qualification, qualificationInfo],
       [copy.reportDate, todayByLanguage(language)],
-      [copy.signature, '<div class="signature"></div>']
+      [copy.signature, rawHtml(`<div class="signature"><img src="${esc(signatureImageSrc)}" alt="${esc(copy.signature)}"></div>`)]
     ])}
     
   </section>

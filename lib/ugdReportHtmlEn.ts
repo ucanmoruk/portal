@@ -436,7 +436,17 @@ export function renderUgdReportHtmlEn(input: UGDReportInput) {
   const targetUsersEn = translateEnglishTerms(
     optionalExposureValue(maruziyetEn, "Targeted or exposed person(s)") || f.Hedef,
   );
-  const signatureImageSrc = text(f.SignatureImageUrl || f.ImzaGorselUrl, "https://placehold.co/320x120/ffffff/111827?text=Signature");
+  const isLabProfile = profile === "lab";
+  const signatureImageSrc = text(
+    f.SignatureImageUrl || f.ImzaGorselUrl,
+    isLabProfile ? "/imza-oguzhan.png" : "/imza-dilsun.png"
+  );
+  const evaluatorInfo = isLabProfile
+    ? "Oğuzhan EKER\nROOT KOZMETİK A.Ş.\nYakuplu Mah. Hürriyet Blv. Yakuplu Eval Plaza No.131 D.40 Beylikdüzü İstanbul\n+90 (212) 909 82 08 / info@rootarge.com"
+    : "Dilsun KARABULUT SEFER \n OZECO GROUP ULUSLARARASI DANIŞMANLIK TİCARET LİMİTED ŞİRKETİ \n Şehit Osman Avcı, Malazgirt 1071. Cad. No:49 A İç Kapı No:13, 06820 Eryaman/Ankara +90 (850) 308 33 51 / +90 533 450 69 05";
+  const qualificationInfo = isLabProfile
+    ? "Istanbul University Cerrahpasa Faculty of Science // Organic Chemistry Master's Degree\nSee Annex – Qualification of Safety Assessor"
+    : "Gazi University Faculty Of Engineering And Architecture/ Chemical Engineer (Diploma no: 2267)\n See Annex \n– Qualification of Safety Assessor \n– University Diploma \n–University Diploma Supplement";
   const title = `UGD_Rapor_${text(f.RaporNo, "rapor")}`;
   const reportHeader = `
     <div class="report-header">
@@ -950,8 +960,8 @@ Other documents in the Information File of the product are listed below:
     <h3>B.4. Assessor’s credentials and approval of Part B</h3>
 
     ${infoTable([
-      [copy.evaluator, "Dilsun KARABULUT SEFER \n OZECO GROUP ULUSLARARASI DANIŞMANLIK TİCARET LİMİTED ŞİRKETİ \n Şehit Osman Avcı, Malazgirt 1071. Cad. No:49 A İç Kapı No:13, 06820 Eryaman/Ankara +90 (850) 308 33 51 / +90 533 450 69 05"],
-      [copy.qualification, "Gazi University Faculty Of Engineering And Architecture/ Chemical Engineer (Diploma no: 2267)\n See Annex \n– Qualification of Safety Assessor \n– University Diploma \n–University Diploma Supplement"],
+      [copy.evaluator, evaluatorInfo],
+      [copy.qualification, qualificationInfo],
       [copy.reportDate, todayByLanguage(language)],
       [copy.signature, rawHtml(`<div class="signature"><img src="${esc(signatureImageSrc)}" alt="Signature"></div>`)]
     ])}
