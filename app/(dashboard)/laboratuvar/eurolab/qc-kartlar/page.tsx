@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, Search, Trash2 } from "lucide-react";
+import { ReadOnlyBanner } from "@/components/eurolab/ReadOnlyBanner";
 import styles from "@/app/styles/table.module.css";
 
 type QcCardRow = {
@@ -118,6 +119,7 @@ export default function QcCardsPage() {
 
   return (
     <div className={styles.page}>
+      <ReadOnlyBanner menuKey="eurolab.qc-kartlar" />
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>QC Kartlar</h1>

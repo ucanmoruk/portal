@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import type { ComponentType } from "react";
 import GenelReport from "./formats/GenelReport";
+import ChallengeReport from "./formats/ChallengeReport";
 import type { ReportFormatProps } from "./reportTypes";
 import { loadRaporViewData } from "@/lib/raporViewData";
 
@@ -12,6 +13,7 @@ export const metadata = { title: "Analiz Raporu — Onay Önizleme" };
 // bir bileşen oluşturup buraya kaydetmek yeterli.
 const FORMAT_COMPONENTS: Record<string, ComponentType<ReportFormatProps>> = {
   Genel: GenelReport,
+  Challenge: ChallengeReport,
 };
 
 function resolveFormatComponent(format: string): ComponentType<ReportFormatProps> {

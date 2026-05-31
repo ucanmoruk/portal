@@ -4,7 +4,17 @@ import poolPromise from "@/lib/db";
 import { type NextRequest } from "next/server";
 import { allMenuKeys } from "@/lib/menuConfig";
 
-// GET /api/admin/yetki?userId=X — kullanıcının yetkili menü key'leri
+export type AccessLevel = "edit" | "view";
+
+// Sadece şu key'ler altında view/edit seçimi anlamlıdır; diğerlerinde her zaman 'edit'.
+// (Denetim sırasında Eurolab üzerinde personelin sadece görüntüleme yapması istendi.)
+const LEVELLED_PREFIX = "eurolab";
+
+const normalizeLevel = (raw: unknown): AccessLevel =>
+  raw === "view" ? "view" : "edit";
+
+// GET /api/admin/yetki?userId=X
+//   → { keys: string[], levels: Record<string, 'edit'|'view'> }
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz" }, { status: 401 });
@@ -16,46 +26,61 @@ export async function GET(request: NextRequest) {
     const pool = await poolPromise;
     const result = await pool.request()
       .input("userId", parseInt(userId))
-      .query(`SELECT MenuKey FROM PortalYetki WHERE KullaniciID = @userId`);
+      .query(`SELECT MenuKey, Yetki FROM PortalYetki WHERE KullaniciID = @userId`);
 
-    const keys = result.recordset.map((r: any) => r.MenuKey as string);
-    return Response.json({ keys });
+    const keys: string[] = [];
+    const levels: Record<string, AccessLevel> = {};
+    for (const row of result.recordset as Array<{ MenuKey: string; Yetki?: string | null }>) {
+      const key = row.MenuKey;
+      keys.push(key);
+      // Sadece Eurolab altında anlamlı; diğerlerinde gönderme.
+      if (key.startsWith(LEVELLED_PREFIX)) {
+        levels[key] = normalizeLevel(row.Yetki);
+      }
+    }
+    return Response.json({ keys, levels });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }
 }
 
-// POST /api/admin/yetki — { userId, keys: string[] } kaydeder (replace all)
+// POST /api/admin/yetki — { userId, keys: string[], levels?: Record<string, 'edit'|'view'> }
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz" }, { status: 401 });
 
   try {
     const body = await request.json();
-    const { userId, keys } = body as { userId: number; keys: string[] };
+    const { userId, keys, levels } = body as {
+      userId: number;
+      keys: string[];
+      levels?: Record<string, AccessLevel>;
+    };
 
     if (!userId) return Response.json({ error: "userId gerekli" }, { status: 400 });
 
-    // Gelen key'lerin geçerli olduğunu doğrula
     const valid = new Set(allMenuKeys());
     const safeKeys = (keys || []).filter(k => valid.has(k));
+    const safeLevels = levels || {};
 
     const pool = await poolPromise;
     const tx = pool.transaction();
     await tx.begin();
 
     try {
-      // Önce bu kullanıcının tüm yetkilerini sil
       await tx.request()
         .input("userId", userId)
         .query(`DELETE FROM PortalYetki WHERE KullaniciID = @userId`);
 
-      // Yeni yetkileri tek tek ekle
       for (const key of safeKeys) {
+        const level: AccessLevel = key.startsWith(LEVELLED_PREFIX)
+          ? normalizeLevel(safeLevels[key])
+          : "edit";
         await tx.request()
           .input("userId", userId)
           .input("menuKey", key)
-          .query(`INSERT INTO PortalYetki (KullaniciID, MenuKey) VALUES (@userId, @menuKey)`);
+          .input("yetki", level)
+          .query(`INSERT INTO PortalYetki (KullaniciID, MenuKey, Yetki) VALUES (@userId, @menuKey, @yetki)`);
       }
 
       await tx.commit();

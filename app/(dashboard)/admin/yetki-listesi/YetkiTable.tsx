@@ -23,10 +23,15 @@ export default function YetkiTable() {
   // Modal
   const [selected, setSelected]   = useState<Kullanici | null>(null);
   const [checkedKeys, setCheckedKeys] = useState<Set<string>>(new Set());
+  // Eurolab altındaki key'ler için 'edit' / 'view' seçimi.
+  // Diğer menüler için her zaman edit (tablo backend tarafında zorlanır).
+  const [accessLevels, setAccessLevels] = useState<Record<string, "edit" | "view">>({});
   const [modalLoading, setModalLoading] = useState(false);
   const [saving, setSaving]       = useState(false);
   const [saveMsg, setSaveMsg]     = useState("");
   const [saveErr, setSaveErr]     = useState("");
+
+  const isLevelled = (key: string) => key.startsWith("eurolab");
 
   useEffect(() => {
     fetch("/api/admin/kullanicilar")
@@ -44,14 +49,20 @@ export default function YetkiTable() {
       const res  = await fetch(`/api/admin/yetki?userId=${user.ID}`);
       const data = await res.json();
       setCheckedKeys(new Set(data.keys || []));
+      setAccessLevels(data.levels || {});
     } catch {
       setCheckedKeys(new Set());
+      setAccessLevels({});
     } finally {
       setModalLoading(false);
     }
   };
 
-  const closeModal = () => { setSelected(null); setCheckedKeys(new Set()); };
+  const closeModal = () => { setSelected(null); setCheckedKeys(new Set()); setAccessLevels({}); };
+
+  const setLevel = (key: string, level: "edit" | "view") => {
+    setAccessLevels(prev => ({ ...prev, [key]: level }));
+  };
 
   // ── Checkbox mantığı ──
   const toggle = (key: string, item: MenuItem) => {
@@ -89,10 +100,15 @@ export default function YetkiTable() {
     setSaveMsg("");
     setSaveErr("");
     try {
+      // Eurolab key'leri için: kullanıcı seçim yapmadıysa default 'edit'
+      const levels: Record<string, "edit" | "view"> = {};
+      for (const key of checkedKeys) {
+        if (isLevelled(key)) levels[key] = accessLevels[key] || "edit";
+      }
       const res = await fetch("/api/admin/yetki", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: selected.ID, keys: [...checkedKeys] }),
+        body: JSON.stringify({ userId: selected.ID, keys: [...checkedKeys], levels }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -220,16 +236,45 @@ export default function YetkiTable() {
                       {/* Children */}
                       {item.children && (
                         <div className={pageStyles.menuChildren}>
-                          {item.children.map(child => (
-                            <label key={child.key} className={pageStyles.menuChild}>
-                              <input
-                                type="checkbox"
-                                checked={checkedKeys.has(child.key)}
-                                onChange={() => toggleChild(child.key, item)}
-                              />
-                              <span>{child.label}</span>
-                            </label>
-                          ))}
+                          {item.children.map(child => {
+                            const checked = checkedKeys.has(child.key);
+                            const levelled = isLevelled(child.key);
+                            const currentLevel = accessLevels[child.key] || "edit";
+                            return (
+                              <div key={child.key} className={pageStyles.menuChildRow}>
+                                <label className={pageStyles.menuChild}>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleChild(child.key, item)}
+                                  />
+                                  <span>{child.label}</span>
+                                </label>
+                                {levelled && checked && (
+                                  <div className={pageStyles.levelGroup} role="radiogroup" aria-label={`${child.label} yetki seviyesi`}>
+                                    <label className={`${pageStyles.levelOption} ${currentLevel === "edit" ? pageStyles.levelEditActive : ""}`}>
+                                      <input
+                                        type="radio"
+                                        name={`level-${child.key}`}
+                                        checked={currentLevel === "edit"}
+                                        onChange={() => setLevel(child.key, "edit")}
+                                      />
+                                      <span>Düzenleme</span>
+                                    </label>
+                                    <label className={`${pageStyles.levelOption} ${currentLevel === "view" ? pageStyles.levelViewActive : ""}`}>
+                                      <input
+                                        type="radio"
+                                        name={`level-${child.key}`}
+                                        checked={currentLevel === "view"}
+                                        onChange={() => setLevel(child.key, "view")}
+                                      />
+                                      <span>Görüntüleme</span>
+                                    </label>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

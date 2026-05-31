@@ -200,7 +200,7 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
           </svg>
         </div>
         <div className={styles.brandText}>
-          <span className={styles.brandName}>ÜGD Portal</span>
+          <span className={styles.brandName}>Online Portal</span>
           <span className={styles.brandSub}>Laboratuvar Sistemi</span>
         </div>
       </div>

@@ -4,8 +4,8 @@ import Providers from "@/components/Providers";
 
 export const metadata: Metadata = {
   title: {
-    template: "%s | ÜGD Portal",
-    default: "ÜGD Portal",
+    template: "%s | Online Portal",
+    default: "Online Portal",
   },
   description: "Laboratuvar Yönetim ve ÜGD Analiz Portalı",
 };

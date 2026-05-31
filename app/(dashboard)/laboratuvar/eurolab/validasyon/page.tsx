@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BarChart3, Printer, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useCanEdit } from "@/components/eurolab/EurolabAccessProvider";
+import { ReadOnlyBanner } from "@/components/eurolab/ReadOnlyBanner";
 import styles from "@/app/styles/table.module.css";
 
 interface ValidationRow {
@@ -253,22 +255,27 @@ export default function ValidationDashboard() {
     }
   };
 
+  const canEdit = useCanEdit("eurolab.validasyon");
+
   return (
     <div className={styles.page}>
+      <ReadOnlyBanner menuKey="eurolab.validasyon" />
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Validasyon</h1>
           <p className={styles.pageSubtitle}>Eurolab metot validasyon ve verifikasyon kayıtları.</p>
         </div>
         <div className={styles.toolbarRight}>
-          <Link href="/laboratuvar/eurolab/validasyon/yeni">
-            <button className={styles.addBtn}>
-              <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
-                <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
-              </svg>
-              Yeni Validasyon
-            </button>
-          </Link>
+          {canEdit && (
+            <Link href="/laboratuvar/eurolab/validasyon/yeni">
+              <button className={styles.addBtn}>
+                <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
+                  <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+                </svg>
+                Yeni Validasyon
+              </button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -362,10 +369,10 @@ export default function ValidationDashboard() {
                      <td>
                     <button
                       type="button"
-                      onClick={() => row.status !== "PASSIVE" && updateStatus(row, nextStatus(row.status))}
-                      disabled={updatingId === row.id || row.status === "PASSIVE"}
-                      title={row.status === "PASSIVE" ? "Pasif kayıt" : "Durumu değiştir"}
-                      style={{ border: 0, background: "transparent", padding: 0, cursor: row.status === "PASSIVE" ? "default" : "pointer" }}
+                      onClick={() => canEdit && row.status !== "PASSIVE" && updateStatus(row, nextStatus(row.status))}
+                      disabled={!canEdit || updatingId === row.id || row.status === "PASSIVE"}
+                      title={!canEdit ? "Görüntüleme modu" : row.status === "PASSIVE" ? "Pasif kayıt" : "Durumu değiştir"}
+                      style={{ border: 0, background: "transparent", padding: 0, cursor: (!canEdit || row.status === "PASSIVE") ? "default" : "pointer" }}
                     >
                       <Badge className={statusTone(row.status)}>
                         {statusLabel(row.status)}
@@ -374,11 +381,13 @@ export default function ValidationDashboard() {
                   </td>
                   <td>
                     <div className={styles.actionBtns}>
-                      <button className={styles.editBtn} onClick={() => openQcCardDialogOrExisting(row)} disabled={creatingQcId === row.id} title="QC kartı">
-                        {creatingQcId === row.id ? <span className={styles.loader} style={{ width: 13, height: 13 }} /> : <BarChart3 size={14} />}
-                      </button>
+                      {canEdit && (
+                        <button className={styles.editBtn} onClick={() => openQcCardDialogOrExisting(row)} disabled={creatingQcId === row.id} title="QC kartı">
+                          {creatingQcId === row.id ? <span className={styles.loader} style={{ width: 13, height: 13 }} /> : <BarChart3 size={14} />}
+                        </button>
+                      )}
                       <Link href={`/laboratuvar/eurolab/validasyon/${row.id}`}>
-                        <button className={styles.editBtn} title="Düzenle">
+                        <button className={styles.editBtn} title={canEdit ? "Düzenle" : "Görüntüle"}>
                           <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                             <path d="m5.433 13.917 1.262-3.155A4 4 0 0 1 7.58 9.42l6.92-6.918a2.121 2.121 0 0 1 3 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 0 1-.65-.65Z" />
                           </svg>
@@ -389,11 +398,13 @@ export default function ValidationDashboard() {
                           <Printer size={14} />
                         </button>
                       </Link>
-                      <button className={styles.deleteBtn} onClick={() => markPassive(row)} disabled={updatingId === row.id || row.status === "PASSIVE"} title="Pasife al">
-                        <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-                          <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4Z" clipRule="evenodd" />
-                        </svg>
-                      </button>
+                      {canEdit && (
+                        <button className={styles.deleteBtn} onClick={() => markPassive(row)} disabled={updatingId === row.id || row.status === "PASSIVE"} title="Pasife al">
+                          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                            <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4Z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

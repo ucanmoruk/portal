@@ -16,6 +16,8 @@ import type { ReportData } from "@/components/validation/report/ValidationReport
 import { ValidationReportV2 as ValidationReport } from "@/components/validation/report/ValidationReportV2";
 import { sortValidationParameters } from "@/types/validation";
 import { Download, FileText, Printer, Upload } from "lucide-react";
+import { useCanEdit } from "@/components/eurolab/EurolabAccessProvider";
+import { ReadOnlyBanner } from "@/components/eurolab/ReadOnlyBanner";
 import styles from "@/app/styles/table.module.css";
 import detailStyles from "./page.module.css";
 
@@ -191,6 +193,7 @@ const buildParameterTabs = (parameters: Array<{ id: string; name: string; isEnab
 
 export default function ValidationDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
+    const canEdit = useCanEdit("eurolab.validasyon");
     const [validation, setValidation] = useState<ValidationDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -627,6 +630,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
 
     return (
         <div className={detailStyles.detailPage}>
+            <ReadOnlyBanner menuKey="eurolab.validasyon" />
             <div className={`${detailStyles.hero} no-print`}>
                 <div className={detailStyles.heroMain}>
                     <div className={detailStyles.crumb}>Eurolab Validasyon</div>
@@ -659,14 +663,26 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                     >
                         <Download size={16} /> {excelBusy === "downloading" ? "İndiriliyor…" : "Şablon İndir"}
                     </Button>
+                    {canEdit && (
+                        <Button
+                            variant="outline"
+                            className={detailStyles.printButton}
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={excelBusy !== "idle"}
+                            title="Doldurulmuş Excel'i yükle (sadece dolu hücreler import edilir)"
+                        >
+                            <Upload size={16} /> {excelBusy === "uploading" ? "Yükleniyor…" : "Excel Yükle"}
+                        </Button>
+                    )}
                     <Button
                         variant="outline"
                         className={detailStyles.printButton}
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={excelBusy !== "idle"}
-                        title="Doldurulmuş Excel'i yükle (sadece dolu hücreler import edilir)"
+                        onClick={() => {
+                            window.open(`/api/eurolab/validations/${validation.id}/protocol-docx`, "_blank");
+                        }}
+                        title="Validasyon planı şablonunu doldurulmuş olarak indir"
                     >
-                        <Upload size={16} /> {excelBusy === "uploading" ? "Yükleniyor…" : "Excel Yükle"}
+                        <FileText size={16} /> Protokolü Yazdır
                     </Button>
                     <Button variant="outline" className={detailStyles.printButton} onClick={() => window.print()}>
                         <Printer size={16} /> Yazdır
@@ -713,13 +729,17 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
 
                 {parameterTabs.map(tab => (
                     <TabsContent key={tab.value} value={tab.value} className={detailStyles.tabContent}>
-                        {renderParameterPanel(tab)}
+                        <div className={canEdit ? undefined : detailStyles.viewOnlyZone}>
+                            {renderParameterPanel(tab)}
+                        </div>
                     </TabsContent>
                 ))}
 
                 {fixedTabs.map(tab => (
                     <TabsContent key={tab.value} value={tab.value} className={detailStyles.tabContent}>
-                        {renderFixedPanel(tab)}
+                        <div className={canEdit ? undefined : detailStyles.viewOnlyZone}>
+                            {renderFixedPanel(tab)}
+                        </div>
                     </TabsContent>
                 ))}
 

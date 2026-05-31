@@ -96,3 +96,62 @@
   cursor: pointer;
   flex-shrink: 0;
 }
+
+/* ── Düzenleme / Görüntüleme seviye seçimi (Eurolab) ── */
+.menuChildRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 14px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.menuChildRow:last-child { border-bottom: none; }
+
+.menuChildRow .menuChild {
+  flex: 1 1 auto;
+  border-bottom: none;
+}
+
+.levelGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-light);
+  border-radius: 999px;
+  padding: 2px;
+}
+
+.levelOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.levelOption input[type="radio"] {
+  display: none;
+}
+
+.levelEditActive {
+  background: #0071e3;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 113, 227, 0.25);
+}
+
+.levelViewActive {
+  background: #f5a623;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(245, 166, 35, 0.25);
+}

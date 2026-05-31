@@ -184,6 +184,11 @@ export default function HamveriTable() {
                           <Printer size={14} />
                         </button>
                       </Link>
+                      <a href={`/api/eurolab/rawdata/${row.id}/docx`} title="Ç.01.PR.19 DOCX indir">
+                        <button className={styles.editBtn}>
+                          <FileText size={14} />
+                        </button>
+                      </a>
                       <Link href={`/laboratuvar/eurolab/hamveri/${row.id}/duzenle`}>
                         <button className={styles.editBtn} title="Düzenle">
                           <Edit size={14} />

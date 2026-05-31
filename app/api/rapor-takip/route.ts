@@ -169,7 +169,8 @@ export async function GET(request: Request) {
           n.Numune_Adi,
           f.Ad                                    AS FirmaAd,
           p.Ad                                    AS ProjeAd,
-          s.RaporFormati
+          s.RaporFormati,
+          ${hasLabKabul ? `CONVERT(varchar(10), lk.KabulTarihi, 23)` : `NULL`} AS KabulTarihi
         FROM NKR n
         LEFT JOIN RootTedarikci f  ON f.ID = n.Firma_ID
         LEFT JOIN NumuneDetay   nd ON nd.RaporID = n.ID
@@ -177,7 +178,7 @@ export async function GET(request: Request) {
         INNER JOIN NumuneX1         x1 ON x1.RaporID  = n.ID
         INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
           AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
-        ${acceptedOnly && hasLabKabul ? `INNER JOIN NKR_LabKabul lk ON lk.NkrID = n.ID AND lk.RaporFormati = s.RaporFormati` : ""}
+        ${hasLabKabul ? `${acceptedOnly ? "INNER" : "LEFT"} JOIN NKR_LabKabul lk ON lk.NkrID = n.ID AND lk.RaporFormati = s.RaporFormati` : ""}
         WHERE n.Durum = 'Aktif'
           ${searchFilter}
           ${raporTuruFilter}

@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import RaporTakipTable from "./RaporTakipTable";
+import OnayliRaporTable from "./OnayliRaporTable";
 import styles from "@/app/styles/table.module.css";
 
 export const metadata = {
@@ -15,13 +15,11 @@ export default async function RaporTakipPage() {
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Rapor Takip</h1>
-          <p className={styles.pageSubtitle}>Rapor formatı sekmeleriyle ilgili laboratuvar kayıtlarını listeleyin.</p>
+          <p className={styles.pageSubtitle}>Onaylanmış raporlar — imzalı PDF indirme ve portala gönderim.</p>
         </div>
       </div>
 
-      {/* phase="approval" — sadece "Onaya Gönder" basılmış (Onay Bekleniyor)
-          ve laboratuvar kabulü yapılmış raporlar görünsün. */}
-      <RaporTakipTable acceptedOnly phase="approval" />
+      <OnayliRaporTable />
     </div>
   );
 }

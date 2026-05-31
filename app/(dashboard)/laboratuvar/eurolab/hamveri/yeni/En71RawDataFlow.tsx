@@ -61,8 +61,201 @@ const steps: Array<{ key: StepKey; label: string; icon: React.ReactNode }> = [
   { key: "age", label: "Yaş Seçimi", icon: <Users className="h-4 w-4" /> },
   { key: "type", label: "Tip / Fonksiyon", icon: <Shapes className="h-4 w-4" /> },
   { key: "tests", label: "Test Listesi", icon: <ListChecks className="h-4 w-4" /> },
-  { key: "records", label: "Karar Defteri", icon: <ClipboardCheck className="h-4 w-4" /> },
+  { key: "records", label: "Hamveri Formu", icon: <ClipboardCheck className="h-4 w-4" /> },
 ];
+
+// Gereklilik → Madde + Test Yöntemi haritalama (kullanıcının verdiği tablodan).
+// "Tip / Fonksiyon" adımındaki seçime göre Test Listesi otomatik doldurulur.
+const gereklilikDataset: Array<{ gereklilik: string; madde: string; yontem: string }> = [
+  { gereklilik: "Malzeme Temizliği", madde: "4.1", yontem: "Görsel Muayene" },
+  { gereklilik: "Montaj", madde: "4.2", yontem: "Görsel Muayene" },
+  { gereklilik: "Esnek Plastik Levha", madde: "4.3", yontem: "8.24.1" },
+  { gereklilik: "Esnek Plastik Levha", madde: "4.3", yontem: "Plastik levha ≥ 0,038 mm ise hava geçişi kontrolü" },
+  { gereklilik: "Oyuncak Torbaları", madde: "4.4", yontem: "Boyutsal ölçüm (380 mm çevre)" },
+  { gereklilik: "Oyuncak Torbaları", madde: "4.4", yontem: "8.43" },
+  { gereklilik: "Cam", madde: "4.5", yontem: "Yaş Değerlendirmesi (5)" },
+  { gereklilik: "Cam", madde: "4.5", yontem: "Camın kullanımındaki işlev değerlendilir." },
+  { gereklilik: "Cam", madde: "4.5", yontem: "8.5" },
+  { gereklilik: "Cam", madde: "4.5", yontem: "8.7" },
+  { gereklilik: "Cam", madde: "4.5", yontem: "8.11" },
+  { gereklilik: "Cam", madde: "4.5", yontem: "8.12" },
+  { gereklilik: "Genişleyen Malzemeler", madde: "4.6", yontem: "8.2" },
+  { gereklilik: "Genişleyen Malzemeler", madde: "4.6", yontem: "8.3" },
+  { gereklilik: "Genişleyen Malzemeler", madde: "4.6", yontem: "8.4.2.1" },
+  { gereklilik: "Genişleyen Malzemeler", madde: "4.6", yontem: "8.5" },
+  { gereklilik: "Genişleyen Malzemeler", madde: "4.6", yontem: "8.7" },
+  { gereklilik: "Genişleyen Malzemeler", madde: "4.6", yontem: "8.8" },
+  { gereklilik: "Genişleyen Malzemeler", madde: "4.6", yontem: "8.14" },
+  { gereklilik: "Kenarlar", madde: "4.7", yontem: "8.11" },
+  { gereklilik: "Kenarlar", madde: "4.7", yontem: "Kıymık görsel kontrol" },
+  { gereklilik: "Kenarlar", madde: "4.7", yontem: "Yaş Değerlendirmesi (5)" },
+  { gereklilik: "Kenarlar", madde: "4.7", yontem: "Uyarı Kontrolü (7.6)" },
+  { gereklilik: "Uçlar ve Metal Teller", madde: "4.8", yontem: "8.12" },
+  { gereklilik: "Uçlar ve Metal Teller", madde: "4.8", yontem: "8.13.2" },
+  { gereklilik: "Uçlar ve Metal Teller", madde: "4.8", yontem: "8.13.3" },
+  { gereklilik: "Uçlar ve Metal Teller", madde: "4.8", yontem: "Yaş Değerlendirmesi (5)" },
+  { gereklilik: "Uçlar ve Metal Teller", madde: "4.8", yontem: "Uyarı Kontrolü (7.6)" },
+  { gereklilik: "Çıkıntılı Parçalar", madde: "4.9", yontem: "Çap kontrolü (≥ 2mm)" },
+  { gereklilik: "Çıkıntılı Parçalar", madde: "4.9", yontem: "Uç kısmı pürüzsüz, çapaksız ve yuvarlatılmış mı?" },
+  { gereklilik: "Çıkıntılı Parçalar", madde: "4.9", yontem: "8.4.2.3" },
+  { gereklilik: "Çıkıntılı Parçalar", madde: "4.9", yontem: "8.11" },
+  { gereklilik: "Çıkıntılı Parçalar", madde: "4.9", yontem: "8.12" },
+  { gereklilik: "Birbirine Karş Hareket Eden Parçalar (menteşe)", madde: "4.10.3", yontem: "Parça kütlesi kontrolü (≥250 g)" },
+  { gereklilik: "Birbirine Karş Hareket Eden Parçalar (menteşe)", madde: "4.10.3", yontem: "Yay açıklık ölçümü (3 mm)" },
+  { gereklilik: "Birbirine Karş Hareket Eden Parçalar (yay)", madde: "4.10.4", yontem: "Yay açıklık ölçümü (3 mm)" },
+  { gereklilik: "Birbirine Karş Hareket Eden Parçalar (yay)", madde: "4.10.4", yontem: "40 N kuvvet uygulama kontrolü" },
+  { gereklilik: "Ağızla Çalıştırılan Oyuncaklar ve Ağıza Alınması Amaçlanan Diğer Oyuncaklar", madde: "4.11", yontem: "8.2" },
+  { gereklilik: "Ağızla Çalıştırılan Oyuncaklar ve Ağıza Alınması Amaçlanan Diğer Oyuncaklar", madde: "4.11", yontem: "8.3" },
+  { gereklilik: "Ağızla Çalıştırılan Oyuncaklar ve Ağıza Alınması Amaçlanan Diğer Oyuncaklar", madde: "4.11", yontem: "8.4.2.1" },
+  { gereklilik: "Ağızla Çalıştırılan Oyuncaklar ve Ağıza Alınması Amaçlanan Diğer Oyuncaklar", madde: "4.11", yontem: "8.9" },
+  { gereklilik: "Ağızla Çalıştırılan Oyuncaklar ve Ağıza Alınması Amaçlanan Diğer Oyuncaklar", madde: "4.11", yontem: "8.17.1" },
+  { gereklilik: "Ağızla Çalıştırılan Oyuncaklar ve Ağıza Alınması Amaçlanan Diğer Oyuncaklar", madde: "4.11", yontem: "8.17.2" },
+  { gereklilik: "Balonlar", madde: "4.12", yontem: "Uyarı Kontrolü (7.3)" },
+  { gereklilik: "Balonlar", madde: "4.12", yontem: "8.24.1 (plastik balon ise)" },
+  { gereklilik: "Oyuncak Uçurtmaların ve Diğer Uçan Oyuncakların Kordonları/ipleri", madde: "4.13", yontem: "8.19" },
+  { gereklilik: "Oyuncak Uçurtmaların ve Diğer Uçan Oyuncakların Kordonları/ipleri", madde: "4.13", yontem: "Uyarı Kontrolü (7.9)" },
+  { gereklilik: "İçine Girilebilen Oyuncaklar", madde: "4.14.1", yontem: "İç hacim ölçümü (30 litre)" },
+  { gereklilik: "İçine Girilebilen Oyuncaklar", madde: "4.14.1", yontem: "İç boyut ölçümü (≥150mm)" },
+  { gereklilik: "İçine Girilebilen Oyuncaklar", madde: "4.14.1", yontem: "8.43" },
+  { gereklilik: "İçine Girilebilen Oyuncaklar", madde: "4.14.1", yontem: "8.42" },
+  { gereklilik: "İçine Girilebilen Oyuncaklar", madde: "4.14.1", yontem: "Parmak(Boşluk) Testi (≥ 12 mm)" },
+  { gereklilik: "İçine Girilebilen Oyuncaklar", madde: "4.14.1", yontem: "8.27.2" },
+  { gereklilik: "İçine Girilebilen Oyuncaklar", madde: "4.14.1", yontem: "8.27.3" },
+  { gereklilik: "Başı Tamamen Saran Oyuncaklar", madde: "4.14.2", yontem: "8.43" },
+  { gereklilik: "Başı Tamamen Saran Oyuncaklar", madde: "4.14.2", yontem: "Yüzey temas testi" },
+  { gereklilik: "Başı Tamamen Saran Oyuncaklar", madde: "4.14.2", yontem: "Taklit oyuncak ise Uyarı kontrolü (7.8)" },
+  { gereklilik: "Başı Tamamen Saran Oyuncaklar", madde: "4.14.2", yontem: "Numune normal kullanım testi" },
+  { gereklilik: "Yüzü Saran Sert Malzeme Oyuncaklar", madde: "4.14.3", yontem: "8.3 Tork" },
+  { gereklilik: "Yüzü Saran Sert Malzeme Oyuncaklar", madde: "4.14.3", yontem: "8.4.2.1 Çekme" },
+  { gereklilik: "Yüzü Saran Sert Malzeme Oyuncaklar", madde: "4.14.3", yontem: "8.5 Düşme" },
+  { gereklilik: "Yüzü Saran Sert Malzeme Oyuncaklar", madde: "4.14.3", yontem: "8.7 Darbe" },
+  { gereklilik: "Yüzü Saran Sert Malzeme Oyuncaklar", madde: "4.14.3", yontem: "8.11" },
+  { gereklilik: "Yüzü Saran Sert Malzeme Oyuncaklar", madde: "4.14.3", yontem: "8.12" },
+  { gereklilik: "Yüzü Saran Sert Malzeme Oyuncaklar", madde: "4.14.3", yontem: "Küçük ve gevşek parça kontrolü" },
+  { gereklilik: "Taklit Koruyucu Maske ve Kasklar", madde: "4.14.4", yontem: "Taklit oyuncak ise Uyarı kontrolü (7.8)" },
+  { gereklilik: "Taklit Koruyucu Maske ve Kasklar", madde: "4.14.4", yontem: "Numune normal kullanım testi" },
+  { gereklilik: "Su Oyuncakları ve Şişirilebilir Oyuncaklar", madde: "4.18", yontem: "8.3" },
+  { gereklilik: "Su Oyuncakları ve Şişirilebilir Oyuncaklar", madde: "4.18", yontem: "8.4.2.1" },
+  { gereklilik: "Su Oyuncakları ve Şişirilebilir Oyuncaklar", madde: "4.18", yontem: "Stoper çıkıntı kontrolü (>5 mm)" },
+  { gereklilik: "Su Oyuncakları ve Şişirilebilir Oyuncaklar", madde: "4.18", yontem: "8.2" },
+  { gereklilik: "Su Oyuncakları ve Şişirilebilir Oyuncaklar", madde: "4.18", yontem: "Uyarı Kontrolü (7.4)" },
+  { gereklilik: "Su Oyuncakları ve Şişirilebilir Oyuncaklar", madde: "4.18", yontem: "\"Gözetimsiz güvenli\" iması kontrolü" },
+  { gereklilik: "Elektriksel Olmayan Bir Isı Kaynağı İçeren Oyuncaklar", madde: "4.21", yontem: "8.26 Sıcaklık Artışı Ölçümü" },
+  { gereklilik: "Küçük Toplar", madde: "4.22", yontem: "8.28.1" },
+  { gereklilik: "Küçük Toplar", madde: "4.22", yontem: "8.28.2" },
+  { gereklilik: "Küçük Toplar", madde: "4.22", yontem: "8.3" },
+  { gereklilik: "Küçük Toplar", madde: "4.22", yontem: "8.4.2.1" },
+  { gereklilik: "Küçük Toplar", madde: "4.22", yontem: "8.5" },
+  { gereklilik: "Küçük Toplar", madde: "4.22", yontem: "8.6" },
+  { gereklilik: "Küçük Toplar", madde: "4.22", yontem: "8.7" },
+  { gereklilik: "Küçük Toplar", madde: "4.22", yontem: "8.8" },
+  { gereklilik: "Küçük Toplar", madde: "4.22", yontem: "Yaş Değerlendirmesi (5.10)" },
+  { gereklilik: "Küçük Toplar", madde: "4.22", yontem: "Uyarı Kontrolü (7.2)" },
+  { gereklilik: "Mıknastıslar", madde: "4.23", yontem: "Ürün, 8 yaş ve üzeri için tasarlanmış manyetik/elektriksel deney seti mi?" },
+  { gereklilik: "Mıknastıslar", madde: "4.23", yontem: "8.2" },
+  { gereklilik: "Mıknastıslar", madde: "4.23", yontem: "8.3" },
+  { gereklilik: "Mıknastıslar", madde: "4.23", yontem: "8.4.2.1" },
+  { gereklilik: "Mıknastıslar", madde: "4.23", yontem: "8.4.2.2" },
+  { gereklilik: "Mıknastıslar", madde: "4.23", yontem: "8.5" },
+  { gereklilik: "Mıknastıslar", madde: "4.23", yontem: "8.7" },
+  { gereklilik: "Mıknastıslar", madde: "4.23", yontem: "8.8" },
+  { gereklilik: "Mıknastıslar", madde: "4.23", yontem: "8.30" },
+  { gereklilik: "Mıknastıslar", madde: "4.23", yontem: "8.9" },
+  { gereklilik: "Mıknastıslar", madde: "4.23", yontem: "8.31" },
+  { gereklilik: "Mıknastıslar", madde: "4.23", yontem: "Uyarı Kontrolü (7.16)" },
+  { gereklilik: "Yo-Yo Topları", madde: "4.24", yontem: "8.33.1" },
+  { gereklilik: "Yo-Yo Topları", madde: "4.24", yontem: "8.33.2" },
+  { gereklilik: "Yiyeceklere Bağlı Oyuncaklar", madde: "4.25", yontem: "8.2" },
+  { gereklilik: "Yiyeceklere Bağlı Oyuncaklar", madde: "4.25", yontem: "8.28.1" },
+  { gereklilik: "Yiyeceklere Bağlı Oyuncaklar", madde: "4.25", yontem: "8.3" },
+  { gereklilik: "Yiyeceklere Bağlı Oyuncaklar", madde: "4.25", yontem: "8.4.2.1" },
+  { gereklilik: "Yiyeceklere Bağlı Oyuncaklar", madde: "4.25", yontem: "8.5" },
+  { gereklilik: "Yiyeceklere Bağlı Oyuncaklar", madde: "4.25", yontem: "8.7" },
+  { gereklilik: "Yiyeceklere Bağlı Oyuncaklar", madde: "4.25", yontem: "8.8" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.2 - 5.1(a) – Test Öncesi Kontrol" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.4.2.1 - 8.2 5.1(a) – Test Öncesi Kontrol" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.3 5.1(b) – Kullanım ve Kötüye Kullanım" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.4.2.1 5.1(b) – Kullanım ve Kötüye Kullanım" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.5 5.1(b) – Kullanım ve Kötüye Kullanım" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.7 5.1(b) – Kullanım ve Kötüye Kullanım" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.8 5.1(b) – Kullanım ve Kötüye Kullanım" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.6 5.1(b) – Kullanım ve Kötüye Kullanım" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.2 5.1(b) – Test Sonrası Zorunlu Kontroller" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.11 5.1(b) – Test Sonrası Zorunlu Kontroller" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.12 5.1(b) – Test Sonrası Zorunlu Kontroller" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "4.10.4 (yay kontrolü) 5.1(b) – Test Sonrası Zorunlu Kontroller" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "Manyetik bileşen ayrılması kontrolü 5.1(b) – Test Sonrası Zorunlu Kontroller" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.12 - 5.1(c) – Metal Uç Tetikleyici (≤ 2 mm)" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.6 - 5.1(d) – Büyük ve hacimli oyuncak" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "8.9 - 5.1(e) – Yapıştırılmış Ahşap test sonrası 5.1(b) tekrar kontrol edilir." },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "Muhafaza çatlak kontrolü - 5.1(f) – Oturamayan Bebek Oyuncağı" },
+  { gereklilik: "36 Aydan Küçük Çocuklar İçin Tasarlanmış Oyuncaklarda Genel Kurallar", madde: "5.1", yontem: "Erişilebilir köpük bileşen kontrolü 5.1(g) – Köpük Oyuncak" },
+  { gereklilik: "Yumuşak Dolgulu Oyuncaklar ve Oyuncakların Yumuşak Dolgulu Bölümleri", madde: "5.2", yontem: "Görsel Muayene - 5.2(a) - Dolgu içeriği kontrolü" },
+  { gereklilik: "Yumuşak Dolgulu Oyuncaklar ve Oyuncakların Yumuşak Dolgulu Bölümleri", madde: "5.2", yontem: "8.4.2.2 - 5.2(b) - Dikiş dayanım kontrolü" },
+  { gereklilik: "Yumuşak Dolgulu Oyuncaklar ve Oyuncakların Yumuşak Dolgulu Bölümleri", madde: "5.2", yontem: "8.10 - 5.2(b) - Erişilebilirlik Kontrolü" },
+  { gereklilik: "Yumuşak Dolgulu Oyuncaklar ve Oyuncakların Yumuşak Dolgulu Bölümleri", madde: "5.2", yontem: "8.2 - 5.2(b) - Küçük Parça Kontrolü (gerekirse)" },
+  { gereklilik: "Yumuşak Dolgulu Oyuncaklar ve Oyuncakların Yumuşak Dolgulu Bölümleri", madde: "5.2", yontem: "12 mm/6mm - 5.2(c) - Lifli Dolgu Açıklık Kontrolü" },
+  { gereklilik: "Plastik Tabaka", madde: "5.3", yontem: "8.24.2 Plastik Tabaka Yapışma Kontrolü" },
+  { gereklilik: "Plastik Tabaka", madde: "5.3", yontem: "8.4.2.1 Plastik Tabaka Germe Deneyi" },
+  { gereklilik: "Plastik Tabaka", madde: "5.3", yontem: "8.24.1 Kalınlık Ölçümü" },
+  { gereklilik: "Oyuncaklardaki İpler, Zincirler ve Elektrik Kabloları için Gereklilikler", madde: "5.4", yontem: "8.36 Kordon, Zincir ve Elektrik Kablosu Uzunluk Deneyi" },
+  { gereklilik: "Oyuncaklardaki İpler, Zincirler ve Elektrik Kabloları için Gereklilikler", madde: "5.4", yontem: "8.34 Ayırma Düzeneği Deneyi" },
+  { gereklilik: "Oyuncaklardaki İpler, Zincirler ve Elektrik Kabloları için Gereklilikler", madde: "5.4", yontem: "8.37 İki İp Veya Zincirin Dolanma Potansiyelinin Değerlendirilmesi" },
+  { gereklilik: "Oyuncaklardaki İpler, Zincirler ve Elektrik Kabloları için Gereklilikler", madde: "5.4", yontem: "8.32 Kordonların ve Zincirlerin Çevre Uzunluğu Deneyi" },
+  { gereklilik: "Oyuncaklardaki İpler, Zincirler ve Elektrik Kabloları için Gereklilikler", madde: "5.4", yontem: "8.20 Kordonların Enine Kesit Ölçüsü Deneyi" },
+  { gereklilik: "Oyuncaklardaki İpler, Zincirler ve Elektrik Kabloları için Gereklilikler", madde: "5.4", yontem: "8.35 Geri Sarılabilir Kordon Deneyi" },
+  { gereklilik: "Oyuncaklardaki İpler, Zincirler ve Elektrik Kabloları için Gereklilikler", madde: "5.4", yontem: "7.18 Uyarı Gerekliliği" },
+  { gereklilik: "Sıvı Doldurulmuş Oyuncaklar İçin Gereklilikler", madde: "5.5", yontem: "8.15 Sıvıyla Doldurulmuş Oyuncakların Sızdırması Deneyi" },
+  { gereklilik: "Sıvı Doldurulmuş Oyuncaklar İçin Gereklilikler", madde: "5.5", yontem: "7.11 Uyarı Gerekliliği" },
+  { gereklilik: "Cam ve Porselen İçin Gereklilikler", madde: "5.7", yontem: "8.10" },
+  { gereklilik: "Cam ve Porselen İçin Gereklilikler", madde: "5.7", yontem: "8.5" },
+  { gereklilik: "Cam ve Porselen İçin Gereklilikler", madde: "5.7", yontem: "8.2" },
+  { gereklilik: "Cam ve Porselen İçin Gereklilikler", madde: "5.7", yontem: "8.3" },
+  { gereklilik: "Cam ve Porselen İçin Gereklilikler", madde: "5.7", yontem: "8.4" },
+  { gereklilik: "Cam ve Porselen İçin Gereklilikler", madde: "5.7", yontem: "8.6" },
+  { gereklilik: "Cam ve Porselen İçin Gereklilikler", madde: "5.7", yontem: "8.7" },
+  { gereklilik: "Cam ve Porselen İçin Gereklilikler", madde: "5.7", yontem: "8.8" },
+  { gereklilik: "Cam ve Porselen İçin Gereklilikler", madde: "5.7", yontem: "8.9" },
+  { gereklilik: "Belirli Oyuncakların Şekil ve Büyüklüğünün Kontrolü", madde: "5.8", yontem: "8.16" },
+  { gereklilik: "Monofilament Element İçeren Oyuncaklar için Gereklilikler", madde: "5.9", yontem: "Görsel kontrol" },
+  { gereklilik: "Monofilament Element İçeren Oyuncaklar için Gereklilikler", madde: "5.9", yontem: "Uzunluk Ölçümü" },
+  { gereklilik: "Monofilament Element İçeren Oyuncaklar için Gereklilikler", madde: "5.9", yontem: "7.15 Uyarı Gerekliliği" },
+  { gereklilik: "Küçük Toplar İçin Gereklilikler", madde: "5.10", yontem: "8.28" },
+  { gereklilik: "Küçük Toplar İçin Gereklilikler", madde: "5.10", yontem: "8.2" },
+  { gereklilik: "Küçük Toplar İçin Gereklilikler", madde: "5.10", yontem: "8.3" },
+  { gereklilik: "Küçük Toplar İçin Gereklilikler", madde: "5.10", yontem: "8.4.2.1" },
+  { gereklilik: "Küçük Toplar İçin Gereklilikler", madde: "5.10", yontem: "8.5" },
+  { gereklilik: "Küçük Toplar İçin Gereklilikler", madde: "5.10", yontem: "8.6" },
+  { gereklilik: "Küçük Toplar İçin Gereklilikler", madde: "5.10", yontem: "8.7" },
+  { gereklilik: "Küçük Toplar İçin Gereklilikler", madde: "5.10", yontem: "8.8" },
+  { gereklilik: "Küçük Toplar İçin Gereklilikler", madde: "5.10", yontem: "Uyarı Kontrolü (7.2)" },
+  { gereklilik: "Oyun Heykelleri İçin Gereklilikler", madde: "5.11", yontem: "Uzunluk Ölçümü" },
+  { gereklilik: "Oyun Heykelleri İçin Gereklilikler", madde: "5.11", yontem: "8.29 Oyun figürleri deneyi" },
+  { gereklilik: "Yarı Küresel Şekle Sahip Oyuncaklar İçin Gereklilikler", madde: "5.12", yontem: "Boyut Ölçümü" },
+  { gereklilik: "Yarı Küresel Şekle Sahip Oyuncaklar İçin Gereklilikler", madde: "5.12", yontem: "8.3" },
+  { gereklilik: "Yarı Küresel Şekle Sahip Oyuncaklar İçin Gereklilikler", madde: "5.12", yontem: "8.4.2.1" },
+  { gereklilik: "Yarı Küresel Şekle Sahip Oyuncaklar İçin Gereklilikler", madde: "5.12", yontem: "8.5" },
+  { gereklilik: "Yarı Küresel Şekle Sahip Oyuncaklar İçin Gereklilikler", madde: "5.12", yontem: "8.7" },
+  { gereklilik: "Yarı Küresel Şekle Sahip Oyuncaklar İçin Gereklilikler", madde: "5.12", yontem: "8.8" },
+  { gereklilik: "Yarı Küresel Şekle Sahip Oyuncaklar İçin Gereklilikler", madde: "5.12", yontem: "8.9" },
+  { gereklilik: "Yarı Küresel Şekle Sahip Oyuncaklar İçin Gereklilikler", madde: "5.12", yontem: "8.6" },
+  { gereklilik: "Vakumlu Tutucular İçin Gereklilikler", madde: "5.13", yontem: "8.28" },
+  { gereklilik: "Vakumlu Tutucular İçin Gereklilikler", madde: "5.13", yontem: "8.2" },
+  { gereklilik: "Vakumlu Tutucular İçin Gereklilikler", madde: "5.13", yontem: "8.3" },
+  { gereklilik: "Vakumlu Tutucular İçin Gereklilikler", madde: "5.13", yontem: "8.4.2.1" },
+  { gereklilik: "Vakumlu Tutucular İçin Gereklilikler", madde: "5.13", yontem: "8.5" },
+  { gereklilik: "Vakumlu Tutucular İçin Gereklilikler", madde: "5.13", yontem: "8.6" },
+  { gereklilik: "Vakumlu Tutucular İçin Gereklilikler", madde: "5.13", yontem: "8.7" },
+  { gereklilik: "Vakumlu Tutucular İçin Gereklilikler", madde: "5.13", yontem: "8.8" },
+  { gereklilik: "Vakumlu Tutucular İçin Gereklilikler", madde: "5.13", yontem: "8.9" },
+  { gereklilik: "Tamamen veya Kısmen Boyun Etrafına Takılmak Amacıyla Tasarlanan Kayışlar İçin Gereklilikler", madde: "5.14", yontem: "8.34" },
+  { gereklilik: "Çekme İpleri Olan Kızaklar", madde: "5.15", yontem: "7.20 Uyarı Gerekliliği" },
+];
+
+const gereklilikNames: string[] = Array.from(new Set(gereklilikDataset.map(row => row.gereklilik)));
+
+const requirementSlug = (name: string) =>
+  name.normalize("NFKD").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
 
 const materialOptions = [
   "Sert plastik",
@@ -444,6 +637,47 @@ const methodLabelById = new Map(en71MethodOptions.map(option => [option.id, opti
 const formatMethodIds = (methodIds: string[]) =>
   methodIds.map(method => methodLabelById.get(method) || method).join(" / ");
 
+// "Madde 8.X - <isim>" formatından numara → isim haritası çıkar.
+// Test Listesi yöntem sütununda "8.X" rakamlarının yanına test isimlerini
+// ekleyebilmek için kullanılır.
+const methodNameByNumber: Record<string, string> = {};
+for (const option of en71MethodOptions) {
+  const match = option.label.match(/^Madde\s+([\d.]+)\s*-\s*(.+)$/);
+  if (match) {
+    methodNameByNumber[match[1]] = match[2].trim();
+  }
+}
+
+// "8.4.2.1" gibi alt-numaralı maddeler için en yakın üst numarayı (8.4) bulup
+// onun ismini döndürür.
+function methodNumberToName(num: string): string | undefined {
+  if (methodNameByNumber[num]) return methodNameByNumber[num];
+  const parts = num.split(".");
+  while (parts.length > 1) {
+    parts.pop();
+    const parent = parts.join(".");
+    if (methodNameByNumber[parent]) return methodNameByNumber[parent];
+  }
+  return undefined;
+}
+
+// Bir method string'i içindeki "X.Y..." rakamlarının yanına, eğer hemen
+// ardından yazılı bir açıklama YOKSA, " - <Madde adı>" ekler.
+// Örnek: "8.2"             → "8.2 - Küçük parça silindiri"
+// Örnek: "8.4 / 8.7"       → "8.4 - Germe (çekme) deneyi / 8.7 - Çarpma (darbe) deneyi"
+// Örnek: "8.3 Tork"        → "8.3 Tork"  (zaten açıklamalı, dokunma)
+// Örnek: "8.24.1 (plastik) → "8.24.1 (plastik)"  (parantezli açıklama var)
+function enrichMethodCell(method: string): string {
+  if (!method) return method;
+  return method.replace(/\b(\d+(?:\.\d+)+)\b/g, (full, num, offset, source) => {
+    const after = (source as string).slice(offset + (num as string).length).trimStart();
+    // Hemen ardından bir harf veya parantez geliyorsa zaten açıklamalı kabul et
+    if (/^[\p{L}(]/u.test(after)) return num as string;
+    const name = methodNumberToName(num as string);
+    return name ? `${num} - ${name}` : (num as string);
+  });
+}
+
 const en71FullClauseOptions: TestRow[] = en71RequirementTitles.map(({ clause, title }) => ({
   id: "en71-1-clause-" + clause.replace(/\./g, "-"),
   source: "Harici",
@@ -501,7 +735,10 @@ interface FormState {
     under18: boolean;
     under8: boolean;
   };
+  // Eski (legacy) tip seçimi — kayıtlı kayıtlarda hâlâ olabilir.
   toyTypes: Record<string, boolean>;
+  // Yeni: "Tip / Fonksiyon" adımında seçilen gereklilik (EN 71-1 tablosundan).
+  selectedRequirements: string[];
 }
 
 const emptyState: FormState = {
@@ -518,6 +755,7 @@ const emptyState: FormState = {
     under8: false,
   },
   toyTypes: Object.fromEntries(toyTypeOptions.map(option => [option.key, false])),
+  selectedRequirements: [],
 };
 
 const decisionClass = (decision: TestDecision) => {
@@ -629,8 +867,12 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
             ...(json.product_data?.toyTypes || {}),
           },
           materials: Array.isArray(json.product_data?.materials) ? json.product_data.materials : [],
+          selectedRequirements: Array.isArray(json.product_data?.selectedRequirements) ? json.product_data.selectedRequirements : [],
         });
         setRecords(json.test_data?.records || {});
+        // Hem kullanıcının manuel eklediği (Harici) hem de otomatik atanan
+        // (auto-* id prefiksli) satırları geri yükle; useEffect'ler kayıttaki
+        // materials/selectedRequirements'a göre auto'ları zaten regenere edecek.
         setManualTests((json.test_data?.selectedTests || []).filter(test => test.source === "Harici"));
       } catch (error: unknown) {
         if (alive) setSaveError(getErrorMessage(error, "Hamveri kaydı alınamadı."));
@@ -646,6 +888,57 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
   }, [rawdataId]);
 
   const activeIndex = steps.findIndex(step => step.key === activeStep);
+
+  // ── Otomatik test atamaları ──────────────────────────────────────────
+  // 1) Kimliklendirme'de "Tekstil" seçili ise EN 71-2 alevlenebilirlik
+  //    satırını test listesine otomatik ekle, kaldırılınca temizle.
+  const AUTO_TEKSTIL_ID = "auto-en71-2-tekstil";
+  useEffect(() => {
+    const hasTekstil = form.materials.includes("Tekstil");
+    setManualTests(current => {
+      const without = current.filter(test => test.id !== AUTO_TEKSTIL_ID);
+      if (!hasTekstil) return without;
+      const row: TestRow = {
+        id: AUTO_TEKSTIL_ID,
+        source: "Zorunlu",
+        group: "EN 71-2",
+        title: "Alevlenebilirlik (EN 71-2)",
+        clause: "EN 71-2",
+        method: "EN 71-2",
+        reason: "Tekstil malzeme seçildiği için otomatik atandı.",
+      };
+      return [...without, row];
+    });
+  }, [form.materials]);
+
+  // 2) "Tip / Fonksiyon" adımında seçilen her gereklilik için kendi madde
+  //    + test yöntemi satırlarını otomatik ekle. Kullanıcı yine "Harici"
+  //    olarak manuel satır ekleyebilir; bunlar etkilenmez.
+  const AUTO_REQ_PREFIX = "auto-req-";
+  useEffect(() => {
+    setManualTests(current => {
+      // Otomatik gereklilik satırlarını temizle
+      const preserved = current.filter(test => !test.id.startsWith(AUTO_REQ_PREFIX));
+      const autoRows: TestRow[] = [];
+      for (const reqName of form.selectedRequirements) {
+        const rows = gereklilikDataset.filter(row => row.gereklilik === reqName);
+        const slug = requirementSlug(reqName);
+        rows.forEach((row, index) => {
+          autoRows.push({
+            id: `${AUTO_REQ_PREFIX}${slug}-${index}`,
+            source: "Zorunlu",
+            group: reqName,
+            title: `${reqName} — ${row.yontem}`,
+            clause: `Madde ${row.madde}`,
+            method: row.yontem,
+            reason: `${reqName} için Madde ${row.madde} kontrolü (otomatik atandı).`,
+          });
+        });
+      }
+      return [...preserved, ...autoRows];
+    });
+  }, [form.selectedRequirements]);
+
   const selectedTests = useMemo(() => manualTests, [manualTests]);
 
   const activeRequirementVisuals = useMemo(() => {
@@ -683,13 +976,6 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
       materials: current.materials.includes(material)
         ? current.materials.filter(item => item !== material)
         : [...current.materials, material],
-    }));
-  };
-
-  const toggleToyType = (key: string) => {
-    setForm(current => ({
-      ...current,
-      toyTypes: { ...current.toyTypes, [key]: !current.toyTypes[key] },
     }));
   };
 
@@ -760,10 +1046,12 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
     setSaving(true);
     setSaveError("");
     try {
-      const toyCategory = Object.entries(form.toyTypes)
-        .filter(([, checked]) => checked)
-        .map(([key]) => key)
-        .join(", ");
+      const toyCategory = form.selectedRequirements.length > 0
+        ? form.selectedRequirements.join(", ")
+        : Object.entries(form.toyTypes)
+            .filter(([, checked]) => checked)
+            .map(([key]) => key)
+            .join(", ");
 
       const response = await fetch(rawdataId ? `/api/eurolab/rawdata/${rawdataId}` : "/api/eurolab/rawdata", {
         method: rawdataId ? "PUT" : "POST",
@@ -931,23 +1219,20 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
 
             {activeStep === "type" && (
               <div className="space-y-6">
-                <PanelTitle title="3. Kademe: Oyuncak Tipi ve Fonksiyon" subtitle="Bu seçimler sadece ilgili oyuncak tipine özgü özel testleri listeye ekler." />
-                <div className="grid gap-4 md:grid-cols-2">
-                  {toyTypeOptions.map(option => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      className={`rounded-xl border text-left transition ${
-                        form.toyTypes[option.key] ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/30"
-                      }`}
-                      style={{ padding: "18px" }}
-                      onClick={() => toggleToyType(option.key)}
-                    >
-                      <span className="block text-sm font-bold text-slate-900">{option.label}</span>
-                      <span className="mt-1 block text-xs leading-5 text-slate-500">{option.hint}</span>
-                    </button>
-                  ))}
-                </div>
+                <PanelTitle
+                  title="3. Kademe: Oyuncak Tipi ve Fonksiyon"
+                  subtitle="EN 71-1 gerekliliklerinden ürüne uygun olanları seçin. Seçilen her gereklilik için Madde + Test Yöntemi satırları Test Listesi'ne otomatik eklenir; bir gereklilik kaldırılırsa o satırlar da kalkar. Manuel eklemeler etkilenmez."
+                />
+                <RequirementMultiSelect
+                  selected={form.selectedRequirements}
+                  onToggle={(name) => setForm(current => ({
+                    ...current,
+                    selectedRequirements: current.selectedRequirements.includes(name)
+                      ? current.selectedRequirements.filter(item => item !== name)
+                      : [...current.selectedRequirements, name],
+                  }))}
+                  onClear={() => setForm(current => ({ ...current, selectedRequirements: [] }))}
+                />
               </div>
             )}
 
@@ -992,7 +1277,7 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
 
             {activeStep === "records" && (
               <div className="space-y-6">
-                <PanelTitle title="5. Kademe: Veri Girişi ve Karar Defteri" subtitle="Analist ölçülen değer, karar ve hata gözlemini her test satırı için girer." />
+                <PanelTitle title="5. Kademe: Veri Girişi ve Hamveri Formu" subtitle="Analist ölçülen değer, karar ve hata gözlemini her test satırı için girer." />
                 {saveError && (
                   <div className="rounded-lg border border-red-200 bg-red-50 text-sm font-semibold text-red-700" style={{ padding: "12px 14px" }}>
                     {saveError}
@@ -1024,7 +1309,7 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
                             <div className="mt-1 text-xs text-slate-500">{row.source} - {row.group}</div>
                           </td>
                           <td className="px-4 py-4 align-top text-slate-700"><InstructionLink value={row.clause} instructions={instructionMap} /></td>
-                          <td className="px-4 py-4 align-top text-slate-700"><InstructionLink value={row.method} instructions={instructionMap} /></td>
+                          <td className="px-4 py-4 align-top text-slate-700"><InstructionLink value={enrichMethodCell(row.method)} instructions={instructionMap} /></td>
                           <td className="px-4 py-4 align-top">
                             <input className="field-input h-9 min-w-[260px]" value={row.record.measuredValue} onChange={event => updateRecord(row.id, { measuredValue: event.target.value })} placeholder="Kontrol açıklaması veya gözlem notu" />
                           </td>
@@ -1050,6 +1335,16 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
               </button>
               {activeStep === "records" ? (
                 <div className="flex flex-wrap gap-3 sm:justify-end">
+                  {rawdataId && (
+                    <a
+                      href={`/api/eurolab/rawdata/${rawdataId}/docx`}
+                      className="rounded-full border border-blue-200 bg-blue-50 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                      style={{ padding: "9px 18px" }}
+                      title="Ç.01.PR.19 Tanımlama ve Ham Veri Çizelgesi formatında DOCX indir"
+                    >
+                      DOCX İndir (Ç.01.PR.19)
+                    </a>
+                  )}
                   <button type="button" className="rounded-full border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50" style={{ padding: "9px 18px" }} onClick={handlePrint}>
                     Yazdır
                   </button>
@@ -1114,7 +1409,9 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
       purpose={form.purpose}
       status={testStatus}
       materials={form.materials}
-      toyTypes={toyTypeOptions.filter(option => form.toyTypes[option.key]).map(option => option.label)}
+      toyTypes={form.selectedRequirements.length > 0
+        ? form.selectedRequirements
+        : toyTypeOptions.filter(option => form.toyTypes[option.key]).map(option => option.label)}
       notes={form.notes}
       stats={stats}
       rows={selectedTests.map(test => ({
@@ -1518,7 +1815,7 @@ function TestTable({ tests, instructions, onRemoveManual }: { tests: TestRow[]; 
                 <div className="mt-1 text-[0.78rem] leading-5 text-slate-500">{test.group}</div>
               </td>
               <td className="px-4 py-4 align-top text-slate-700"><InstructionLink value={test.clause} instructions={instructions} /></td>
-              <td className="px-4 py-4 align-top text-slate-700"><InstructionLink value={test.method} instructions={instructions} /></td>
+              <td className="px-4 py-4 align-top text-slate-700"><InstructionLink value={enrichMethodCell(test.method)} instructions={instructions} /></td>
               <td className="px-4 py-4 align-top text-[0.82rem] leading-6 text-slate-500">{test.reason}</td>
               <td className="px-4 py-4 align-top text-right">
                 {test.source === "Harici" && (
@@ -1531,6 +1828,176 @@ function TestTable({ tests, instructions, onRemoveManual }: { tests: TestRow[]; 
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function RequirementMultiSelect({
+  selected,
+  onToggle,
+  onClear,
+}: {
+  selected: string[];
+  onToggle: (name: string) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  const normalizedQuery = query.trim().toLocaleLowerCase("tr-TR");
+  const filtered = normalizedQuery
+    ? gereklilikNames.filter(name => name.toLocaleLowerCase("tr-TR").includes(normalizedQuery))
+    : gereklilikNames;
+
+  const countByRequirement = (name: string) =>
+    gereklilikDataset.filter(row => row.gereklilik === name).length;
+
+  return (
+    <div ref={containerRef} className="relative">
+      {selected.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {selected.map(name => (
+            <span
+              key={name}
+              className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[0.78rem] font-bold text-blue-700"
+            >
+              {name}
+              <span className="ml-1 inline-flex items-center justify-center rounded-full bg-blue-200/70 px-1.5 text-[0.66rem] text-blue-800">
+                {countByRequirement(name)}
+              </span>
+              <button
+                type="button"
+                aria-label={`${name} gerekliliğini kaldır`}
+                className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-500 hover:bg-blue-100 hover:text-blue-800"
+                onClick={() => onToggle(name)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className={`flex w-full items-center justify-between gap-3 rounded-lg border bg-white text-left transition focus:outline-none focus:ring-4 ${
+          open
+            ? "border-blue-500 ring-blue-100"
+            : "border-slate-300 hover:border-blue-300"
+        }`}
+        style={{ padding: "12px 16px" }}
+        onClick={() => setOpen(prev => !prev)}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <Shapes className="h-4 w-4 shrink-0 text-blue-600" />
+          <span className="truncate text-sm font-semibold text-slate-800">
+            {selected.length > 0
+              ? `${selected.length} gereklilik seçili — eklemek/çıkarmak için tıklayın`
+              : "Gereklilik seçmek için tıklayın"}
+          </span>
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+          <div className="border-b border-slate-200" style={{ padding: "12px 14px" }}>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                placeholder="Gereklilik ara (ör. Cam, Mıknatıs, Küçük Toplar)"
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                style={{ paddingLeft: "40px", paddingRight: "14px" }}
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="max-h-[420px] overflow-y-auto" role="listbox" aria-multiselectable="true">
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
+                <Search className="h-5 w-5 text-slate-300" />
+                <div className="text-sm font-semibold text-slate-600">Eşleşen gereklilik yok</div>
+              </div>
+            ) : (
+              filtered.map(name => {
+                const checked = selected.includes(name);
+                const count = countByRequirement(name);
+                return (
+                  <label
+                    key={name}
+                    role="option"
+                    aria-selected={checked}
+                    className={`flex cursor-pointer items-center gap-3 border-b border-slate-100 transition last:border-b-0 ${
+                      checked ? "bg-blue-50/70" : "hover:bg-slate-50"
+                    }`}
+                    style={{ padding: "10px 14px" }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 shrink-0 accent-blue-600"
+                      checked={checked}
+                      onChange={() => onToggle(name)}
+                    />
+                    <span className="min-w-0 flex-1 text-[0.84rem] font-semibold text-slate-800">{name}</span>
+                    <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[0.66rem] font-bold text-slate-600">
+                      {count} satır
+                    </span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50" style={{ padding: "12px 16px" }}>
+            <span className="text-xs font-semibold text-slate-600">
+              {selected.length} seçili · {filtered.length} sonuç
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ padding: "8px 18px" }}
+                onClick={onClear}
+                disabled={selected.length === 0}
+              >
+                Temizle
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 text-xs font-bold text-white hover:bg-blue-700"
+                style={{ padding: "8px 20px" }}
+                onClick={() => setOpen(false)}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
