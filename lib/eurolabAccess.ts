@@ -4,8 +4,8 @@ import poolPromise from "@/lib/db";
 
 export type AccessLevel = "edit" | "view";
 
-// Selin (1) ve Oğuzhan (2) → admin, her zaman edit
-const ADMIN_USER_IDS = new Set(["1", "2"]);
+// Oğuzhan (2) → admin, her zaman edit
+const ADMIN_USER_IDS = new Set(["2"]);
 
 export interface EurolabAccessSnapshot {
   isAdmin: boolean;

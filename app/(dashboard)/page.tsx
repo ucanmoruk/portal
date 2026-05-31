@@ -16,7 +16,8 @@ const stats = [
   { label: "Firma Sayısı", value: "—", icon: "🏢", color: "#bf5af2" },
 ];
 
-const ADMIN_USER_IDS = new Set(["1", "2"]);
+// Admin: Oğuzhan Eker (2)
+const ADMIN_USER_IDS = new Set(["2"]);
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);

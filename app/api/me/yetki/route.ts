@@ -4,14 +4,14 @@ import poolPromise from "@/lib/db";
 
 // GET /api/me/yetki
 // Mevcut kullanıcının yetki anahtarlarını döner.
-// Admin (Selin:1, Oğuzhan:2) ise isAdmin=true → tüm yetkilere sahip kabul edilir.
+// Admin (Oğuzhan:2) ise isAdmin=true → tüm yetkilere sahip kabul edilir.
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
 
   const userId = (session.user as { userId?: number | string } | undefined)?.userId;
   const userIdNum = typeof userId === "string" ? parseInt(userId, 10) : (userId as number | undefined);
-  const isAdmin = userIdNum === 1 || userIdNum === 2;
+  const isAdmin = userIdNum === 2;
 
   if (!userIdNum) {
     return Response.json({ keys: [], isAdmin: false });

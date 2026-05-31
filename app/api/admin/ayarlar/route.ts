@@ -2,7 +2,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAllSettings, setSettings } from "@/lib/settings";
 
-const ADMIN_IDS = new Set(["1", "2"]);
+// Admin: Oğuzhan Eker (2)
+const ADMIN_IDS = new Set(["2"]);
 
 async function checkAdmin() {
   const session = await getServerSession(authOptions);

@@ -6,7 +6,8 @@ import AyarlarForm from "./AyarlarForm";
 
 export const metadata = { title: "Ayarlar" };
 
-const ADMIN_IDS = new Set(["1", "2"]);
+// Admin: Oğuzhan Eker (2)
+const ADMIN_IDS = new Set(["2"]);
 
 export default async function AyarlarPage() {
   const session = await getServerSession(authOptions);

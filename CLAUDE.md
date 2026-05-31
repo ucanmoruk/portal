@@ -27,7 +27,7 @@ lib/
 
 ## Yetki sistemi
 - `allowedKeys` boşsa → kısıtlama yok
-- `isAdmin` → `Set(["1","2"])` (Selin:1, Oğuzhan:2)
+- `isAdmin` → `Set(["2"])` (Oğuzhan:2)
 
 ## Kritik DB tabloları
 | Tablo | Açıklama |

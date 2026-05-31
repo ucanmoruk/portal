@@ -7,8 +7,8 @@ import { SidebarProvider } from "@/components/SidebarProvider";
 import styles from "./dashboard-layout.module.css";
 import poolPromise from "@/lib/db";
 
-// Admin yetkisi olan kullanıcı ID'leri (Oğuzhan Eker: 2, Selin Eker: 1)
-const ADMIN_USER_IDS = new Set(["1", "2"]);
+// Admin yetkisi olan kullanıcı ID'leri (Oğuzhan Eker: 2)
+const ADMIN_USER_IDS = new Set(["2"]);
 
 export default async function DashboardLayout({
   children,
