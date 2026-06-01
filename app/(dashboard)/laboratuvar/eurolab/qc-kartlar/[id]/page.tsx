@@ -160,7 +160,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   const [workingPointId, setWorkingPointId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [personnelOptions, setPersonnelOptions] = useState<string[]>([]);
-  const [form, setForm] = useState({ analyst: "", value: "", target_value: "", unit: "mg/kg", measured_at: "" });
+  const [form, setForm] = useState({ analyst: "", analystB: "", value: "", target_value: "", unit: "mg/kg", measured_at: "" });
   const [xAxisMin, setXAxisMin] = useState("");
   const [xAxisMax, setXAxisMax] = useState("");
   const [yAxisMin, setYAxisMin] = useState("");
@@ -293,8 +293,22 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
   }, [activeComponent]);
 
   const resetForm = () => {
-    setForm({ analyst: "", value: "", target_value: "", unit: activeComponent?.unit || "mg/kg", measured_at: "" });
+    setForm({ analyst: "", analystB: "", value: "", target_value: "", unit: activeComponent?.unit || "mg/kg", measured_at: "" });
   };
+
+  const isRangeCard = card?.card_type === "RANGE";
+  const formAverage = useMemo(() => {
+    const a = parseDecimal(form.value);
+    const b = parseDecimal(form.target_value);
+    return Number.isFinite(a) && Number.isFinite(b) ? (a + b) / 2 : Number.NaN;
+  }, [form.value, form.target_value]);
+  const formRangePct = useMemo(() => {
+    const a = parseDecimal(form.value);
+    const b = parseDecimal(form.target_value);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return Number.NaN;
+    const avg = (a + b) / 2;
+    return avg !== 0 && Number.isFinite(avg) ? (Math.abs(a - b) / Math.abs(avg)) * 100 : Number.NaN;
+  }, [form.value, form.target_value]);
 
   const auditRows = useMemo(() => {
     const logs = activeComponent?.audit_logs || [];
@@ -333,11 +347,24 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     setSaving(true);
     setError("");
     try {
+      // Range kart icin payload: analyst = "A||B", recovery = |A-B|/avg*100 (client-side hesap)
+      const payload = isRangeCard
+        ? {
+            analyst: `${form.analyst}||${form.analystB}`,
+            value: form.value,
+            target_value: form.target_value,
+            unit: null,
+            recovery: Number.isFinite(formRangePct) ? formRangePct : undefined,
+            measured_at: form.measured_at,
+            point_id: editingId,
+            component_card_id: activeComponent.id,
+          }
+        : { ...form, point_id: editingId, component_card_id: activeComponent.id };
       const res = await fetch(`/api/eurolab/qc-cards/${cardId}`, {
         method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ ...form, point_id: editingId, component_card_id: activeComponent.id }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || (editingId ? "Veri güncellenemedi." : "Veri eklenemedi."));
@@ -353,13 +380,26 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
 
   const startEdit = (point: QcPoint) => {
     setEditingId(point.id);
-    setForm({
-      analyst: point.analyst || "",
-      value: point.value == null ? "" : String(point.value),
-      target_value: point.target_value == null ? "" : String(point.target_value),
-      unit: point.unit || activeComponent?.unit || "mg/kg",
-      measured_at: point.measured_at ? point.measured_at.slice(0, 10) : "",
-    });
+    if (card?.card_type === "RANGE") {
+      const { a, b } = splitRangeAnalysts(point.analyst);
+      setForm({
+        analyst: a,
+        analystB: b,
+        value: point.value == null ? "" : String(point.value),
+        target_value: point.target_value == null ? "" : String(point.target_value),
+        unit: "",
+        measured_at: point.measured_at ? point.measured_at.slice(0, 10) : "",
+      });
+    } else {
+      setForm({
+        analyst: point.analyst || "",
+        analystB: "",
+        value: point.value == null ? "" : String(point.value),
+        target_value: point.target_value == null ? "" : String(point.target_value),
+        unit: point.unit || activeComponent?.unit || "mg/kg",
+        measured_at: point.measured_at ? point.measured_at.slice(0, 10) : "",
+      });
+    }
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
@@ -475,53 +515,104 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
           <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--color-border-light)" }}>
             <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>{editingId ? "Veri Güncelle" : "Yeni Veri"}</h2>
           </div>
-          <form onSubmit={savePoint} className={styles.modalBody} style={{ padding: 14 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, alignItems: "end" }}>
-              <div className={styles.formGroup}>
-                <label>Personel</label>
-                <select value={form.analyst} onChange={event => setForm(current => ({ ...current, analyst: event.target.value }))}>
-                  <option value="">Seçiniz</option>
-                  {selectablePersonnel.map(person => <option key={person} value={person}>{person}</option>)}
-                </select>
-              </div>
-              <div className={styles.formGroup}>
-                <label>Tarih</label>
-                <input type="date" value={form.measured_at} onChange={event => setForm(current => ({ ...current, measured_at: event.target.value }))} />
-              </div>
-              <div className={styles.formGroup}>
-                <label>Ölçüm Değeri</label>
-                <input value={form.value} onChange={event => setForm(current => ({ ...current, value: event.target.value }))} inputMode="decimal" required />
-              </div>
-              <div className={styles.formGroup}>
-                <label>Hedef Değer <span className={styles.required}>*</span></label>
-                <input value={form.target_value} onChange={event => setForm(current => ({ ...current, target_value: event.target.value }))} inputMode="decimal" required />
-              </div>
-              <div className={styles.formGroup}>
-                <label>Birim</label>
-                <select value={form.unit} onChange={event => setForm(current => ({ ...current, unit: event.target.value }))}>
-                  {selectableUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
-                </select>
-              </div>
-              <div className={styles.formGroup}>
-                <label>Geri Kazanım (%)</label>
-                <input value={Number.isFinite(formRecovery) ? formatNumber(formRecovery, 3) : ""} readOnly placeholder="Otomatik hesaplanır" />
-              </div>
-              <div className={styles.formGroup}>
-                <label>Yasal Aralık (%)</label>
-                <input value={formLegalLimit ? `${formatNumber(formLegalLimit.low)} - ${formatNumber(formLegalLimit.high)}` : ""} readOnly placeholder="Otomatik" />
-              </div>
-              <div className={styles.formGroup} style={{ justifyContent: "flex-end" }}>
-                <button className={styles.saveBtn} type="submit" disabled={saving}>
-                  {saving ? <span className={styles.loader} /> : <><Plus size={15} /> {editingId ? "Güncelle" : "Ekle"}</>}
-                </button>
-                {editingId && (
-                  <button className={styles.cancelBtn} type="button" onClick={cancelEdit} disabled={saving}>
-                    <X size={15} /> Vazgeç
+          {isRangeCard ? (
+            <form onSubmit={savePoint} className={styles.modalBody} style={{ padding: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, alignItems: "end" }}>
+                <div className={styles.formGroup}>
+                  <label>Tarih</label>
+                  <input type="date" value={form.measured_at} onChange={event => setForm(current => ({ ...current, measured_at: event.target.value }))} required />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Analist A <span className={styles.required}>*</span></label>
+                  <select value={form.analyst} onChange={event => setForm(current => ({ ...current, analyst: event.target.value }))} required>
+                    <option value="">Seçiniz</option>
+                    {selectablePersonnel.map(person => <option key={`a-${person}`} value={person}>{person}</option>)}
+                  </select>
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Analist B <span className={styles.required}>*</span></label>
+                  <select value={form.analystB} onChange={event => setForm(current => ({ ...current, analystB: event.target.value }))} required>
+                    <option value="">Seçiniz</option>
+                    {selectablePersonnel.map(person => <option key={`b-${person}`} value={person}>{person}</option>)}
+                  </select>
+                </div>
+                <div className={styles.formGroup}>
+                  <label>A Değeri <span className={styles.required}>*</span></label>
+                  <input value={form.value} onChange={event => setForm(current => ({ ...current, value: event.target.value }))} inputMode="decimal" required />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>B Değeri <span className={styles.required}>*</span></label>
+                  <input value={form.target_value} onChange={event => setForm(current => ({ ...current, target_value: event.target.value }))} inputMode="decimal" required />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Ortalama</label>
+                  <input value={Number.isFinite(formAverage) ? formatNumber(formAverage, 4) : ""} readOnly placeholder="Otomatik" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>%r</label>
+                  <input value={Number.isFinite(formRangePct) ? `${formatNumber(formRangePct, 3)}%` : ""} readOnly placeholder="Otomatik hesaplanır" />
+                </div>
+                <div className={styles.formGroup} style={{ justifyContent: "flex-end" }}>
+                  <button className={styles.saveBtn} type="submit" disabled={saving}>
+                    {saving ? <span className={styles.loader} /> : <><Plus size={15} /> {editingId ? "Güncelle" : "Ekle"}</>}
                   </button>
-                )}
+                  {editingId && (
+                    <button className={styles.cancelBtn} type="button" onClick={cancelEdit} disabled={saving}>
+                      <X size={15} /> Vazgeç
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          </form>
+            </form>
+          ) : (
+            <form onSubmit={savePoint} className={styles.modalBody} style={{ padding: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, alignItems: "end" }}>
+                <div className={styles.formGroup}>
+                  <label>Personel</label>
+                  <select value={form.analyst} onChange={event => setForm(current => ({ ...current, analyst: event.target.value }))}>
+                    <option value="">Seçiniz</option>
+                    {selectablePersonnel.map(person => <option key={person} value={person}>{person}</option>)}
+                  </select>
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Tarih</label>
+                  <input type="date" value={form.measured_at} onChange={event => setForm(current => ({ ...current, measured_at: event.target.value }))} />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Ölçüm Değeri</label>
+                  <input value={form.value} onChange={event => setForm(current => ({ ...current, value: event.target.value }))} inputMode="decimal" required />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Hedef Değer <span className={styles.required}>*</span></label>
+                  <input value={form.target_value} onChange={event => setForm(current => ({ ...current, target_value: event.target.value }))} inputMode="decimal" required />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Birim</label>
+                  <select value={form.unit} onChange={event => setForm(current => ({ ...current, unit: event.target.value }))}>
+                    {selectableUnits.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+                  </select>
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Geri Kazanım (%)</label>
+                  <input value={Number.isFinite(formRecovery) ? formatNumber(formRecovery, 3) : ""} readOnly placeholder="Otomatik hesaplanır" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Yasal Aralık (%)</label>
+                  <input value={formLegalLimit ? `${formatNumber(formLegalLimit.low)} - ${formatNumber(formLegalLimit.high)}` : ""} readOnly placeholder="Otomatik" />
+                </div>
+                <div className={styles.formGroup} style={{ justifyContent: "flex-end" }}>
+                  <button className={styles.saveBtn} type="submit" disabled={saving}>
+                    {saving ? <span className={styles.loader} /> : <><Plus size={15} /> {editingId ? "Güncelle" : "Ekle"}</>}
+                  </button>
+                  {editingId && (
+                    <button className={styles.cancelBtn} type="button" onClick={cancelEdit} disabled={saving}>
+                      <X size={15} /> Vazgeç
+                    </button>
+                  )}
+                </div>
+              </div>
+            </form>
+          )}
         </div>
       )}
 
