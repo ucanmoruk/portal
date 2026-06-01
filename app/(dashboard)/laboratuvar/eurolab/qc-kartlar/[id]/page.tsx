@@ -104,6 +104,15 @@ const pointSourceLabel = (point: QcPoint) => {
   return "Manuel";
 };
 
+const splitRangeAnalysts = (raw: string | null) => {
+  if (!raw) return { a: "", b: "" };
+  if (raw.includes("||")) {
+    const [a, b] = raw.split("||");
+    return { a: (a || "").trim(), b: (b || "").trim() };
+  }
+  return { a: raw.trim(), b: raw.trim() };
+};
+
 const parseDecimal = (value: string) => {
   const parsed = Number(value.replace(",", "."));
   return Number.isFinite(parsed) ? parsed : Number.NaN;
@@ -516,7 +525,60 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
         </div>
       )}
 
-      {card && activeComponent && (
+      {card && activeComponent && card.card_type === "RANGE" && (
+        <div className={styles.tableCard} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
+          <div className={styles.tableWrapper} style={{ width: "100%", maxWidth: "100%", maxHeight: "52vh", overflow: "auto" }}>
+            <table className={styles.table} style={{ minWidth: 980, fontSize: "0.72rem", tableLayout: "fixed" }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 56, padding: "12px 8px" }}>Sıra No</th>
+                  <th style={{ width: 88, padding: "6px 8px" }}>A</th>
+                  <th style={{ width: 88, padding: "6px 8px" }}>B</th>
+                  <th style={{ width: 92, padding: "6px 8px" }}>Ortalama</th>
+                  <th style={{ width: 84, padding: "6px 8px" }}>%r</th>
+                  <th style={{ width: 80, padding: "6px 8px" }}>Birim</th>
+                  <th style={{ width: 92, padding: "6px 8px" }}>Tarih</th>
+                  <th style={{ width: 130, padding: "6px 8px" }}>Analist A</th>
+                  <th style={{ width: 130, padding: "6px 8px" }}>Analist B</th>
+                  <th style={{ width: 104, padding: "6px 8px" }}>Kaynak</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dataRows.length === 0 ? (
+                  <tr><td colSpan={10}><div className={styles.empty}>Veri bulunamadı.</div></td></tr>
+                ) : dataRows.map(point => {
+                  const pointUnit = point.unit || activeComponent.unit || null;
+                  const A = point.value;
+                  const B = point.target_value;
+                  const avg = (typeof A === "number" && typeof B === "number" && Number.isFinite(A) && Number.isFinite(B))
+                    ? (A + B) / 2 : null;
+                  const { a: analystA, b: analystB } = splitRangeAnalysts(point.analyst);
+                  return (
+                    <tr key={point.id}>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{point.sequence_no}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(A, 4)}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(B, 4)}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatNumber(avg, 4)}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{`${formatNumber(point.recovery, 3)}%`}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{pointUnit || "-"}</td>
+                      <td className={styles.tdMono} style={{ padding: "5px 8px" }}>{formatDate(point.measured_at || point.created_at)}</td>
+                      <td style={{ padding: "5px 8px" }}>{analystA || "-"}</td>
+                      <td style={{ padding: "5px 8px" }}>{analystB || "-"}</td>
+                      <td>
+                        <span className={`${styles.badge} ${point.locked ? styles.badgeGray : styles.badgeGreen}`}>
+                          {pointSourceLabel(point)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {card && activeComponent && card.card_type !== "RANGE" && (
         <div className={styles.tableCard} style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}>
           <div className={styles.tableWrapper} style={{ width: "100%", maxWidth: "100%", maxHeight: "52vh", overflow: "auto" }}>
             <table className={styles.table} style={{ minWidth: 980, fontSize: "0.72rem", tableLayout: "fixed" }}>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasEurolabDatabaseConfig } from "@/lib/db_eurolab";
-import { createRecoveryCardsFromValidation, deleteQcCardGroup, findQcCardGroupByValidation, listQcCards } from "@/lib/eurolab_qc_cards";
+import { createRangeCardsFromValidation, createRecoveryCardsFromValidation, deleteQcCardGroup, findQcCardGroupByValidation, listQcCards } from "@/lib/eurolab_qc_cards";
 
 export async function GET(request: Request) {
   try {
@@ -30,17 +30,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Validasyon seçimi zorunludur." }, { status: 400 });
     }
 
-    if (cardType === "AVERAGE" || cardType === "RANGE") {
-      return NextResponse.json({ error: "Bu kart tipi için hesaplama kurgusu sonraki aşamada eklenecek." }, { status: 400 });
+    if (cardType === "AVERAGE") {
+      return NextResponse.json({ error: "Ortalama kart tipi henüz desteklenmiyor." }, { status: 400 });
     }
 
-    if (cardType !== "RECOVERY") {
+    if (cardType !== "RECOVERY" && cardType !== "RANGE") {
       return NextResponse.json({ error: "Geçerli bir QC kart tipi seçiniz." }, { status: 400 });
     }
 
-    const existingGroup = await findQcCardGroupByValidation(validationId, "RECOVERY");
+    const existingGroup = await findQcCardGroupByValidation(validationId, cardType);
     if (existingGroup) return NextResponse.json(existingGroup);
 
+    if (cardType === "RANGE") {
+      return NextResponse.json(await createRangeCardsFromValidation(validationId));
+    }
     return NextResponse.json(await createRecoveryCardsFromValidation(validationId));
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "QC kart oluşturulamadı.";

@@ -772,5 +772,220 @@ export async function createRecoveryCardsFromValidation(validationId: number) {
 }
 
 export async function createRangeCardsFromValidation(validationId: number) {
-  return createRecoveryCardsFromValidation(validationId);
+  await ensureQcCardSchema();
+
+  const validationResult = await query(`
+    SELECT
+      v.id,
+      COALESCE(v.code, 'VAL-' || v.id::text) AS code,
+      COALESCE(m.name, v.title) AS method_name,
+      COALESCE(v.config, '{}'::jsonb) AS config
+    FROM eurolab_validations v
+    LEFT JOIN eurolab_methods m ON m.id = v.method_id
+    WHERE v.id = $1
+  `, [validationId]);
+
+  if (validationResult.rowCount === 0) {
+    throw new Error("Validasyon bulunamadı.");
+  }
+
+  const validation = validationResult.rows[0] as ValidationForQc;
+  const config = asRecord(validation.config);
+  const moduleData = asRecord(config.moduleData);
+  const repeatData = asRecord(moduleData.PRECISION_REPEATABILITY);
+  const reproData = asRecord(moduleData.PRECISION_REPRODUCIBILITY);
+
+  // Range kart icin REPEATABILITY zorunlu (Sinir verisi); REPRO opsiyonel (Ornek/Takip)
+  const componentNames = Array.from(new Set([...Object.keys(repeatData), ...Object.keys(reproData)]));
+  if (componentNames.length === 0) {
+    throw new Error("Range kart için PRECISION_REPEATABILITY veya PRECISION_REPRODUCIBILITY verisi bulunamadı.");
+  }
+
+  const BASELINE_PER_ANALYST = 5;   // her analistten 5 paralel cift -> Sinir
+  const FLOW_ROWS = 2;              // REPRO'dan ilk 2 satir -> Ornek/Takip
+  const F_WARNING = 2.83;           // S * 2.83 = UUL
+  const F_CONTROL = 3.69;           // S * 3.69 = UKL
+
+  type RangePoint = { A: number; B: number; avg: number; r: number; analystA: string | null; analystB: string | null; date: string | null };
+
+  const createdCards: QcCardComponent[] = [];
+
+  for (const componentName of componentNames) {
+    const compRepeat = asRecord(repeatData[componentName]);
+    const compRepro = asRecord(reproData[componentName]);
+
+    const unit = (typeof compRepeat.unitLabel === "string" && compRepeat.unitLabel) ? compRepeat.unitLabel
+              : (typeof compRepro.unitLabel === "string" && compRepro.unitLabel) ? compRepro.unitLabel
+              : (typeof compRepeat.unit === "string" ? compRepeat.unit : null)
+              ?? (typeof compRepro.unit === "string" ? compRepro.unit : null);
+
+    // 1) Baseline (Sinir) - REPEATABILITY rawData[level-0][analyst] = [[A,B], ...]
+    const rawData = asRecord(compRepeat.rawData);
+    const levelKeys = Object.keys(rawData).sort();
+    const firstLevel = asRecord(rawData[levelKeys[0]]);
+    const baselinePoints: RangePoint[] = [];
+    for (const [analystName, pairsRaw] of Object.entries(firstLevel)) {
+      if (!Array.isArray(pairsRaw)) continue;
+      const pairs = pairsRaw.slice(0, BASELINE_PER_ANALYST);
+      for (const pairRaw of pairs) {
+        const pair = Array.isArray(pairRaw) ? pairRaw : [];
+        const A = parseNumber(pair[0]);
+        const B = parseNumber(pair[1]);
+        if (!Number.isFinite(A) || !Number.isFinite(B)) continue;
+        const avg = (A + B) / 2;
+        if (!Number.isFinite(avg) || avg === 0) continue;
+        const r = Math.abs(A - B) / Math.abs(avg) * 100;
+        // Baseline (REPEAT): A ve B ayni analist tarafindan parallel olcum
+        baselinePoints.push({ A, B, avg, r, analystA: analystName, analystB: analystName, date: null });
+      }
+    }
+
+    // 2) Flow (Ornek/Takip) - REPRODUCIBILITY rows
+    const reproRows = Array.isArray(compRepro.rows) ? compRepro.rows : [];
+    const reproAnalysts = asStringArray(compRepro.analysts);
+    const flowPoints: RangePoint[] = [];
+    for (const r of reproRows.slice(0, FLOW_ROWS)) {
+      const row = asRecord(r);
+      const values = Array.isArray(row.values) ? row.values : [];
+      const A = parseNumber(values[0]);
+      const B = parseNumber(values[1]);
+      if (!Number.isFinite(A) || !Number.isFinite(B)) continue;
+      const avg = (A + B) / 2;
+      if (!Number.isFinite(avg) || avg === 0) continue;
+      const rPct = Math.abs(A - B) / Math.abs(avg) * 100;
+      const date = typeof row.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.date) ? row.date : null;
+      // Flow (REPRO): A = analist1, B = analist2 (analist karsilastirmasi)
+      const analystA = reproAnalysts[0] || null;
+      const analystB = reproAnalysts[1] || reproAnalysts[0] || null;
+      flowPoints.push({ A, B, avg, r: rPct, analystA, analystB, date });
+    }
+
+    if (baselinePoints.length === 0) continue;
+
+    // S = mean of baseline %r (validasyon repeatability'nin RSD'si gibi)
+    const baselineR = baselinePoints.map(p => p.r);
+    const S = sampleMean(baselineR);
+    const standardDeviation = sampleStandardDeviation(baselineR);
+    const centerLine = S;
+    const upperWarningLimit = S * F_WARNING;  // ÜUL
+    const upperControlLimit = S * F_CONTROL;  // ÜKL
+    // Alt sinir/yasal yok: NULL
+
+    const cardResult = await query(`
+      INSERT INTO eurolab_qc_cards
+        (
+          code, validation_id, validation_code, method_name, component_name, card_type,
+          lower_limit, center_line, upper_limit,
+          lower_warning_limit, upper_warning_limit, lower_control_limit, upper_control_limit,
+          lower_legal_limit, upper_legal_limit, standard_deviation,
+          unit, source_data, metadata
+        )
+      VALUES (
+        $1, $2, $3, $4, $5, 'RANGE',
+        0, $6, $7,
+        0, $7, 0, $8,
+        NULL, NULL, $9,
+        $10, $11::jsonb, $12::jsonb
+      )
+      ON CONFLICT (validation_id, component_name, card_type)
+      DO UPDATE SET
+        validation_code = EXCLUDED.validation_code,
+        method_name = EXCLUDED.method_name,
+        lower_limit = EXCLUDED.lower_limit,
+        center_line = EXCLUDED.center_line,
+        upper_limit = EXCLUDED.upper_limit,
+        lower_warning_limit = EXCLUDED.lower_warning_limit,
+        upper_warning_limit = EXCLUDED.upper_warning_limit,
+        lower_control_limit = EXCLUDED.lower_control_limit,
+        upper_control_limit = EXCLUDED.upper_control_limit,
+        lower_legal_limit = NULL,
+        upper_legal_limit = NULL,
+        standard_deviation = EXCLUDED.standard_deviation,
+        unit = EXCLUDED.unit,
+        source_data = EXCLUDED.source_data,
+        metadata = EXCLUDED.metadata,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING
+        id, code, card_type, validation_id, validation_code, method_name, component_name,
+        lower_limit::float AS lower_limit,
+        center_line::float AS center_line,
+        upper_limit::float AS upper_limit,
+        lower_warning_limit::float AS lower_warning_limit,
+        upper_warning_limit::float AS upper_warning_limit,
+        lower_control_limit::float AS lower_control_limit,
+        upper_control_limit::float AS upper_control_limit,
+        lower_legal_limit::float AS lower_legal_limit,
+        upper_legal_limit::float AS upper_legal_limit,
+        standard_deviation::float AS standard_deviation,
+        unit,
+        created_at,
+        updated_at
+    `, [
+      `QC-R-${validation.code}-${componentName}`.replace(/\s+/g, "-").slice(0, 60),
+      validation.id,
+      validation.code,
+      validation.method_name,
+      componentName,
+      centerLine,           // $6 center = S
+      upperWarningLimit,    // $7 ÜUL = S * 2.83
+      upperControlLimit,    // $8 ÜKL = S * 3.69
+      standardDeviation,    // $9
+      unit,                 // $10
+      JSON.stringify({
+        repeatability: compRepeat,
+        reproducibility: compRepro,
+        baselineCount: baselinePoints.length,
+        flowCount: flowPoints.length,
+        formula: "%r = |A-B|/avg(A,B) * 100",
+      }),
+      JSON.stringify({
+        source: "PRECISION_REPEATABILITY+PRECISION_REPRODUCIBILITY",
+        cardType: "RANGE",
+        limitRule: "S = mean(%r baseline); ÜUL = S × 2.83; ÜKL = S × 3.69; alt limit yok",
+        S: centerLine,
+        warningFactor: F_WARNING,
+        controlFactor: F_CONTROL,
+        upperWarningLimit,
+        upperControlLimit,
+        baselinePerAnalyst: BASELINE_PER_ANALYST,
+        flowRows: FLOW_ROWS,
+      }),
+    ]);
+
+    const card = cardResult.rows[0] as QcCardComponent;
+    await query(`DELETE FROM eurolab_qc_card_points WHERE card_id = $1 AND source IN ('VALIDATION', 'VALIDATION_BASELINE', 'VALIDATION_FLOW')`, [card.id]);
+
+    // Range kart noktasi sema:
+    //   value         = A (1. paralel)
+    //   target_value  = B (2. paralel)
+    //   recovery      = %r (grafikte Y)
+    //   analyst       = "analystA||analystB" (iki analist, ayni kisi olsa da iki kez yazilir)
+    let seq = 0;
+    for (const p of baselinePoints) {
+      seq++;
+      const analystField = `${p.analystA || ""}||${p.analystB || ""}`;
+      await query(`
+        INSERT INTO eurolab_qc_card_points
+          (card_id, sequence_no, label, analyst, value, target_value, unit, recovery, source, locked, measured_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'VALIDATION_BASELINE', true, NULL)
+      `, [card.id, seq, `Sınır ${seq}`, analystField, p.A, p.B, unit, p.r]);
+    }
+    for (const p of flowPoints) {
+      seq++;
+      const analystField = `${p.analystA || ""}||${p.analystB || ""}`;
+      await query(`
+        INSERT INTO eurolab_qc_card_points
+          (card_id, sequence_no, label, analyst, value, target_value, unit, recovery, source, locked, measured_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'VALIDATION_FLOW', true, $9::date)
+      `, [card.id, seq, `Örnek ${seq - baselinePoints.length}`, analystField, p.A, p.B, unit, p.r, p.date]);
+    }
+
+    createdCards.push(card);
+  }
+
+  if (createdCards.length === 0) {
+    throw new Error("Range kart için yeterli paralel ölçüm verisi bulunamadı.");
+  }
+
+  return findQcCardGroupByValidation(validationId, "RANGE");
 }
