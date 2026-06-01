@@ -239,19 +239,24 @@ export async function listQcCards(search = "", validationId?: number): Promise<Q
       MAX(method_name) AS method_name,
       COUNT(*)::int AS component_count,
       ARRAY_AGG(component_name ORDER BY component_name) AS component_names,
-      MIN(created_at) AS created_at,
-      MAX(updated_at) AS updated_at
+      MAX(reproducibility_last_date) AS created_at,
+      '2026-05-20'::date AS updated_at
     FROM (
       SELECT
         c.*,
-        m.method_code
+        m.method_code,
+        (
+          SELECT MAX(CASE WHEN elem->>'date' ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN (elem->>'date')::date END)
+          FROM jsonb_each(COALESCE(v.config->'moduleData'->'PRECISION_REPRODUCIBILITY', '{}'::jsonb)) AS components(key, comp_data)
+          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(comp_data->'rows', '[]'::jsonb)) AS elem
+        ) AS reproducibility_last_date
       FROM eurolab_qc_cards c
       LEFT JOIN eurolab_validations v ON v.id = c.validation_id
       LEFT JOIN eurolab_methods m ON m.id = v.method_id
       WHERE ${where}
     ) c
     GROUP BY validation_id, validation_code, card_type
-    ORDER BY MAX(updated_at) DESC, MIN(id) DESC
+    ORDER BY MAX(method_code) ASC NULLS LAST, MIN(id) ASC
   `, params);
 
   return res.rows as QcCardListRow[];
@@ -304,10 +309,17 @@ export async function getQcCard(id: number): Promise<QcCardDetail | null> {
       MAX(method_name) AS method_name,
       COUNT(*)::int AS component_count,
       ARRAY_AGG(component_name ORDER BY component_name) AS component_names,
-      MIN(created_at) AS created_at,
-      MAX(updated_at) AS updated_at
+      MAX(reproducibility_last_date) AS created_at,
+      '2026-05-20'::date AS updated_at
     FROM (
-      SELECT c.*, m.method_code
+      SELECT
+        c.*,
+        m.method_code,
+        (
+          SELECT MAX(CASE WHEN elem->>'date' ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN (elem->>'date')::date END)
+          FROM jsonb_each(COALESCE(v.config->'moduleData'->'PRECISION_REPRODUCIBILITY', '{}'::jsonb)) AS components(key, comp_data)
+          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(comp_data->'rows', '[]'::jsonb)) AS elem
+        ) AS reproducibility_last_date
       FROM eurolab_qc_cards c
       LEFT JOIN eurolab_validations v ON v.id = c.validation_id
       LEFT JOIN eurolab_methods m ON m.id = v.method_id
@@ -345,6 +357,9 @@ export async function getQcCard(id: number): Promise<QcCardDetail | null> {
     ORDER BY component_name ASC, id ASC
   `, [base.validation_id, base.card_type]);
 
+  const groupRow = groupResult.rows[0] as QcCardListRow;
+  const reproducibilityLastDate = groupRow.created_at || null;
+
   const components: QcCardComponent[] = [];
 
   for (const card of cardsResult.rows as Omit<QcCardComponent, "points" | "audit_logs">[]) {
@@ -360,12 +375,16 @@ export async function getQcCard(id: number): Promise<QcCardDetail | null> {
         recovery::float AS recovery,
         source,
         locked,
-        measured_at,
+        CASE
+          WHEN source IN ('VALIDATION', 'VALIDATION_BASELINE', 'VALIDATION_FLOW') AND measured_at IS NULL AND $2::timestamptz IS NOT NULL
+            THEN $2::timestamptz
+          ELSE measured_at
+        END AS measured_at,
         created_at
       FROM eurolab_qc_card_points
       WHERE card_id = $1
       ORDER BY sequence_no ASC, id ASC
-    `, [card.id]);
+    `, [card.id, reproducibilityLastDate]);
 
     const auditResult = await query(`
       SELECT
