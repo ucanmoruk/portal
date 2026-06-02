@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import type { ComponentType } from "react";
 import GenelReport from "./formats/GenelReport";
 import ChallengeReport from "./formats/ChallengeReport";
+import DetayRaporReport from "./formats/DetayRaporReport";
 import type { ReportFormatProps } from "./reportTypes";
 import { loadRaporViewData } from "@/lib/raporViewData";
 
@@ -14,6 +15,13 @@ export const metadata = { title: "Analiz Raporu — Onay Önizleme" };
 const FORMAT_COMPONENTS: Record<string, ComponentType<ReportFormatProps>> = {
   Genel: GenelReport,
   Challenge: ChallengeReport,
+  DetayRapor: DetayRaporReport,
+};
+
+// Bazı formatlar veriyi başka bir formattan yükler (örn. DetayRapor → Genel).
+// StokAnalizListesi.RaporFormati alanı sorgulanırken bu eşleştirme kullanılır.
+const DATA_FORMAT_ALIAS: Record<string, string> = {
+  DetayRapor: "Genel",
 };
 
 function resolveFormatComponent(format: string): ComponentType<ReportFormatProps> {
@@ -41,7 +49,9 @@ export default async function RaporOnayPrintPage({
 
   // ÖNEMLI: Önizleme ve imzalı PDF AYNI veri yükleyiciyi kullanır →
   // ekranda görünen ile imzalanan/doğrulanan içerik HER ZAMAN birebir aynı.
-  const data = await loadRaporViewData(nkrIdNum, format);
+  // DetayRapor gibi türetilmiş formatlar veriyi alias üzerinden çeker.
+  const dataFormat = DATA_FORMAT_ALIAS[format] ?? format;
+  const data = await loadRaporViewData(nkrIdNum, dataFormat);
   if (!data) {
     return <div style={{ padding: 40, fontFamily: "system-ui" }}>Rapor bulunamadı.</div>;
   }

@@ -337,6 +337,11 @@ export default function ChallengeReport({
           padding-top: 3mm;
         }
 
+        .FooterNot{
+        font-size:6px;
+        text-align: justify;
+        }
+
         @media print {
           body { background: #fff; }
           .onay-toolbar { display: none !important; }
@@ -442,68 +447,156 @@ export default function ChallengeReport({
             </tbody>
           </table>
 
+      
+
           {/* ───── TEST SONUÇLARI ───── */}
           <div className="results-section">
             <div className="results-title">TEST SONUÇLARI</div> *Koruyucu Etkinlik (Challenge) Testi – ISO 11930
             <div className="notlar-body"> </div>
-            <table className="results">
+            <table className="limit-table" style={{width: "100%", marginTop: 10, borderCollapse: "collapse", tableLayout: "fixed", fontSize: "9.5px", lineHeight: 1.1}}>
               <thead>
                 <tr>
-                  <th style={{ width: "auto"}}>Parametre</th>
-                  <th style={{ width: 50 }}>İnokülasyon (Cfu) N</th>
-                  <th style={{ padding:0 }}>
-                    <div className="inner-grid">
-                      <div className="grid-header">Numune Sayımı kob/g [Nx = C / (Vxd)]</div>
-                      <div className="grid-item">0. Gün N0</div>
-                      <div className="grid-item">7. Gün N7</div>
-                      <div className="grid-item">14. Gün N14</div>
-                      <div className="grid-item">28. Gün N28</div>
-                    </div> </th>     
-                  <th style={{ padding:0 }}>
-                  <div className="inner-grid">
-                      <div className="grid-header">Numune Sayımı kob/g [Nx = C / (Vxd)]</div>
-                      <div className="grid-item">7. Gün N7</div>
-                      <div className="grid-item">14. Gün N14</div>
-                      <div className="grid-item">28. Gün N28</div>
-                    </div></th>
-                  <th style={{ width: 100, textAlign: "center" }}>Değerlendirme</th>
-                </tr>
+                  <th rowSpan={2} style={{ width: "21%", textAlign: "left", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px 5px" }}>Parametre</th>
+                  <th rowSpan={2} style={{ width: "11%", textAlign: "left", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px 5px" }}>İnokülasyon (Cfu) N</th>
+                  <th colSpan={4} style={{ textAlign: "left", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px 5px" }}>Numune Sayımı kob/g </th>
+                  <th colSpan={3} style={{ textAlign: "left", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px 5px" }}>Düşüş (Log)</th>
+                  <th rowSpan={2} style={{ width: "15%", textAlign: "left", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px 5px" }}>Değerlendirme</th>
+                 </tr>
+                  <tr>
+                    <th style={{ width: "11%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>0. Gün<br />N0</th>
+                    <th style={{ width: "7%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>7. Gün N7</th>
+                    <th style={{ width: "7%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>14. Gün N14</th>
+                    <th style={{ width: "7%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>28. Gün N28</th>
+                    <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>7. Gün<br />N7</th>
+                    <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>14. Gün N14</th>
+                    <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>28. Gün N28</th>
+                  </tr>
               </thead>
               <tbody>
-                {hizmetler.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: "center", color: "#6e6e73", padding: "30px" }}>
-                      Bu rapor formatına ait hizmet bulunamadı.
-                    </td>
-                  </tr>
-                ) : (
-                  hizmetler.map((h, i) => {
-                    const isAkr = String(h.Akreditasyon || "").trim().toLowerCase() === "var";
-                    const deg = degerlendirmeLabel(h.Degerlendirme);
-                    return (
-                      <tr key={i}>
-                        <td style={{paddingRight:10 }}>
-                          {isAkr ? "*" : ""}{h.Ad}
-                        </td>
-                        <td className="center">{h.Birim || "-"}</td>
-                        <td className="center">{h.Sonuc || "-"}</td>
-                        <td className="center" style={{ paddingLeft: 5 }}>{h.LOQ || "-"}</td>
-                        <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
-                        <td className="center" style={{ paddingLeft: 5 }}>{h.Metot || "-"}</td>
-                        <td className="center">{h.LimitDeger || "-"}</td>
-                        <td className="center">{h.LimitDeger || "-"}</td>
-                        <td className="center">{h.LimitDeger || "-"}</td>
-                        <td className="center">{h.LimitDeger || "-"}</td>
-                        <td className={deg.cls} style={{textAlign:"center"}}>{deg.text}</td>
-                      </tr>
-                    );
-                  })
-                )}
+                <tr>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>Pseudomonas aeruginosa</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,7 x 10^7</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,7 x 10^7</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>3.2x10^5</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1.8x10^4</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td rowSpan={5} style={{ border: "1px solid #ccc", padding: "2px 5px", textAlign: "center", verticalAlign: "middle", fontWeight: 700 }}>Uygun</td>
+                </tr>
+                <tr>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>Escherichia coli</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,9 x 10^7</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,9 x 10^7</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>3.2x10^5</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1.8x10^4</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>10</td>
+                </tr>
+                <tr>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>Staphylococcus aureus</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,5 x 10^7</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,5 x 10^7</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>3.2x10^5</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1.8x10^4</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>10</td>
+                </tr>
+                <tr>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>Candida albicans</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,8 x 10^6</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,8 x 10^7</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>4.0x10^4</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>2.5x10^3</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>10</td>
+                </tr>
+                <tr>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>Aspergillus brasiliensis</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,4 x 10^6</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,4 x 10^7</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>-</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>2.5x10^3</td>
+                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>10</td>
+                </tr>
               </tbody>
             </table>
           </div>
 
-          {/* ───── NOTLAR ───── */}
+          {/* --limitler-- */}
+         <div style={{marginTop:"10px"}}>Test Limitleri</div>
+          <table className="limit-table" style={{ width: "100%", marginTop:"5px",
+            tableLayout: "fixed", borderCollapse: "collapse", textAlign: "center", verticalAlign: "middle", fontSize: "9.5px", lineHeight: 1.1 }}>
+  <thead>
+    {/* 1. SATIR: Ana Başlıklar (Mikroorganizmalar) */}
+    <tr>
+      <th style={{ width:"20%", border: "1px solid #ccc", padding: "2px 5px", verticalAlign:"middle"}}>
+        Mikroorganizma
+      </th>
+      <th colSpan={3} style={{ border: "1px solid #ccc", padding: "2px 5px", verticalAlign:"middle" }}>
+        Bacteria</th>
+      <th colSpan={3} style={{ border: "1px solid #ccc", padding: "2px 5px", verticalAlign:"middle"}}>
+        C.Albicans </th>
+      <th colSpan={2} style={{ border: "1px solid #ccc", padding: "2px 5px", verticalAlign:"middle"}}>
+        A.brasiliensis </th>
+    </tr>
+
+    {/* 2. SATIR: Alt Başlıklar (Süreler) */}
+    <tr>
+      <th style={{ border: "1px solid #ccc", padding: "2px 5px", verticalAlign:"middle" }}>
+        Örnekleme Süresi
+      </th>
+      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px" }}>T7</th>
+      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px" }}>T14</th>
+      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px" }}>T28</th>
+      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px" }}>T7</th>
+      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px"}}>T14</th>
+      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px" }}>T28</th>
+      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px"}}>T14</th>
+      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px" }}>T28</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    {/* 3. SATIR: Kriter A Verileri */}
+    <tr>
+      <td style={{ border: "1px solid #ccc", padding: "2px 5px", fontWeight: "bold" }}>Kriter A</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥3</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥3 ve NIᵇ</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥3 ve NI</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥1</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥0C</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
+    </tr>
+
+    {/* 4. SATIR: Kriter B Verileri */}
+    <tr>
+      <td style={{ border: "1px solid #ccc", padding: "2px 5px", fontWeight: "bold" }}>Kriter B</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>-</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥3</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥3 ve NI</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>-</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥1</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥0</td>
+      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥0 ve NI</td>
+    </tr>
+  </tbody>
+</table>
+
+              {/* ───── NOTLAR ───── */}
           <div className="notlar">
           <div className="results-title" style={{marginBottom:"4px"}}>AÇIKLAMALAR</div>    
               {testBaslangic && testBitis ? (
@@ -513,24 +606,7 @@ export default function ChallengeReport({
                 </>
               ) : null}
             <br></br>Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir. 
-            <div className="notlar-title" style={{ marginTop: 5 }}>NOTLAR</div>
-            <div className="notlar-body">
-              <span className="legend">LOQ:</span> Tespit Limiti, <span className="legend">Ö.B.:</span> Ölçüm Belirsizliği
-               <br></br>&ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.
-               <br></br>
-                Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Analiz Raporları geçersizdir.
-                {" "}{sirketAdi}&apos;nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya
-                herhangi bir başka amaçla kullanılamaz.
-              
-            <br></br>
-                Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.
-                Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından
-                beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal
-                zorunluluklardan laboratuvarımız sorumlu değildir.
-              <br></br>
-                <span className="legend">Karar Kuralı:</span>{" "} Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır.
-                
-            </div>
+         
           </div>
 
           {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ───── */}
@@ -581,6 +657,14 @@ export default function ChallengeReport({
           </div>
 
           {/* ───── FOOTER ───── */}
+
+          <div className="FooterNot">
+                &ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Analiz Raporları geçersizdir.{" "}{sirketAdi}&apos;nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya herhangi bir başka amaçla kullanılamaz.Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal zorunluluklardan laboratuvarımız sorumlu değildir. Karar Kuralı: Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır.
+          </div>
+
+
+
+
              <div className="footer" style={{marginTop:"5px"}}>
             <span> {process.env.SIRKET_EMAIL || "info@uniqueanalyse.com"}</span>
             <span>Ek-1.PR.20 Geçerlilik Tarihi: 25.11.2024 / 01</span>            
