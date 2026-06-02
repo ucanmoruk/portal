@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Edit, Eye, FileText, Printer } from "lucide-react";
+import { Edit, Eye, FileText, Printer, Trash2 } from "lucide-react";
 import styles from "@/app/styles/table.module.css";
 
 interface RawdataRow {
@@ -48,6 +48,7 @@ export default function HamveriTable() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const pages = useMemo(() => buildPages(page, pageCount), [page, pageCount]);
@@ -75,6 +76,28 @@ export default function HamveriTable() {
 
   useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  const handleDelete = useCallback(async (row: RawdataRow) => {
+    const label = row.code ? `${row.code} — ${row.sample_name}` : row.sample_name;
+    if (!window.confirm(`"${label}" kaydı silinsin mi? Bu işlem geri alınamaz.`)) return;
+    setDeletingId(row.id);
+    setError("");
+    try {
+      const res = await fetch(`/api/eurolab/rawdata/${row.id}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      const contentType = res.headers.get("content-type") || "";
+      const json = contentType.includes("application/json") ? await res.json() : null;
+      if (!res.ok) throw new Error(json?.error || "Kayıt silinemedi.");
+      // Listeyi tazele
+      await fetchData();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Kayıt silinemedi."));
+    } finally {
+      setDeletingId(null);
+    }
   }, [fetchData]);
 
   useEffect(() => {
@@ -137,7 +160,7 @@ export default function HamveriTable() {
                 <th style={{ width: 130 }}>Yaş Grubu</th>
                 <th style={{ width: 120 }}>Test Durumu</th>
                 <th style={{ width: 110 }}>Tarih</th>
-                <th style={{ width: 118 }}></th>
+                <th style={{ width: 150 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -194,6 +217,15 @@ export default function HamveriTable() {
                           <Edit size={14} />
                         </button>
                       </Link>
+                      <button
+                        className={styles.editBtn}
+                        title="Sil"
+                        onClick={() => handleDelete(row)}
+                        disabled={deletingId === row.id}
+                        style={{ color: "#c0392b" }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </td>
                 </tr>

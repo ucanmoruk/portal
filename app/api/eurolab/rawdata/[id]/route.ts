@@ -35,6 +35,30 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 }
 
+export async function DELETE(_request: Request, context: RouteContext) {
+  try {
+    if (!hasEurolabDatabaseConfig()) {
+      return NextResponse.json({ error: "Eurolab hamveri veritabanı bağlantısı eksik." }, { status: 500 });
+    }
+
+    await ensureEurolabRawdataTable();
+
+    const { id } = await context.params;
+    const result = await query(
+      `DELETE FROM eurolab_rawdata WHERE id = $1 RETURNING id`,
+      [Number(id)],
+    );
+
+    if (result.rowCount === 0) {
+      return NextResponse.json({ error: "Hamveri kaydı bulunamadı." }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, id: result.rows[0].id });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Hamveri kaydı silinemedi.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 export async function PUT(request: Request, context: RouteContext) {
   try {
     if (!hasEurolabDatabaseConfig()) {

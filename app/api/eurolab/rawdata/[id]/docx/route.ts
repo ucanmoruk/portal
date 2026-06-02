@@ -34,26 +34,41 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         const safeCode = String(record.code || `hamveri-${id}`).replace(/[^\w.\-]+/g, "_");
         const filename = `Hamveri-${safeCode}.docx`;
 
-        // Next.js Response gövdesi için Buffer yerine Uint8Array kullanıyoruz —
-        // bazı sürümlerde Buffer body'si yanlış encode edilebiliyor, bu da Word'ün
-        // "dosya bozuk" demesine yol açar. Uint8Array binary olarak transfer edilir.
-        const body = new Uint8Array(buffer);
+        // Vercel/serverless'ta en güvenilir binary aktarım: Blob.
+        // Buffer/Uint8Array bazen ortam-spesifik encoding adımlarına takılabiliyor;
+        // Blob standart Web API tipi ve düzgün transfer ediliyor.
+        const u8 = new Uint8Array(buffer);
+        const blob = new Blob([u8], {
+            type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        });
 
-        return new NextResponse(body, {
+        return new Response(blob, {
             status: 200,
             headers: {
                 "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 "Content-Disposition": `attachment; filename="${filename}"`,
-                "Content-Length": String(body.byteLength),
+                "Content-Length": String(u8.byteLength),
                 // no-transform: Vercel/CDN edge'inin gzip/brotli yeniden sıkıştırma yapıp
                 // zaten DEFLATE olan docx içeriğini bozmasını engeller.
                 "Cache-Control": "no-store, no-transform",
                 "X-Content-Type-Options": "nosniff",
+                // Tanı için: bozuksa response header'larından dosya boyutunu görebilelim.
+                "X-Doc-Bytes": String(u8.byteLength),
             },
         });
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Hamveri şablonu üretilemedi.";
         console.error("Hamveri DOCX üretim hatası:", error);
-        return NextResponse.json({ error: message }, { status: 500 });
+        // Hata cevabını DOCX uzantısıyla göstermeyelim — Word açmaya çalışıp kafa karıştırır.
+        return new Response(
+            JSON.stringify({ error: message }),
+            {
+                status: 500,
+                headers: {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Cache-Control": "no-store",
+                },
+            },
+        );
     }
 }
