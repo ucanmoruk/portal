@@ -49,12 +49,20 @@ export interface HamveriRecord {
     updated_at?: string | Date | null;
 }
 
+// XML 1.0 yasak karakterler — bunlar bir <w:t> içine girerse Word dosyayı
+// "bozuk içerik" diye reddeder. Veritabanından gelen alanlarda bazen null byte
+// veya kontrol karakteri olabiliyor; burada temizliyoruz.
+// İzin verilen: \t (\x09), \n (\x0A), \r (\x0D) + yazdırılabilir karakterler.
+const stripInvalidXmlChars = (s: string) =>
+    s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+
 const esc = (value: unknown) =>
-    String(value ?? "")
+    stripInvalidXmlChars(String(value ?? ""))
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
 
 const istanbulDateFormatter = new Intl.DateTimeFormat("tr-TR", {
     timeZone: "Europe/Istanbul",
@@ -296,5 +304,8 @@ export function buildHamveriDocx(record: HamveriRecord): Buffer {
 
     doc.render({ content: middle });
 
-    return doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" });
+    // Serverless ortamda Buffer ↔ Uint8Array dönüşümleri sırasında body
+    // bozulabiliyor; doğrudan Uint8Array üret ve onu Buffer.from ile sarıp dön.
+    const u8 = doc.getZip().generate({ type: "uint8array", compression: "DEFLATE" }) as Uint8Array;
+    return Buffer.from(u8);
 }

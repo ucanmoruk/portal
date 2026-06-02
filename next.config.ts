@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/urunler/rapor-sablon": ["./node_modules/@sparticuz/chromium/bin/**/*"],
     "/api/eurolab/validations/[id]/pdf": ["./node_modules/@sparticuz/chromium/bin/**/*"],
+    // DOCX şablonları — public/ dizininden okunduğunda serverless paketine
+    // dahil edilmeleri gerekir, aksi halde production'da template bulunamaz.
+    "/api/eurolab/rawdata/[id]/docx": ["./public/templates/**/*"],
+    "/api/eurolab/validations/[id]/protocol-docx": ["./public/templates/**/*"],
   },
 };
 

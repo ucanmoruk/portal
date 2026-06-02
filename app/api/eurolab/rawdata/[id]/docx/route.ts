@@ -34,12 +34,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         const safeCode = String(record.code || `hamveri-${id}`).replace(/[^\w.\-]+/g, "_");
         const filename = `Hamveri-${safeCode}.docx`;
 
-        return new NextResponse(buffer as any, {
+        // Next.js Response gövdesi için Buffer yerine Uint8Array kullanıyoruz —
+        // bazı sürümlerde Buffer body'si yanlış encode edilebiliyor, bu da Word'ün
+        // "dosya bozuk" demesine yol açar. Uint8Array binary olarak transfer edilir.
+        const body = new Uint8Array(buffer);
+
+        return new NextResponse(body, {
             status: 200,
             headers: {
                 "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 "Content-Disposition": `attachment; filename="${filename}"`,
-                "Cache-Control": "no-store",
+                "Content-Length": String(body.byteLength),
+                // no-transform: Vercel/CDN edge'inin gzip/brotli yeniden sıkıştırma yapıp
+                // zaten DEFLATE olan docx içeriğini bozmasını engeller.
+                "Cache-Control": "no-store, no-transform",
+                "X-Content-Type-Options": "nosniff",
             },
         });
     } catch (error: unknown) {
