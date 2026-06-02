@@ -94,13 +94,16 @@ const criticalAgesLabel = (ca?: { under10?: boolean; under18?: boolean; under8?:
 // Stil hedef: A4 sayfa içeriği ~9000 dxa = 159 mm
 const PAGE_DXA = 9000;
 
+// NOT: OOXML w:pPr çocuklarının sırası ŞEMA ile zorunlu. Doğru sıra:
+//   spacing → ind → jc → rPr (rPr en sonda).
+// Word strict mode bu sırayı bozuk dosyalarda dosyayı reddedebiliyor.
 const para = (text: string, opts: { bold?: boolean; align?: "left" | "center"; size?: number } = {}) => {
     const sz = opts.size ? `<w:sz w:val="${opts.size}"/><w:szCs w:val="${opts.size}"/>` : "";
     const bold = opts.bold ? `<w:b/><w:bCs/>` : "";
     const align = opts.align === "center" ? `<w:jc w:val="center"/>` : "";
     return (
         `<w:p>` +
-        `<w:pPr>${align}<w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:ind w:left="0"/><w:rPr>${bold}${sz}</w:rPr></w:pPr>` +
+        `<w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:ind w:left="0"/>${align}<w:rPr>${bold}${sz}</w:rPr></w:pPr>` +
         `<w:r><w:rPr>${bold}${sz}</w:rPr><w:t xml:space="preserve">${esc(text)}</w:t></w:r>` +
         `</w:p>`
     );
@@ -167,7 +170,7 @@ const testsHeader = () =>
 const headerCell = (text: string, width: number) =>
     `<w:tc>` +
     `<w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${tcBorders}<w:shd w:val="clear" w:color="auto" w:fill="0F172A"/><w:vAlign w:val="center"/></w:tcPr>` +
-    `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="18"/></w:rPr></w:pPr>` +
+    `<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="18"/></w:rPr></w:pPr>` +
     `<w:r><w:rPr><w:b/><w:bCs/><w:color w:val="FFFFFF"/><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">${esc(text)}</w:t></w:r>` +
     `</w:p>` +
     `</w:tc>`;
