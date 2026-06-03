@@ -238,7 +238,9 @@ const testsTable = (rows: Array<{ clause?: string; method?: string; title?: stri
 const notesBlock = (notes: string) =>
     sectionTitle("Notlar") +
     `<w:p>` +
-    `<w:pPr><w:spacing w:after="0" w:line="276" w:lineRule="auto"/><w:ind w:left="0"/><w:pBdr><w:top w:val="single" w:sz="4" w:color="E2E8F0"/><w:left w:val="single" w:sz="4" w:color="E2E8F0"/><w:bottom w:val="single" w:sz="4" w:color="E2E8F0"/><w:right w:val="single" w:sz="4" w:color="E2E8F0"/></w:pBdr><w:shd w:val="clear" w:color="auto" w:fill="F8FAFC"/><w:rPr><w:sz w:val="18"/></w:rPr></w:pPr>` +
+    // OOXML CT_PPr çocuk sırası ŞEMA ile zorunlu: pBdr → shd → spacing → ind → rPr.
+    // Yanlış sıra (spacing/ind önce) Word strict modda dosyayı "bozuk içerik" diye reddeder.
+    `<w:pPr><w:pBdr><w:top w:val="single" w:sz="4" w:color="E2E8F0"/><w:left w:val="single" w:sz="4" w:color="E2E8F0"/><w:bottom w:val="single" w:sz="4" w:color="E2E8F0"/><w:right w:val="single" w:sz="4" w:color="E2E8F0"/></w:pBdr><w:shd w:val="clear" w:color="auto" w:fill="F8FAFC"/><w:spacing w:after="0" w:line="276" w:lineRule="auto"/><w:ind w:left="0"/><w:rPr><w:sz w:val="18"/></w:rPr></w:pPr>` +
     `<w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">${esc(notes)}</w:t></w:r>` +
     `</w:p>`;
 
