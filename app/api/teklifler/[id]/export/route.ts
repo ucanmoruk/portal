@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { getAllSettings } from "@/lib/settings";
 import fs from "fs";
 import path from "path";
@@ -11,9 +11,12 @@ import path from "path";
 
 function teklifLabel(no: number | null, rev: number) {
   if (!no) return "000000";
-  const yy  = String(no).slice(0, 2);
-  const seq = String(no).slice(2).padStart(4, "0");
-  return rev > 0 ? `${yy}${seq}/${rev}` : `${yy}${seq}`;
+  return rev > 0 ? `${no}/${String(rev).padStart(2, "0")}` : String(no);
+}
+// Müşteriye giden dış teklif kodu: ÜGAM-26-XXXXX/00
+function disLabel(kod: string | null | undefined, rev: number) {
+  if (!kod) return "-";
+  return `${kod}/${String(rev).padStart(2, "0")}`;
 }
 
 function fmt(n: any) {
@@ -126,13 +129,13 @@ export async function GET(
   }
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     const hRes = await pool.request()
       .input("ID", Number(id))
       .query(`
         SELECT
-          t.ID, t.TeklifNo, t.RevNo,
+          t.ID, t.TeklifNo, t.DisTeklifKodu, t.RevNo,
           FORMAT(t.Tarih, 'dd.MM.yyyy') AS Tarih,
           t.Notlar,
           ISNULL(t.TeklifKonusu,'Fiyat teklifimiz') AS TeklifKonusu,
@@ -146,8 +149,8 @@ export async function GET(
           ISNULL(m.Yetkili,'')      AS MusteriYetkili,
           ISNULL(m.VergiDairesi,'') AS VergiDairesi,
           ISNULL(m.VergiNo,'')      AS VergiNo
-        FROM TeklifX1 t
-        LEFT JOIN RootTedarikci m ON m.ID = t.MusteriID
+        FROM TeklifBaslik t
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) m ON m.ID = t.MusteriID
         WHERE t.ID = @ID
       `);
 
@@ -162,13 +165,13 @@ export async function GET(
                ISNULL(Metot,'')        AS Metot,
                ISNULL(Akreditasyon,'') AS Akreditasyon,
                Fiyat, ParaBirimi, Iskonto, Notlar
-        FROM TeklifX2
+        FROM TeklifKalem
         WHERE TeklifID = @TeklifID
         ORDER BY ID
       `);
 
     const satirlar: any[] = sRes.recordset;
-    const no = teklifLabel(h.TeklifNo, h.RevNo);
+    const no = h.DisTeklifKodu ? disLabel(h.DisTeklifKodu, h.RevNo) : teklifLabel(h.TeklifNo, h.RevNo);
 
     // Hesaplamalar
     const kdvOran    = parseInt(h.KdvOran)     || 20;

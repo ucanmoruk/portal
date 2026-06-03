@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 // GET /api/numune-form/paket-items?x3id=123
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   if (!x3id) return Response.json({ error: "x3id gerekli" }, { status: 400 });
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const hasBolumCol = await pool.request().query(
       `SELECT 1 AS hasIt FROM INFORMATION_SCHEMA.COLUMNS
        WHERE TABLE_NAME='StokAnalizListesi' AND COLUMN_NAME='BolumID'
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
         FROM NumuneX4 x4
         LEFT JOIN StokAnalizListesi s ON s.ID = x4.AltAnalizID
         ${bolumJoin}
-        WHERE x4.ListeID = @x3id
+        WHERE x4.x3ID = @x3id
         ORDER BY x4.ID
       `);
 

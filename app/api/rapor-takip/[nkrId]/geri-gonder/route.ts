@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 // POST /api/rapor-takip/[nkrId]/geri-gonder
@@ -28,7 +28,7 @@ export async function POST(
   const userId = ((session.user as any)?.userId ?? null) as number | null;
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // İlgili tablolar opsiyonel — yoksa atla
     const tables = ["NKR_RaporOnay", "NKR_LabKabul", "NKR_RaporDurumOverride", "NKR_Log"];

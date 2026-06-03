@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 // POST /api/numune-takip-lab/[nkrId]/kabul-et
@@ -33,9 +33,10 @@ export async function POST(
   }
 
   const userId = ((session.user as any)?.userId ?? null) as number | null;
+  const userName = ((session.user as any)?.name || (session.user as any)?.email || null) as string | null;
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // NKR_LabKabul tablo mu var? (dbo/cosmoroot şemasında)
     const tblCheck = await pool.request().query(
@@ -94,11 +95,12 @@ export async function POST(
         .input("RaporFormati", raporFormati)
         .input("BolumID", bolumID)
         .input("KabulEdenID", userId)
+        .input("KabulEdenAd", userName)
         .input("Notlar", body.notlar || null)
         .query(`
-          INSERT INTO NKR_LabKabul (NkrID, RaporFormati, BolumID, KabulEdenID, Notlar)
+          INSERT INTO NKR_LabKabul (NkrID, RaporFormati, BolumID, KabulEdenID, KabulEdenAd, Notlar)
           OUTPUT INSERTED.ID
-          VALUES (@NkrID, @RaporFormati, @BolumID, @KabulEdenID, @Notlar)
+          VALUES (@NkrID, @RaporFormati, @BolumID, @KabulEdenID, @KabulEdenAd, @Notlar)
         `);
       kabulID = insRes.recordset[0]?.ID ?? null;
     }
@@ -122,11 +124,12 @@ export async function POST(
       await pool.request()
         .input("NKRID", nkrIdNum)
         .input("KullaniciID", userId)
+        .input("KullaniciAdi", userName)
         .input("Eylem", "Laboratuvar Kabulü")
         .input("Aciklama", aciklama)
         .query(
-          `INSERT INTO NKR_Log (NKRID, KullaniciID, Eylem, Aciklama, Tarih)
-           VALUES (@NKRID, @KullaniciID, @Eylem, @Aciklama, CURRENT_TIMESTAMP)`
+          `INSERT INTO NKR_Log (NKRID, KullaniciID, KullaniciAdi, Eylem, Aciklama, Tarih)
+           VALUES (@NKRID, @KullaniciID, @KullaniciAdi, @Eylem, @Aciklama, CURRENT_TIMESTAMP)`
         );
     }
 
@@ -161,7 +164,7 @@ export async function DELETE(
   }
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     await pool.request()
       .input("NkrID", nkrIdNum)
       .input("RaporFormati", raporFormati)

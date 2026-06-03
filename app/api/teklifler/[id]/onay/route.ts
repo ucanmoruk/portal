@@ -2,13 +2,14 @@ export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
 import nodemailer from "nodemailer";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { getAllSettings } from "@/lib/settings";
 import { verifyTeklifApprovalToken } from "@/lib/teklifApprovalToken";
 
 type TeklifOnayRow = {
   ID: number;
   TeklifNo: number | null;
+  DisTeklifKodu: string | null;
   RevNo: number;
   TeklifDurum: string;
   Tarih: string;
@@ -27,55 +28,34 @@ function escHtml(value: unknown) {
 
 function teklifLabel(no: number | null, rev: number) {
   if (!no) return "-";
-  const yy = String(no).slice(0, 2);
-  const seq = String(no).slice(2).padStart(4, "0");
-  return rev > 0 ? `${yy}${seq}/${rev}` : `${yy}${seq}`;
+  return rev > 0 ? `${no}/${String(rev).padStart(2, "0")}` : String(no);
+}
+// Müşteriye giden dış teklif kodu etiketi: ÜGAM-26-XXXXX/00
+function disLabel(kod: string | null | undefined, rev: number) {
+  if (!kod) return "-";
+  return `${kod}/${String(rev).padStart(2, "0")}`;
 }
 
 async function getTeklif(id: string) {
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
   const res = await pool.request()
     .input("ID", Number(id))
     .query(`
       SELECT
-        t.ID, t.TeklifNo, t.RevNo, ISNULL(t.TeklifDurum, '') AS TeklifDurum,
+        t.ID, t.TeklifNo, t.DisTeklifKodu, t.RevNo, ISNULL(t.TeklifDurum, '') AS TeklifDurum,
         FORMAT(t.Tarih, 'dd.MM.yyyy') AS Tarih,
         ISNULL(m.Ad, '') AS MusteriAd,
         ISNULL(m.Email, '') AS MusteriEmail,
         ISNULL(m.Yetkili, '') AS MusteriYetkili
-      FROM TeklifX1 t
-      LEFT JOIN RootTedarikci m ON m.ID = t.MusteriID
+      FROM TeklifBaslik t
+      LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) m ON m.ID = t.MusteriID
       WHERE t.ID = @ID
     `);
   return res.recordset[0] as TeklifOnayRow | undefined;
 }
 
-const isPostgres = Boolean(process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL);
-
 async function ensureLogTable() {
-  const pool = await poolPromise;
-  if (isPostgres) {
-    // Postgres: native syntax. lib/db.ts translator MSSQL "IF NOT EXISTS ... CREATE TABLE"
-    // pattern'ini noop olarak skip ediyor; bu yüzden PG için ayrı yazıyoruz.
-    await pool.request().query(`
-      CREATE TABLE IF NOT EXISTS TeklifOnayLog (
-        ID SERIAL PRIMARY KEY,
-        TeklifID INTEGER NOT NULL,
-        TeklifNo VARCHAR(50) NULL,
-        Aksiyon VARCHAR(20) NOT NULL,
-        Aciklama TEXT NULL,
-        IpAdresi VARCHAR(100) NULL,
-        UserAgent VARCHAR(500) NULL,
-        MusteriAd VARCHAR(255) NULL,
-        MusteriEmail VARCHAR(255) NULL,
-        MusteriYetkili VARCHAR(255) NULL,
-        kullaniciid INTEGER NULL,
-        kullaniciad VARCHAR(255) NULL,
-        Tarih TIMESTAMP NOT NULL DEFAULT NOW()
-      )
-    `);
-    return;
-  }
+  const pool = await cosmoPool;
   await pool.request().query(`
     IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[TeklifOnayLog]') AND type in (N'U'))
     BEGIN
@@ -106,7 +86,7 @@ function clientIp(req: NextRequest) {
 
 async function writeLog(req: NextRequest, teklif: TeklifOnayRow, action: "Onaylandı" | "Reddedildi", aciklama: string) {
   await ensureLogTable();
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
   await pool.request()
     .input("TeklifID", teklif.ID)
     .input("TeklifNo", teklifLabel(teklif.TeklifNo, teklif.RevNo))
@@ -188,7 +168,7 @@ function invalidLinkPage() {
 // "Onaylandı" veya "Reddedildi" kaydı varsa, mevcut karar bilgisini bir sayfa
 // olarak döner. Yoksa null döner.
 async function findFinalDecision(teklifId: number) {
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
   const res = await pool.request()
     .input("ID", teklifId)
     .query(`
@@ -197,9 +177,7 @@ async function findFinalDecision(teklifId: number) {
         ISNULL(MusteriAd, '')      AS MusteriAd,
         ISNULL(MusteriYetkili, '') AS MusteriYetkili,
         ISNULL(IpAdresi, '')       AS IpAdresi,
-        ${isPostgres
-          ? "TO_CHAR(Tarih AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Istanbul', 'DD.MM.YYYY HH24:MI:SS')"
-          : "FORMAT(Tarih, 'dd.MM.yyyy HH:mm:ss')"} AS Tarih
+        FORMAT(Tarih, 'dd.MM.yyyy HH:mm:ss') AS Tarih
       FROM TeklifOnayLog
       WHERE TeklifID = @ID AND Aksiyon IN ('Onaylandı', 'Reddedildi')
       ORDER BY ID DESC
@@ -246,14 +224,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const teklif = await getTeklif(id);
   if (!teklif) return page("Teklif bulunamadi", "<h1>Teklif bulunamadi.</h1>", 404);
 
-  const no = teklifLabel(teklif.TeklifNo, teklif.RevNo);
+  const no = disLabel(teklif.DisTeklifKodu, teklif.RevNo);
   return page("Teklif Onayi", `
     <div class="header">
       <img class="logo" src="/unique-logo.png" alt="Unique">
       <div class="title">TEKLİF ONAYI</div>
     </div>
     <table class="meta">
-      <tr><td class="label">Referans No:</td><td>${escHtml(no)}</td><td style="text-align:right;">${escHtml(teklif.Tarih || "-")}</td></tr>
+      <tr><td class="label">Referans No:</td><td style="white-space:nowrap;font-weight:700;">${escHtml(no)}</td><td style="text-align:right;">${escHtml(teklif.Tarih || "-")}</td></tr>
     </table>
     <div style="font-weight:800;margin-bottom:8px;">Sayin,</div>
     <div style="font-weight:900;">${escHtml(teklif.MusteriAd || "-")}</div>
@@ -307,14 +285,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const mailPass = cfg.MAIL_PASS || process.env.MAIL_PASS || "";
   const mailFrom = cfg.MAIL_FROM || process.env.MAIL_FROM || mailUser;
   const sirketEmail = cfg.SIRKET_EMAIL || process.env.SIRKET_EMAIL || mailFrom;
-  const no = teklifLabel(teklif.TeklifNo, teklif.RevNo);
+  const no = disLabel(teklif.DisTeklifKodu, teklif.RevNo);
   const nextStatus = action === "reject" ? "Reddedildi" : "Onaylandı";
 
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
   await pool.request()
     .input("ID", Number(id))
     .input("TeklifDurum", nextStatus)
-    .query("UPDATE TeklifX1 SET TeklifDurum = @TeklifDurum WHERE ID = @ID");
+    .query("UPDATE TeklifBaslik SET TeklifDurum = @TeklifDurum WHERE ID = @ID");
 
   await writeLog(req, teklif, nextStatus as "Onaylandı" | "Reddedildi", aciklama);
 

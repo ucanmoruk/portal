@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { nkrUgdTipFkColumn } from "@/lib/nkrUgdTipColumn";
 import { hasNkrFormulTable, hasNkrLogTable, nkrHasColumn } from "@/lib/numuneFormTables";
 import { saveLabUgdrTexts } from "@/lib/labUgdrStorage";
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
 
   const userId = (session.user as any)?.userId;
+  const userName = (session.user as any)?.name || (session.user as any)?.email || null;
 
   try {
     const body = await request.json();
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     if (!nkr?.RaporNo?.trim())    return Response.json({ error: "Rapor No zorunludur."   }, { status: 400 });
     if (!nkr?.Numune_Adi?.trim()) return Response.json({ error: "Numune Adı zorunludur." }, { status: 400 });
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     const existing = await pool.request()
       .input("RaporNo", nkr.RaporNo.trim())
@@ -177,10 +178,10 @@ export async function POST(request: Request) {
       const paketMap = new Map<string, { LimitDeger: string; LimitBirimi: string; LimitEn: string; BirimEn: string }>();
       if (paketHizmetler.length > 0) {
         const paketCond = paketHizmetler.map((h: any) =>
-          `(ListeID=${Number(h.x3ID)} AND AltAnalizID=${Number(h.AnalizID)})`
+          `(x3ID=${Number(h.x3ID)} AND AltAnalizID=${Number(h.AnalizID)})`
         ).join(" OR ");
         const x4Res = await pool.request().query(`
-          SELECT ListeID, AltAnalizID,
+          SELECT x3ID AS ListeID, AltAnalizID,
             ISNULL(LimitDeger,    '') AS LimitDeger,
             ISNULL(LimitBirimi,   '') AS LimitBirimi,
             ISNULL(LimitDegerEn,  '') AS LimitEn,
@@ -280,11 +281,12 @@ export async function POST(request: Request) {
       }
       
       await pool.request()
-        .input("NKRID",       nkrId)
-        .input("KullaniciID", userId ? parseInt(userId) : null)
-        .input("Eylem",       "Oluşturuldu")
-        .input("Aciklama",    aciklama)
-        .query("INSERT INTO NKR_Log (NKRID, KullaniciID, Eylem, Aciklama, Tarih) VALUES (@NKRID, @KullaniciID, @Eylem, @Aciklama, CURRENT_TIMESTAMP)");
+        .input("NKRID",        nkrId)
+        .input("KullaniciID",  userId ? parseInt(userId) : null)
+        .input("KullaniciAdi", userName)
+        .input("Eylem",        "Oluşturuldu")
+        .input("Aciklama",     aciklama)
+        .query("INSERT INTO NKR_Log (NKRID, KullaniciID, KullaniciAdi, Eylem, Aciklama, Tarih) VALUES (@NKRID, @KullaniciID, @KullaniciAdi, @Eylem, @Aciklama, CURRENT_TIMESTAMP)");
     }
 
     return Response.json({ id: nkrId }, { status: 201 });

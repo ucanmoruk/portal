@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 // GET /api/rapor-takip/rapor-formatlari
 // Mevcut rapor formatlarını döner
@@ -9,7 +9,7 @@ export async function GET() {
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     
     const result = await pool.request().query(`
       SELECT DISTINCT RaporFormati

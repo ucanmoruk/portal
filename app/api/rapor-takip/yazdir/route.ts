@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { NextRequest } from "next/server";
 
 // GET /api/rapor-takip/yazdir?ids=1,2,3
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   if (ids.length === 0) return Response.json({ error: "ID gerekli" }, { status: 400 });
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // Raporları al
     const placeholders = ids.map((_, i) => `@id${i}`).join(",");
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
         f.Ad AS FirmaAd,
         s.RaporFormati
       FROM NKR n
-      LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
+      LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
       INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
       WHERE n.ID IN (${placeholders}) AND n.Durum = 'Aktif'

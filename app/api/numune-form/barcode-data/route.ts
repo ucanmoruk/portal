@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 // GET /api/numune-form/barcode-data?ids=1,2,3
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // Dinamik kolon tespiti — BolumID varsa Bölüm JOIN'i yap
     const hasBolumCol = await pool.request().query(
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     const nkrRes = await pool.request().query(`
       SELECT n.ID, n.RaporNo, n.Numune_Adi, n.Tarih, ISNULL(f.Ad, '') AS FirmaAd
       FROM NKR n
-      LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
+      LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
       WHERE n.ID IN (${inList}) AND n.Durum = 'Aktif'
     `);
 

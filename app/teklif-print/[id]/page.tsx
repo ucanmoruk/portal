@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { JetBrains_Mono } from "next/font/google";
 import PrintToolbar from "./PrintToolbar";
 
@@ -16,6 +16,7 @@ const jetBrainsMono = JetBrains_Mono({
 interface TeklifHeader {
   ID: number;
   TeklifNo: number | null;
+  DisTeklifKodu: string | null;
   RevNo: number;
   Tarih: string;
   Toplam: number | string | null;
@@ -46,9 +47,12 @@ interface TeklifSatir {
 
 function teklifLabel(no: number | null, rev: number) {
   if (!no) return "—";
-  const yy = String(no).slice(0, 2);
-  const seq = String(no).slice(2).padStart(4, "0");
-  return rev > 0 ? `${yy}${seq}/${rev}` : `${yy}${seq}/0`;
+  return `${no}/${String(rev).padStart(2, "0")}`;
+}
+// Müşteriye giden dış teklif kodu: ÜGAM-26-XXXXX/00
+function disLabel(kod: string | null | undefined, rev: number) {
+  if (!kod) return "—";
+  return `${kod}/${String(rev).padStart(2, "0")}`;
 }
 
 function fmt(n: unknown) {
@@ -82,13 +86,13 @@ export default async function TeklifPrintPage({
   const autoPrint = sp.print === "1";
   const pdfMode = sp.pdfMode === "1";
 
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
 
   const headerRes = await pool.request()
     .input("ID", Number(id))
     .query(`
       SELECT
-        t.ID, t.TeklifNo, t.RevNo,
+        t.ID, t.TeklifNo, t.DisTeklifKodu, t.RevNo,
         FORMAT(t.Tarih, 'dd.MM.yyyy') AS Tarih,
         t.Toplam, t.Notlar,
         ISNULL(t.TeklifKonusu, 'Fiyat teklifimiz') AS TeklifKonusu,
@@ -102,8 +106,8 @@ export default async function TeklifPrintPage({
         ISNULL(m.VergiDairesi,'') AS VergiDairesi,
         ISNULL(m.VergiNo,'')      AS VergiNo,
         ISNULL(m.Yetkili,'')      AS MusteriYetkili
-      FROM TeklifX1 t
-      LEFT JOIN RootTedarikci m ON m.ID = t.MusteriID
+      FROM TeklifBaslik t
+      LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) m ON m.ID = t.MusteriID
       WHERE t.ID = @ID
     `);
 
@@ -120,13 +124,13 @@ export default async function TeklifPrintPage({
              Fiyat, ParaBirimi, Iskonto,
              ISNULL(Metot,'') AS Metot, ISNULL(Akreditasyon,'') AS Akreditasyon,
              Notlar
-      FROM TeklifX2
+      FROM TeklifKalem
       WHERE TeklifID = @TeklifID
       ORDER BY ID
     `);
 
   const satirlar = satirRes.recordset as TeklifSatir[];
-  const noLabel = teklifLabel(h.TeklifNo, h.RevNo);
+  const noLabel = h.DisTeklifKodu ? disLabel(h.DisTeklifKodu, h.RevNo) : teklifLabel(h.TeklifNo, h.RevNo);
   const sirketAdi = process.env.SIRKET_ADI || "UNIQUE ANALYSE";
 
   // Hesaplamalar
@@ -411,8 +415,8 @@ export default async function TeklifPrintPage({
           <div className="meta">
             <div>
               <div className="meta-row">
-                <span className="meta-label" style={{width: "70%"}}>Referans No:</span>
-                <span className="meta-value">{noLabel}</span>
+                <span className="meta-label" style={{width: "70%"}}>Referans No:</span> 
+                <span className="meta-value" style={{marginLeft: "-40px"}}>{noLabel}</span>
               </div>
               
             </div>

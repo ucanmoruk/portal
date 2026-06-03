@@ -84,10 +84,10 @@ function FirmaSearch({
     setCreating(true);
     setCreateError("");
     try {
-      const response = await fetch("/api/musteriler", {
+      const response = await fetch("/api/firmalar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...newFirma, Ad: ad, Kimin: "Root" }),
+        body: JSON.stringify({ ...newFirma, Ad: ad }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Firma kaydedilemedi.");

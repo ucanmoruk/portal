@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 // ----------------------------------------------------------------
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit;
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // Arama: Evrak_No, RaporNo, FirmaAd, NumuneAdi üzerinde
     const searchClause = search
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     const baseJoin = `
       FROM NKR n
-      LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
+      LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
       WHERE n.Durum = 'Aktif' ${searchClause}
     `;
 
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
               SELECT TOP 1 rt.Ad
               FROM   NKR n2
               LEFT JOIN NumuneDetay nd ON nd.RaporID = n2.ID
-              LEFT JOIN RootTedarikci rt ON nd.ProjeID = rt.ID
+              LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) rt ON nd.ProjeID = rt.ID
               WHERE  n2.Evrak_No = n.Evrak_No AND n2.Durum = 'Aktif'
                 AND  rt.Ad IS NOT NULL
             )                                         AS ProjeAd
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
     if (!RaporNo?.trim())    return Response.json({ error: "Rapor No zorunludur."   }, { status: 400 });
     if (!Numune_Adi?.trim()) return Response.json({ error: "Numune Adı zorunludur." }, { status: 400 });
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const result = await pool.request()
       .input("Tarih",      Tarih      || null)
       .input("Evrak_No",   Evrak_No.trim())

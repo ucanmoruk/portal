@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import nodemailer from "nodemailer";
 import { getAllSettings } from "@/lib/settings";
 import { createTeklifApprovalToken } from "@/lib/teklifApprovalToken";
@@ -46,7 +46,7 @@ export async function POST(
   }
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // Ayarları DB'den oku (env fallback)
     const cfg = await getAllSettings();
@@ -70,7 +70,7 @@ export async function POST(
       .input("ID", Number(id))
       .query(`
         SELECT
-          t.ID, t.TeklifNo, t.RevNo,
+          t.ID, t.TeklifNo, t.DisTeklifKodu, t.RevNo,
           FORMAT(t.Tarih, 'dd.MM.yyyy') AS Tarih,
           t.Notlar,
           ISNULL(t.TeklifKonusu, 'Fiyat teklifimiz') AS TeklifKonusu,
@@ -82,8 +82,8 @@ export async function POST(
           ISNULL(m.Telefon,'')      AS MusteriTelefon,
           ISNULL(m.Adres,'')        AS MusteriAdres,
           ISNULL(m.Yetkili,'')      AS MusteriYetkili
-        FROM TeklifX1 t
-        LEFT JOIN RootTedarikci m ON m.ID = t.MusteriID
+        FROM TeklifBaslik t
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) m ON m.ID = t.MusteriID
         WHERE t.ID = @ID
       `);
 
@@ -102,13 +102,13 @@ export async function POST(
                ISNULL(Akreditasyon, '') AS Akreditasyon,
                Fiyat, ParaBirimi,
                ISNULL(Iskonto, 0)       AS Iskonto
-        FROM TeklifX2
+        FROM TeklifKalem
         WHERE TeklifID = @TeklifID
         ORDER BY ID
       `);
 
     const satirlar = sRes.recordset as TeklifMailSatir[];
-    const no = teklifLabel(h.TeklifNo, h.RevNo);
+    const no = h.DisTeklifKodu ? disLabel(h.DisTeklifKodu, h.RevNo) : teklifLabel(h.TeklifNo, h.RevNo);
 
     // Hesaplamalar
     const kdvOran = Number.parseInt(String(h.KdvOran ?? ""), 10) || 20;
@@ -196,7 +196,7 @@ export async function POST(
       from:    mailFrom,
       to:      to.join(", "),
       cc:      cc.length ? cc.join(", ") : undefined,
-      subject: konu || `Fiyat Teklifimiz — ROT${no} | ${sirketAdi}`,
+      subject: konu || `Fiyat Teklifimiz — ${no} | ${sirketAdi}`,
       html,
       attachments,
     });
@@ -204,7 +204,7 @@ export async function POST(
     // Durumu "Gönderildi" yap
     await pool.request()
       .input("ID", Number(id))
-      .query(`UPDATE TeklifX1 SET TeklifDurum = 'Gönderildi' WHERE ID = @ID AND TeklifDurum = 'Taslak'`);
+      .query(`UPDATE TeklifBaslik SET TeklifDurum = 'Gönderildi' WHERE ID = @ID AND TeklifDurum = 'Taslak'`);
 
     return Response.json({ success: true });
   } catch (e: unknown) {
@@ -242,7 +242,7 @@ export async function GET(
 }
 
 async function buildPreviewHtml(id: string, mesaj: string) {
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
   const cfg = await getAllSettings();
   const sirketAdi = cfg.SIRKET_ADI || process.env.SIRKET_ADI || "ÜGD";
   const sirketWeb = cfg.SIRKET_WEB || process.env.SIRKET_WEB || "";
@@ -253,7 +253,7 @@ async function buildPreviewHtml(id: string, mesaj: string) {
     .input("ID", Number(id))
     .query(`
       SELECT
-        t.ID, t.TeklifNo, t.RevNo,
+        t.ID, t.TeklifNo, t.DisTeklifKodu, t.RevNo,
         FORMAT(t.Tarih, 'dd.MM.yyyy') AS Tarih,
         t.Notlar,
         ISNULL(t.TeklifKonusu, 'Fiyat teklifimiz') AS TeklifKonusu,
@@ -262,8 +262,8 @@ async function buildPreviewHtml(id: string, mesaj: string) {
         ISNULL(t.GenelIskonto, 0)                   AS GenelIskonto,
         ISNULL(m.Ad,'')           AS MusteriAd,
         ISNULL(m.Yetkili,'')      AS MusteriYetkili
-      FROM TeklifX1 t
-      LEFT JOIN RootTedarikci m ON m.ID = t.MusteriID
+      FROM TeklifBaslik t
+      LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) m ON m.ID = t.MusteriID
       WHERE t.ID = @ID
     `);
   if (!hRes.recordset.length) throw new Error("Teklif bulunamadı.");
@@ -278,7 +278,7 @@ async function buildPreviewHtml(id: string, mesaj: string) {
              ISNULL(Akreditasyon, '') AS Akreditasyon,
              Fiyat, ParaBirimi,
              ISNULL(Iskonto, 0)       AS Iskonto
-      FROM TeklifX2
+      FROM TeklifKalem
       WHERE TeklifID = @TeklifID
       ORDER BY ID
     `);
@@ -334,7 +334,7 @@ async function buildPreviewHtml(id: string, mesaj: string) {
   const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "");
   return buildHtmlV4({
     sirketAdi, sirketWeb, sirketEmail, sirketAdres,
-    no: teklifLabel(h.TeklifNo, h.RevNo),
+    no: h.DisTeklifKodu ? disLabel(h.DisTeklifKodu, h.RevNo) : teklifLabel(h.TeklifNo, h.RevNo),
     tarih: h.Tarih,
     musteriAd: h.MusteriAd,
     musteriYetkili: h.MusteriYetkili,
@@ -386,7 +386,7 @@ function buildHtml(p: {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Teklif ROT${no}</title>
+  <title>Teklif ${no}</title>
 </head>
 <body style="margin:0;padding:0;background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;">
 
@@ -401,7 +401,7 @@ function buildHtml(p: {
         </div>
         <div style="text-align:right;">
           <div style="background:rgba(255,255,255,0.15);border-radius:8px;padding:8px 14px;display:inline-block;">
-            <div style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:0.5px;">ROT${no}</div>
+            <div style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:0.5px;white-space:nowrap;">${no}</div>
             <div style="color:rgba(255,255,255,0.75);font-size:11px;margin-top:2px;">${tarih}</div>
           </div>
         </div>
@@ -567,7 +567,7 @@ function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
     <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:18px;">
       <tr>
         <td style="font-weight:700;width:120px;padding:2px 8px 2px 0;">Referans No:</td>
-        <td style="padding:2px 8px;">${escHtml(no)}</td>
+        <td style="padding:2px 8px;white-space:nowrap;">${escHtml(no)}</td>
         <td style="text-align:right;padding:2px 0;">${escHtml(tarih)}</td>
       </tr>
     </table>
@@ -645,9 +645,12 @@ function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
 
 function teklifLabel(no: number | null, rev: number) {
   if (!no) return "—";
-  const yy  = String(no).slice(0, 2);
-  const seq = String(no).slice(2).padStart(4, "0");
-  return rev > 0 ? `${yy}${seq}/${rev}` : `${yy}${seq}`;
+  return rev > 0 ? `${no}/${String(rev).padStart(2, "0")}` : String(no);
+}
+// Müşteriye giden dış teklif kodu: ÜGAM-26-XXXXX/00
+function disLabel(kod: string | null | undefined, rev: number) {
+  if (!kod) return "—";
+  return `${kod}/${String(rev).padStart(2, "0")}`;
 }
 
 // Para birimi normalize — DB "TRY" veya "₺" → "TL" (JetBrains Mono ₺ glyph'i yok)

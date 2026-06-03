@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 // GET /api/numune-form/hizmet-search?q=arama
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   if (q.length < 1) return Response.json([]);
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const result = await pool.request()
       .input("q", q)
       .query(`

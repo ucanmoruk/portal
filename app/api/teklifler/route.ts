@@ -1,100 +1,95 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 import { writeInternalTeklifLog, teklifNoLabel, clientIpFromRequest } from "@/lib/teklifLog";
+import { icTeklifRange, randomDisKod } from "@/lib/teklifNo";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Teklifler — MSSQL massgrup_cosmo · YENİ tablolar TeklifBaslik / TeklifKalem
+// (legacy TeklifX1/TeklifX2'ye dokunulmaz). Cari kaynağı: Firma.
+//
+//  • İç teklif no (TeklifNo, INT): 2026 için ilk 260200, sonra +1.
+//  • Dış teklif kodu (DisTeklifKodu): ÜGAM-26-XXXXX (benzersiz, tahmin edilemez).
+//  • Revizyon: her ikisi sabit kalır, RevNo (/NN) artar.
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function ensureTables() {
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
 
-  // TeklifX1 — oluştur (TeklifNo INT: YYNNNN formatında)
   await pool.request().query(`
-    IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='TeklifX1' AND xtype='U')
-    CREATE TABLE TeklifX1 (
-      ID        INT IDENTITY(1,1) PRIMARY KEY,
-      TeklifNo  INT           NULL,
-      RevNo     INT           NOT NULL DEFAULT 0,
-      MusteriID INT           NULL,
-      Tarih     DATETIME      NOT NULL DEFAULT GETDATE(),
-      Toplam    DECIMAL(18,2) NOT NULL DEFAULT 0,
-      Notlar    NVARCHAR(MAX) NULL,
-      Durum     NVARCHAR(20)  NOT NULL DEFAULT 'Aktif',
-      KID       INT           NULL
+    IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='TeklifBaslik' AND xtype='U')
+    CREATE TABLE TeklifBaslik (
+      ID            INT IDENTITY(1,1) PRIMARY KEY,
+      TeklifNo      INT           NULL,           -- iç takip no (260200+)
+      DisTeklifKodu NVARCHAR(20)  NULL,           -- dış kod: ÜGAM-26-XXXXX
+      RevNo         INT           NOT NULL DEFAULT 0,
+      MusteriID     INT           NULL,           -- → Firma.ID
+      Tarih         DATETIME      NOT NULL DEFAULT GETDATE(),
+      Toplam        DECIMAL(18,2) NOT NULL DEFAULT 0,
+      Notlar        NVARCHAR(MAX) NULL,
+      TeklifDurum   NVARCHAR(20)  NOT NULL DEFAULT 'Taslak',
+      KdvOran       INT           NOT NULL DEFAULT 20,
+      TeklifKonusu  NVARCHAR(500) NULL,
+      TeklifVeren   NVARCHAR(200) NULL,
+      GenelIskonto  DECIMAL(5,2)  NOT NULL DEFAULT 0,
+      Durum         NVARCHAR(20)  NOT NULL DEFAULT 'Aktif',
+      KID           INT           NULL,
+      OlusturanAd   NVARCHAR(255) NULL
     )
   `);
 
-  // TeklifX1 — eksik kolon migrasyonu
-  const cols1 = await pool.request().query(`
-    SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'TeklifX1'
-  `);
-  const c1 = new Set(cols1.recordset.map((r: any) => r.COLUMN_NAME as string));
-  if (!c1.has("RevNo"))         await pool.request().query(`ALTER TABLE TeklifX1 ADD RevNo         INT           NOT NULL DEFAULT 0`);
-  if (!c1.has("MusteriID"))     await pool.request().query(`ALTER TABLE TeklifX1 ADD MusteriID     INT           NULL`);
-  if (!c1.has("Tarih"))         await pool.request().query(`ALTER TABLE TeklifX1 ADD Tarih         DATETIME      NOT NULL DEFAULT GETDATE()`);
-  if (!c1.has("Toplam"))        await pool.request().query(`ALTER TABLE TeklifX1 ADD Toplam        DECIMAL(18,2) NOT NULL DEFAULT 0`);
-  if (!c1.has("Notlar"))        await pool.request().query(`ALTER TABLE TeklifX1 ADD Notlar        NVARCHAR(MAX) NULL`);
-  if (!c1.has("Durum"))         await pool.request().query(`ALTER TABLE TeklifX1 ADD Durum         NVARCHAR(20)  NOT NULL DEFAULT 'Aktif'`);
-  if (!c1.has("KID"))           await pool.request().query(`ALTER TABLE TeklifX1 ADD KID           INT           NULL`);
-  if (!c1.has("TeklifDurum"))   await pool.request().query(`ALTER TABLE TeklifX1 ADD TeklifDurum   NVARCHAR(20)  NOT NULL DEFAULT 'Taslak'`);
-  if (!c1.has("KdvOran"))       await pool.request().query(`ALTER TABLE TeklifX1 ADD KdvOran       INT           NOT NULL DEFAULT 20`);
-  if (!c1.has("TeklifKonusu"))  await pool.request().query(`ALTER TABLE TeklifX1 ADD TeklifKonusu  NVARCHAR(500) NULL`);
-  if (!c1.has("TeklifVeren"))   await pool.request().query(`ALTER TABLE TeklifX1 ADD TeklifVeren   NVARCHAR(200) NULL`);
-  if (!c1.has("GenelIskonto")) await pool.request().query(`ALTER TABLE TeklifX1 ADD GenelIskonto  DECIMAL(5,2)  NOT NULL DEFAULT 0`);
-  if (!c1.has("OlusturanAd"))  await pool.request().query(`ALTER TABLE TeklifX1 ADD OlusturanAd   NVARCHAR(255) NULL`);
-
-  // TeklifX2 — oluştur
   await pool.request().query(`
-    IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='TeklifX2' AND xtype='U')
-    CREATE TABLE TeklifX2 (
-      ID         INT IDENTITY(1,1) PRIMARY KEY,
-      TeklifID   INT           NOT NULL,
-      HizmetID   INT           NULL,
-      HizmetAdi  NVARCHAR(200) NULL,
-      Fiyat      DECIMAL(18,2) NOT NULL DEFAULT 0,
-      ParaBirimi NVARCHAR(10)  NOT NULL DEFAULT 'TRY',
-      Iskonto    DECIMAL(5,2)  NOT NULL DEFAULT 0,
-      Notlar     NVARCHAR(500) NULL
+    IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='TeklifKalem' AND xtype='U')
+    CREATE TABLE TeklifKalem (
+      ID           INT IDENTITY(1,1) PRIMARY KEY,
+      TeklifID     INT           NOT NULL,
+      HizmetID     INT           NULL,
+      HizmetAdi    NVARCHAR(200) NULL,
+      Adet         INT           NOT NULL DEFAULT 1,
+      Metot        NVARCHAR(200) NULL,
+      Akreditasyon NVARCHAR(10)  NULL,
+      Fiyat        DECIMAL(18,2) NOT NULL DEFAULT 0,
+      ParaBirimi   NVARCHAR(10)  NOT NULL DEFAULT 'TRY',
+      Iskonto      DECIMAL(5,2)  NOT NULL DEFAULT 0,
+      Notlar       NVARCHAR(500) NULL
     )
   `);
-
-  // TeklifX2 — eksik kolon migrasyonu
-  const cols2 = await pool.request().query(`
-    SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'TeklifX2'
-  `);
-  const c2 = new Set(cols2.recordset.map((r: any) => r.COLUMN_NAME as string));
-  if (!c2.has("TeklifID"))    await pool.request().query(`ALTER TABLE TeklifX2 ADD TeklifID    INT           NOT NULL DEFAULT 0`);
-  if (!c2.has("HizmetID"))    await pool.request().query(`ALTER TABLE TeklifX2 ADD HizmetID    INT           NULL`);
-  if (!c2.has("HizmetAdi"))   await pool.request().query(`ALTER TABLE TeklifX2 ADD HizmetAdi   NVARCHAR(200) NULL`);
-  if (!c2.has("Adet"))        await pool.request().query(`ALTER TABLE TeklifX2 ADD Adet        INT           NOT NULL DEFAULT 1`);
-  if (!c2.has("Metot"))       await pool.request().query(`ALTER TABLE TeklifX2 ADD Metot       NVARCHAR(200) NULL`);
-  if (!c2.has("Akreditasyon"))await pool.request().query(`ALTER TABLE TeklifX2 ADD Akreditasyon NVARCHAR(10)  NULL`);
-  if (!c2.has("Fiyat"))       await pool.request().query(`ALTER TABLE TeklifX2 ADD Fiyat       DECIMAL(18,2) NOT NULL DEFAULT 0`);
-  if (!c2.has("ParaBirimi"))  await pool.request().query(`ALTER TABLE TeklifX2 ADD ParaBirimi  NVARCHAR(10)  NOT NULL DEFAULT 'TRY'`);
-  if (!c2.has("Iskonto"))     await pool.request().query(`ALTER TABLE TeklifX2 ADD Iskonto     DECIMAL(5,2)  NOT NULL DEFAULT 0`);
-  if (!c2.has("Notlar"))      await pool.request().query(`ALTER TABLE TeklifX2 ADD Notlar      NVARCHAR(500) NULL`);
 }
 
-// Yıla göre sıradaki TeklifNo'yu üretir: YYNNNN (örn. 260001)
-async function nextTeklifNo(pool: any): Promise<number> {
-  const year2   = new Date().getFullYear() % 100;   // 26
-  const yearMin = year2 * 10000;                     // 260000
-  const yearMax = yearMin + 9999;                    // 269999
+// Yıla göre sıradaki iç teklif no (2026 → ilk 260200)
+async function nextIcTeklifNo(pool: any): Promise<number> {
+  const { yearMin, yearMax, floor } = icTeklifRange(new Date().getFullYear());
   const res = await pool.request()
     .input("yearMin", yearMin)
     .input("yearMax", yearMax)
+    .input("floor", floor)
     .query(`
-      SELECT ISNULL(MAX(TeklifNo), @yearMin) + 1 AS nextNo
-      FROM TeklifX1
+      SELECT ISNULL(MAX(TeklifNo), @floor) + 1 AS nextNo
+      FROM TeklifBaslik
       WHERE TeklifNo >= @yearMin AND TeklifNo <= @yearMax
     `);
   return res.recordset[0].nextNo as number;
 }
 
-// Satırları TeklifX2'ye ekler
+// Benzersiz dış teklif kodu üret (çakışırsa tekrar dener)
+async function genUniqueDisKod(pool: any): Promise<string> {
+  const year = new Date().getFullYear();
+  for (let i = 0; i < 25; i++) {
+    const kod = randomDisKod(year);
+    const exists = await pool.request()
+      .input("kod", kod)
+      .query(`SELECT TOP 1 ID FROM TeklifBaslik WHERE DisTeklifKodu = @kod`);
+    if (!exists.recordset.length) return kod;
+  }
+  // Aşırı düşük olasılık: yine de benzersizleştir
+  return randomDisKod(year) + String(Date.now()).slice(-2);
+}
+
 async function insertSatirlar(pool: any, teklifId: number, satirlar: any[]) {
   for (const s of satirlar) {
     await pool.request()
-      .input("TeklifID",   teklifId)
+      .input("TeklifID",    teklifId)
       .input("HizmetID",    s.hizmetId      || null)
       .input("HizmetAdi",   s.hizmetAdi     || "")
       .input("Adet",        parseInt(s.adet) || 1)
@@ -105,7 +100,7 @@ async function insertSatirlar(pool: any, teklifId: number, satirlar: any[]) {
       .input("Iskonto",     parseFloat(s.iskonto) || 0)
       .input("Notlar",      s.notlar        || null)
       .query(`
-        INSERT INTO TeklifX2 (TeklifID, HizmetID, HizmetAdi, Adet, Metot, Akreditasyon, Fiyat, ParaBirimi, Iskonto, Notlar)
+        INSERT INTO TeklifKalem (TeklifID, HizmetID, HizmetAdi, Adet, Metot, Akreditasyon, Fiyat, ParaBirimi, Iskonto, Notlar)
         VALUES (@TeklifID, @HizmetID, @HizmetAdi, @Adet, @Metot, @Akreditasyon, @Fiyat, @ParaBirimi, @Iskonto, @Notlar)
       `);
   }
@@ -136,12 +131,14 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit;
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
+    // Arama: dış kod + iç no + müşteri adı + notlar
     const searchClause = search
       ? `AND (
-           LOWER(ISNULL(m.Ad,'')) LIKE LOWER(@searchLike)
-        OR LOWER(ISNULL(t.Notlar,'')) LIKE LOWER(@searchLike)
+           LOWER(ISNULL(t.DisTeklifKodu,'')) LIKE LOWER(@searchLike)
         OR CAST(ISNULL(t.TeklifNo,0) AS NVARCHAR) LIKE N'%'+@search+'%'
+        OR LOWER(ISNULL(m.Firma_Adi,'')) LIKE LOWER(@searchLike)
+        OR LOWER(ISNULL(t.Notlar,'')) LIKE LOWER(@searchLike)
         )`
       : "";
 
@@ -150,8 +147,8 @@ export async function GET(request: NextRequest) {
       .input("searchLike", `%${search}%`)
       .query(`
         SELECT COUNT(*) AS total
-        FROM TeklifX1 t
-        LEFT JOIN RootTedarikci m ON m.ID = t.MusteriID
+        FROM TeklifBaslik t
+        LEFT JOIN Firma m ON m.ID = t.MusteriID
         WHERE t.Durum = 'Aktif' ${searchClause}
       `);
 
@@ -164,19 +161,20 @@ export async function GET(request: NextRequest) {
         SELECT
           t.ID,
           t.TeklifNo,
+          t.DisTeklifKodu,
           t.RevNo,
           FORMAT(t.Tarih, 'dd.MM.yyyy') AS Tarih,
           t.MusteriID,
-          ISNULL(m.Ad, '') AS MusteriAd,
+          ISNULL(m.Firma_Adi, '') AS MusteriAd,
           t.Toplam, t.Notlar, t.Durum,
           ISNULL(t.TeklifDurum, 'Taslak') AS TeklifDurum,
           ISNULL(t.OlusturanAd, '') AS OlusturanAd,
-          COUNT(x2.ID) AS HizmetSayisi
-        FROM TeklifX1 t
-        LEFT JOIN RootTedarikci m ON m.ID = t.MusteriID
-        LEFT JOIN TeklifX2 x2 ON x2.TeklifID = t.ID
+          COUNT(k.ID) AS HizmetSayisi
+        FROM TeklifBaslik t
+        LEFT JOIN Firma m ON m.ID = t.MusteriID
+        LEFT JOIN TeklifKalem k ON k.TeklifID = t.ID
         WHERE t.Durum = 'Aktif' ${searchClause}
-        GROUP BY t.ID, t.TeklifNo, t.RevNo, t.Tarih, t.MusteriID, m.Ad, t.Toplam, t.Notlar, t.Durum, t.TeklifDurum, t.OlusturanAd
+        GROUP BY t.ID, t.TeklifNo, t.DisTeklifKodu, t.RevNo, t.Tarih, t.MusteriID, m.Firma_Adi, t.Toplam, t.Notlar, t.Durum, t.TeklifDurum, t.OlusturanAd
         ORDER BY t.ID DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
@@ -194,8 +192,8 @@ export async function GET(request: NextRequest) {
 
 // ----------------------------------------------------------------
 // POST /api/teklifler
-//   Normal: { musteriId, satirlar, notlar }
-//   Revizyon: { musteriId, satirlar, notlar, revizeOfId: number }
+//   Normal:   { musteriId, satirlar, notlar, ... }
+//   Revizyon: { ..., revizeOfId: number }
 // ----------------------------------------------------------------
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -217,54 +215,56 @@ export async function POST(request: Request) {
     }
 
     const toplam = calcToplam(satirlar);
-    const pool   = await poolPromise;
+    const pool   = await cosmoPool;
 
     let teklifNo: number;
-    let revNo   = 0;
+    let disKod: string;
+    let revNo = 0;
 
     if (revizeOfId) {
-      // Revizyon: orijinal teklif numarasını al, RevNo'yu bir artır
+      // Revizyon: orijinalin iç no + dış kodunu koru, RevNo'yu artır
       const origRes = await pool.request()
         .input("OrigID", Number(revizeOfId))
-        .query(`SELECT TeklifNo FROM TeklifX1 WHERE ID = @OrigID`);
-
+        .query(`SELECT TeklifNo, DisTeklifKodu FROM TeklifBaslik WHERE ID = @OrigID`);
       if (!origRes.recordset.length) {
         return Response.json({ error: "Revize edilecek teklif bulunamadı." }, { status: 404 });
       }
       teklifNo = origRes.recordset[0].TeklifNo as number;
+      disKod   = origRes.recordset[0].DisTeklifKodu as string;
 
       const maxRevRes = await pool.request()
         .input("TeklifNo", teklifNo)
-        .query(`SELECT ISNULL(MAX(RevNo), 0) + 1 AS nextRevNo FROM TeklifX1 WHERE TeklifNo = @TeklifNo`);
+        .query(`SELECT ISNULL(MAX(RevNo), 0) + 1 AS nextRevNo FROM TeklifBaslik WHERE TeklifNo = @TeklifNo`);
       revNo = maxRevRes.recordset[0].nextRevNo as number;
     } else {
-      // Yeni teklif: yıla göre sıradaki numara
-      teklifNo = await nextTeklifNo(pool);
+      // Yeni teklif: sıradaki iç no + benzersiz dış kod
+      teklifNo = await nextIcTeklifNo(pool);
+      disKod   = await genUniqueDisKod(pool);
     }
 
     const insertRes = await pool.request()
       .input("TeklifNo",     teklifNo)
+      .input("DisTeklifKodu",disKod)
       .input("RevNo",        revNo)
       .input("MusteriID",    Number(musteriId))
       .input("Tarih",        new Date())
       .input("Toplam",       parseFloat(toplam.toFixed(2)))
       .input("Notlar",       notlar        || null)
       .input("TeklifKonusu", teklifKonusu  || "Fiyat teklifimiz")
-      .input("TeklifVeren",   teklifVeren   || null)
-      .input("KdvOran",       parseInt(kdvOran) || 20)
-      .input("GenelIskonto",  parseFloat(genelIskonto) || 0)
-      .input("KID",           userId ? parseInt(userId) : null)
-      .input("OlusturanAd",   userName || null)
+      .input("TeklifVeren",  teklifVeren   || null)
+      .input("KdvOran",      parseInt(kdvOran) || 20)
+      .input("GenelIskonto", parseFloat(genelIskonto) || 0)
+      .input("KID",          userId ? parseInt(userId) : null)
+      .input("OlusturanAd",  userName || null)
       .query(`
-        INSERT INTO TeklifX1 (TeklifNo, RevNo, MusteriID, Tarih, Toplam, Notlar, TeklifKonusu, TeklifVeren, KdvOran, GenelIskonto, Durum, KID, OlusturanAd)
+        INSERT INTO TeklifBaslik (TeklifNo, DisTeklifKodu, RevNo, MusteriID, Tarih, Toplam, Notlar, TeklifKonusu, TeklifVeren, KdvOran, GenelIskonto, Durum, KID, OlusturanAd)
         OUTPUT INSERTED.ID
-        VALUES (@TeklifNo, @RevNo, @MusteriID, @Tarih, @Toplam, @Notlar, @TeklifKonusu, @TeklifVeren, @KdvOran, @GenelIskonto, 'Aktif', @KID, @OlusturanAd)
+        VALUES (@TeklifNo, @DisTeklifKodu, @RevNo, @MusteriID, @Tarih, @Toplam, @Notlar, @TeklifKonusu, @TeklifVeren, @KdvOran, @GenelIskonto, 'Aktif', @KID, @OlusturanAd)
       `);
 
     const teklifId = insertRes.recordset[0].ID;
     await insertSatirlar(pool, teklifId, satirlar);
 
-    // Log: Oluşturuldu (revize ise farklı aksiyon)
     const reason = String(revisionReason || "").trim();
     try {
       await writeInternalTeklifLog({
@@ -276,7 +276,6 @@ export async function POST(request: Request) {
         kullaniciAd: userName,
         ipAdresi: clientIpFromRequest(request.headers),
       });
-      // Revize ise eski teklifin history'sinde de görünsün — link açıklamasıyla
       if (revizeOfId) {
         await writeInternalTeklifLog({
           teklifId: Number(revizeOfId),

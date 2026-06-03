@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 export async function GET(
   _request: Request,
@@ -13,7 +13,7 @@ export async function GET(
   const nkrId = parseInt(id);
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const res = await pool.request()
       .input("id", nkrId)
       .query(`

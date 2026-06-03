@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 // POST /api/rapor-takip/[nkrId]/yayinla
@@ -27,7 +27,7 @@ export async function POST(
   const userId = ((session.user as any)?.userId ?? null) as number | null;
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     const tblCheck = await pool.request().query(
       `SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES

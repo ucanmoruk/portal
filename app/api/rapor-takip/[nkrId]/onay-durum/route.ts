@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 // GET /api/rapor-takip/[nkrId]/onay-durum?format=Genel
@@ -19,7 +19,7 @@ export async function GET(
   if (!format) return Response.json({ error: "format gerekli" }, { status: 400 });
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // NKR_RaporOnay tablosu yoksa onay yok demektir
     const tblCheck = await pool.request().query(
@@ -47,14 +47,13 @@ export async function GET(
           o.OnayTarihi,
           o.YayinTarihi,
           o.YayinUrl,
-          ISNULL(u.Ad, '') AS OnaylayanAd,
-          ISNULL(u.Soyad, '') AS OnaylayanSoyad
+          ISNULL(o.OnaylayanAd, '') AS OnaylayanAd,
+          '' AS OnaylayanSoyad
         FROM NKR n
-        LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
         LEFT JOIN NKR_RaporOnay o
           ON o.NkrID = n.ID
          AND UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
-        LEFT JOIN RootKullanici u ON u.ID = o.OnaylayanID
         WHERE n.ID = @nkrId AND n.Durum = 'Aktif'
       `);
 

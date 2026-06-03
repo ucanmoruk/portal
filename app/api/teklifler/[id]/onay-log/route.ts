@@ -2,34 +2,10 @@ export const runtime = "nodejs";
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
-
-const isPostgres = Boolean(process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL);
+import { cosmoPool } from "@/lib/db";
 
 async function ensureLogTable() {
-  const pool = await poolPromise;
-  if (isPostgres) {
-    // Postgres: native syntax. lib/db.ts translator MSSQL "IF NOT EXISTS ... CREATE TABLE"
-    // pattern'ini noop olarak skip ediyor; bu yüzden PG için ayrı yazıyoruz.
-    await pool.request().query(`
-      CREATE TABLE IF NOT EXISTS TeklifOnayLog (
-        ID SERIAL PRIMARY KEY,
-        TeklifID INTEGER NOT NULL,
-        TeklifNo VARCHAR(50) NULL,
-        Aksiyon VARCHAR(20) NOT NULL,
-        Aciklama TEXT NULL,
-        IpAdresi VARCHAR(100) NULL,
-        UserAgent VARCHAR(500) NULL,
-        MusteriAd VARCHAR(255) NULL,
-        MusteriEmail VARCHAR(255) NULL,
-        MusteriYetkili VARCHAR(255) NULL,
-        kullaniciid INTEGER NULL,
-        kullaniciad VARCHAR(255) NULL,
-        Tarih TIMESTAMP NOT NULL DEFAULT NOW()
-      )
-    `);
-    return;
-  }
+  const pool = await cosmoPool;
   await pool.request().query(`
     IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[TeklifOnayLog]') AND type in (N'U'))
     BEGIN
@@ -62,14 +38,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   await ensureLogTable();
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
 
   // 1) Bu teklifin TeklifNo'sunu bul — aynı TeklifNo'ya sahip TÜM kayıtların
   //    (tüm revizyonlar) ID'lerini topla. Geçmiş bu birleşik küme üzerinden döner,
   //    böylece yeni revizyon açıldığında eski revizyonların log'ları da görünür.
   const idRow = await pool.request()
     .input("ID", Number(id))
-    .query(`SELECT TeklifNo FROM TeklifX1 WHERE ID = @ID`);
+    .query(`SELECT TeklifNo FROM TeklifBaslik WHERE ID = @ID`);
 
   const teklifNo = idRow.recordset[0]?.TeklifNo as number | null | undefined;
 
@@ -78,7 +54,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (teklifNo) {
     const famRes = await pool.request()
       .input("TeklifNo", teklifNo)
-      .query(`SELECT ID FROM TeklifX1 WHERE TeklifNo = @TeklifNo ORDER BY ID`);
+      .query(`SELECT ID FROM TeklifBaslik WHERE TeklifNo = @TeklifNo ORDER BY ID`);
     familyIds = famRes.recordset.map((r: { ID: number }) => Number(r.ID)).filter(Boolean);
     if (familyIds.length === 0) familyIds = [Number(id)];
   }
@@ -101,11 +77,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       ISNULL(MusteriAd, '')         AS MusteriAd,
       ISNULL(MusteriEmail, '')      AS MusteriEmail,
       ISNULL(MusteriYetkili, '')    AS MusteriYetkili,
-      ISNULL(kullaniciid, 0)        AS KullaniciID,
-      ISNULL(kullaniciad, '')       AS KullaniciAd,
-      ${isPostgres
-        ? `TO_CHAR(Tarih AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Istanbul', 'DD.MM.YYYY HH24:MI:SS') AS Tarih`
-        : `FORMAT(Tarih, 'dd.MM.yyyy HH:mm:ss') AS Tarih`}
+      ISNULL(KullaniciID, 0)        AS KullaniciID,
+      ISNULL(KullaniciAd, '')       AS KullaniciAd,
+      FORMAT(Tarih, 'dd.MM.yyyy HH:mm:ss') AS Tarih
     FROM TeklifOnayLog
     WHERE TeklifID IN (${idList})
     ORDER BY ID DESC

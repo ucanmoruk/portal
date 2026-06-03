@@ -1,14 +1,21 @@
 import type { ConnectionPool } from "mssql";
 import { UGD_REPORT_TEXT_FIELDS } from "@/lib/ugdReportFields";
 
-let ensuredTextTable = false;
-let ensuredFormulTable = false;
-const isPostgres = Boolean(process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL);
+const ensuredTextTable = new Set<string>();
+const ensuredFormulTable = new Set<string>();
+
+// Dialect, global env yerine POOL'a göre belirlenir: gerçek mssql ConnectionPool'da
+// `.config` vardır, lib/db.ts PgCompatPool'unda yoktur. Böylece aynı helper hem
+// cosmo (MSSQL) hem Postgres çağıranıyla doğru çalışır.
+function isPgPool(pool: ConnectionPool): boolean {
+  return !(pool as unknown as { config?: unknown }).config;
+}
 
 export async function ensureLabUgdrTextTable(pool: ConnectionPool) {
-  if (ensuredTextTable) return;
+  const key = isPgPool(pool) ? "pg" : "mssql";
+  if (ensuredTextTable.has(key)) return;
 
-  if (isPostgres) {
+  if (isPgPool(pool)) {
     await pool.request().query(`
       CREATE TABLE IF NOT EXISTS NKR_UGDRaporMetinleri (
         ID SERIAL PRIMARY KEY,
@@ -44,13 +51,14 @@ export async function ensureLabUgdrTextTable(pool: ConnectionPool) {
     `);
   }
 
-  ensuredTextTable = true;
+  ensuredTextTable.add(key);
 }
 
 export async function ensureLabUgdrFormulTable(pool: ConnectionPool) {
-  if (ensuredFormulTable) return;
+  const key = isPgPool(pool) ? "pg" : "mssql";
+  if (ensuredFormulTable.has(key)) return;
 
-  if (isPostgres) {
+  if (isPgPool(pool)) {
     await pool.request().query(`
       CREATE TABLE IF NOT EXISTS NKR_Formul (
         ID SERIAL PRIMARY KEY,
@@ -86,7 +94,7 @@ export async function ensureLabUgdrFormulTable(pool: ConnectionPool) {
     `);
   }
 
-  ensuredFormulTable = true;
+  ensuredFormulTable.add(key);
 }
 
 export async function saveLabUgdrTexts(pool: ConnectionPool, nkrId: number, body: Record<string, unknown>) {

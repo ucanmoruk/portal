@@ -5,10 +5,11 @@ type InputValue = string | number | boolean | Date | null | undefined | Buffer;
 
 const usePostgres = Boolean(process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL);
 
-const mssqlConfig = {
+// Sunucu/kimlik ortak; yalnızca veritabanı adı değişir (massgrup_cosmo, massgrup_root, ...)
+const mssqlConfigFor = (database: string): mssql.config => ({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  database,
   server: process.env.DB_SERVER || "",
   port: 1433,
   pool: {
@@ -20,29 +21,43 @@ const mssqlConfig = {
     encrypt: true,
     trustServerCertificate: true,
   },
-};
+});
 
-let mssqlConnectionPromise: Promise<mssql.ConnectionPool> | undefined;
+// Her MSSQL veritabanı için ayrı, cache'lenen bağlantı havuzu.
+const mssqlPools = new Map<string, Promise<mssql.ConnectionPool>>();
 
-const getMssqlPool = () => {
-  if (!process.env.DB_SERVER || !process.env.DB_NAME || !process.env.DB_USER) {
-    throw new Error("MSSQL environment variables are missing. Set DB_SERVER, DB_NAME, DB_USER and DB_PASSWORD.");
+const getMssqlPoolFor = (database: string) => {
+  if (!process.env.DB_SERVER || !process.env.DB_USER) {
+    throw new Error("MSSQL environment variables are missing. Set DB_SERVER, DB_USER and DB_PASSWORD.");
+  }
+  if (!database) {
+    throw new Error("MSSQL database name is empty.");
   }
 
-  mssqlConnectionPromise ??= new mssql.ConnectionPool(mssqlConfig)
-    .connect()
-    .then((pool) => {
-      console.log("MSSQL veritabanina basariyla baglanildi.");
-      return pool;
-    })
-    .catch((err) => {
-      console.log("Veritabani baglantisi basarisiz! Hata: ", err);
-      mssqlConnectionPromise = undefined;
-      throw err;
-    });
-
-  return mssqlConnectionPromise;
+  let connection = mssqlPools.get(database);
+  if (!connection) {
+    connection = new mssql.ConnectionPool(mssqlConfigFor(database))
+      .connect()
+      .then((pool) => {
+        console.log(`MSSQL veritabanina baglanildi: ${database}`);
+        return pool;
+      })
+      .catch((err) => {
+        console.log(`MSSQL baglanti hatasi (${database}): `, err);
+        mssqlPools.delete(database);
+        throw err;
+      });
+    mssqlPools.set(database, connection);
+  }
+  return connection;
 };
+
+// Varsayılan MSSQL havuzu — eski davranışı korur (DB_NAME).
+const getMssqlPool = () => getMssqlPoolFor(process.env.DB_NAME || "");
+
+// Menü bazlı MSSQL veritabanı adları (bkz. DB yönlendirme haritası).
+const MSSQL_COSMO_DB = process.env.MSSQL_COSMO_DB || "massgrup_cosmo";
+const MSSQL_ROOT_DB = process.env.MSSQL_ROOT_DB || "massgrup_root";
 
 interface DbMetadata {
   tables: { name: string; schema: string }[];
@@ -434,3 +449,26 @@ const poolPromise: PromiseLike<mssql.ConnectionPool> = {
 };
 
 export default poolPromise;
+
+// ── Menü bazlı havuzlar (DB yönlendirme haritası) ───────────────────────────
+// Step 1: ADDITIVE — varsayılan poolPromise davranışı değişmez. Route grupları
+// Step 2'de tek tek bu havuzlara taşınacak. Hepsi `await cosmoPool` gibi kullanılır.
+
+/** Müşteriler + Laboratuvar → MSSQL massgrup_cosmo */
+export const cosmoPool: PromiseLike<mssql.ConnectionPool> = {
+  then: (onfulfilled, onrejected) =>
+    getMssqlPoolFor(MSSQL_COSMO_DB).then(onfulfilled, onrejected),
+};
+
+/** Spektrotek → MSSQL massgrup_root */
+export const rootPool: PromiseLike<mssql.ConnectionPool> = {
+  then: (onfulfilled, onrejected) =>
+    getMssqlPoolFor(MSSQL_ROOT_DB).then(onfulfilled, onrejected),
+};
+
+/** Formül Kontrol + ÜGD + Root Kozmetik → Neon Postgres (compat).
+ *  Global bayraktan BAĞIMSIZ — her zaman Postgres döner. */
+export const ugdPool: PromiseLike<mssql.ConnectionPool> = {
+  then: (onfulfilled, onrejected) =>
+    Promise.resolve(new PgCompatPool() as unknown as mssql.ConnectionPool).then(onfulfilled, onrejected),
+};

@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { randomBytes } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { imzalaVeKaydet } from "@/lib/raporImzaData";
@@ -29,9 +29,10 @@ export async function POST(
   if (!format) return Response.json({ error: "format gerekli" }, { status: 400 });
 
   const userId = ((session.user as any)?.userId ?? null) as number | null;
+  const userName = ((session.user as any)?.name || (session.user as any)?.email || null) as string | null;
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     const tblCheck = await pool.request().query(
       `SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
@@ -84,10 +85,11 @@ export async function POST(
       .input("format", format)
       .input("token", token)
       .input("onaylayan", userId)
+      .input("onaylayanAd", userName)
       .query(`
-        INSERT INTO NKR_RaporOnay (NkrID, RaporFormati, KarekodToken, Durum, OnaylayanID)
+        INSERT INTO NKR_RaporOnay (NkrID, RaporFormati, KarekodToken, Durum, OnaylayanID, OnaylayanAd)
         OUTPUT INSERTED.ID
-        VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan)
+        VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan, @onaylayanAd)
       `);
 
     // ───── Dijital imza (tamper-proof) ─────

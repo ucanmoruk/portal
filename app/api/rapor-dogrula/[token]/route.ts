@@ -1,4 +1,4 @@
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 import { verifyRapor } from "@/lib/raporImza";
 import { loadImzaInput, imzaColumnExists } from "@/lib/raporImzaData";
@@ -17,7 +17,7 @@ export async function GET(
   }
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     const tblCheck = await pool.request().query(
       `SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
@@ -40,12 +40,11 @@ export async function GET(
           ${imzaSelect}
           n.RaporNo, n.Numune_Adi, n.Tarih,
           ISNULL(f.Ad, '') AS FirmaAd,
-          ISNULL(u.Ad, '')    AS OnaylayanAd,
-          ISNULL(u.Soyad, '') AS OnaylayanSoyad
+          ISNULL(o.OnaylayanAd, '') AS OnaylayanAd,
+          '' AS OnaylayanSoyad
         FROM NKR_RaporOnay o
         INNER JOIN NKR n ON n.ID = o.NkrID
-        LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
-        LEFT JOIN RootKullanici u ON u.ID = o.OnaylayanID
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
         WHERE o.KarekodToken = @tok
       `);
 

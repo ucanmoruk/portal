@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 export async function POST(
   request: Request,
@@ -28,7 +28,7 @@ export async function POST(
     if (!format) return Response.json({ error: "Rapor formati zorunlu" }, { status: 400 });
     if (!allowed.has(durum)) return Response.json({ error: "Gecersiz durum" }, { status: 400 });
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     await pool.request()
       .input("nkrId", nkrIdNum)

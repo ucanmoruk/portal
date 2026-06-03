@@ -66,7 +66,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     try {
       const params = new URLSearchParams({ search: s, page: String(p), limit: String(l) });
       if (filterKimin) params.set("kimin", filterKimin);
-      const res = await fetch(`/api/musteriler?${params}`);
+      const res = await fetch(`/api/firmalar?${params}`);
       if (!res.ok) throw new Error((await res.json()).error || "Veri alınamadı");
       const json: ApiResponse = await res.json();
       setData(json.data);
@@ -119,7 +119,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     setSaving(true);
     setFormError("");
     try {
-      const url = modalMode === "edit" ? `/api/musteriler/${editId}` : "/api/musteriler";
+      const url = modalMode === "edit" ? `/api/firmalar/${editId}` : "/api/firmalar";
       const method = modalMode === "edit" ? "PUT" : "POST";
       const res = await fetch(url, {
         method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, Kimin: filterKimin }),
@@ -138,7 +138,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/musteriler/${deleteTarget.ID}`, { method: "DELETE" });
+      const res = await fetch(`/api/firmalar/${deleteTarget.ID}`, { method: "DELETE" });
       if (!res.ok) throw new Error((await res.json()).error || "İşlem başarısız");
       setDeleteTarget(null);
       fetchData(search, page, limit);

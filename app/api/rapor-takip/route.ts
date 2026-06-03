@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 // GET /api/rapor-takip
 // Her (NKR.ID, RaporFormati) kombinasyonu icin bir satir doner.
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     const phase = (searchParams.get("phase") || "").trim();
     const offset      = (page - 1) * limit;
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // NKR_LabKabul tablosu opsiyonel — yoksa acceptedOnly filtresi yok sayılır.
     // Schema filtresi: Postgres mirror'da lowercase legacy tablolardan kaçınılır.
@@ -172,9 +172,9 @@ export async function GET(request: Request) {
           s.RaporFormati,
           ${hasLabKabul ? `CONVERT(varchar(10), lk.KabulTarihi, 23)` : `NULL`} AS KabulTarihi
         FROM NKR n
-        LEFT JOIN RootTedarikci f  ON f.ID = n.Firma_ID
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f  ON f.ID = n.Firma_ID
         LEFT JOIN NumuneDetay   nd ON nd.RaporID = n.ID
-        LEFT JOIN RootTedarikci p  ON p.ID = nd.ProjeID
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) p  ON p.ID = nd.ProjeID
         INNER JOIN NumuneX1         x1 ON x1.RaporID  = n.ID
         INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
           AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''

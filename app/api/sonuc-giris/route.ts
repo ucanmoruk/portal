@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 // ── GET /api/sonuc-giris — Numune bazlı gruplu liste ─────────────────────────
 export async function GET(request: Request) {
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   const offset = (page - 1) * limit;
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // Opsiyonel kolonlar
     const colRes = await pool.request().query(
@@ -161,11 +161,10 @@ export async function GET(request: Request) {
           ${hasLimitEn  ? "ISNULL(x1.LimitEn,  '')" : "''"} AS LimitEn,
           ${hasBirimEn  ? "ISNULL(x1.BirimEn,  '')" : "''"} AS BirimEn,
           ${hasHizmetDurum ? "x1.HizmetDurum"        : "'Devam'"} AS Durum,
-          ISNULL(y.Ad, '')                                AS YetkiliAd
+          ''                                              AS YetkiliAd
         FROM NKR n
         JOIN NumuneX1 x1 ON x1.RaporID = n.ID
         LEFT JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-        LEFT JOIN RootKullanici y ON y.ID = s.YetkiliID
         WHERE n.ID IN (${inList}) AND ${where}
         ORDER BY
           n.ID,

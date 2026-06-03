@@ -1,4 +1,4 @@
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import QRCode from "qrcode";
 import type { HizmetRow, RaporHeader, OnayInfo, KarekodInfo } from "@/app/rapor-onay-print/[nkrId]/reportTypes";
 import { imzaColumnExists, imzalaVeKaydet } from "@/lib/raporImzaData";
@@ -45,7 +45,7 @@ export function fmtDate(d: Date | string | null | undefined): string {
 
 // Veriyi yükler. Rapor yoksa null döner (çağıran tarafı 404 verir).
 export async function loadRaporViewData(nkrIdNum: number, format: string): Promise<RaporViewData | null> {
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
 
   const headerRes = await pool.request()
     .input("id", nkrIdNum)
@@ -71,7 +71,7 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
         nd.UretimTarihi,
         nd.SKT
       FROM NKR n
-      LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
+      LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
       LEFT JOIN NumuneDetay   nd ON nd.RaporID = n.ID
       WHERE n.ID = @id AND n.Durum = 'Aktif'
     `);
@@ -121,10 +121,9 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
       .input("format", format)
       .query(`
         SELECT o.KarekodToken, o.Durum, o.OnayTarihi, o.YayinTarihi, o.YayinUrl,
-               ISNULL(u.Ad, '')    AS OnaylayanAd,
-               ISNULL(u.Soyad, '') AS OnaylayanSoyad
+               ISNULL(o.OnaylayanAd, '') AS OnaylayanAd,
+               ''                  AS OnaylayanSoyad
         FROM NKR_RaporOnay o
-        LEFT JOIN RootKullanici u ON u.ID = o.OnaylayanID
         WHERE o.NkrID = @nkrId AND o.RaporFormati = @format
       `);
     const r = onayRes.recordset[0];

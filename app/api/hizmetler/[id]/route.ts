@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 // Module-level col cache — 30s TTL (ALTER TABLE sonrası sunucu restart gerektirmesin)
 let _colCache: { cols: Set<string>; ts: number } | null = null;
@@ -27,7 +27,7 @@ export async function GET(
 
   const { id } = await params;
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const cols = await getStokCols(pool);
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
@@ -86,7 +86,7 @@ export async function PUT(
       Limit, Birim, LOQ, LimitEn, BirimEn, LOQEn,
     } = body;
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const cols = await getStokCols(pool);
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");

@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 // GET /api/numune-form/lookup
 // Döner: grupTurleri, rUGDTipler, paketler
@@ -9,7 +9,7 @@ export async function GET() {
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     const [grupRes, tipRes, paketRes] = await Promise.all([
       pool.request().query(
@@ -19,7 +19,7 @@ export async function GET() {
         "SELECT ID, Kategori, UrunTipi, UygulamaBolgesi, ADegeri FROM rUGDTip ORDER BY Kategori, UrunTipi"
       ),
       pool.request().query(
-        "SELECT ID, ListeAdi, Aciklama FROM NumuneX3 WHERE Durum = 'Aktif' ORDER BY ListeAdi"
+        "SELECT ID, ISNULL(Aciklama, '') AS ListeAdi, '' AS Aciklama FROM NumuneX3 WHERE Durum = 'Aktif' ORDER BY Aciklama"
       ),
     ]);
 

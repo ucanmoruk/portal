@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   if (!evrakNo) return Response.json({ error: "Evrak no zorunludur." }, { status: 400 });
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     const firmaRes = await pool.request()
       .input("evrakNo", evrakNo)
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
           ISNULL(f.Telefon, '') AS Telefon, ISNULL(f.Adres, '') AS Adres,
           ISNULL(f.VergiDairesi, '') AS VergiDairesi, ISNULL(f.VergiNo, '') AS VergiNo
         FROM NKR n
-        LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
         WHERE n.Evrak_No = @evrakNo AND n.Durum = 'Aktif'
         ORDER BY n.ID
       `);
@@ -36,8 +36,8 @@ export async function GET(request: NextRequest) {
           ISNULL(s.Kod, '') AS HizmetKodu,
           ISNULL(s.Ad, '') AS HizmetAdi,
           COUNT(*) AS Adet,
-          STRING_AGG(CAST(n.RaporNo AS text), ', ') AS RaporNoListesi,
-          STRING_AGG(CAST(n.Numune_Adi AS text), ', ') AS NumuneListesi
+          STRING_AGG(CAST(n.RaporNo AS NVARCHAR(MAX)), ', ') AS RaporNoListesi,
+          STRING_AGG(CAST(n.Numune_Adi AS NVARCHAR(MAX)), ', ') AS NumuneListesi
         FROM NKR n
         INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
         LEFT JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
@@ -54,8 +54,8 @@ export async function GET(request: NextRequest) {
         .query(`
           SELECT TOP 1 t.ID, t.TeklifNo, t.RevNo, t.MusteriID, ISNULL(m.Ad, '') AS MusteriAd,
                  ISNULL(t.KdvOran, 20) AS KdvOran, ISNULL(t.GenelIskonto, 0) AS GenelIskonto
-          FROM TeklifX1 t
-          LEFT JOIN RootTedarikci m ON m.ID = t.MusteriID
+          FROM TeklifBaslik t
+          LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) m ON m.ID = t.MusteriID
           WHERE t.ID = @id
         `);
       teklif = teklifRes.recordset[0] || null;
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
         .input("id", Number(teklifId))
         .query(`
           SELECT HizmetID, HizmetAdi, Fiyat, ParaBirimi, Iskonto
-          FROM TeklifX2
+          FROM TeklifKalem
           WHERE TeklifID = @id
         `);
       teklifLines = linesRes.recordset;

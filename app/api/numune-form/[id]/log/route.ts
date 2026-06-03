@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { hasNkrLogTable } from "@/lib/numuneFormTables";
 
 // GET /api/numune-form/[id]/log
@@ -16,7 +16,7 @@ export async function GET(
     const { id } = await params;
     console.log("Log API called for id:", id); // Debug
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     if (!(await hasNkrLogTable(pool))) {
       console.log("NKR_Log table does not exist"); // Debug
       return Response.json([]);
@@ -31,11 +31,7 @@ export async function GET(
           l.Eylem,
           l.Aciklama,
           l.KullaniciID,
-          CASE 
-            WHEN EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'RootKullanici')
-            THEN (SELECT k.Ad + ' ' + k.Soyad FROM RootKullanici k WHERE k.ID = l.KullaniciID)
-            ELSE NULL
-          END AS KullaniciAd
+          ISNULL(l.KullaniciAdi, '') AS KullaniciAd
         FROM NKR_Log l
         WHERE l.NKRID = @id
         ORDER BY l.Tarih DESC

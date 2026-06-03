@@ -8,6 +8,7 @@ import styles from "@/app/styles/table.module.css";
 interface Teklif {
   ID: number;
   TeklifNo: number | null;
+  DisTeklifKodu: string | null;
   RevNo: number;
   Tarih: string;
   MusteriID: number;
@@ -106,11 +107,15 @@ function fmt(n: number | null | undefined) {
   return n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// İç takip no (260200) — opsiyonel revizyon /NN
 function teklifLabel(no: number | null, rev: number) {
   if (!no) return "—";
-  const yy  = String(no).slice(0, 2);
-  const seq = String(no).slice(2).padStart(4, "0");
-  return rev > 0 ? `ROT${yy}${seq}/${rev}` : `ROT${yy}${seq}`;
+  return rev > 0 ? `${no}/${String(rev).padStart(2, "0")}` : String(no);
+}
+// Dış teklif kodu (müşteriye giden): ÜGAM-26-XXXXX/00
+function disLabel(kod: string | null | undefined, rev: number) {
+  if (!kod) return "—";
+  return `${kod}/${String(rev).padStart(2, "0")}`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -476,7 +481,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
     setMailTab("edit");
     setOnayLogs([]);
     setMailTo([]); setMailToInput(""); setMailCc([]); setMailCcInput("");
-    setMailKonu(`Teklif: ${teklifLabel(t.TeklifNo, t.RevNo)} — ${t.MusteriAd}`);
+    setMailKonu(`Teklif: ${disLabel(t.DisTeklifKodu, t.RevNo)} — ${t.MusteriAd}`);
     setMailMesaj("");
     // Müşteri mailini çek
     try {
@@ -606,7 +611,10 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                       return (
                         <tr key={t.ID}>
                           <td className={styles.tdMono} style={{ fontWeight: 600 }}>
-                            {teklifLabel(t.TeklifNo, t.RevNo)}
+                            <div>{disLabel(t.DisTeklifKodu, t.RevNo)}</div>
+                            <div style={{ fontWeight: 500, fontSize: "0.8em", color: "var(--color-text-tertiary)" }}>
+                              {teklifLabel(t.TeklifNo, t.RevNo)}
+                            </div>
                           </td>
                           <td className={styles.tdSecondary}>{t.Tarih}</td>
                           <td className={styles.tdName}>
@@ -1116,7 +1124,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
             <div className={styles.modalHeader}>
               <h2>Mail Gönder</h2>
               <span style={{ fontSize: 13, color: "var(--color-text-tertiary)", marginLeft: 10 }}>
-                {teklifLabel(mailTarget.TeklifNo, mailTarget.RevNo)} — {mailTarget.MusteriAd}
+                {disLabel(mailTarget.DisTeklifKodu, mailTarget.RevNo)} — {mailTarget.MusteriAd}
               </span>
               <button className={styles.modalClose} onClick={() => !mailSending && setMailTarget(null)}>✕</button>
             </div>

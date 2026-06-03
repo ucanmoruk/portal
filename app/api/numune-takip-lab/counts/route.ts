@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 // GET /api/numune-takip-lab/counts
 // Numune Takip ana tabları için kayıt sayıları:
@@ -13,7 +13,7 @@ export async function GET() {
   if (!session) return Response.json({ error: "Yetkisiz" }, { status: 401 });
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     const tblRes = await pool.request().query(
       `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES

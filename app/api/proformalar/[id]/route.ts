@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 function toNumber(value: any, fallback = 0) {
   const n = Number(value);
@@ -25,15 +25,15 @@ export async function GET(
   if (!id || isNaN(Number(id))) return Response.json({ error: "Geçersiz ID" }, { status: 400 });
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const header = await pool.request()
       .input("id", Number(id))
       .query(`
         SELECT p.*, ISNULL(f.Ad, '') AS FirmaAd, ISNULL(f.Email, '') AS FirmaEmail,
                ISNULL(f.Telefon, '') AS FirmaTelefon, ISNULL(f.Adres, '') AS FirmaAdres,
                ISNULL(f.VergiDairesi, '') AS VergiDairesi, ISNULL(f.VergiNo, '') AS VergiNo
-        FROM ProformaX1 p
-        LEFT JOIN RootTedarikci f ON f.ID = p.FirmaID
+        FROM ProformaBaslik p
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = p.FirmaID
         WHERE p.ID = @id AND p.SilindiMi = 0
       `);
     if (!header.recordset.length) return Response.json({ error: "Proforma bulunamadı" }, { status: 404 });
@@ -42,7 +42,7 @@ export async function GET(
       .input("id", Number(id))
       .query(`
         SELECT *
-        FROM ProformaX2
+        FROM ProformaKalem
         WHERE ProformaID = @id
         ORDER BY ID
       `);
@@ -69,11 +69,11 @@ export async function PATCH(
     const valid = ["Taslak", "Gönderildi", "Onaylandı", "İptal"];
     if (!valid.includes(durum)) return Response.json({ error: "Geçersiz durum" }, { status: 400 });
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     await pool.request()
       .input("id", Number(id))
       .input("durum", durum)
-      .query(`UPDATE ProformaX1 SET Durum = @durum WHERE ID = @id`);
+      .query(`UPDATE ProformaBaslik SET Durum = @durum WHERE ID = @id`);
 
     return Response.json({ success: true });
   } catch (e: any) {
@@ -106,7 +106,7 @@ export async function PUT(
     const kdvTutar = kdvMatrah * (kdvOran / 100);
     const genelToplam = kdvMatrah + kdvTutar;
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     await pool.request()
       .input("id", Number(id))
       .input("EvrakNo", body.evrakNo || null)
@@ -120,7 +120,7 @@ export async function PUT(
       .input("GenelToplam", Number(genelToplam.toFixed(2)))
       .input("Notlar", body.notlar || null)
       .query(`
-        UPDATE ProformaX1 SET
+        UPDATE ProformaBaslik SET
           EvrakNo = @EvrakNo,
           TeklifID = @TeklifID,
           FirmaID = @FirmaID,
@@ -136,7 +136,7 @@ export async function PUT(
 
     await pool.request()
       .input("id", Number(id))
-      .query(`DELETE FROM ProformaX2 WHERE ProformaID = @id`);
+      .query(`DELETE FROM ProformaKalem WHERE ProformaID = @id`);
 
     for (const line of satirlar) {
       const adet = toNumber(line.adet ?? line.Adet, 1);
@@ -157,7 +157,7 @@ export async function PUT(
         .input("Tutar", Number(tutar.toFixed(2)))
         .input("Kaynak", line.kaynak || null)
         .query(`
-          INSERT INTO ProformaX2
+          INSERT INTO ProformaKalem
             (ProformaID, HizmetID, HizmetKodu, HizmetAdi, RaporNoListesi, NumuneListesi,
              Adet, BirimFiyat, ParaBirimi, Iskonto, Tutar, Kaynak)
           VALUES
@@ -193,10 +193,10 @@ export async function DELETE(
   if (!id || isNaN(Number(id))) return Response.json({ error: "Geçersiz ID" }, { status: 400 });
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     await pool.request()
       .input("id", Number(id))
-      .query(`UPDATE ProformaX1 SET SilindiMi = 1 WHERE ID = @id`);
+      .query(`UPDATE ProformaBaslik SET SilindiMi = 1 WHERE ID = @id`);
     return Response.json({ success: true });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });

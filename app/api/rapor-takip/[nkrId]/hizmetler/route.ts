@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { NextRequest } from "next/server";
 
 // Değerlendirme Türkçe → İngilizce çeviri
@@ -29,7 +29,7 @@ export async function GET(
   const raporFormati = request.nextUrl.searchParams.get("raporFormati") || "";
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // Hangi opsiyonel kolonlar mevcut?
     const colCheck = await pool.request().query(`
@@ -105,7 +105,7 @@ export async function PATCH(
 
     if (updates.length === 0) return Response.json({ ok: true });
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // Kolonları kontrol et
     const colCheck = await pool.request().query(`

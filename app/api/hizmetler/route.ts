@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 // Hangi kolonların mevcut olduğunu kontrol et (30s TTL cache — ALTER TABLE sonrası
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit;
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const cols = await getStokCols(pool);
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
     if (!Kod?.trim()) return Response.json({ error: "Kod zorunludur." }, { status: 400 });
     if (!Ad?.trim())  return Response.json({ error: "Ad zorunludur."  }, { status: 400 });
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const cols = await getStokCols(pool);
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");

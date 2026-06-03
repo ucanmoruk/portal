@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 // GET /api/numune-form/next-no?grup=Özel
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   const grup = request.nextUrl.searchParams.get("grup") || "Özel";
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     const [evrakRes, raporRes] = await Promise.all([
       pool.request().query(

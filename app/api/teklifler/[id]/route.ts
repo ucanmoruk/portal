@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { writeInternalTeklifLog, teklifNoLabel, clientIpFromRequest } from "@/lib/teklifLog";
 
 // ----------------------------------------------------------------
@@ -19,13 +19,13 @@ export async function GET(
   }
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     const headerRes = await pool.request()
       .input("ID", Number(id))
       .query(`
         SELECT
-          t.ID, t.TeklifNo, t.RevNo,
+          t.ID, t.TeklifNo, t.DisTeklifKodu, t.RevNo,
           t.MusteriID,
           ISNULL(m.Ad,'')           AS MusteriAd,
           ISNULL(m.Email,'')        AS MusteriEmail,
@@ -41,8 +41,8 @@ export async function GET(
           ISNULL(t.TeklifVeren,  '')               AS TeklifVeren,
           ISNULL(t.KdvOran, 20)                    AS KdvOran,
           ISNULL(t.GenelIskonto, 0)                AS GenelIskonto
-        FROM TeklifX1 t
-        LEFT JOIN RootTedarikci m ON m.ID = t.MusteriID
+        FROM TeklifBaslik t
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) m ON m.ID = t.MusteriID
         WHERE t.ID = @ID
       `);
 
@@ -58,7 +58,7 @@ export async function GET(
                ISNULL(Metot,'') AS Metot,
                ISNULL(Akreditasyon,'') AS Akreditasyon,
                Fiyat, ParaBirimi, Iskonto, Notlar
-        FROM TeklifX2
+        FROM TeklifKalem
         WHERE TeklifID = @TeklifID
         ORDER BY ID
       `);
@@ -96,11 +96,11 @@ export async function PATCH(
   }
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     await pool.request()
       .input("ID",          Number(id))
       .input("TeklifDurum", teklifDurum)
-      .query(`UPDATE TeklifX1 SET TeklifDurum = @TeklifDurum WHERE ID = @ID`);
+      .query(`UPDATE TeklifBaslik SET TeklifDurum = @TeklifDurum WHERE ID = @ID`);
     return Response.json({ success: true });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
@@ -147,13 +147,13 @@ export async function PUT(
       return sum + adet * (parseFloat(s.fiyat) || 0) * (1 - (parseFloat(s.iskonto) || 0) / 100);
     }, 0);
 
-    const pool     = await poolPromise;
+    const pool     = await cosmoPool;
     const teklifId = Number(id);
 
     // Mevcut TeklifNo + RevNo'yu al (log için)
     const curRes = await pool.request()
       .input("ID", teklifId)
-      .query(`SELECT TeklifNo, ISNULL(RevNo, 0) AS RevNo FROM TeklifX1 WHERE ID = @ID`);
+      .query(`SELECT TeklifNo, ISNULL(RevNo, 0) AS RevNo FROM TeklifBaslik WHERE ID = @ID`);
     if (!curRes.recordset.length) {
       return Response.json({ error: "Teklif bulunamadı" }, { status: 404 });
     }
@@ -172,7 +172,7 @@ export async function PUT(
       .input("GenelIskonto",  parseFloat(genelIskonto) || 0)
       .input("RevNo",        nextRev)
       .query(`
-        UPDATE TeklifX1
+        UPDATE TeklifBaslik
         SET MusteriID = @MusteriID, Toplam = @Toplam, Notlar = @Notlar,
             TeklifKonusu = @TeklifKonusu, TeklifVeren = @TeklifVeren,
             KdvOran = @KdvOran, GenelIskonto = @GenelIskonto,
@@ -182,7 +182,7 @@ export async function PUT(
 
     await pool.request()
       .input("TeklifID", teklifId)
-      .query(`DELETE FROM TeklifX2 WHERE TeklifID = @TeklifID`);
+      .query(`DELETE FROM TeklifKalem WHERE TeklifID = @TeklifID`);
 
     for (const s of satirlar) {
       await pool.request()
@@ -197,7 +197,7 @@ export async function PUT(
         .input("Iskonto",     parseFloat(s.iskonto) || 0)
         .input("Notlar",      s.notlar        || null)
         .query(`
-          INSERT INTO TeklifX2 (TeklifID, HizmetID, HizmetAdi, Adet, Metot, Akreditasyon, Fiyat, ParaBirimi, Iskonto, Notlar)
+          INSERT INTO TeklifKalem (TeklifID, HizmetID, HizmetAdi, Adet, Metot, Akreditasyon, Fiyat, ParaBirimi, Iskonto, Notlar)
           VALUES (@TeklifID, @HizmetID, @HizmetAdi, @Adet, @Metot, @Akreditasyon, @Fiyat, @ParaBirimi, @Iskonto, @Notlar)
         `);
     }
@@ -239,10 +239,10 @@ export async function DELETE(
   }
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     await pool.request()
       .input("ID", Number(id))
-      .query(`UPDATE TeklifX1 SET Durum = 'Pasif' WHERE ID = @ID`);
+      .query(`UPDATE TeklifBaslik SET Durum = 'Pasif' WHERE ID = @ID`);
     return Response.json({ success: true });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });

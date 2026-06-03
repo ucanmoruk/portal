@@ -1,7 +1,52 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
+
+// Proforma — MSSQL massgrup_cosmo · YENİ tablolar ProformaBaslik / ProformaKalem
+// (cosmo'da ProformaBaslik/X2 yoktu → sıfırdan kuruluyor). Cari kaynağı: Firma.
+async function ensureProformaTables() {
+  const pool = await cosmoPool;
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='ProformaBaslik' AND xtype='U')
+    CREATE TABLE ProformaBaslik (
+      ID           INT IDENTITY(1,1) PRIMARY KEY,
+      ProformaNo   NVARCHAR(40)  NULL,
+      EvrakNo      NVARCHAR(40)  NULL,
+      TeklifID     INT           NULL,
+      FirmaID      INT           NULL,
+      Tarih        DATETIME      NOT NULL DEFAULT GETDATE(),
+      Durum        NVARCHAR(20)  NOT NULL DEFAULT 'Taslak',
+      KdvOran      DECIMAL(5,2)  NOT NULL DEFAULT 20,
+      GenelIskonto DECIMAL(5,2)  NOT NULL DEFAULT 0,
+      AraToplam    DECIMAL(18,2) NOT NULL DEFAULT 0,
+      IskontoTutar DECIMAL(18,2) NOT NULL DEFAULT 0,
+      KdvTutar     DECIMAL(18,2) NOT NULL DEFAULT 0,
+      GenelToplam  DECIMAL(18,2) NOT NULL DEFAULT 0,
+      Notlar       NVARCHAR(MAX) NULL,
+      KID          INT           NULL,
+      SilindiMi    BIT           NOT NULL DEFAULT 0
+    )
+  `);
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='ProformaKalem' AND xtype='U')
+    CREATE TABLE ProformaKalem (
+      ID             INT IDENTITY(1,1) PRIMARY KEY,
+      ProformaID     INT           NOT NULL,
+      HizmetID       INT           NULL,
+      HizmetKodu     NVARCHAR(50)  NULL,
+      HizmetAdi      NVARCHAR(300) NULL,
+      RaporNoListesi NVARCHAR(MAX) NULL,
+      NumuneListesi  NVARCHAR(MAX) NULL,
+      Adet           DECIMAL(18,2) NOT NULL DEFAULT 1,
+      BirimFiyat     DECIMAL(18,2) NOT NULL DEFAULT 0,
+      ParaBirimi     NVARCHAR(10)  NOT NULL DEFAULT 'TRY',
+      Iskonto        DECIMAL(5,2)  NOT NULL DEFAULT 0,
+      Tutar          DECIMAL(18,2) NOT NULL DEFAULT 0,
+      Kaynak         NVARCHAR(20)  NULL
+    )
+  `);
+}
 
 function toNumber(value: any, fallback = 0) {
   const n = Number(value);
@@ -22,7 +67,7 @@ async function nextProformaNo(pool: any) {
     .input("prefix", prefix)
     .query(`
       SELECT ISNULL(MAX(CAST(RIGHT(ProformaNo, 4) AS INT)), 0) + 1 AS nextSeq
-      FROM ProformaX1
+      FROM ProformaBaslik
       WHERE ProformaNo LIKE @prefix + '%'
     `);
   const seq = Number(res.recordset[0]?.nextSeq || 1);
@@ -40,7 +85,8 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit;
 
   try {
-    const pool = await poolPromise;
+    await ensureProformaTables();
+    const pool = await cosmoPool;
     const where = search
       ? `AND (
           ISNULL(p.ProformaNo, '') COLLATE Turkish_CI_AS LIKE @search
@@ -54,8 +100,8 @@ export async function GET(request: NextRequest) {
       .input("search", `%${search}%`)
       .query(`
         SELECT COUNT(*) AS total
-        FROM ProformaX1 p
-        LEFT JOIN RootTedarikci f ON f.ID = p.FirmaID
+        FROM ProformaBaslik p
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = p.FirmaID
         WHERE p.SilindiMi = 0 ${where}
       `);
 
@@ -72,9 +118,9 @@ export async function GET(request: NextRequest) {
           ISNULL(f.Ad, '') AS FirmaAd,
           ISNULL(f.Email, '') AS FirmaEmail,
           COUNT(x.ID) AS KalemSayisi
-        FROM ProformaX1 p
-        LEFT JOIN RootTedarikci f ON f.ID = p.FirmaID
-        LEFT JOIN ProformaX2 x ON x.ProformaID = p.ID
+        FROM ProformaBaslik p
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = p.FirmaID
+        LEFT JOIN ProformaKalem x ON x.ProformaID = p.ID
         WHERE p.SilindiMi = 0 ${where}
         GROUP BY p.ID, p.ProformaNo, p.EvrakNo, p.TeklifID, p.FirmaID, p.Tarih, p.Durum,
           p.AraToplam, p.IskontoTutar, p.KdvTutar, p.GenelToplam, p.KdvOran, p.GenelIskonto,
@@ -109,7 +155,8 @@ export async function POST(request: Request) {
     const kdvTutar = kdvMatrah * (kdvOran / 100);
     const genelToplam = kdvMatrah + kdvTutar;
 
-    const pool = await poolPromise;
+    await ensureProformaTables();
+    const pool = await cosmoPool;
     const proformaNo = await nextProformaNo(pool);
     const userId = (session.user as any)?.userId ?? null;
 
@@ -128,17 +175,17 @@ export async function POST(request: Request) {
       .input("Notlar", body.notlar || null)
       .input("KID", userId ? Number(userId) : null)
       .query(`
-        INSERT INTO ProformaX1
+        INSERT INTO ProformaBaslik
           (ProformaNo, EvrakNo, TeklifID, FirmaID, Tarih, Durum, KdvOran, GenelIskonto,
            AraToplam, IskontoTutar, KdvTutar, GenelToplam, Notlar, KID, SilindiMi)
         VALUES
           (@ProformaNo, @EvrakNo, @TeklifID, @FirmaID, GETDATE(), @Durum, @KdvOran, @GenelIskonto,
-           @AraToplam, @IskontoTutar, @KdvTutar, @GenelToplam, @Notlar, @KID, FALSE)
+           @AraToplam, @IskontoTutar, @KdvTutar, @GenelToplam, @Notlar, @KID, 0)
       `);
 
     const idRes = await pool.request()
       .input("ProformaNo", proformaNo)
-      .query(`SELECT TOP 1 ID FROM ProformaX1 WHERE ProformaNo = @ProformaNo ORDER BY ID DESC`);
+      .query(`SELECT TOP 1 ID FROM ProformaBaslik WHERE ProformaNo = @ProformaNo ORDER BY ID DESC`);
     const proformaId = Number(idRes.recordset[0]?.ID);
     for (const line of satirlar) {
       const adet = toNumber(line.adet ?? line.Adet, 1);
@@ -159,7 +206,7 @@ export async function POST(request: Request) {
         .input("Tutar", Number(tutar.toFixed(2)))
         .input("Kaynak", line.kaynak || null)
         .query(`
-          INSERT INTO ProformaX2
+          INSERT INTO ProformaKalem
             (ProformaID, HizmetID, HizmetKodu, HizmetAdi, RaporNoListesi, NumuneListesi,
              Adet, BirimFiyat, ParaBirimi, Iskonto, Tutar, Kaynak)
           VALUES

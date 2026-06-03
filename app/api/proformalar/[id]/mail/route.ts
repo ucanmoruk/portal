@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import nodemailer from "nodemailer";
 import { getAllSettings } from "@/lib/settings";
 
@@ -15,13 +15,13 @@ export async function POST(
   if (!id || isNaN(Number(id))) return Response.json({ error: "Geçersiz ID" }, { status: 400 });
 
   const body = await request.json().catch(() => ({}));
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
   const headerRes = await pool.request()
     .input("id", Number(id))
     .query(`
       SELECT p.*, ISNULL(f.Ad, '') AS FirmaAd, ISNULL(f.Email, '') AS FirmaEmail
-      FROM ProformaX1 p
-      LEFT JOIN RootTedarikci f ON f.ID = p.FirmaID
+      FROM ProformaBaslik p
+      LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = p.FirmaID
       WHERE p.ID = @id AND p.SilindiMi = 0
     `);
 
@@ -32,7 +32,7 @@ export async function POST(
 
   const lineRes = await pool.request()
     .input("id", Number(id))
-    .query(`SELECT * FROM ProformaX2 WHERE ProformaID = @id ORDER BY ID`);
+    .query(`SELECT * FROM ProformaKalem WHERE ProformaID = @id ORDER BY ID`);
 
   const cfg = await getAllSettings();
   const mailHost = cfg.MAIL_HOST || process.env.MAIL_HOST || "";
@@ -92,7 +92,7 @@ export async function POST(
 
   await pool.request()
     .input("id", Number(id))
-    .query(`UPDATE ProformaX1 SET Durum = 'Gönderildi' WHERE ID = @id AND Durum = 'Taslak'`);
+    .query(`UPDATE ProformaBaslik SET Durum = 'Gönderildi' WHERE ID = @id AND Durum = 'Taslak'`);
 
   return Response.json({ success: true });
 }

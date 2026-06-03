@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { nkrUgdTipFkColumn } from "@/lib/nkrUgdTipColumn";
 import { hasNkrFormulTable, hasNkrLogTable, nkrHasColumn } from "@/lib/numuneFormTables";
 import { loadLabUgdrTexts, saveLabUgdrTexts } from "@/lib/labUgdrStorage";
@@ -46,7 +46,7 @@ export async function GET(
   const nkrId = parseInt(id);
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const [ugdCol, doFormul] = await Promise.all([
       nkrUgdTipFkColumn(pool),
       hasNkrFormulTable(pool),
@@ -57,7 +57,7 @@ export async function GET(
            t.Kategori AS UGDTip_Kategori, t.UrunTipi AS UGDTip_UrunTipi,
            t.UygulamaBolgesi, t.ADegeri
          FROM NKR n
-         LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
+         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
          LEFT JOIN rUGDTip t       ON t.ID = n.[${ugdCol}]
          WHERE n.ID = @id AND n.Durum = 'Aktif'`
       : `SELECT n.*, f.Ad AS FirmaAd,
@@ -66,7 +66,7 @@ export async function GET(
            CAST(NULL AS nvarchar(500)) AS UygulamaBolgesi,
            CAST(NULL AS nvarchar(200)) AS ADegeri
          FROM NKR n
-         LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
+         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
          WHERE n.ID = @id AND n.Durum = 'Aktif'`;
 
     const [nkrRes, detayRes, hizmetlerRes, formulRes, fotoRes, textRows] = await Promise.all([
@@ -74,13 +74,13 @@ export async function GET(
       pool.request().input("id", nkrId).query(`
         SELECT nd.*, p.Ad AS ProjeAd
         FROM NumuneDetay nd
-        LEFT JOIN RootTedarikci p ON p.ID = nd.ProjeID
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) p ON p.ID = nd.ProjeID
         WHERE nd.RaporID = @id
       `),
       pool.request().input("id", nkrId).query(`
         SELECT x1.ID, x1.AnalizID, x1.Termin, x1.x3ID,
                s.Kod, s.Ad, s.Method AS Metot, s.Sure,
-               p.ListeAdi AS PaketAd, x1.Limit, x1.Birim,
+               ISNULL(p.Aciklama, '') AS PaketAd, x1.Limit, x1.Birim,
                ISNULL(x1.LimitEn, '') AS LimitEn,
                ISNULL(x1.BirimEn, '') AS BirimEn,
                ISNULL(x1.LOQ, '') AS LOQ,
@@ -155,7 +155,7 @@ export async function PUT(
     if (!nkr?.RaporNo?.trim())    return Response.json({ error: "Rapor No zorunludur."   }, { status: 400 });
     if (!nkr?.Numune_Adi?.trim()) return Response.json({ error: "Numune Adı zorunludur." }, { status: 400 });
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     const [
       hasRevno, hasKarar, hasDil, hasAciklama, hasTur,
@@ -283,10 +283,10 @@ export async function PUT(
       const paketMap = new Map<string, { LimitDeger: string; LimitBirimi: string; LimitEn: string; BirimEn: string }>();
       if (paketHizmetler.length > 0) {
         const paketCond = paketHizmetler.map((h: any) =>
-          `(ListeID=${Number(h.x3ID)} AND AltAnalizID=${Number(h.AnalizID)})`
+          `(x3ID=${Number(h.x3ID)} AND AltAnalizID=${Number(h.AnalizID)})`
         ).join(" OR ");
         const x4Res = await pool.request().query(`
-          SELECT ListeID, AltAnalizID,
+          SELECT x3ID AS ListeID, AltAnalizID,
             ISNULL(LimitDeger,    '') AS LimitDeger,
             ISNULL(LimitBirimi,   '') AS LimitBirimi,
             ISNULL(LimitDegerEn,  '') AS LimitEn,

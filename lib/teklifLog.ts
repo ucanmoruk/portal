@@ -8,7 +8,7 @@
 // Tablonun kendisi `app/api/teklifler/[id]/onay/route.ts:ensureLogTable` tarafından
 // yaratılır (CREATE TABLE IF NOT EXISTS). Bu helper sadece INSERT yapar.
 
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 export type TeklifAksiyon =
     | "Oluşturuldu"
@@ -27,33 +27,9 @@ interface InternalLogArgs {
     ipAdresi?: string | null;
 }
 
-const isPostgres = Boolean(process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL);
-
+// Teklif artık yalnızca MSSQL massgrup_cosmo'da → daima cosmoPool + MSSQL.
 async function ensureLogTable() {
-    const pool = await poolPromise;
-    if (isPostgres) {
-        // kullaniciid / kullaniciad lowercase — translator metadata "KullaniciID"
-        // PascalCase görür ve quote eder; lowercase yazınca translator dokunmaz
-        // ve PG tutarlı şekilde lowercase saklar.
-        await pool.request().query(`
-            CREATE TABLE IF NOT EXISTS TeklifOnayLog (
-                ID SERIAL PRIMARY KEY,
-                TeklifID INTEGER NOT NULL,
-                TeklifNo VARCHAR(50) NULL,
-                Aksiyon VARCHAR(20) NOT NULL,
-                Aciklama TEXT NULL,
-                IpAdresi VARCHAR(100) NULL,
-                UserAgent VARCHAR(500) NULL,
-                MusteriAd VARCHAR(255) NULL,
-                MusteriEmail VARCHAR(255) NULL,
-                MusteriYetkili VARCHAR(255) NULL,
-                kullaniciid INTEGER NULL,
-                kullaniciad VARCHAR(255) NULL,
-                Tarih TIMESTAMP NOT NULL DEFAULT NOW()
-            )
-        `);
-        return;
-    }
+    const pool = await cosmoPool;
     await pool.request().query(`
         IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[TeklifOnayLog]') AND type in (N'U'))
         BEGIN
@@ -82,12 +58,7 @@ async function ensureLogTable() {
  */
 export async function writeInternalTeklifLog(args: InternalLogArgs) {
     await ensureLogTable();
-    const pool = await poolPromise;
-    // Kolon adı notu: lib/db.ts translator metadata cache'inde "KullaniciID"
-    // PascalCase olarak dbo tablolarında var. INSERT'te PascalCase yazarsak
-    // translator quote eder → "KullaniciID" → public.teklifonaylog'da bulunmaz.
-    // Çözüm: kolon referanslarını **lowercase** yaz → translator regex match
-    // etmez → unquoted → PG aynı şekilde lowercase'e indirir → match ✓.
+    const pool = await cosmoPool;
     await pool.request()
         .input("TeklifID", args.teklifId)
         .input("TeklifNo", args.teklifNo)
@@ -98,7 +69,7 @@ export async function writeInternalTeklifLog(args: InternalLogArgs) {
         .input("KullaniciAd", args.kullaniciAd || null)
         .query(`
             INSERT INTO TeklifOnayLog
-                (TeklifID, TeklifNo, Aksiyon, Aciklama, IpAdresi, kullaniciid, kullaniciad)
+                (TeklifID, TeklifNo, Aksiyon, Aciklama, IpAdresi, KullaniciID, KullaniciAd)
             VALUES
                 (@TeklifID, @TeklifNo, @Aksiyon, @Aciklama, @IpAdresi, @KullaniciID, @KullaniciAd)
         `);

@@ -19,7 +19,7 @@ export async function loadImzaInput(
         CONVERT(varchar(10), n.Tarih, 23) AS Tarih,
         ISNULL(f.Ad, '') AS FirmaAd
       FROM NKR n
-      LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
+      LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
       WHERE n.ID = @id
     `);
   const h = hdr.recordset[0];

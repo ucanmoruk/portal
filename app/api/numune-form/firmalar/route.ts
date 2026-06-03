@@ -1,10 +1,10 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 // GET /api/numune-form/firmalar?q=arama
-// Firma ve Proje arama için — her ikisi de RootTedarikci'den gelir
+// Firma araması — MSSQL massgrup_cosmo · Firma (Firma_Adi → Ad)
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
@@ -13,15 +13,15 @@ export async function GET(request: NextRequest) {
   if (q.length < 1) return Response.json([]);
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const result = await pool.request()
       .input("q", q)
       .query(`
-        SELECT TOP 15 ID, Ad
-        FROM RootTedarikci
+        SELECT TOP 15 ID, ISNULL(Firma_Adi, '') AS Ad
+        FROM Firma
         WHERE Durum = N'Aktif'
-          AND ISNULL(Ad, '') COLLATE Turkish_CI_AS LIKE N'%' + @q + '%'
-        ORDER BY Ad
+          AND ISNULL(Firma_Adi, '') COLLATE Turkish_CI_AS LIKE N'%' + @q + '%'
+        ORDER BY Firma_Adi
       `);
 
     return Response.json(result.recordset);

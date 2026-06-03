@@ -1,4 +1,4 @@
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 // ── Tipler ───────────────────────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ export async function getReportData(
   nkrId: number,
   format: string,
 ): Promise<ReportData | null> {
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
 
   // ── Hangi opsiyonel kolonlar mevcut? (paralel sorgu) ─────────────────────
   const [x1ColRes, salColRes, loqRes, rtRes, ndColRes, nkrColRes] = await Promise.all([
@@ -105,11 +105,11 @@ export async function getReportData(
       SELECT 1 AS x FROM sys.columns
       WHERE object_id = OBJECT_ID('StokAnalizListesi') AND name = 'LOQ'
     `),
-    // RootTedarikci
+    // Firma (cari) — cosmo. Email alias'ı Mail kolonundan gelir.
     pool.request().query(`
       SELECT name FROM sys.columns
-      WHERE object_id = OBJECT_ID('RootTedarikci')
-        AND name IN ('Adres','Yetkili','Email')
+      WHERE object_id = OBJECT_ID('Firma')
+        AND name IN ('Adres','Yetkili','Mail')
     `),
     // NumuneDetay
     pool.request().query(`
@@ -135,7 +135,7 @@ export async function getReportData(
   // ── NKR + Firma sorgusu ──────────────────────────────────────────────────
   const adresE   = rtCols.has("Adres")   ? "ISNULL(CAST(f.Adres AS nvarchar(500)),   '')" : "''";
   const yetkiliE = rtCols.has("Yetkili") ? "ISNULL(CAST(f.Yetkili AS nvarchar(200)), '')" : "''";
-  const emailE   = rtCols.has("Email")   ? "ISNULL(CAST(f.Email AS nvarchar(200)),   '')" : "''";
+  const emailE   = rtCols.has("Mail")    ? "ISNULL(CAST(f.Email AS nvarchar(200)),   '')" : "''";
   const revnoE   = nkrCols.has("Revno")        ? "ISNULL(CAST(n.Revno AS nvarchar(50)), '0')" : "'0'";
   const adiEnE   = nkrCols.has("Numune_Adi_En") ? "ISNULL(CAST(n.Numune_Adi_En AS nvarchar(500)), '')" : "''";
 
@@ -153,7 +153,7 @@ export async function getReportData(
         ${yetkiliE}                                  AS FirmaYetkili,
         ${emailE}                                    AS FirmaMail
       FROM NKR n
-      LEFT JOIN RootTedarikci f
+      LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f
         ON CAST(f.ID AS nvarchar(50)) = NULLIF(CAST(n.Firma_ID AS nvarchar(50)), '')
       WHERE n.ID = @nkrId AND n.Durum = 'Aktif'
     `);

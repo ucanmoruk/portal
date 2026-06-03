@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 // GET /api/numune-takip-lab/[nkrId]/hizmetler?raporFormati=Genel
@@ -24,7 +24,7 @@ export async function GET(
   }
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // BolumID kolonu opsiyonel
     const hasBolumCol = await pool.request().query(

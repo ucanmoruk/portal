@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 // ----------------------------------------------------------------
 // PUT /api/numune-kabul/[id]  (güncelle)
@@ -17,7 +17,7 @@ export async function PUT(
     const body = await request.json();
     const { Tarih, Evrak_No, RaporNo, Firma_ID, Numune_Adi, Grup } = body;
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     await pool.request()
       .input("id",        id)
       .input("Tarih",     Tarih      || null)
@@ -56,7 +56,7 @@ export async function DELETE(
 
   const { id } = await params;
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     await pool.request()
       .input("id", id)
       .query(`UPDATE NKR SET Durum = 'Pasif' WHERE ID = @id`);

@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import sql from "mssql";
 import { createPool } from "@vercel/postgres";
 import { isNumuneFtpConfigured, uploadNumuneFotoToFtp } from "@/lib/numuneFotoUpload";
@@ -29,7 +29,7 @@ async function ensurePgFotoTable() {
 
 async function ensureFotografBinaryColumns() {
   if (usesPostgresCompat()) return;
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
   await pool.request().query(`
     IF COL_LENGTH('Fotograf', 'FotoData') IS NULL
       ALTER TABLE Fotograf ADD FotoData VARBINARY(MAX) NULL;
@@ -68,7 +68,7 @@ export async function GET(
       }
     }
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const res = usesPostgresCompat()
       ? await pool.request()
           .input("id", nkrId)
@@ -135,7 +135,7 @@ export async function POST(
     if (usesPostgresCompat()) await ensurePgFotoTable();
     else await ensureFotografBinaryColumns();
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const raporRes = await pool.request().input("id", nkrId).query("SELECT RaporNo FROM NKR WHERE ID = @id");
     const raporNo = String(raporRes.recordset[0]?.RaporNo ?? nkrId);
 

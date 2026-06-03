@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 // ── PATCH /api/sonuc-giris/[x1id] — Sonuç, Değerlendirme, Durum güncelle ───
 export async function PATCH(
@@ -24,7 +24,7 @@ export async function PATCH(
     const limitEn = (body.limitEn || "").trim() || null;
     const birimEn = (body.birimEn || "").trim() || null;
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // Hangi opsiyonel kolonlar var?
     const colRes = await pool.request().query(

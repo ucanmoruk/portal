@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 
 // ── GET /api/lab/paketler/[id]/items ─────────────────────────────────────────
 // NumuneX4 + StokAnalizListesi join
@@ -15,7 +15,7 @@ export async function GET(
   const offset  = (page - 1) * limit;
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const searchClause = q
       ? `AND (
           ISNULL(s.Kod, '') COLLATE Turkish_CI_AS LIKE @q
@@ -31,7 +31,7 @@ export async function GET(
         SELECT COUNT(*) AS toplam
         FROM NumuneX4 x4
         JOIN StokAnalizListesi s ON s.ID = x4.AltAnalizID
-        WHERE x4.ListeID = @listeId ${searchClause}
+        WHERE x4.x3ID = @listeId ${searchClause}
       `);
 
     const dataRes = await pool.request()
@@ -41,15 +41,17 @@ export async function GET(
       .input("limit",   limit)
       .query(`
         SELECT
-          x4.ID, x4.ListeID, x4.AltAnalizID,
-          x4.LimitDeger, x4.LimitBirimi, ISNULL(x4.LimitDegerEn, '') AS LimitDegerEn,
+          x4.ID, x4.x3ID AS ListeID, x4.AltAnalizID,
+          ISNULL(x4.LimitDeger, ISNULL(x4.Limit, '')) AS LimitDeger,
+          ISNULL(x4.LimitBirimi, ISNULL(x4.Birim, '')) AS LimitBirimi,
+          ISNULL(x4.LimitDegerEn, '') AS LimitDegerEn,
           ISNULL(x4.LimitBirimiEn, '') AS LimitBirimiEn, ISNULL(x4.LOQ, '') AS LOQ,
           ISNULL(x4.LOQEn, '') AS LOQEn, x4.Notlar,
           s.Kod, s.Ad, s.Method, s.Matriks,
           s.Akreditasyon, s.Sure, s.Fiyat, s.ParaBirimi
         FROM NumuneX4 x4
         JOIN StokAnalizListesi s ON s.ID = x4.AltAnalizID
-        WHERE x4.ListeID = @listeId ${searchClause}
+        WHERE x4.x3ID = @listeId ${searchClause}
         ORDER BY x4.ID DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
@@ -86,13 +88,13 @@ export async function POST(
       return NextResponse.json({ error: "HizmetID zorunludur." }, { status: 400 });
     }
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
 
     // Aynı hizmet zaten listede mi?
     const existing = await pool.request()
       .input("listeId",  parseInt(id))
       .input("hizmetId", hizmetId)
-      .query(`SELECT ID FROM NumuneX4 WHERE ListeID=@listeId AND AltAnalizID=@hizmetId`);
+      .query(`SELECT ID FROM NumuneX4 WHERE x3ID=@listeId AND AltAnalizID=@hizmetId`);
 
     if (existing.recordset.length > 0) {
       return NextResponse.json({ error: "Bu hizmet zaten listede mevcut." }, { status: 409 });
@@ -110,7 +112,7 @@ export async function POST(
       .input("notlar",       notlar)
       .query(`
         INSERT INTO NumuneX4
-          (ListeID, AltAnalizID, LimitDeger, LimitBirimi, LimitDegerEn, LimitBirimiEn, LOQ, LOQEn, Notlar)
+          (x3ID, AltAnalizID, LimitDeger, LimitBirimi, LimitDegerEn, LimitBirimiEn, LOQ, LOQEn, Notlar)
         OUTPUT INSERTED.ID
         VALUES
           (@listeId, @hizmetId, @limitDeger, @limitBirimi, @limitDegerEn, @limitBirimiEn, @loq, @loqEn, @notlar)
@@ -136,11 +138,11 @@ export async function DELETE(
       return NextResponse.json({ error: "itemId zorunludur." }, { status: 400 });
     }
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     await pool.request()
       .input("itemId",  itemId)
       .input("listeId", parseInt(id))
-      .query(`DELETE FROM NumuneX4 WHERE ID=@itemId AND ListeID=@listeId`);
+      .query(`DELETE FROM NumuneX4 WHERE ID=@itemId AND x3ID=@listeId`);
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {
@@ -165,7 +167,7 @@ export async function PATCH(
     const loqEn         = (body.loqEn         || "").trim() || null;
     const notlar        = (body.notlar        || "").trim() || null;
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     await pool.request()
       .input("itemId",        itemId)
       .input("listeId",       parseInt(id))
@@ -180,7 +182,7 @@ export async function PATCH(
         UPDATE NumuneX4
         SET LimitDeger=@limitDeger, LimitBirimi=@limitBirimi, LimitDegerEn=@limitDegerEn,
             LimitBirimiEn=@limitBirimiEn, LOQ=@loq, LOQEn=@loqEn, Notlar=@notlar
-        WHERE ID=@itemId AND ListeID=@listeId
+        WHERE ID=@itemId AND x3ID=@listeId
       `);
 
     return NextResponse.json({ ok: true });
