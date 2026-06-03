@@ -322,7 +322,11 @@ export function buildHamveriDocx(record: HamveriRecord): Buffer {
     if (!originalXml.includes(PLACEHOLDER)) {
         throw new Error("Hamveri şablonunda {@content} placeholder'ı bulunamadı.");
     }
-    const renderedXml = originalXml.replace(PLACEHOLDER, middle);
+    // KRİTİK: replacement'ı FONKSİYON olarak ver. String verilirse JS, içindeki
+    // $&, $`, $', $$, $1 dizilerini özel değiştirme kalıbı sanıp içeriği bozar
+    // (DB'den gelen notes/measuredValue alanlarında $ olduğunda XML mangle oluyordu).
+    // Fonksiyon dönüşü harfi harfine kullanılır — hiçbir $ yorumlanmaz.
+    const renderedXml = originalXml.replace(PLACEHOLDER, () => middle);
 
     zip.file(DOC_PART, renderedXml);
 
