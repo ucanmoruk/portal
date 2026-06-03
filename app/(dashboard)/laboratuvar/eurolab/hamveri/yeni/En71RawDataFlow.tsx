@@ -1081,7 +1081,11 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
   };
 
   const handlePrint = () => {
-    window.print();
+    if (!rawdataId) {
+      window.alert("Önce kaydetmelisiniz (DOCX indirme kayıtlı hamveri gerektirir).");
+      return;
+    }
+    window.location.href = `/api/eurolab/rawdata/${rawdataId}/docx`;
   };
 
   return (
@@ -1335,17 +1339,14 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
               </button>
               {activeStep === "records" ? (
                 <div className="flex flex-wrap gap-3 sm:justify-end">
-                  {rawdataId && (
-                    <a
-                      href={`/api/eurolab/rawdata/${rawdataId}/docx`}
-                      className="rounded-full border border-blue-200 bg-blue-50 text-sm font-semibold text-blue-700 hover:bg-blue-100"
-                      style={{ padding: "9px 18px" }}
-                      title="Ç.01.PR.19 Tanımlama ve Ham Veri Çizelgesi formatında DOCX indir"
-                    >
-                      DOCX İndir (Ç.01.PR.19)
-                    </a>
-                  )}
-                  <button type="button" className="rounded-full border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50" style={{ padding: "9px 18px" }} onClick={handlePrint}>
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    style={{ padding: "9px 18px" }}
+                    onClick={handlePrint}
+                    disabled={!rawdataId}
+                    title={rawdataId ? "Ç.01.PR.19 formatında DOCX indir" : "Önce kaydedin"}
+                  >
                     Yazdır
                   </button>
                   <button type="button" className="rounded-full bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60" style={{ padding: "9px 22px" }} onClick={handleSave} disabled={saving}>
