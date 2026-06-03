@@ -148,8 +148,12 @@ const labelValueRow = (label: string, value: string) =>
 
 const labelValueTable = (rows: Array<[string, string]>) =>
     `<w:tbl>` +
-    `<w:tblPr><w:tblW w:w="${PAGE_DXA}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0"/></w:tblPr>` +
-    `<w:tblGrid><w:gridCol w:w="2800"/><w:gridCol w:w="${PAGE_DXA - 2800}"/></w:tblGrid>` +
+    // NOT: ${PAGE_DXA} interpolasyonu KULLANMA. Turbopack (Next 16 prod build)
+    // sabit interpolasyonunu inline edip komşu literal'leri birleştirirken bu
+    // yapısal string'in bir parçasını DÜŞÜRÜYOR (w:w="9000<w:tblGrid kalıyor).
+    // Bu yüzden 9000 sabiti literal olarak gömülü.
+    `<w:tblPr><w:tblW w:w="9000" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0"/></w:tblPr>` +
+    `<w:tblGrid><w:gridCol w:w="2800"/><w:gridCol w:w="6200"/></w:tblGrid>` +
     rows.map(([l, v]) => labelValueRow(l, v)).join("") +
     `</w:tbl>`;
 
@@ -215,7 +219,11 @@ const testsTable = (rows: Array<{ clause?: string; method?: string; title?: stri
     if (rows.length === 0) {
         return (
             `<w:tbl>` +
-            `<w:tblPr><w:tblW w:w="${PAGE_DXA}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0"/></w:tblPr>` +
+            // NOT: ${PAGE_DXA} interpolasyonu KULLANMA. Turbopack (Next 16 prod build)
+    // sabit interpolasyonunu inline edip komşu literal'leri birleştirirken bu
+    // yapısal string'in bir parçasını DÜŞÜRÜYOR (w:w="9000<w:tblGrid kalıyor).
+    // Bu yüzden 9000 sabiti literal olarak gömülü.
+    `<w:tblPr><w:tblW w:w="9000" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0"/></w:tblPr>` +
             `<w:tblGrid>${TESTS_COLS.map(w => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>` +
             testsHeaderRow() +
             `<w:tr>` +
@@ -226,7 +234,11 @@ const testsTable = (rows: Array<{ clause?: string; method?: string; title?: stri
     }
     return (
         `<w:tbl>` +
-        `<w:tblPr><w:tblW w:w="${PAGE_DXA}" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0"/></w:tblPr>` +
+        // NOT: ${PAGE_DXA} interpolasyonu KULLANMA. Turbopack (Next 16 prod build)
+    // sabit interpolasyonunu inline edip komşu literal'leri birleştirirken bu
+    // yapısal string'in bir parçasını DÜŞÜRÜYOR (w:w="9000<w:tblGrid kalıyor).
+    // Bu yüzden 9000 sabiti literal olarak gömülü.
+    `<w:tblPr><w:tblW w:w="9000" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0"/></w:tblPr>` +
         `<w:tblGrid>${TESTS_COLS.map(w => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>` +
         testsHeaderRow() +
         rows.map((r, i) => testRow(i, r)).join("") +
@@ -329,7 +341,7 @@ export function buildHamveriDocx(record: HamveriRecord): Buffer {
     // içerikte enjekte edilen OOXML'in bir parçasını (statik tblPr) sessizce
     // düşürüyordu — localhost'ta temiz, production'da bozuk. indexOf + slice
     // ile manuel splice tamamen deterministik ve motordan bağımsızdır.
-    const BUILD_MARKER = "<!-- HAMVERI_BUILD=v7-slice -->";
+    const BUILD_MARKER = "<!-- HAMVERI_BUILD=v8-noconstfold -->";
     let renderedXml =
         originalXml.slice(0, phIdx) + middle + originalXml.slice(phIdx + PLACEHOLDER.length);
 
