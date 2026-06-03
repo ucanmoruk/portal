@@ -267,14 +267,14 @@ export function buildHamveriDocx(record: HamveriRecord): Buffer {
         method: t.method,
         title: t.title,
         measuredValue: td.records?.[t.id]?.measuredValue || "",
-        decision: td.records?.[t.id]?.decision || "Bekliyor",
+        decision: td.records?.[t.id]?.decision || "",
     }));
     const stats = td.stats || {
         total: tests.length,
         passed: tests.filter(t => t.decision === "Geçti").length,
         failed: tests.filter(t => t.decision === "Kaldı").length,
         na: tests.filter(t => t.decision === "N/A").length,
-        waiting: tests.filter(t => t.decision === "Bekliyor").length,
+        waiting: tests.filter(t => t.decision === "").length,
     };
 
     const requirements = Array.isArray(pd.selectedRequirements) && pd.selectedRequirements.length > 0

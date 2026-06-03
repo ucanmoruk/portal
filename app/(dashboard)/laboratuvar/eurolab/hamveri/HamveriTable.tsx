@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Edit, Eye, FileText, Printer, Trash2 } from "lucide-react";
+import { Edit, FileText, Trash2 } from "lucide-react";
 import styles from "@/app/styles/table.module.css";
 
 interface RawdataRow {
@@ -197,21 +197,6 @@ export default function HamveriTable() {
                   <td>{formatDate(row.created_at)}</td>
                   <td>
                     <div className={styles.actionBtns}>
-                      <Link href={`/laboratuvar/eurolab/hamveri/${row.id}`}>
-                        <button className={styles.editBtn} title="Görüntüle / çıktı al">
-                          <Eye size={14} />
-                        </button>
-                      </Link>
-                      <Link href={`/laboratuvar/eurolab/hamveri/${row.id}`}>
-                        <button className={styles.editBtn} title="Çıktı ekranı">
-                          <Printer size={14} />
-                        </button>
-                      </Link>
-                      <a href={`/api/eurolab/rawdata/${row.id}/docx`} title="Ç.01.PR.19 DOCX indir">
-                        <button className={styles.editBtn}>
-                          <FileText size={14} />
-                        </button>
-                      </a>
                       <Link href={`/laboratuvar/eurolab/hamveri/${row.id}/duzenle`}>
                         <button className={styles.editBtn} title="Düzenle">
                           <Edit size={14} />
