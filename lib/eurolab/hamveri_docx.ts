@@ -319,23 +319,37 @@ export function buildHamveriDocx(record: HamveriRecord): Buffer {
     const originalXml = docFile.asText();
 
     const PLACEHOLDER = "<w:p><w:r><w:t>{@content}</w:t></w:r></w:p>";
-    if (!originalXml.includes(PLACEHOLDER)) {
+    const phIdx = originalXml.indexOf(PLACEHOLDER);
+    if (phIdx < 0) {
         throw new Error("Hamveri şablonunda {@content} placeholder'ı bulunamadı.");
     }
-    // KRİTİK: replacement'ı FONKSİYON olarak ver. String verilirse JS, içindeki
-    // $&, $`, $', $$, $1 dizilerini özel değiştirme kalıbı sanıp içeriği bozar
-    // (DB'den gelen notes/measuredValue alanlarında $ olduğunda XML mangle oluyordu).
-    // Fonksiyon dönüşü harfi harfine kullanılır — hiçbir $ yorumlanmaz.
-    let renderedXml = originalXml.replace(PLACEHOLDER, () => middle);
 
-    // BUILD FINGERPRINT — hangi kod sürümünün ÜRETTİĞİNİ kanıtlamak için.
-    // Word bu XML yorumunu yok sayar; indirilen dosyada grep'lenebilir.
-    // İndirilen dosyada bu marker YOKSA production stale/cache'li build servis
-    // ediyor demektir (kod deploy olmamış).
-    const BUILD_MARKER = "<!-- HAMVERI_BUILD=v6-directinject -->";
-    renderedXml = renderedXml.replace("?>", "?>" + BUILD_MARKER);
+    // KRİTİK: String.prototype.replace KULLANMA. Vercel serverless V8'inde
+    // replace() (string ya da fonksiyon replacement farketmeksizin) büyük
+    // içerikte enjekte edilen OOXML'in bir parçasını (statik tblPr) sessizce
+    // düşürüyordu — localhost'ta temiz, production'da bozuk. indexOf + slice
+    // ile manuel splice tamamen deterministik ve motordan bağımsızdır.
+    const BUILD_MARKER = "<!-- HAMVERI_BUILD=v7-slice -->";
+    let renderedXml =
+        originalXml.slice(0, phIdx) + middle + originalXml.slice(phIdx + PLACEHOLDER.length);
 
-    zip.file(DOC_PART, renderedXml);
+    // Build fingerprint: XML deklarasyonundan hemen sonra (yine slice ile).
+    const declEnd = renderedXml.indexOf("?>");
+    if (declEnd >= 0) {
+        renderedXml =
+            renderedXml.slice(0, declEnd + 2) + BUILD_MARKER + renderedXml.slice(declEnd + 2);
+    }
+
+    // SAVUNMA: enjeksiyon bozulduysa (tblPr parçası düştüyse) bozuk DOCX
+    // üretmektense hata fırlat — Word'e bozuk dosya gitmesin, sebebi loglansın.
+    if (renderedXml.includes('w:w="9000<') || renderedXml.includes("{@content}")) {
+        throw new Error("Hamveri DOCX enjeksiyonu bozuldu (tblPr/placeholder tutarsız).");
+    }
+
+    // PizZip'e STRING yerine önceden UTF-8'e çevrilmiş byte ver — PizZip'in
+    // kendi string→bytes dönüşümünü serverless'ta atlamak için.
+    const xmlBytes = new TextEncoder().encode(renderedXml);
+    zip.file(DOC_PART, xmlBytes);
 
     // Serverless ortamda Buffer ↔ Uint8Array dönüşümleri sırasında body
     // bozulabiliyor; doğrudan Uint8Array üret ve onu Buffer.from ile sarıp dön.
