@@ -90,8 +90,11 @@ const criticalAgesLabel = (ca?: { under10?: boolean; under18?: boolean; under8?:
     [ca?.under10 && "10 ay altı", ca?.under18 && "18 ay altı", ca?.under8 && "8 yaş altı"].filter(Boolean).join(", ") || "-";
 
 // ── OOXML yardımcıları ──────────────────────────────────────────────────────
-// Stil hedef: A4 sayfa içeriği ~9000 dxa = 159 mm
-const PAGE_DXA = 9000;
+// Tablo genişliği şablonun antet tablosuyla AYNI: 11058 dxa + tblInd -885.
+// Böylece veri tabloları sayfada antetle kenardan kenara hizalanır (dar/ortalı kalmaz).
+const PAGE_DXA = 11058;
+const LABEL_W = 2800;            // "etiket" sütunu
+const VALUE_W = PAGE_DXA - LABEL_W; // "değer" sütunu (8258)
 
 // NOT: OOXML w:pPr çocuklarının sırası ŞEMA ile zorunlu. Doğru sıra:
 //   spacing → ind → jc → rPr (rPr en sonda).
@@ -142,8 +145,8 @@ const spacer = () => `<w:p><w:pPr><w:spacing w:after="0" w:line="120" w:lineRule
 // 2 sütunlu "etiket — değer" satırı
 const labelValueRow = (label: string, value: string) =>
     `<w:tr>` +
-    cell(label, { width: 2800, bold: true, bg: "F1F5F9", size: 18 }) +
-    cell(value || "-", { width: PAGE_DXA - 2800, size: 18 }) +
+    cell(label, { width: LABEL_W, bold: true, bg: "F1F5F9", size: 18 }) +
+    cell(value || "-", { width: VALUE_W, size: 18 }) +
     `</w:tr>`;
 
 const labelValueTable = (rows: Array<[string, string]>) =>
@@ -152,13 +155,13 @@ const labelValueTable = (rows: Array<[string, string]>) =>
     // sabit interpolasyonunu inline edip komşu literal'leri birleştirirken bu
     // yapısal string'in bir parçasını DÜŞÜRÜYOR (w:w="9000<w:tblGrid kalıyor).
     // Bu yüzden 9000 sabiti literal olarak gömülü.
-    `<w:tblPr><w:tblW w:w="9000" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0"/></w:tblPr>` +
-    `<w:tblGrid><w:gridCol w:w="2800"/><w:gridCol w:w="6200"/></w:tblGrid>` +
+    `<w:tblPr><w:tblW w:w="11058" w:type="dxa"/><w:tblInd w:w="-885" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0"/></w:tblPr>` +
+    `<w:tblGrid><w:gridCol w:w="2800"/><w:gridCol w:w="8258"/></w:tblGrid>` +
     rows.map(([l, v]) => labelValueRow(l, v)).join("") +
     `</w:tbl>`;
 
 // Atanan testler tablosu
-const TESTS_COLS = [600, 1100, 2700, 2900, 1700]; // toplam = 9000
+const TESTS_COLS = [740, 1350, 3318, 3560, 2090]; // toplam = 11058 (#, Madde, Yöntem, Ölçülen, Karar)
 const testsHeader = () =>
     `<w:tr><w:trPr><w:tblHeader/></w:trPr>` +
     cell("#", { width: TESTS_COLS[0], bold: true, bg: "0F172A", align: "center", size: 18 }).replace("</w:tcPr>", `<w:rPr><w:color w:val="FFFFFF"/></w:rPr></w:tcPr>`) +
@@ -187,13 +190,6 @@ const testsHeaderRow = () =>
     headerCell("Karar", TESTS_COLS[4]) +
     `</w:tr>`;
 
-const decisionFill = (decision: string) => {
-    if (decision === "Geçti") return "DCFCE7";
-    if (decision === "Kaldı") return "FEE2E2";
-    if (decision === "N/A") return "F1F5F9";
-    return "FEF3C7";
-};
-
 const testRow = (index: number, row: {
     clause?: string;
     method?: string;
@@ -203,14 +199,14 @@ const testRow = (index: number, row: {
 }) =>
     `<w:tr>` +
     cell(String(index + 1), { width: TESTS_COLS[0], align: "center", size: 18 }) +
-    cell(row.clause || "-", { width: TESTS_COLS[1], size: 18 }) +
-    cell([row.title || "-", row.method ? `(${row.method})` : ""].filter(Boolean), { width: TESTS_COLS[2], size: 18 }) +
+    cell(row.clause || "", { width: TESTS_COLS[1], size: 18 }) +
+    cell([row.title || "", row.method ? `(${row.method})` : ""].filter(Boolean), { width: TESTS_COLS[2], size: 18 }) +
     cell(row.measuredValue || "-", { width: TESTS_COLS[3], size: 18 }) +
-    cell(row.decision || "Bekliyor", {
+    cell(row.decision || "", {
         width: TESTS_COLS[4],
         align: "center",
         bold: true,
-        bg: decisionFill(row.decision || "Bekliyor"),
+        // Karar sütunu arka planı beyaz (bg verilmiyor → renksiz/beyaz hücre).
         size: 18,
     }) +
     `</w:tr>`;
@@ -223,7 +219,7 @@ const testsTable = (rows: Array<{ clause?: string; method?: string; title?: stri
     // sabit interpolasyonunu inline edip komşu literal'leri birleştirirken bu
     // yapısal string'in bir parçasını DÜŞÜRÜYOR (w:w="9000<w:tblGrid kalıyor).
     // Bu yüzden 9000 sabiti literal olarak gömülü.
-    `<w:tblPr><w:tblW w:w="9000" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0"/></w:tblPr>` +
+    `<w:tblPr><w:tblW w:w="11058" w:type="dxa"/><w:tblInd w:w="-885" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0"/></w:tblPr>` +
             `<w:tblGrid>${TESTS_COLS.map(w => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>` +
             testsHeaderRow() +
             `<w:tr>` +
@@ -238,7 +234,7 @@ const testsTable = (rows: Array<{ clause?: string; method?: string; title?: stri
     // sabit interpolasyonunu inline edip komşu literal'leri birleştirirken bu
     // yapısal string'in bir parçasını DÜŞÜRÜYOR (w:w="9000<w:tblGrid kalıyor).
     // Bu yüzden 9000 sabiti literal olarak gömülü.
-    `<w:tblPr><w:tblW w:w="9000" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0"/></w:tblPr>` +
+    `<w:tblPr><w:tblW w:w="11058" w:type="dxa"/><w:tblInd w:w="-885" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblLook w:val="04A0"/></w:tblPr>` +
         `<w:tblGrid>${TESTS_COLS.map(w => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>` +
         testsHeaderRow() +
         rows.map((r, i) => testRow(i, r)).join("") +
@@ -295,23 +291,12 @@ export function buildHamveriDocx(record: HamveriRecord): Buffer {
         ["Malzeme Bileşimi", (pd.materials || []).join(", ") || "-"],
         ["Kullanım Amacı", pd.purpose || "-"],
         ["Tip / Fonksiyon (Gereklilik)", requirements],
-        ["Durum", record.status || "-"],
-        ["Hazırlanma Tarihi", fmtDate(record.created_at)],
     ];
 
-    const statsRows: Array<[string, string]> = [
-        ["Toplam", String(stats.total ?? 0)],
-        ["Geçti", String(stats.passed ?? 0)],
-        ["Kaldı", String(stats.failed ?? 0)],
-        ["N/A", String(stats.na ?? 0)],
-        ["Bekliyor", String(stats.waiting ?? 0)],
-    ];
 
     const middle =
         sectionTitle("Numune Bilgileri") +
         labelValueTable(numuneRows) +
-        sectionTitle("Test Özeti") +
-        labelValueTable(statsRows) +
         sectionTitle("Atanan Testler") +
         testsTable(tests) +
         (pd.notes && pd.notes.trim() ? notesBlock(pd.notes.trim()) : "") +
@@ -341,7 +326,7 @@ export function buildHamveriDocx(record: HamveriRecord): Buffer {
     // içerikte enjekte edilen OOXML'in bir parçasını (statik tblPr) sessizce
     // düşürüyordu — localhost'ta temiz, production'da bozuk. indexOf + slice
     // ile manuel splice tamamen deterministik ve motordan bağımsızdır.
-    const BUILD_MARKER = "<!-- HAMVERI_BUILD=v8-noconstfold -->";
+    const BUILD_MARKER = "<!-- HAMVERI_BUILD=v9-fullwidth -->";
     let renderedXml =
         originalXml.slice(0, phIdx) + middle + originalXml.slice(phIdx + PLACEHOLDER.length);
 
@@ -352,9 +337,10 @@ export function buildHamveriDocx(record: HamveriRecord): Buffer {
             renderedXml.slice(0, declEnd + 2) + BUILD_MARKER + renderedXml.slice(declEnd + 2);
     }
 
-    // SAVUNMA: enjeksiyon bozulduysa (tblPr parçası düştüyse) bozuk DOCX
-    // üretmektense hata fırlat — Word'e bozuk dosya gitmesin, sebebi loglansın.
-    if (renderedXml.includes('w:w="9000<') || renderedXml.includes("{@content}")) {
+    // SAVUNMA: enjeksiyon bozulduysa (Turbopack tblPr parçası düşürürse) bozuk
+    // DOCX üretmektense hata fırlat. Genel desen: bir tblW/gridCol değerinin
+    // hemen ardından '<' gelmesi (örn. w:w="11058<) = bozulma.
+    if (/w:w="\d+</.test(renderedXml) || renderedXml.includes("{@content}")) {
         throw new Error("Hamveri DOCX enjeksiyonu bozuldu (tblPr/placeholder tutarsız).");
     }
 
