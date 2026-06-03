@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
       )
       SELECT *, COUNT(*) OVER() AS TotalCount
       FROM Pending
-      ORDER BY Tarih DESC, RaporNo ASC, RaporFormati
+      ORDER BY RaporNo DESC, RaporFormati
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `;
 

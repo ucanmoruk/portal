@@ -246,8 +246,45 @@ async function renderTargetToPdf(target: RenderTarget, options: PdfRenderOptions
     }
 
     await send("Page.navigate", { url: pageUrl }, sessionId);
-    // Canlı URL'de font/görsel yüklenmesi için daha uzun varsayılan bekleme.
-    await delay(options.settleMs ?? (target.url ? 1500 : 750));
+
+    // ───────────────────────────────────────────────────────────
+    // Render edilmeden once SAYFA + GORSELLER + FONT yuklenmesini bekle.
+    // Sabit delay yerine olay-tabanli bekleme (sabit delay yetmiyorsa
+    // PDF imza/seal/karekod gibi gorseller bos kaliyordu).
+    // ───────────────────────────────────────────────────────────
+    try {
+      await send(
+        "Runtime.evaluate",
+        {
+          expression: `(async () => {
+            if (document.readyState !== "complete") {
+              await new Promise(r => addEventListener("load", r, { once: true }));
+            }
+            const imgs = Array.from(document.images || []);
+            await Promise.all(imgs.map(img =>
+              img.complete && img.naturalWidth > 0
+                ? null
+                : new Promise(r => {
+                    const done = () => r();
+                    img.addEventListener("load", done, { once: true });
+                    img.addEventListener("error", done, { once: true });
+                    // Guvenli timeout - bir gorsel yuklenmiyorsa sonsuza dek bekleme
+                    setTimeout(done, 5000);
+                  })
+            ));
+            try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (_) {}
+          })()`,
+          awaitPromise: true,
+          returnByValue: true,
+        },
+        sessionId,
+      );
+    } catch (err) {
+      console.warn("[chromiumPdf] Sayfa/gorsel bekleme atlandi:", err);
+    }
+
+    // Olay-tabanli bekleme yapildi; ek buffer (animasyon/transition icin) azaltildi.
+    await delay(options.settleMs ?? (target.url ? 250 : 200));
 
     const result = await send(
       "Page.printToPDF",

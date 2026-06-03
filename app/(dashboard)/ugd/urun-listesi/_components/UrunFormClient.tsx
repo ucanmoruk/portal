@@ -409,12 +409,13 @@ interface UrunFormClientProps {
   editId?: string;
   source?: 'ugd' | 'lab';
   returnHref?: string;
+  displayLabel?: string;
 }
 
 const editorSectionUiKey = (section: { key?: string }, index: number) =>
   `${section.key || "section"}-${index}`;
 
-export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/ugd/urun-listesi" }: UrunFormClientProps) {
+export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/ugd/urun-listesi", displayLabel }: UrunFormClientProps) {
   const router = useRouter();
   const isEdit = !!editId;
   const isLabSource = source === 'lab';
@@ -1297,7 +1298,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>{isLabSource ? "Laboratuvar ÜGDR" : isEdit ? "Ürün Güncelle" : "Yeni Ürün Ekle"}</h1>
-          <p className={styles.pageSubtitle}>{isLabSource ? `Laboratuvar kaydı #${editId} için ÜGDR detayları düzenleniyor.` : isEdit ? `Kayıt #${editId} düzenleniyor` : "Yeni ÜGD ürün kaydı oluşturun."}</p>
+          <p className={styles.pageSubtitle}>{isLabSource ? `Rapor No #${displayLabel || form.RaporNo || editId} için ÜGDR detayları düzenleniyor.` : isEdit ? `Kayıt #${displayLabel || editId} düzenleniyor` : "Yeni ÜGD ürün kaydı oluşturun."}</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button

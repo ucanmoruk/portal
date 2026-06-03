@@ -233,8 +233,7 @@ export async function GET(request: Request) {
       SELECT *, COUNT(*) OVER() AS TotalCount
       FROM Filtered
       ORDER BY
-        Tarih ASC,
-        RaporNo ASC,
+        RaporNo DESC,
         RaporFormati
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `;

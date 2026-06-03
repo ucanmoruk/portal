@@ -1,0 +1,1937 @@
+{
+  "id": 21,
+  "code": "K.SOP.05-Ek.1",
+  "title": "DMFu Tayini Validasyonu",
+  "study_type": "VERIFICATION",
+  "status": "COMPLETED",
+  "config": {
+    "devices": [
+      {
+        "id": "9a442151-328c-4fe1-a6d8-bd65fe9fe20e",
+        "code": "CK.01",
+        "name": "SHIMADZU GC-MS",
+        "unit": "",
+        "serialNo": "2010SE - 20535500659",
+        "valueText": "",
+        "intendedUse": "Ana Cihaz",
+        "inventoryId": 6,
+        "distributionType": "Dikdörtgen",
+        "uncertaintyValue": "",
+        "uncertaintyComponent": ""
+      },
+      {
+        "id": "11952348-68a5-4352-bad0-f8907b196eb2",
+        "code": "CK.28",
+        "name": "Hassas Terazi",
+        "unit": "g",
+        "serialNo": "AXIS / ACN220 - 375",
+        "valueText": "200",
+        "intendedUse": "Numune Hazırlama",
+        "inventoryId": 9,
+        "distributionType": "Normal",
+        "uncertaintyValue": "0.001700",
+        "uncertaintyComponent": "Sertifikası Değeri"
+      },
+      {
+        "id": "0c8948d3-f320-4d53-b709-c741cc0d9601",
+        "code": "CK.41",
+        "name": "100ul Otomatik Pipet",
+        "unit": "ul",
+        "serialNo": "IKEMELAB - YE208AS0016677",
+        "valueText": "100",
+        "intendedUse": "Numune Hazırlama",
+        "inventoryId": 3,
+        "distributionType": "Normal",
+        "uncertaintyValue": "0.145000",
+        "uncertaintyComponent": "Sertifikası Değeri"
+      },
+      {
+        "id": "26956769-f9f5-49cc-8486-057f795b4f70",
+        "code": "CK.43",
+        "name": "1000ul Otomatik Pipet",
+        "unit": "ul",
+        "serialNo": "DRAGONLAB - YE184AH0019326",
+        "valueText": "1000",
+        "intendedUse": "Numune Hazırlama",
+        "inventoryId": 8,
+        "distributionType": "Normal",
+        "uncertaintyValue": "1.438000",
+        "uncertaintyComponent": "Sertifikası Değeri"
+      },
+      {
+        "id": "c89c95a2-47d5-41bc-8366-38a51106a3c1",
+        "code": "L3",
+        "name": "10 ml Balon joje",
+        "unit": "ml",
+        "serialNo": "-",
+        "valueText": "10",
+        "intendedUse": "Numune Hazırlama",
+        "inventoryId": 1,
+        "distributionType": "Dikdörtgen",
+        "uncertaintyValue": "0.008000",
+        "uncertaintyComponent": "Hacim (Beyan)"
+      },
+      {
+        "id": "0fdd39ba-39cf-4b00-bb23-391ca4a9aa0e",
+        "code": "L6",
+        "name": "100 ml Balon joje",
+        "unit": "ml",
+        "serialNo": "-",
+        "valueText": "100",
+        "intendedUse": "Numune Hazırlama",
+        "inventoryId": 2,
+        "distributionType": "Dikdörtgen",
+        "uncertaintyValue": "0.021000",
+        "uncertaintyComponent": "Hacim (Beyan)"
+      }
+    ],
+    "personnel": [
+      {
+        "id": "11a909d3-84d2-4361-8db6-77c6dd5d95ff",
+        "name": "Ali Berkan Akdoğan",
+        "role": "Birim Sorumlusu",
+        "userId": 2009
+      },
+      {
+        "id": "827f4421-dc10-4bac-b2fe-365bfe891fc4",
+        "name": "Efsu Nur Akyol",
+        "role": "Kimyasal Analiz Lab. Personeli",
+        "userId": 3018
+      }
+    ],
+    "revisions": [
+      {
+        "by": "Ali Berkan AKDOĞAN",
+        "date": "15-10-2025",
+        "revNo": "01",
+        "clause": "Tüm",
+        "reason": "Personel değişikliği sebebi ile validasyon revize edilmiştir."
+      },
+      {
+        "by": "Selin EKER",
+        "date": "15-05-2026",
+        "revNo": "02",
+        "clause": "Tüm",
+        "reason": "Validasyon şablonu güncellenmiştir."
+      }
+    ],
+    "components": [
+      {
+        "id": "fba0b10d-358e-445c-a5ba-b41ddd6eaaae",
+        "code": "STD-143",
+        "name": "Fumaric acid, bis-mehyl ester (DMFu)",
+        "unit": "%",
+        "casNo": "624-49-7",
+        "limit": "",
+        "valueText": "99,24",
+        "inventoryId": 112,
+        "distributionType": "Normal",
+        "uncertaintyValue": "0.510000",
+        "uncertaintyComponent": ""
+      },
+      {
+        "id": "67ca525e-2a6e-45ff-997d-0e3e414c7417",
+        "code": "STD-19",
+        "name": "Maleic acid, bis-methyl ester (DMMa)",
+        "unit": "%",
+        "casNo": "624-48-6",
+        "limit": "",
+        "valueText": "90,60",
+        "inventoryId": 111,
+        "distributionType": "Normal",
+        "uncertaintyValue": "0.700000",
+        "uncertaintyComponent": ""
+      }
+    ],
+    "moduleData": {
+      "LOD_LOQ": {
+        "Fumaric acid, bis-mehyl ester (DMFu)": {
+          "lod": 0.12211123624969053,
+          "loq": 0.1842041208323017,
+          "mean": 0.09550000000000002,
+          "rows": [
+            [
+              "0,10",
+              "0,10"
+            ],
+            [
+              "0,08",
+              "0,10"
+            ],
+            [
+              "0,09",
+              "0,10"
+            ],
+            [
+              "0,09",
+              "0,09"
+            ],
+            [
+              "0,09",
+              "0,10"
+            ],
+            [
+              "0,09",
+              "0,11"
+            ],
+            [
+              "0,09",
+              "0,09"
+            ],
+            [
+              "0,10",
+              "0,12"
+            ],
+            [
+              "0,09",
+              "0,09"
+            ],
+            [
+              "0,09",
+              "0,10"
+            ]
+          ],
+          "unit": "mg_L",
+          "notes": "Tayin ve Tespit Limiti çalışmaları için 2 personel tarafından lineerite aralığının en düşük noktasında 10'ar adet spike test numunesi çalışılmıştır.\n\nElde edilen ölçüm değerlerinin ortalamaları ve standart sapmaları hesaplanmış, ortalamaya standart sapmanın 3 katı ilave edilerek LOD, 10 katı ilave edilerek LOQ olarak değerlendirilmiştir.",
+          "stdDev": 0.00887041208323017
+        },
+        "Maleic acid, bis-methyl ester (DMMa)": {
+          "lod": 0.12075674951674907,
+          "loq": 0.15870899838916352,
+          "mean": 0.10449150000000003,
+          "rows": [
+            [
+              "0,11",
+              "0,10510"
+            ],
+            [
+              "0,10",
+              "0,10531"
+            ],
+            [
+              "0,10",
+              "0,10201"
+            ],
+            [
+              "0,10",
+              "0,10257"
+            ],
+            [
+              "0,10",
+              "0,11108"
+            ],
+            [
+              "0,10",
+              "0,11451"
+            ],
+            [
+              "0,10",
+              "0,10985"
+            ],
+            [
+              "0,11",
+              "0,10988"
+            ],
+            [
+              "0,10",
+              "0,09689"
+            ],
+            [
+              "0,10",
+              "0,11263"
+            ]
+          ],
+          "unit": "mg_L",
+          "notes": "Tayin ve Tespit Limiti çalışmaları için 2 personel tarafından lineerite aralığının en düşük noktasında 10'ar adet spike test numunesi çalışılmıştır.\n\nElde edilen ölçüm değerlerinin ortalamaları ve standart sapmaları hesaplanmış, ortalamaya standart sapmanın 3 katı ilave edilerek LOD, 10 katı ilave edilerek LOQ olarak değerlendirilmiştir.",
+          "stdDev": 0.005421749838916349
+        }
+      },
+      "TRUENESS": {
+        "Fumaric acid, bis-mehyl ester (DMFu)": {
+          "rows": [
+            [
+              "1,029",
+              "0,968"
+            ],
+            [
+              "1,044",
+              "1,067"
+            ],
+            [
+              "1,028",
+              "1,095"
+            ],
+            [
+              "0,961",
+              "1,022"
+            ],
+            [
+              "1,027",
+              "1,057"
+            ],
+            [
+              "0,985",
+              "1,054"
+            ],
+            [
+              "1,004",
+              "1,053"
+            ],
+            [
+              "1,058",
+              "0,953"
+            ],
+            [
+              "0,965",
+              "1,051"
+            ],
+            [
+              "1,022",
+              "1,029"
+            ],
+            [
+              "0,971",
+              "1,079"
+            ],
+            [
+              "1,013",
+              "0,975"
+            ]
+          ],
+          "unit": "mg_kg",
+          "notes": "Geri kazanım çalışmasının değerlendirmesi aşağıda belirtilen \"AOAC Manual For The Peer Verified Methods Program Analyte - Recovery Table\" tablosuna göre yapılmıştır.",
+          "uBias": 0.014799260655249941,
+          "matrix": "",
+          "target": "1",
+          "results": {
+            "Efsu Nur Akyol": {
+              "n": 12,
+              "rsd": 0.04422042730216752,
+              "mean": 1.0335833333333333,
+              "stdDev": 0.04570549665239865,
+              "values": [
+                0.968,
+                1.067,
+                1.095,
+                1.022,
+                1.057,
+                1.054,
+                1.053,
+                0.953,
+                1.051,
+                1.029,
+                1.079,
+                0.975
+              ],
+              "recoveries": [
+                {
+                  "value": 0.968,
+                  "recovery": 96.8,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.067,
+                  "recovery": 106.69999999999999,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.095,
+                  "recovery": 109.5,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.022,
+                  "recovery": 102.2,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.057,
+                  "recovery": 105.69999999999999,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.054,
+                  "recovery": 105.4,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.053,
+                  "recovery": 105.3,
+                  "isSuitable": true
+                },
+                {
+                  "value": 0.953,
+                  "recovery": 95.3,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.051,
+                  "recovery": 105.1,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.029,
+                  "recovery": 102.89999999999999,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.079,
+                  "recovery": 107.89999999999999,
+                  "isSuitable": true
+                },
+                {
+                  "value": 0.975,
+                  "recovery": 97.5,
+                  "isSuitable": true
+                }
+              ]
+            },
+            "Ali Berkan Akdoğan": {
+              "n": 12,
+              "rsd": 0.03159999881721849,
+              "mean": 1.0089166666666667,
+              "stdDev": 0.03188176547333869,
+              "values": [
+                1.029,
+                1.044,
+                1.028,
+                0.961,
+                1.027,
+                0.985,
+                1.004,
+                1.058,
+                0.965,
+                1.022,
+                0.971,
+                1.013
+              ],
+              "recoveries": [
+                {
+                  "value": 1.029,
+                  "recovery": 102.89999999999999,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.044,
+                  "recovery": 104.4,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.028,
+                  "recovery": 102.8,
+                  "isSuitable": true
+                },
+                {
+                  "value": 0.961,
+                  "recovery": 96.1,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.027,
+                  "recovery": 102.69999999999999,
+                  "isSuitable": true
+                },
+                {
+                  "value": 0.985,
+                  "recovery": 98.5,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.004,
+                  "recovery": 100.4,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.058,
+                  "recovery": 105.80000000000001,
+                  "isSuitable": true
+                },
+                {
+                  "value": 0.965,
+                  "recovery": 96.5,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.022,
+                  "recovery": 102.2,
+                  "isSuitable": true
+                },
+                {
+                  "value": 0.971,
+                  "recovery": 97.1,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.013,
+                  "recovery": 101.29999999999998,
+                  "isSuitable": true
+                }
+              ]
+            }
+          },
+          "analysts": [
+            "Ali Berkan Akdoğan",
+            "Efsu Nur Akyol"
+          ],
+          "unitLabel": "mg/kg (ppm)",
+          "recoveryMean": 1.02125,
+          "recoveryMeanPercent": 102.125,
+          "standardUncertainty": 0.014799260655249941
+        },
+        "Maleic acid, bis-methyl ester (DMMa)": {
+          "rows": [
+            [
+              "1,050",
+              "1,016"
+            ],
+            [
+              "1,041",
+              "1,030"
+            ],
+            [
+              "1,027",
+              "1,034"
+            ],
+            [
+              "1,004",
+              "1,027"
+            ],
+            [
+              "1,034",
+              "1,006"
+            ],
+            [
+              "0,993",
+              "1,074"
+            ],
+            [
+              "1,043",
+              "1,019"
+            ],
+            [
+              "1,036",
+              "1,019"
+            ],
+            [
+              "0,986",
+              "1,028"
+            ],
+            [
+              "1,038",
+              "0,978"
+            ],
+            [
+              "0,996",
+              "1,015"
+            ],
+            [
+              "1,026",
+              "0,982"
+            ]
+          ],
+          "unit": "mg_kg",
+          "notes": "",
+          "uBias": 0.012959043000590118,
+          "matrix": "",
+          "target": "1",
+          "results": {
+            "Efsu Nur Akyol": {
+              "n": 12,
+              "rsd": 0.024327799136786482,
+              "mean": 1.019,
+              "stdDev": 0.024790027320385422,
+              "values": [
+                1.016,
+                1.03,
+                1.034,
+                1.027,
+                1.006,
+                1.074,
+                1.019,
+                1.019,
+                1.028,
+                0.978,
+                1.015,
+                0.982
+              ],
+              "recoveries": [
+                {
+                  "value": 1.016,
+                  "recovery": 101.6,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.03,
+                  "recovery": 103,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.034,
+                  "recovery": 103.4,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.027,
+                  "recovery": 102.69999999999999,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.006,
+                  "recovery": 100.6,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.074,
+                  "recovery": 107.4,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.019,
+                  "recovery": 101.89999999999999,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.019,
+                  "recovery": 101.89999999999999,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.028,
+                  "recovery": 102.8,
+                  "isSuitable": true
+                },
+                {
+                  "value": 0.978,
+                  "recovery": 97.8,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.015,
+                  "recovery": 101.49999999999999,
+                  "isSuitable": true
+                },
+                {
+                  "value": 0.982,
+                  "recovery": 98.2,
+                  "isSuitable": true
+                }
+              ]
+            },
+            "Ali Berkan Akdoğan": {
+              "n": 12,
+              "rsd": 0.021564694604020607,
+              "mean": 1.0228333333333335,
+              "stdDev": 0.02205708846414575,
+              "values": [
+                1.05,
+                1.041,
+                1.027,
+                1.004,
+                1.034,
+                0.993,
+                1.043,
+                1.036,
+                0.986,
+                1.038,
+                0.996,
+                1.026
+              ],
+              "recoveries": [
+                {
+                  "value": 1.05,
+                  "recovery": 105,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.041,
+                  "recovery": 104.1,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.027,
+                  "recovery": 102.69999999999999,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.004,
+                  "recovery": 100.4,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.034,
+                  "recovery": 103.4,
+                  "isSuitable": true
+                },
+                {
+                  "value": 0.993,
+                  "recovery": 99.3,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.043,
+                  "recovery": 104.3,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.036,
+                  "recovery": 103.60000000000001,
+                  "isSuitable": true
+                },
+                {
+                  "value": 0.986,
+                  "recovery": 98.6,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.038,
+                  "recovery": 103.8,
+                  "isSuitable": true
+                },
+                {
+                  "value": 0.996,
+                  "recovery": 99.6,
+                  "isSuitable": true
+                },
+                {
+                  "value": 1.026,
+                  "recovery": 102.60000000000001,
+                  "isSuitable": true
+                }
+              ]
+            }
+          },
+          "analysts": [
+            "Ali Berkan Akdoğan",
+            "Efsu Nur Akyol"
+          ],
+          "unitLabel": "mg/kg (ppm)",
+          "recoveryMean": 1.0209166666666667,
+          "recoveryMeanPercent": 102.09166666666667,
+          "standardUncertainty": 0.012959043000590118
+        }
+      },
+      "LINEARITY": {
+        "Fumaric acid, bis-mehyl ester (DMFu)": {
+          "rows": [
+            {
+              "id": "1",
+              "level": "L1",
+              "responses": [
+                "773,00"
+              ],
+              "concentrations": [
+                "0,01"
+              ]
+            },
+            {
+              "id": "2",
+              "level": "L2",
+              "responses": [
+                "4756,00"
+              ],
+              "concentrations": [
+                "0,05"
+              ]
+            },
+            {
+              "id": "3",
+              "level": "L3",
+              "responses": [
+                "11750,67"
+              ],
+              "concentrations": [
+                "0,1"
+              ]
+            },
+            {
+              "id": "4",
+              "level": "L4",
+              "responses": [
+                "20449,00"
+              ],
+              "concentrations": [
+                "0,15"
+              ]
+            },
+            {
+              "id": "5",
+              "level": "L5",
+              "responses": [
+                "25948,33"
+              ],
+              "concentrations": [
+                "0,2"
+              ]
+            },
+            {
+              "id": "0.1664386587416139",
+              "level": "L6",
+              "responses": [
+                "31267,00"
+              ],
+              "concentrations": [
+                "0,25"
+              ]
+            }
+          ],
+          "unit": "mg_L",
+          "notes": "Analiz talimatında anlatıldığı şekilde okutmalar yapılmış, kalibrasyon eğrisi oluşturulmuş ve regresyon denklemi ile korelasyon katsayısı belirlenmiştir.\n\nDoğrusal çalışma aralığında korelasyon sabiti (R²) 0,995'den büyük olduğu ve görsel olarak doğrusal grafik oluşturduğu için kabul kriterlerine göre uygun olarak kabul edilmiştir.",
+          "range": "0.01 - 0.25 mg/L",
+          "slope": 132293.29838709682,
+          "points": [
+            {
+              "x": 0.01,
+              "y": 773,
+              "type": "measure"
+            },
+            {
+              "x": 0.05,
+              "y": 4756,
+              "type": "measure"
+            },
+            {
+              "x": 0.1,
+              "y": 11750.67,
+              "type": "measure"
+            },
+            {
+              "x": 0.15,
+              "y": 20449,
+              "type": "measure"
+            },
+            {
+              "x": 0.2,
+              "y": 25948.33,
+              "type": "measure"
+            },
+            {
+              "x": 0.25,
+              "y": 31267,
+              "type": "measure"
+            },
+            {
+              "x": 0.01,
+              "y": 389.7818548387037,
+              "type": "predicted"
+            },
+            {
+              "x": 0.25,
+              "y": 32140.17346774194,
+              "type": "predicted"
+            }
+          ],
+          "equation": "y = 132293.2984x - 933.1511",
+          "rSquared": 0.9936701646164637,
+          "intercept": -933.1511290322645,
+          "replicates": 1,
+          "statistics": {
+            "n": 18,
+            "p": 3,
+            "co": 0.25,
+            "sxx": 0.041596633173833046,
+            "uCo": 0.0070476629415465765,
+            "cort": 0.12666666666666668,
+            "rows": [
+              {
+                "x": 0.01,
+                "y": 773,
+                "xi": 0.012896731352483034,
+                "xDelta": -0.11376993531418364,
+                "yResidual": -383.2181451612963,
+                "yPredicted": 389.7818548387037,
+                "xDeltaSquared": 0.01294359818139353,
+                "yResidualSquared": 146856.14678086436
+              },
+              {
+                "x": 0.05,
+                "y": 4756,
+                "xi": 0.04300407653595213,
+                "xDelta": -0.08366259013071455,
+                "yResidual": 925.5137903225768,
+                "yPredicted": 5681.513790322577,
+                "xDeltaSquared": 0.006999428987379935,
+                "yResidualSquared": 856575.7760772627
+              },
+              {
+                "x": 0.1,
+                "y": 11750.67,
+                "xi": 0.09587652045622726,
+                "xDelta": -0.03079014621043942,
+                "yResidual": 545.5087096774168,
+                "yPredicted": 12296.178709677417,
+                "xDeltaSquared": 0.000948033103660237,
+                "yResidualSquared": 297579.7523339203
+              },
+              {
+                "x": 0.15,
+                "y": 20449,
+                "xi": 0.1616268653795827,
+                "xDelta": 0.03496019871291603,
+                "yResidual": -1538.156370967743,
+                "yPredicted": 18910.843629032257,
+                "xDeltaSquared": 0.0012222154940465756,
+                "yResidualSquared": 2365925.021548657
+              },
+              {
+                "x": 0.2,
+                "y": 25948.33,
+                "xi": 0.2031960912364261,
+                "xDelta": 0.07652942456975942,
+                "yResidual": -422.821451612901,
+                "yPredicted": 25525.5085483871,
+                "xDeltaSquared": 0.005856752824978497,
+                "yResidualSquared": 178777.9799440408
+              },
+              {
+                "x": 0.25,
+                "y": 31267,
+                "xi": 0.2433997150393288,
+                "xDelta": 0.11673304837266213,
+                "yResidual": 873.1734677419408,
+                "yPredicted": 32140.17346774194,
+                "xDeltaSquared": 0.013626604582374276,
+                "yResidualSquared": 762431.9047684862
+              }
+            ],
+            "slope": 132293.29838709682,
+            "rsdUCo": 2.8190651766186305,
+            "nLevels": 6,
+            "sOverB1": 0.008113258292753707,
+            "inverseN": 0.05555555555555555,
+            "inverseP": 0.3333333333333333,
+            "intercept": -933.1511290322645,
+            "coDeltaOverSxx": 0.36568130520428455,
+            "standardDeviation": 1073.3297002148538,
+            "uncertaintyFactor": 0.8686599991326718
+          }
+        },
+        "Maleic acid, bis-methyl ester (DMMa)": {
+          "rows": [
+            {
+              "id": "1",
+              "level": "L1",
+              "responses": [
+                "1559,67"
+              ],
+              "concentrations": [
+                "0,01"
+              ]
+            },
+            {
+              "id": "2",
+              "level": "L2",
+              "responses": [
+                "7789,00"
+              ],
+              "concentrations": [
+                "0,05"
+              ]
+            },
+            {
+              "id": "3",
+              "level": "L3",
+              "responses": [
+                "18512,67"
+              ],
+              "concentrations": [
+                "0,1"
+              ]
+            },
+            {
+              "id": "4",
+              "level": "L4",
+              "responses": [
+                "31433,33"
+              ],
+              "concentrations": [
+                "0,15"
+              ]
+            },
+            {
+              "id": "5",
+              "level": "L5",
+              "responses": [
+                "39735,33"
+              ],
+              "concentrations": [
+                "0,2"
+              ]
+            },
+            {
+              "id": "0.9916412283451467",
+              "level": "L6",
+              "responses": [
+                "46885,00"
+              ],
+              "concentrations": [
+                "0,25"
+              ]
+            }
+          ],
+          "unit": "mg_L",
+          "notes": "Analiz talimatında anlatıldığı şekilde okutmalar yapılmış, kalibrasyon eğrisi oluşturulmuş ve regresyon denklemi ile korelasyon katsayısı belirlenmiştir.\n\nDoğrusal çalışma aralığında korelasyon sabiti (R²) 0,995'den büyük olduğu ve görsel olarak doğrusal grafik oluşturduğu için kabul kriterlerine göre uygun olarak kabul edilmiştir.",
+          "range": "0.01 - 0.25 mg/L",
+          "slope": 197348.28709677423,
+          "points": [
+            {
+              "x": 0.01,
+              "y": 1559.67,
+              "type": "measure"
+            },
+            {
+              "x": 0.05,
+              "y": 7789,
+              "type": "measure"
+            },
+            {
+              "x": 0.1,
+              "y": 18512.67,
+              "type": "measure"
+            },
+            {
+              "x": 0.15,
+              "y": 31433.33,
+              "type": "measure"
+            },
+            {
+              "x": 0.2,
+              "y": 39735.33,
+              "type": "measure"
+            },
+            {
+              "x": 0.25,
+              "y": 46885,
+              "type": "measure"
+            },
+            {
+              "x": 0.01,
+              "y": 1295.1998387096721,
+              "type": "predicted"
+            },
+            {
+              "x": 0.25,
+              "y": 48658.78874193549,
+              "type": "predicted"
+            }
+          ],
+          "equation": "y = 197348.2871x - 678.2830",
+          "rSquared": 0.9921966865763526,
+          "intercept": -678.2830322580703,
+          "replicates": 1,
+          "statistics": {
+            "n": 18,
+            "p": 3,
+            "co": 0.25,
+            "sxx": 0.04165840693941142,
+            "uCo": 0.007828067785168221,
+            "cort": 0.12666666666666668,
+            "rows": [
+              {
+                "x": 0.01,
+                "y": 1559.67,
+                "xi": 0.011340118858800326,
+                "xDelta": -0.11532654780786636,
+                "yResidual": -264.47016129032795,
+                "yPredicted": 1295.1998387096721,
+                "xDeltaSquared": 0.013300212629280085,
+                "yResidualSquared": 69944.46621293208
+              },
+              {
+                "x": 0.05,
+                "y": 7789,
+                "xi": 0.042905277551793214,
+                "xDelta": -0.08376138911487346,
+                "yResidual": 1400.1313225806425,
+                "yPredicted": 9189.131322580643,
+                "xDeltaSquared": 0.007015970306453243,
+                "yResidualSquared": 1960367.7204714192
+              },
+              {
+                "x": 0.1,
+                "y": 18512.67,
+                "xi": 0.09724408209759301,
+                "xDelta": -0.029422584569073665,
+                "yResidual": 543.8756774193571,
+                "yPredicted": 19056.545677419355,
+                "xDeltaSquared": 0.0008656884827242917,
+                "yResidualSquared": 295800.7524883646
+              },
+              {
+                "x": 0.15,
+                "y": 31433.33,
+                "xi": 0.162715438297731,
+                "xDelta": 0.03604877163106432,
+                "yResidual": -2509.369967741939,
+                "yPredicted": 28923.960032258063,
+                "xDeltaSquared": 0.0012995139361086276,
+                "yResidualSquared": 6296937.63500518
+              },
+              {
+                "x": 0.2,
+                "y": 39735.33,
+                "xi": 0.20478319638234477,
+                "xDelta": 0.07811652971567809,
+                "yResidual": -943.9556129032208,
+                "yPredicted": 38791.37438709678,
+                "xDeltaSquared": 0.006102192214820418,
+                "yResidualSquared": 891052.1991314951
+              },
+              {
+                "x": 0.25,
+                "y": 46885,
+                "xi": 0.2410118868117377,
+                "xDelta": 0.11434522014507104,
+                "yResidual": 1773.7887419354884,
+                "yPredicted": 48658.78874193549,
+                "xDeltaSquared": 0.013074829370024759,
+                "yResidualSquared": 3146326.5010170825
+              }
+            ],
+            "slope": 197348.28709677423,
+            "rsdUCo": 3.1312271140672885,
+            "nLevels": 6,
+            "sOverB1": 0.009014898863521761,
+            "inverseN": 0.05555555555555555,
+            "inverseP": 0.3333333333333333,
+            "intercept": -678.2830322580703,
+            "coDeltaOverSxx": 0.3651390494416737,
+            "standardDeviation": 1779.0748490666765,
+            "uncertaintyFactor": 0.8683478210547675
+          }
+        }
+      },
+      "PRECISION_REPEATABILITY": {
+        "Fumaric acid, bis-mehyl ester (DMFu)": {
+          "unit": "mg_kg",
+          "notes": "Validasyon çalışmalarında tekrarlanabilirlik parametresi için \"spike test örnekleri\" kullanılmıştır.\n\nTekrarlanabilirlik çalışmaları, 2 analist tarafından 6'şar adet test örneği ve paralel test örneği kullanılarak, her bir analist tarafından farklı zamanlarda, en kısa süre içerisinde aynı şartlar altında ve aynı cihaz kullanılarak yukarıda belirtildiği şekilde yapılmıştır.\n\nElde edilen sonuçlar incelendiğinde, her bir test örneği ve paralel örnekten elde edilen analiz sonuçları farkının (x1-x2), tekrarlanabilirlik limit değerinden (r) küçük veya eşit olduğu görülmüştür.\n\n(x1 - x2) ≤ r",
+          "levels": [
+            {
+              "key": "level-0",
+              "label": "Düşük Seviye",
+              "matrix": "Tekstil",
+              "target": "0,5",
+              "analysts": {
+                "Efsu Nur Akyol": {
+                  "n": 12,
+                  "mean": 0.5225833333333334,
+                  "rsdr": 0.0350901622465864,
+                  "grubbs": {
+                    "n": 12,
+                    "mean": 0.5225833333333334,
+                    "index": 4,
+                    "value": 0.486,
+                    "stdDev": 0.01833753395402861,
+                    "gCritical": 2.285,
+                    "hasOutlier": false,
+                    "gCalculated": 1.9949974421340524
+                  },
+                  "stdDev": 0.01833753395402861,
+                  "values": [
+                    0.517,
+                    0.505,
+                    0.509,
+                    0.525,
+                    0.486,
+                    0.514,
+                    0.551,
+                    0.54,
+                    0.537,
+                    0.517,
+                    0.542,
+                    0.528
+                  ],
+                  "rsdrPoolPart": 0.01354451435140933,
+                  "repeatabilityLimit": 0.05189522108990097
+                },
+                "Ali Berkan Akdoğan": {
+                  "n": 12,
+                  "mean": 0.47908333333333336,
+                  "rsdr": 0.040518232911858326,
+                  "grubbs": {
+                    "n": 12,
+                    "mean": 0.47908333333333336,
+                    "index": 1,
+                    "value": 0.508,
+                    "stdDev": 0.01941161008418946,
+                    "gCritical": 2.285,
+                    "hasOutlier": false,
+                    "gCalculated": 1.4896583303112476
+                  },
+                  "stdDev": 0.01941161008418946,
+                  "values": [
+                    0.504,
+                    0.508,
+                    0.46,
+                    0.498,
+                    0.46,
+                    0.472,
+                    0.489,
+                    0.472,
+                    0.452,
+                    0.487,
+                    0.457,
+                    0.49
+                  ],
+                  "rsdrPoolPart": 0.018058999181295592,
+                  "repeatabilityLimit": 0.05493485653825617
+                }
+              },
+              "pooledRsd": 0.0379014952527691
+            },
+            {
+              "key": "level-1",
+              "label": "Yüksek Seviye",
+              "matrix": "Silikajel",
+              "target": "1",
+              "analysts": {
+                "Efsu Nur Akyol": {
+                  "n": 12,
+                  "mean": 1.0309166666666665,
+                  "rsdr": 0.02491472882158335,
+                  "grubbs": {
+                    "n": 12,
+                    "mean": 1.0309166666666665,
+                    "index": 2,
+                    "value": 0.979,
+                    "stdDev": 0.025685009187650633,
+                    "gCritical": 2.285,
+                    "hasOutlier": false,
+                    "gCalculated": 2.0212827757767773
+                  },
+                  "stdDev": 0.025685009187650633,
+                  "values": [
+                    1.054,
+                    0.995,
+                    0.979,
+                    1.042,
+                    1.045,
+                    1.046,
+                    1.067,
+                    1.016,
+                    1.046,
+                    1.033,
+                    1.011,
+                    1.037
+                  ],
+                  "rsdrPoolPart": 0.006828180834783397,
+                  "repeatabilityLimit": 0.07268857600105129
+                },
+                "Ali Berkan Akdoğan": {
+                  "n": 12,
+                  "mean": 1.0089166666666667,
+                  "rsdr": 0.03159999881721849,
+                  "grubbs": {
+                    "n": 12,
+                    "mean": 1.0089166666666667,
+                    "index": 3,
+                    "value": 1.058,
+                    "stdDev": 0.03188176547333869,
+                    "gCritical": 2.285,
+                    "hasOutlier": false,
+                    "gCalculated": 1.5395425129257536
+                  },
+                  "stdDev": 0.03188176547333869,
+                  "values": [
+                    1.029,
+                    1.004,
+                    1.044,
+                    1.058,
+                    1.028,
+                    0.965,
+                    0.961,
+                    1.022,
+                    1.027,
+                    0.971,
+                    0.985,
+                    1.013
+                  ],
+                  "rsdrPoolPart": 0.01098415917773031,
+                  "repeatabilityLimit": 0.09022539628954848
+                }
+              },
+              "pooledRsd": 0.028454381362992644
+            }
+          ],
+          "rawData": {
+            "level-0": {
+              "Efsu Nur Akyol": [
+                [
+                  "0,517",
+                  "0,505"
+                ],
+                [
+                  "0,509",
+                  "0,525"
+                ],
+                [
+                  "0,486",
+                  "0,514"
+                ],
+                [
+                  "0,551",
+                  "0,540"
+                ],
+                [
+                  "0,537",
+                  "0,517"
+                ],
+                [
+                  "0,542",
+                  "0,528"
+                ]
+              ],
+              "Ali Berkan Akdoğan": [
+                [
+                  "0,504",
+                  "0,508"
+                ],
+                [
+                  "0,460",
+                  "0,498"
+                ],
+                [
+                  "0,460",
+                  "0,472"
+                ],
+                [
+                  "0,489",
+                  "0,472"
+                ],
+                [
+                  "0,452",
+                  "0,487"
+                ],
+                [
+                  "0,457",
+                  "0,490"
+                ]
+              ]
+            },
+            "level-1": {
+              "Efsu Nur Akyol": [
+                [
+                  "1,054",
+                  "0,995"
+                ],
+                [
+                  "0,979",
+                  "1,042"
+                ],
+                [
+                  "1,045",
+                  "1,046"
+                ],
+                [
+                  "1,067",
+                  "1,016"
+                ],
+                [
+                  "1,046",
+                  "1,033"
+                ],
+                [
+                  "1,011",
+                  "1,037"
+                ]
+              ],
+              "Ali Berkan Akdoğan": [
+                [
+                  "1,029",
+                  "1,004"
+                ],
+                [
+                  "1,044",
+                  "1,058"
+                ],
+                [
+                  "1,028",
+                  "0,965"
+                ],
+                [
+                  "0,961",
+                  "1,022"
+                ],
+                [
+                  "1,027",
+                  "0,971"
+                ],
+                [
+                  "0,985",
+                  "1,013"
+                ]
+              ]
+            }
+          },
+          "targets": {
+            "level-0": "0,5",
+            "level-1": "1"
+          },
+          "matrices": {
+            "level-0": "Tekstil",
+            "level-1": "Silikajel"
+          },
+          "unitLabel": "mg/kg (ppm)",
+          "levelCount": 2,
+          "parallelCount": 6
+        },
+        "Maleic acid, bis-methyl ester (DMMa)": {
+          "unit": "mg_kg",
+          "notes": "",
+          "levels": [
+            {
+              "key": "level-0",
+              "label": "Düşük Seviye",
+              "matrix": "",
+              "target": "0,5",
+              "analysts": {
+                "Efsu Nur Akyol": {
+                  "n": 12,
+                  "mean": 0.5176666666666668,
+                  "rsdr": 0.01702753726736829,
+                  "grubbs": {
+                    "n": 12,
+                    "mean": 0.5176666666666668,
+                    "index": 9,
+                    "value": 0.498,
+                    "stdDev": 0.008814588458740988,
+                    "gCritical": 2.285,
+                    "hasOutlier": false,
+                    "gCalculated": 2.2311497307811776
+                  },
+                  "stdDev": 0.008814588458740988,
+                  "values": [
+                    0.504,
+                    0.517,
+                    0.52,
+                    0.518,
+                    0.53,
+                    0.516,
+                    0.523,
+                    0.524,
+                    0.521,
+                    0.498,
+                    0.524,
+                    0.517
+                  ],
+                  "rsdrPoolPart": 0.0031893072793077754,
+                  "repeatabilityLimit": 0.024945285338236995
+                },
+                "Ali Berkan Akdoğan": {
+                  "n": 12,
+                  "mean": 0.5095000000000001,
+                  "rsdr": 0.025446492280360833,
+                  "grubbs": {
+                    "n": 12,
+                    "mean": 0.5095000000000001,
+                    "index": 5,
+                    "value": 0.486,
+                    "stdDev": 0.012964987816843847,
+                    "gCritical": 2.285,
+                    "hasOutlier": false,
+                    "gCalculated": 1.8125740133337693
+                  },
+                  "stdDev": 0.012964987816843847,
+                  "values": [
+                    0.532,
+                    0.522,
+                    0.509,
+                    0.504,
+                    0.51,
+                    0.486,
+                    0.522,
+                    0.499,
+                    0.493,
+                    0.508,
+                    0.517,
+                    0.512
+                  ],
+                  "rsdrPoolPart": 0.0071227636631190985,
+                  "repeatabilityLimit": 0.03669091552166809
+                }
+              },
+              "pooledRsd": 0.02165018469628007
+            },
+            {
+              "key": "level-1",
+              "label": "Yüksek Seviye",
+              "matrix": "",
+              "target": "1",
+              "analysts": {
+                "Efsu Nur Akyol": {
+                  "n": 12,
+                  "mean": 1.0219999999999996,
+                  "rsdr": 0.016688901475977336,
+                  "grubbs": {
+                    "n": 12,
+                    "mean": 1.0219999999999996,
+                    "index": 11,
+                    "value": 1.053,
+                    "stdDev": 0.017056057308448832,
+                    "gCritical": 2.285,
+                    "hasOutlier": false,
+                    "gCalculated": 1.8175361069316005
+                  },
+                  "stdDev": 0.017056057308448832,
+                  "values": [
+                    1.007,
+                    1.045,
+                    1.022,
+                    1.009,
+                    1.013,
+                    1.017,
+                    1.017,
+                    1,
+                    1.008,
+                    1.03,
+                    1.043,
+                    1.053
+                  ],
+                  "rsdrPoolPart": 0.0030637137572236636,
+                  "repeatabilityLimit": 0.048268642182910194
+                },
+                "Ali Berkan Akdoğan": {
+                  "n": 12,
+                  "mean": 1.0228333333333335,
+                  "rsdr": 0.021564694604020607,
+                  "grubbs": {
+                    "n": 12,
+                    "mean": 1.0228333333333335,
+                    "index": 5,
+                    "value": 0.986,
+                    "stdDev": 0.02205708846414575,
+                    "gCritical": 2.285,
+                    "hasOutlier": false,
+                    "gCalculated": 1.6699091266377626
+                  },
+                  "stdDev": 0.02205708846414575,
+                  "values": [
+                    1.05,
+                    1.043,
+                    1.041,
+                    1.036,
+                    1.027,
+                    0.986,
+                    1.004,
+                    1.038,
+                    1.034,
+                    0.996,
+                    0.993,
+                    1.026
+                  ],
+                  "rsdrPoolPart": 0.00511539658701143,
+                  "repeatabilityLimit": 0.06242156035353247
+                }
+              },
+              "pooledRsd": 0.019281538914717802
+            }
+          ],
+          "rawData": {
+            "level-0": {
+              "Efsu Nur Akyol": [
+                [
+                  "0,504",
+                  "0,517"
+                ],
+                [
+                  "0,520",
+                  "0,518"
+                ],
+                [
+                  "0,530",
+                  "0,516"
+                ],
+                [
+                  "0,523",
+                  "0,524"
+                ],
+                [
+                  "0,521",
+                  "0,498"
+                ],
+                [
+                  "0,524",
+                  "0,517"
+                ]
+              ],
+              "Ali Berkan Akdoğan": [
+                [
+                  "0,532",
+                  "0,522"
+                ],
+                [
+                  "0,509",
+                  "0,504"
+                ],
+                [
+                  "0,510",
+                  "0,486"
+                ],
+                [
+                  "0,522",
+                  "0,499"
+                ],
+                [
+                  "0,493",
+                  "0,508"
+                ],
+                [
+                  "0,517",
+                  "0,512"
+                ]
+              ]
+            },
+            "level-1": {
+              "Efsu Nur Akyol": [
+                [
+                  "1,007",
+                  "1,045"
+                ],
+                [
+                  "1,022",
+                  "1,009"
+                ],
+                [
+                  "1,013",
+                  "1,017"
+                ],
+                [
+                  "1,017",
+                  "1,000"
+                ],
+                [
+                  "1,008",
+                  "1,030"
+                ],
+                [
+                  "1,043",
+                  "1,053"
+                ]
+              ],
+              "Ali Berkan Akdoğan": [
+                [
+                  "1,050",
+                  "1,043"
+                ],
+                [
+                  "1,041",
+                  "1,036"
+                ],
+                [
+                  "1,027",
+                  "0,986"
+                ],
+                [
+                  "1,004",
+                  "1,038"
+                ],
+                [
+                  "1,034",
+                  "0,996"
+                ],
+                [
+                  "0,993",
+                  "1,026"
+                ]
+              ]
+            }
+          },
+          "targets": {
+            "level-0": "0,5",
+            "level-1": "1"
+          },
+          "matrices": {},
+          "unitLabel": "mg/kg (ppm)",
+          "levelCount": 2,
+          "parallelCount": 6
+        }
+      },
+      "PRECISION_REPRODUCIBILITY": {
+        "Fumaric acid, bis-mehyl ester (DMFu)": {
+          "rows": [
+            {
+              "date": "2025-10-06",
+              "values": [
+                "0,448",
+                "0,482"
+              ]
+            },
+            {
+              "date": "2025-10-07",
+              "values": [
+                "0,493",
+                "0,472"
+              ]
+            },
+            {
+              "date": "2025-10-08",
+              "values": [
+                "0,457",
+                "0,497"
+              ]
+            },
+            {
+              "date": "2025-10-09",
+              "values": [
+                "0,489",
+                "0,497"
+              ]
+            },
+            {
+              "date": "2025-10-10",
+              "values": [
+                "0,446",
+                "0,473"
+              ]
+            },
+            {
+              "date": "2025-10-11",
+              "values": [
+                "0,443",
+                "0,467"
+              ]
+            }
+          ],
+          "unit": "mg_kg",
+          "notes": "",
+          "result": {
+            "fTest": 2.9593749999999988,
+            "result": "Uygun",
+            "criterion": "F < Fkritik ise sonuçlar uygundur",
+            "fCritical": 5.050329057632619,
+            "pooledRsd": 0.039345271494356654,
+            "analystStats": {
+              "Efsu Nur Akyol": {
+                "mean": 0.48133333333333334,
+                "rsdr": 0.027141160584855155,
+                "count": 6,
+                "grubbs": {
+                  "n": 6,
+                  "mean": 0.48133333333333334,
+                  "index": 2,
+                  "value": 0.497,
+                  "stdDev": 0.013063945294843615,
+                  "gCritical": 1.822,
+                  "hasOutlier": false,
+                  "gCalculated": 1.1992293532375973
+                },
+                "stdDev": 0.013063945294843615,
+                "variance": 0.00017066666666666662,
+                "nMinusOne": 5,
+                "rsdrPoolPart": 0.003683212989464475,
+                "repeatabilityLimit": 0.036970965184407435
+              },
+              "Ali Berkan Akdoğan": {
+                "mean": 0.4626666666666667,
+                "rsdr": 0.048574254292128596,
+                "count": 6,
+                "grubbs": {
+                  "n": 6,
+                  "mean": 0.4626666666666667,
+                  "index": 1,
+                  "value": 0.493,
+                  "stdDev": 0.022473688319158167,
+                  "gCritical": 1.822,
+                  "hasOutlier": false,
+                  "gCalculated": 1.3497265291997034
+                },
+                "stdDev": 0.022473688319158167,
+                "variance": 0.0005050666666666663,
+                "nMinusOne": 5,
+                "rsdrPoolPart": 0.011797290900181867,
+                "repeatabilityLimit": 0.06360053794321761
+              }
+            }
+          },
+          "analysts": [
+            "Ali Berkan Akdoğan",
+            "Efsu Nur Akyol"
+          ],
+          "unitLabel": "mg/kg (ppm)",
+          "parallelCount": 6
+        },
+        "Maleic acid, bis-methyl ester (DMMa)": {
+          "rows": [
+            {
+              "date": "2025-10-06",
+              "values": [
+                "0,508",
+                "0,484"
+              ]
+            },
+            {
+              "date": "2025-10-27",
+              "values": [
+                "0,526",
+                "0,512"
+              ]
+            },
+            {
+              "date": "2025-10-08",
+              "values": [
+                "0,535",
+                "0,522"
+              ]
+            },
+            {
+              "date": "2025-10-09",
+              "values": [
+                "0,543",
+                "0,484"
+              ]
+            },
+            {
+              "date": "2025-10-10",
+              "values": [
+                "0,526",
+                "0,510"
+              ]
+            },
+            {
+              "date": "2025-10-11",
+              "values": [
+                "0,530",
+                "0,505"
+              ]
+            }
+          ],
+          "unit": "mg_kg",
+          "notes": "",
+          "result": {
+            "fTest": 1.7738095238095237,
+            "result": "Uygun",
+            "criterion": "F < Fkritik ise sonuçlar uygundur",
+            "fCritical": 5.050329057632619,
+            "pooledRsd": 0.026969097130685956,
+            "analystStats": {
+              "Efsu Nur Akyol": {
+                "mean": 0.5028333333333332,
+                "rsdr": 0.03102462116092213,
+                "count": 6,
+                "grubbs": {
+                  "n": 6,
+                  "mean": 0.5028333333333332,
+                  "index": 2,
+                  "value": 0.522,
+                  "stdDev": 0.01560021367375034,
+                  "gCritical": 1.822,
+                  "hasOutlier": false,
+                  "gCalculated": 1.228615650240581
+                },
+                "stdDev": 0.01560021367375034,
+                "variance": 0.0002433666666666671,
+                "nMinusOne": 5,
+                "rsdrPoolPart": 0.0048126355908936855,
+                "repeatabilityLimit": 0.044148604696713466
+              },
+              "Ali Berkan Akdoğan": {
+                "mean": 0.528,
+                "rsdr": 0.02218416737022172,
+                "count": 6,
+                "grubbs": {
+                  "n": 6,
+                  "mean": 0.528,
+                  "index": 0,
+                  "value": 0.508,
+                  "stdDev": 0.011713240371477068,
+                  "gCritical": 1.822,
+                  "hasOutlier": false,
+                  "gCalculated": 1.7074694419062766
+                },
+                "stdDev": 0.011713240371477068,
+                "variance": 0.00013720000000000024,
+                "nMinusOne": 5,
+                "rsdrPoolPart": 0.0024606864095500502,
+                "repeatabilityLimit": 0.0331484702512801
+              }
+            }
+          },
+          "analysts": [
+            "Ali Berkan Akdoğan",
+            "Efsu Nur Akyol"
+          ],
+          "unitLabel": "mg/kg (ppm)",
+          "parallelCount": 6
+        }
+      }
+    },
+    "parameters": [
+      {
+        "id": "selectivity",
+        "name": "Seçicilik / Spesifiklik",
+        "note": "",
+        "isEnabled": false,
+        "requiredFor": [
+          "FULL_VALIDATION"
+        ]
+      },
+      {
+        "id": "linearity",
+        "name": "Doğrusallık (Linearity)",
+        "note": "Çalışma aralığını kapsayacak şekilde en az 5 farklı konsantrasyon seviyesi belirlenir.\nKorelasyon Katsayısı (R²) ≥ 0.995 (Birçok modern cihaz ve standart için ≥ 0.999 hedeflenir). Kalibrasyon eğrisindeki kalıntı (residual) hataları ±%10'dan sapmamalıdır.",
+        "isEnabled": true,
+        "requiredFor": [
+          "FULL_VALIDATION",
+          "VERIFICATION"
+        ]
+      },
+      {
+        "id": "lod",
+        "name": "LOD (Tespit Limiti) ve LOQ (Tayini Limiti)",
+        "note": "10 tekrar çalışma yapılır. Ortalama ve standart sapma hesaplanır ve ortalamaya +3ss eklenerek LOD, +10ss eklenerek LOQ olarak hesaplanır.",
+        "isEnabled": true,
+        "requiredFor": [
+          "FULL_VALIDATION",
+          "VERIFICATION"
+        ]
+      },
+      {
+        "id": "precision_repeatability",
+        "name": "Kesinlik (Tekrarlanabilirlik)",
+        "note": "Aynı gün, aynı analist, aynı cihaz, aynı parti reaktiflerle bir gerçek numune veya spike numunesi en az 6 kez (bağımsız tartım/ekstraksiyon ile) peş peşe analiz edilir.\nElde edilen % Bağıl Standart Sapma (RSD), ISO standardının metodunda belirtilen Tekrarlanabilirlik (r) limitinden küçük olmalıdır.",
+        "isEnabled": true,
+        "requiredFor": [
+          "FULL_VALIDATION",
+          "VERIFICATION"
+        ]
+      },
+      {
+        "id": "trueness",
+        "name": "Gerçeklik (Bias / Geri Kazanım)",
+        "note": "Bulunan sonuçlar ISO standardının kendi içinde verdiği % Geri Kazanım limitleri içinde olmalıdır. Standartta yoksa AOAC/Eurachem rehberine göre değerlendirilir.",
+        "isEnabled": true,
+        "requiredFor": [
+          "FULL_VALIDATION",
+          "VERIFICATION"
+        ]
+      },
+      {
+        "id": "precision_reproducibility",
+        "name": "Kesinlik (Tekrarüretilebilirlik)",
+        "note": "Farklı bir gün, farklı bir analist ile en az 6 bağımsız analiz yapılır.\nİki farklı gün/analist grubunun varyansları F-Testi ile karşılaştırılır (Fhesap < Ftablo olmalı).\nGenel % RSD, ISO standardında belirtilen (R) limitinden küçük olmalıdır.",
+        "isEnabled": true,
+        "requiredFor": [
+          "FULL_VALIDATION",
+          "VERIFICATION"
+        ]
+      },
+      {
+        "id": "robustness",
+        "name": "Sağlamlık (Robustness)",
+        "note": "",
+        "isEnabled": false,
+        "requiredFor": [
+          "FULL_VALIDATION"
+        ]
+      }
+    ],
+    "revisionNo": "2",
+    "description": "",
+    "publishDate": "2024-07-01",
+    "revisionDate": "2026-05-15"
+  },
+  "method_code": "K.SOP.05",
+  "method_name": "DMFu Tayini",
+  "technique": "ISO 16186:2021",
+  "matrix": "Ayakkabı",
+  "personnel": []
+}

@@ -1,5 +1,6 @@
 import { LAB_UGDR_REPORT_CONTENT_OVERRIDES } from "@/lib/reportContent/labUgdrReportContent";
 import { UGD_REPORT_CONTENT_OVERRIDES } from "@/lib/reportContent/ugdReportContent";
+import { toPublicAssetDataUri } from "@/lib/publicAssetDataUri";
 
 type IngredientRow = {
   inputName?: string;
@@ -400,10 +401,10 @@ export function renderUgdReportHtml(input: UGDReportInput) {
   const evaluatorAddress = localizedField(f, "SorumluAdres", language, empty);
   const evaluatorQualification = localizedField(f, "SorumluKanit", language, empty);
   const isLabProfile = profile === "lab";
-  const signatureImageSrc = text(
+  const signatureImageSrc = toPublicAssetDataUri(text(
     f.SignatureImageUrl || f.ImzaGorselUrl,
     isLabProfile ? "/imza-oguzhan.png" : "/imza-dilsun.png"
-  );
+  ));
   const evaluatorInfo = isLabProfile
     ? "Oğuzhan EKER\nROOT KOZMETİK A.Ş.\nYakuplu Mah. Hürriyet Blv. Yakuplu Eval Plaza No.131 D.40 Beylikdüzü İstanbul\n+90 (212) 909 82 08 / info@rootarge.com"
     : "Dilsun KARABULUT SEFER \n OZECO GROUP ULUSLARARASI DANIŞMANLIK TİCARET LİMİTED ŞİRKETİ \n Şehit Osman Avcı, Malazgirt 1071. Cad. No:49 A İç Kapı No:13, 06820 Eryaman/Ankara +90 (850) 308 33 51 / +90 533 450 69 05";

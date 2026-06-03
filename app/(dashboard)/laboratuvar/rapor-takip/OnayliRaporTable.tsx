@@ -170,6 +170,10 @@ export default function OnayliRaporTable() {
     }, 250);
   };
 
+  // Dosya adi sanitize: Windows/macOS uyumsuz karakterleri temizle.
+  const sanitizeFileName = (s: string) =>
+    s.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+
   const downloadImzaliPdf = async (row: RaporRow) => {
     const key = `${row.NkrID}__${row.RaporFormati}`;
     setDownloadingKey(key);
@@ -185,7 +189,12 @@ export default function OnayliRaporTable() {
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = objUrl;
-      a.download = `Rapor-${row.RaporNo || row.NkrID}-imzali.pdf`;
+      // Dosya adi: "BarkodNo - UrunAdi.pdf" (yoksa RaporNo/NkrID fallback).
+      const idPart = sanitizeFileName(String(row.Barkod || row.RaporNo || row.NkrID));
+      const namePart = sanitizeFileName(String(row.Numune_Adi || ""));
+      a.download = namePart
+        ? `${idPart} - ${namePart}.pdf`
+        : `${idPart}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();

@@ -275,7 +275,7 @@ export default function RaporTakipTable({
   // ── Accordion ──────────────────────────────────────────────────────────────
   const toggleRow = async (row: RaporRow) => {
     if (isUgdrFormat(row.RaporFormati)) {
-      router.push(`/laboratuvar/rapor-takip/ugdr/${row.NkrID}`);
+      router.push(`/laboratuvar/rapor-takip/ugdr/${row.RaporNo || row.NkrID}`);
       return;
     }
 
@@ -589,7 +589,11 @@ export default function RaporTakipTable({
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = `UGD_Rapor_${row.RaporNo || "rapor"}.pdf`;
+      // Dosya adi: "BarkodNo - UrunAdi.pdf" (yoksa RaporNo/NkrID fallback)
+      const sanitize = (s: string) => s.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
+      const idPart = sanitize(String(row.Barkod || row.RaporNo || row.NkrID));
+      const namePart = sanitize(String(row.Numune_Adi || ""));
+      a.download = namePart ? `${idPart} - ${namePart}.pdf` : `${idPart}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e: any) {
@@ -872,7 +876,7 @@ export default function RaporTakipTable({
                   {isUgdrFormat(row.RaporFormati) ? (
                     <button
                       type="button"
-                      onClick={() => window.open(`/laboratuvar/rapor-takip/ugdr/${row.NkrID}`, "_blank", "noopener,noreferrer")}
+                      onClick={() => window.open(`/laboratuvar/rapor-takip/ugdr/${row.RaporNo || row.NkrID}`, "_blank", "noopener,noreferrer")}
                       style={{
                         border: "none",
                         background: "transparent",
