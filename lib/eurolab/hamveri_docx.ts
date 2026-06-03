@@ -12,7 +12,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import PizZip from "pizzip";
-import Docxtemplater from "docxtemplater";
 
 export interface HamveriRecord {
     code: string;
@@ -252,7 +251,6 @@ export function buildHamveriDocx(record: HamveriRecord): Buffer {
     }
     const buffer = fs.readFileSync(templatePath);
     const zip = new PizZip(buffer);
-    const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, delimiters: { start: "{", end: "}" } });
 
     const pd = record.product_data || {};
     const td = record.test_data || {};
@@ -307,10 +305,29 @@ export function buildHamveriDocx(record: HamveriRecord): Buffer {
         (pd.notes && pd.notes.trim() ? notesBlock(pd.notes.trim()) : "") +
         spacer();
 
-    doc.render({ content: middle });
+    // ── Doğrudan placeholder enjeksiyonu (docxtemplater KULLANILMIYOR) ──────────
+    // docxtemplater'ın {…} lexer'ı serverless'ta hem şablondaki sdt GUID'ini
+    // ({28A0092B-…}) hem de bizim enjekte ettiğimiz OOXML'i bozabiliyordu
+    // (statik tblPr parçası düşüyordu). Burada document.xml'i düz metin olarak
+    // alıp placeholder paragrafını birebir string-replace ile değiştiriyoruz —
+    // hiçbir lexer içeriğimize dokunmaz, sonuç deterministik.
+    const DOC_PART = "word/document.xml";
+    const docFile = zip.file(DOC_PART);
+    if (!docFile) {
+        throw new Error("Hamveri şablonunda word/document.xml bulunamadı.");
+    }
+    const originalXml = docFile.asText();
+
+    const PLACEHOLDER = "<w:p><w:r><w:t>{@content}</w:t></w:r></w:p>";
+    if (!originalXml.includes(PLACEHOLDER)) {
+        throw new Error("Hamveri şablonunda {@content} placeholder'ı bulunamadı.");
+    }
+    const renderedXml = originalXml.replace(PLACEHOLDER, middle);
+
+    zip.file(DOC_PART, renderedXml);
 
     // Serverless ortamda Buffer ↔ Uint8Array dönüşümleri sırasında body
     // bozulabiliyor; doğrudan Uint8Array üret ve onu Buffer.from ile sarıp dön.
-    const u8 = doc.getZip().generate({ type: "uint8array", compression: "DEFLATE" }) as Uint8Array;
+    const u8 = zip.generate({ type: "uint8array", compression: "DEFLATE" }) as Uint8Array;
     return Buffer.from(u8);
 }
