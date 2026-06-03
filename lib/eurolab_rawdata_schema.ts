@@ -7,7 +7,7 @@ export async function ensureEurolabRawdataTable() {
       code VARCHAR(80) UNIQUE NOT NULL,
       sample_name VARCHAR(255) NOT NULL,
       standard VARCHAR(120) NOT NULL DEFAULT 'EN 71-1:2026',
-      toy_category VARCHAR(120),
+      toy_category TEXT,
       age_group VARCHAR(80),
       status VARCHAR(30) NOT NULL DEFAULT 'Taslak',
       product_data JSONB,
@@ -21,7 +21,12 @@ export async function ensureEurolabRawdataTable() {
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eurolab_rawdata' AND column_name='toy_category') THEN
-        ALTER TABLE eurolab_rawdata ADD COLUMN toy_category VARCHAR(120);
+        ALTER TABLE eurolab_rawdata ADD COLUMN toy_category TEXT;
+      ELSIF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='eurolab_rawdata' AND column_name='toy_category' AND data_type='character varying'
+      ) THEN
+        ALTER TABLE eurolab_rawdata ALTER COLUMN toy_category TYPE TEXT;
       END IF;
 
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eurolab_rawdata' AND column_name='age_group') THEN
