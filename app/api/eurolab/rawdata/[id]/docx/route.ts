@@ -1,4 +1,8 @@
 export const runtime = "nodejs";
+// Next.js 16 bu GET route'unu statik render edip cache'lemesin — her istekte
+// taze DOCX üretilmeli (aksi halde eski/bozuk dosya servis edilebiliyordu).
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import { hasEurolabDatabaseConfig, query } from "@/lib/db_eurolab";

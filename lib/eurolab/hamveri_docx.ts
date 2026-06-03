@@ -326,7 +326,14 @@ export function buildHamveriDocx(record: HamveriRecord): Buffer {
     // $&, $`, $', $$, $1 dizilerini özel değiştirme kalıbı sanıp içeriği bozar
     // (DB'den gelen notes/measuredValue alanlarında $ olduğunda XML mangle oluyordu).
     // Fonksiyon dönüşü harfi harfine kullanılır — hiçbir $ yorumlanmaz.
-    const renderedXml = originalXml.replace(PLACEHOLDER, () => middle);
+    let renderedXml = originalXml.replace(PLACEHOLDER, () => middle);
+
+    // BUILD FINGERPRINT — hangi kod sürümünün ÜRETTİĞİNİ kanıtlamak için.
+    // Word bu XML yorumunu yok sayar; indirilen dosyada grep'lenebilir.
+    // İndirilen dosyada bu marker YOKSA production stale/cache'li build servis
+    // ediyor demektir (kod deploy olmamış).
+    const BUILD_MARKER = "<!-- HAMVERI_BUILD=v6-directinject -->";
+    renderedXml = renderedXml.replace("?>", "?>" + BUILD_MARKER);
 
     zip.file(DOC_PART, renderedXml);
 
