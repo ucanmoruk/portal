@@ -81,3 +81,39 @@ export async function GET(
     return Response.json({ error: e.message }, { status: 500 });
   }
 }
+
+// PATCH /api/talepler/[id] — talep durumunu güncelle.
+// Yalnızca 3 manuel durum izinli (Yeni Talep otomatik, müşteri portalında oluşur):
+//   Numune Bekleniyor | Analiz Aşamasında | Raporlandı
+const VALID_DURUMLAR = new Set(["Numune Bekleniyor", "Analiz Aşamasında", "Raporlandı"]);
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
+
+  const { id } = await params;
+  if (!id || isNaN(Number(id))) {
+    return Response.json({ error: "Geçersiz ID" }, { status: 400 });
+  }
+
+  try {
+    const body = await request.json();
+    const durum = String(body?.durum || "").trim();
+    if (!VALID_DURUMLAR.has(durum)) {
+      return Response.json({ error: "Geçersiz durum." }, { status: 400 });
+    }
+
+    const pool = await cosmoPool;
+    const r = await pool.request()
+      .input("id", Number(id))
+      .input("durum", durum)
+      .query(`UPDATE dbo.Talep SET Durum = @durum WHERE ID = @id`);
+
+    return Response.json({ success: true, durum, rowsAffected: r.rowsAffected?.[0] ?? 0 });
+  } catch (e: any) {
+    return Response.json({ error: e.message }, { status: 500 });
+  }
+}

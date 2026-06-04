@@ -39,6 +39,11 @@ const DURUM_LABELS: Record<string, { label: string; color: string; bg: string }>
   "Pasif":               { label: "Pasif",               color: "#6e6e73", bg: "#f5f5f7" },
 };
 
+// Filtre çubuğunda gösterilecek 4 durum
+const FILTRE_DURUMLAR = ["Yeni Talep", "Numune Bekleniyor", "Analiz Aşamasında", "Raporlandı"] as const;
+// İç portaldan elle değiştirilebilen 3 durum (Yeni Talep otomatik müşteri portalında oluşur)
+const DEGISEBILIR_DURUMLAR = ["Numune Bekleniyor", "Analiz Aşamasında", "Raporlandı"] as const;
+
 export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
   const router = useRouter();
   const [data,       setData]       = useState<Talep[]>([]);
@@ -47,12 +52,15 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
   const [limit,      setLimit]      = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [search,     setSearch]     = useState("");
+  const [durumFilter, setDurumFilter] = useState("");
+  const [durumMenuId, setDurumMenuId] = useState<number | null>(null);
   const [loading,    setLoading]    = useState(true);
   const [err,        setErr]        = useState("");
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef    = useRef<AbortController | null>(null);
   const latestReqId = useRef(0);
+  const durumFilterRef = useRef("");
 
   const fetchData = useCallback(async (p: number, s: string, l: number) => {
     const reqId = ++latestReqId.current;
@@ -61,8 +69,9 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
     abortRef.current = ctrl;
     setLoading(true); setErr("");
     try {
+      const df = durumFilterRef.current;
       const r = await fetch(
-        `/api/talepler?tur=${encodeURIComponent(tur)}&page=${p}&limit=${l}&search=${encodeURIComponent(s)}`,
+        `/api/talepler?tur=${encodeURIComponent(tur)}&page=${p}&limit=${l}&search=${encodeURIComponent(s)}${df ? `&durum=${encodeURIComponent(df)}` : ""}`,
         { signal: ctrl.signal },
       );
       if (reqId !== latestReqId.current) return;
@@ -90,6 +99,45 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
       setPage(1);
       fetchData(1, val, limit);
     }, 250);
+  };
+
+  const applyDurumFilter = (next: string) => {
+    durumFilterRef.current = next;
+    setDurumFilter(next);
+    setPage(1);
+    fetchData(1, search, limit);
+  };
+
+  // Dış tıklama → durum menüsünü kapat
+  useEffect(() => {
+    if (durumMenuId === null) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-talep-durum-menu]")) setDurumMenuId(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [durumMenuId]);
+
+  const changeDurum = async (id: number, durum: string) => {
+    setDurumMenuId(null);
+    try {
+      const r = await fetch(`/api/talepler/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ durum }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        alert(j?.error || "Durum güncellenemedi.");
+        return;
+      }
+      // Optimistic: yerel state'i güncelle (filtre aktifse ve durum eşleşmiyorsa
+      // satır kaybolacak ama liste sayımı bir sonraki fetch'te düzelir)
+      setData(prev => prev.map(t => t.ID === id ? { ...t, Durum: durum } : t));
+    } catch (e: any) {
+      alert(e?.message || "Durum güncellenemedi.");
+    }
   };
 
   const pageNumbers = () => {
@@ -126,6 +174,29 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
             {[10, 20, 50].map(n => <option key={n} value={n}>{n} / sayfa</option>)}
           </select>
         </div>
+      </div>
+
+      {/* ── Durum filtresi ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "0 0 12px" }}>
+        <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", fontWeight: 600 }}>Durum:</span>
+        {(["", ...FILTRE_DURUMLAR] as const).map(d => {
+          const isActive = durumFilter === d;
+          const label = d === "" ? "Tümü" : d;
+          const cfg = d && DURUM_LABELS[d] ? DURUM_LABELS[d] : null;
+          return (
+            <button key={d || "all"}
+              onClick={() => applyDurumFilter(d)}
+              style={{
+                padding: "5px 12px", borderRadius: 999,
+                border: isActive ? "1px solid var(--color-accent)" : "1px solid var(--color-border)",
+                background: isActive ? (cfg?.bg ?? "var(--color-accent-light, #e6f0ff)") : "transparent",
+                color: isActive ? (cfg?.color ?? "var(--color-accent)") : "var(--color-text-secondary)",
+                fontSize: 12, fontWeight: isActive ? 700 : 500, cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >{label}</button>
+          );
+        })}
       </div>
 
       {/* ── Tablo ── */}
@@ -173,11 +244,42 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
                               {t.Musteri || <em style={{ color: "var(--color-text-tertiary)" }}>—</em>}
                             </td>
                             <td style={{ textAlign: "center" }}>
-                              <span style={{
-                                background: cfg.bg, color: cfg.color,
-                                borderRadius: 20, padding: "3px 10px",
-                                fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
-                              }}>{cfg.label}</span>
+                              <div style={{ position: "relative", display: "inline-block" }} data-talep-durum-menu>
+                                <button
+                                  onClick={() => setDurumMenuId(prev => prev === t.ID ? null : t.ID)}
+                                  title="Durumu değiştir"
+                                  style={{
+                                    background: cfg.bg, color: cfg.color,
+                                    border: "none", borderRadius: 20, padding: "3px 10px",
+                                    fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer",
+                                  }}
+                                >{cfg.label} ▾</button>
+                                {durumMenuId === t.ID && (
+                                  <div style={{
+                                    position: "absolute", top: "calc(100% + 4px)", right: 0,
+                                    background: "var(--color-surface)", border: "1px solid var(--color-border)",
+                                    borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+                                    zIndex: 50, minWidth: 180,
+                                  }}>
+                                    {DEGISEBILIR_DURUMLAR.map(k => {
+                                      const dcfg = DURUM_LABELS[k];
+                                      const isCurrent = k === t.Durum;
+                                      return (
+                                        <button key={k}
+                                          onMouseDown={() => changeDurum(t.ID, k)}
+                                          style={{
+                                            display: "block", width: "100%", textAlign: "left",
+                                            padding: "8px 14px", background: "none", border: "none",
+                                            cursor: "pointer", fontSize: 13,
+                                            color: isCurrent ? dcfg.color : "var(--color-text-primary)",
+                                            fontWeight: isCurrent ? 700 : 400,
+                                          }}
+                                        >{dcfg.label}{isCurrent ? " ✓" : ""}</button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td style={{ textAlign: "center" }}>
                               <button

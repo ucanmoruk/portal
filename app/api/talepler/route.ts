@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
   const sp     = request.nextUrl.searchParams;
   const tur    = (sp.get("tur") || "Analiz").trim();
   const search = sp.get("search")?.trim() || "";
+  const durum  = sp.get("durum")?.trim() || "";
   const page   = Math.max(1, parseInt(sp.get("page")  || "1",  10));
   const limit  = Math.min(100, Math.max(5, parseInt(sp.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
@@ -39,13 +40,14 @@ export async function GET(request: NextRequest) {
             OR LOWER(ISNULL(v.Durum, '')) LIKE LOWER(@searchLike)
           )`
         : "";
+      const durumClause = durum ? `AND ISNULL(v.Durum, '') = @durum` : "";
 
       const [countRes, dataRes] = await Promise.all([
-        pool.request().input("searchLike", `%${search}%`).query(`
+        pool.request().input("searchLike", `%${search}%`).input("durum", durum).query(`
           SELECT COUNT(*) AS total FROM cosmoroot.VIEW_TALEP_LISTE v
-          WHERE 1 = 1 ${searchClause}
+          WHERE 1 = 1 ${searchClause} ${durumClause}
         `),
-        pool.request().input("searchLike", `%${search}%`).input("offset", offset).input("limit", limit).query(`
+        pool.request().input("searchLike", `%${search}%`).input("durum", durum).input("offset", offset).input("limit", limit).query(`
           SELECT
             v.ID,
             v.[Talep No]          AS TalepNo,
@@ -60,7 +62,7 @@ export async function GET(request: NextRequest) {
             v.FirmaID
           FROM cosmoroot.VIEW_TALEP_LISTE v
           INNER JOIN dbo.Talep t ON t.ID = v.ID
-          WHERE 1 = 1 ${searchClause}
+          WHERE 1 = 1 ${searchClause} ${durumClause}
           ORDER BY v.Tarih DESC, v.ID DESC
           OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
         `),
@@ -81,15 +83,16 @@ export async function GET(request: NextRequest) {
           OR LOWER(ISNULL(t.Durum, '')) LIKE LOWER(@searchLike)
         )`
       : "";
+    const durumClause = durum ? `AND ISNULL(t.Durum, '') = @durum` : "";
 
     const [countRes, dataRes] = await Promise.all([
-      pool.request().input("searchLike", `%${search}%`).query(`
+      pool.request().input("searchLike", `%${search}%`).input("durum", durum).query(`
         SELECT COUNT(*) AS total
         FROM dbo.Talep t
         LEFT JOIN dbo.Firma f ON f.Kod = t.FirmaKodu
-        WHERE t.Tur = N'Destek' AND ISNULL(t.Durum, '') <> N'Pasif' ${searchClause}
+        WHERE t.Tur = N'Destek' AND ISNULL(t.Durum, '') <> N'Pasif' ${searchClause} ${durumClause}
       `),
-      pool.request().input("searchLike", `%${search}%`).input("offset", offset).input("limit", limit).query(`
+      pool.request().input("searchLike", `%${search}%`).input("durum", durum).input("offset", offset).input("limit", limit).query(`
         SELECT
           t.ID,
           COALESCE(t.DisTalepKodu, N'26' + CAST(t.TalepNo AS NVARCHAR(20))) AS TalepNo,
@@ -102,7 +105,7 @@ export async function GET(request: NextRequest) {
           f.ID                       AS FirmaID
         FROM dbo.Talep t
         LEFT JOIN dbo.Firma f ON f.Kod = t.FirmaKodu
-        WHERE t.Tur = N'Destek' AND ISNULL(t.Durum, '') <> N'Pasif' ${searchClause}
+        WHERE t.Tur = N'Destek' AND ISNULL(t.Durum, '') <> N'Pasif' ${searchClause} ${durumClause}
         ORDER BY t.Tarih DESC, t.ID DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `),
