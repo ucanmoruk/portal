@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { ensureLabUgdrFormulTable } from "@/lib/labUgdrStorage";
 import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 
@@ -29,7 +29,7 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const nkrId = await resolveNkrId(pool, id);
     if (!nkrId) return Response.json({ error: "Kayit bulunamadi" }, { status: 404 });
 
@@ -66,7 +66,7 @@ export async function POST(
     const { rows } = await request.json();
     if (!Array.isArray(rows)) return Response.json({ error: "Gecersiz veri" }, { status: 400 });
 
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const nkrId = await resolveNkrId(pool, id);
     if (!nkrId) return Response.json({ error: "Kayit bulunamadi" }, { status: 404 });
 

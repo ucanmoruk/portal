@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import { loadLabUgdrTexts, saveLabUgdrTexts } from "@/lib/labUgdrStorage";
 import { nkrHasColumn } from "@/lib/numuneFormTables";
 import { nkrUgdTipFkColumn } from "@/lib/nkrUgdTipColumn";
@@ -119,7 +119,7 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const searchParams = new URL(request.url).searchParams;
     const forcedNkrId = searchParams.get("nkrId");
     const nkrId = forcedNkrId ? await resolveNkrId(pool, forcedNkrId) : await resolveNkrId(pool, id);
@@ -136,7 +136,7 @@ export async function GET(
            t.SiklikEn,
            t.ADegeri
          FROM NKR n
-         LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
+         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
          LEFT JOIN rUGDTip t ON t.ID = n.[${ugdCol}]
          WHERE n.ID = @id AND n.Durum = 'Aktif'`
       : `SELECT n.*, f.Ad AS FirmaAd,
@@ -147,7 +147,7 @@ export async function GET(
            CAST(NULL AS nvarchar(500)) AS SiklikEn,
            CAST(NULL AS nvarchar(200)) AS ADegeri
          FROM NKR n
-         LEFT JOIN RootTedarikci f ON f.ID = n.Firma_ID
+         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
          WHERE n.ID = @id AND n.Durum = 'Aktif'`;
 
     const [nkrRes, detayRes, textRows] = await Promise.all([
@@ -220,7 +220,7 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const pool = await poolPromise;
+    const pool = await cosmoPool;
     const nkrId = await resolveNkrId(pool, id);
     if (!nkrId) return Response.json({ error: "Kayit bulunamadi" }, { status: 404 });
 
