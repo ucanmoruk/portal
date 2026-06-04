@@ -136,13 +136,35 @@ kdv         = iskontolu × KdvOran/100
 genelToplam = iskontolu + kdv
 ```
 
-## 7. PDF / teklif formatı
-Teklif çıktısı **veriden türeyen saf bir HTML/CSS şablonudur** — müşteri portalına
-**kopyalanır** (kod-bağımlılığı kurulmaz). İç portaldaki referanslar:
-- `app/teklif-print/[id]/page.tsx` — yazdırma/PDF sayfası (JetBrains Mono, A4)
-- `app/api/teklifler/[id]/export/route.ts` — Word/PDF export mantığı
-Bunlar `TeklifBaslik` + `TeklifKalem`'den okur; müşteri portalı aynı sorgularla aynı
-şablonu kullanırsa çıktı **birebir aynı** olur. Müşteriye gösterilen numara = `DisTeklifKodu`.
+## 7. PDF / teklif formatı  ← KOPYALANACAK TEK DOSYA
+Teklif çıktısı **veriden türeyen, bağımsız bir bileşendir**:
+- **`app/teklif-print/[id]/TeklifPrintDocument.tsx`** — bu dosyayı müşteri portalına
+  **AYNEN kopyala.** DB/session/env bağımlılığı yoktur; saf sunum.
+
+Kullanım (müşteri portalında):
+```tsx
+import TeklifPrintDocument, { type TeklifHeader, type TeklifSatir } from "./TeklifPrintDocument";
+
+// §3-4'teki sorgularla TeklifBaslik + Firma alanlarını ve TeklifKalem'i çek:
+const header: TeklifHeader = { TeklifNo, DisTeklifKodu, RevNo, Tarih, Notlar,
+  KdvOran, GenelIskonto, MusteriAd, MusteriAdres, MusteriEmail, MusteriYetkili,
+  TeklifVeren /* ... */ };
+const satirlar: TeklifSatir[] = [ /* TeklifKalem satırları */ ];
+
+<TeklifPrintDocument header={header} satirlar={satirlar} sirketAdi="UNIQUE ANALYSE" />
+// opsiyonel: toolbar={<KendiYazdırButonların/>}
+```
+Aynı veri → **birebir aynı çıktı**. Bileşen tüm hesapları (ara toplam / iskonto /
+KDV / genel toplam, çoğunluk para birimi) ve numara etiketini (`DisTeklifKodu/RevNo`)
+kendi içinde yapar.
+
+**Notlar:**
+- **Font:** Bileşen `next/font/google`'dan `JetBrains_Mono` yükler. Müşteri portalı
+  Next.js ise sorunsuz; değilse fontu CSS'le yükle (`'JetBrains Mono'` fallback'leri zaten var).
+- **Görseller:** `/unique-logo.png` ve `/unique-seal.png` müşteri portalının `public/`'ine
+  kopyalanmalı (ya da yol güncellenmeli).
+- İç portalda Word çıktısı ayrıca `app/api/teklifler/[id]/export/route.ts`'tedir (docx şablonu).
+- Müşteriye gösterilen referans = `DisTeklifKodu` (örn. `ÜGAM-26-XXXXX/00`).
 
 ## 8. Bildirim ("yeni teklifiniz var")
 Müşteri portalı kendi tarafında üretir (bağımsızlık için):

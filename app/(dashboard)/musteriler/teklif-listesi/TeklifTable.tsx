@@ -600,7 +600,9 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
 
       {/* Table */}
       <div className={styles.tableCard}>
-        <div className={styles.tableWrapper}>
+        {/* min-height: tek satır bile olsa tablo sayfaya otursun + Durum menüsü
+            alttaki boş alana açılıp kırpılmasın (tableCard overflow:hidden) */}
+        <div className={styles.tableWrapper} style={{ minHeight: "calc(100vh - 340px)" }}>
           <table className={styles.table}>
             <thead>
               <tr>
