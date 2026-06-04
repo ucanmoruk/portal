@@ -77,6 +77,12 @@ export default function NumuneKabulTable() {
   const [limit, setLimit]           = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch]         = useState("");
+  // ── Filtreler ──
+  const [tarihBas, setTarihBas]           = useState("");
+  const [tarihBit, setTarihBit]           = useState("");
+  const [odemeFilter, setOdemeFilter]     = useState("");
+  const [raporDurumFilter, setRaporDurumFilter] = useState("");
+  const filtersRef = useRef({ tarihBas: "", tarihBit: "", odeme: "", raporDurumu: "" });
   const [loading, setLoading]       = useState(true);
   const [transitioning, setTransitioning] = useState(false); // sayfa geçişi (skeleton değil, overlay)
   const [error, setError]           = useState("");
@@ -164,8 +170,14 @@ export default function NumuneKabulTable() {
     setError("");
 
     try {
+      const fr = filtersRef.current;
+      const filterQs =
+        (fr.tarihBas    ? `&tarihBas=${fr.tarihBas}` : "") +
+        (fr.tarihBit    ? `&tarihBit=${fr.tarihBit}` : "") +
+        (fr.odeme       ? `&odeme=${encodeURIComponent(fr.odeme)}` : "") +
+        (fr.raporDurumu ? `&raporDurumu=${encodeURIComponent(fr.raporDurumu)}` : "");
       const res = await fetch(
-        `/api/numune-kabul?page=${p}&limit=${l}&search=${encodeURIComponent(s)}`,
+        `/api/numune-kabul?page=${p}&limit=${l}&search=${encodeURIComponent(s)}${filterQs}`,
         { signal: ctrl.signal }
       );
 
@@ -208,6 +220,30 @@ export default function NumuneKabulTable() {
       fetchData(1, val, limit, { clearFirst: true });
     }, 200);
   };
+
+  // ── Filtre uygula / temizle ──
+  const applyFilters = (patch: Partial<{ tarihBas: string; tarihBit: string; odeme: string; raporDurumu: string }>) => {
+    const next = { ...filtersRef.current, ...patch };
+    filtersRef.current = next;
+    setTarihBas(next.tarihBas);
+    setTarihBit(next.tarihBit);
+    setOdemeFilter(next.odeme);
+    setRaporDurumFilter(next.raporDurumu);
+    setPage(1);
+    fetchData(1, search, limit, { clearFirst: true });
+  };
+
+  const clearFilters = () => {
+    filtersRef.current = { tarihBas: "", tarihBit: "", odeme: "", raporDurumu: "" };
+    setTarihBas(""); setTarihBit(""); setOdemeFilter(""); setRaporDurumFilter("");
+    setPage(1);
+    fetchData(1, search, limit, { clearFirst: true });
+  };
+
+  const hasActiveFilter = !!(tarihBas || tarihBit || odemeFilter || raporDurumFilter);
+
+  const ODEME_OPTS = ["Ödendi", "Fatura Kesilmedi", "Ödeme Bekliyor", "Proforma Onaylandı", "Proforma Oluşturuldu", "Proforma Reddedildi", "Kısmen Ödendi", "İptal"];
+  const RAPOR_DURUM_OPTS = ["Raporlandı", "Rapor Hazır", "Rapor Beklemede", "Tanımlandı", "Mixed"];
 
   // ── Accordion ───────────────────────────────────────────────
   const toggleGroup = (evrakNo: string) => {
@@ -323,6 +359,37 @@ export default function NumuneKabulTable() {
           </button>
 
         </div>
+      </div>
+
+      {/* ── Filtre çubuğu ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "0 0 12px" }}>
+        <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", fontWeight: 600 }}>Filtreler:</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--color-text-secondary)" }}>
+          <span>Tarih</span>
+          <input type="date" value={tarihBas} max={tarihBit || undefined}
+            onChange={e => applyFilters({ tarihBas: e.target.value })}
+            style={{ padding: "5px 8px", borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 12, background: "var(--color-bg-elevated, #fff)", color: "inherit" }} />
+          <span>—</span>
+          <input type="date" value={tarihBit} min={tarihBas || undefined}
+            onChange={e => applyFilters({ tarihBit: e.target.value })}
+            style={{ padding: "5px 8px", borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 12, background: "var(--color-bg-elevated, #fff)", color: "inherit" }} />
+        </div>
+        <select value={odemeFilter} onChange={e => applyFilters({ odeme: e.target.value })}
+          style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 12, background: "var(--color-bg-elevated, #fff)", color: "inherit", cursor: "pointer" }}>
+          <option value="">Ödeme: Tümü</option>
+          {ODEME_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+        <select value={raporDurumFilter} onChange={e => applyFilters({ raporDurumu: e.target.value })}
+          style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 12, background: "var(--color-bg-elevated, #fff)", color: "inherit", cursor: "pointer" }}>
+          <option value="">Rapor Durumu: Tümü</option>
+          {RAPOR_DURUM_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+        {hasActiveFilter && (
+          <button onClick={clearFilters}
+            style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--color-border)", background: "transparent", fontSize: 12, color: "var(--color-accent)", cursor: "pointer", fontWeight: 600 }}>
+            Filtreleri temizle ✕
+          </button>
+        )}
       </div>
 
       {/* ── Accordion listesi ── */}

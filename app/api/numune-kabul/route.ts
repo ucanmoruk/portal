@@ -21,6 +21,12 @@ export async function GET(request: NextRequest) {
   const limit  = Math.min(100, Math.max(5, parseInt(sp.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
 
+  // ── Filtreler ──
+  const tarihBas    = sp.get("tarihBas")?.trim()    || "";
+  const tarihBit    = sp.get("tarihBit")?.trim()    || "";
+  const odeme       = sp.get("odeme")?.trim()       || "";
+  const raporDurumu = sp.get("raporDurumu")?.trim() || "";
+
   try {
     const pool = await cosmoPool;
 
@@ -34,26 +40,42 @@ export async function GET(request: NextRequest) {
         )`
       : "";
 
+    // Filtre cümlesi: tarih aralığı + rapor durumu (NKR satırı) + ödeme (Evrak bazında)
+    const filterClause =
+      (tarihBas    ? " AND CONVERT(date, n.Tarih) >= @tarihBas" : "") +
+      (tarihBit    ? " AND CONVERT(date, n.Tarih) <= @tarihBit" : "") +
+      (raporDurumu ? " AND ISNULL(n.Rapor_Durumu, '') = @raporDurumu" : "") +
+      (odeme       ? " AND (SELECT TOP 1 Odeme_Durumu FROM Odeme WHERE Evrak_No = n.Evrak_No ORDER BY ID DESC) = @odeme" : "");
+
+    // Filtre input'larını bir request'e ekler (yalnızca kullanılanlar)
+    const addFilters = <T extends { input: (n: string, v: unknown) => T }>(req: T): T => {
+      if (tarihBas)    req.input("tarihBas", tarihBas);
+      if (tarihBit)    req.input("tarihBit", tarihBit);
+      if (raporDurumu) req.input("raporDurumu", raporDurumu);
+      if (odeme)       req.input("odeme", odeme);
+      return req;
+    };
+
     const baseJoin = `
       FROM NKR n
       LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
-      WHERE n.Durum = 'Aktif' ${searchClause}
+      WHERE n.Durum = 'Aktif' ${searchClause} ${filterClause}
     `;
 
     const signal = request.signal;
 
     // ── Query 1 + 2 paralel: Count ve sayfalanmış gruplar aynı anda ──
     const [countResult, groupResult] = await Promise.all([
-      pool.request()
+      addFilters(pool.request()
         .input("search", search)
-        .input("searchLike", `%${search}%`)
+        .input("searchLike", `%${search}%`))
         .query(`SELECT COUNT(DISTINCT n.Evrak_No) AS total ${baseJoin}`),
 
-      pool.request()
+      addFilters(pool.request()
         .input("search", search)
         .input("searchLike", `%${search}%`)
         .input("offset", offset)
-        .input("limit",  limit)
+        .input("limit",  limit))
         .query(`
           SELECT
             n.Evrak_No,
