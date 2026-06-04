@@ -604,7 +604,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th style={{ width: 140 }}>Teklif No</th>
+                <th style={{ width: 190, whiteSpace: "nowrap" }}>Teklif No</th>
                 <th style={{ width: 90 }}>Tarih</th>
                 <th>Müşteri</th>
                 <th style={{ width: 150 }}>Teklifi Oluşturan</th>
@@ -629,7 +629,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                       const durumCfg = DURUM_LABELS[t.TeklifDurum] ?? DURUM_LABELS.Taslak;
                       return (
                         <tr key={t.ID}>
-                          <td className={styles.tdMono} style={{ fontWeight: 600 }}>
+                          <td className={styles.tdMono} style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
                             <div>{disLabel(t.DisTeklifKodu, t.RevNo)}</div>
                             <div style={{ fontWeight: 500, fontSize: "0.8em", color: "var(--color-text-tertiary)" }}>
                               {teklifLabel(t.TeklifNo, t.RevNo)}

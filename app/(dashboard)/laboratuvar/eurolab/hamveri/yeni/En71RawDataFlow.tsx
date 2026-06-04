@@ -102,7 +102,7 @@ const gereklilikDataset: Array<{ gereklilik: string; madde: string; yontem: stri
   { gereklilik: "Çıkıntılı Parçalar", madde: "4.9", yontem: "8.11" },
   { gereklilik: "Çıkıntılı Parçalar", madde: "4.9", yontem: "8.12" },
   { gereklilik: "Birbirine Karş Hareket Eden Parçalar (menteşe)", madde: "4.10.3", yontem: "Parça kütlesi kontrolü (≥250 g)" },
-  { gereklilik: "Birbirine Karş Hareket Eden Parçalar (menteşe)", madde: "4.10.3", yontem: "Yay açıklık ölçümü (3 mm)" },
+  { gereklilik: "Birbirine Karş Hareket Eden Parçalar (menteşe)", madde: "4.10.3", yontem: "Erişilebilirlik probları ile yaş kontrolü" },
   { gereklilik: "Birbirine Karş Hareket Eden Parçalar (yay)", madde: "4.10.4", yontem: "Yay açıklık ölçümü (3 mm)" },
   { gereklilik: "Birbirine Karş Hareket Eden Parçalar (yay)", madde: "4.10.4", yontem: "40 N kuvvet uygulama kontrolü" },
   { gereklilik: "Ağızla Çalıştırılan Oyuncaklar ve Ağıza Alınması Amaçlanan Diğer Oyuncaklar", madde: "4.11", yontem: "8.2" },
