@@ -59,6 +59,8 @@ const navGroups: NavGroup[] = [
       { label: "Müşteri Listesi",  href: "/musteriler/musteri-listesi",  menuKey: "musteriler.musteri-listesi"  },
       { label: "Teklif Listesi",   href: "/musteriler/teklif-listesi",   menuKey: "musteriler.teklif-listesi"   },
       { label: "Proforma Listesi", href: "/musteriler/proforma-listesi", menuKey: "musteriler.proforma-listesi" },
+      { label: "Analiz Talepleri", href: "/musteriler/analiz-talepleri", menuKey: "musteriler.analiz-talepleri" },
+      { label: "Destek Talepleri", href: "/musteriler/destek-talepleri", menuKey: "musteriler.destek-talepleri" },
       { label: "Fatura Takip",     href: "/musteriler/fatura-takip",     menuKey: "musteriler.fatura-takip"     },
     ],
   },
