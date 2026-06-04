@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import styles from "@/app/styles/table.module.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -12,7 +13,8 @@ import styles from "@/app/styles/table.module.css";
 
 interface Talep {
   ID: number;
-  TalepNo: string;
+  TalepNo: string;       // dış kod (ÜGAM/26/XXXX veya UQ193)
+  IcTakipNo: string;     // iç kod (26{TalepNo})
   Tarih: string;
   FirmaKodu: string;
   TalepOlusturan: string;
@@ -38,6 +40,7 @@ const DURUM_LABELS: Record<string, { label: string; color: string; bg: string }>
 };
 
 export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
+  const router = useRouter();
   const [data,       setData]       = useState<Talep[]>([]);
   const [total,      setTotal]      = useState(0);
   const [page,       setPage]       = useState(1);
@@ -131,21 +134,22 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th style={{ width: 160 }}>Talep No</th>
+                <th style={{ width: 170 }}>Talep No</th>
                 <th style={{ width: 110 }}>Tarih</th>
                 <th style={{ width: 130 }}>Firma Kodu</th>
                 <th>Talep Oluşturan</th>
                 <th>Müşteri</th>
                 <th style={{ width: 160, textAlign: "center" }}>Durum</th>
+                <th style={{ width: 70, textAlign: "center" }}>Detay</th>
               </tr>
             </thead>
             <tbody>
               {loading
-                ? <tr><td colSpan={6} className={styles.empty}>Yükleniyor…</td></tr>
+                ? <tr><td colSpan={7} className={styles.empty}>Yükleniyor…</td></tr>
                 : err
-                  ? <tr><td colSpan={6} className={styles.empty}>{err}</td></tr>
+                  ? <tr><td colSpan={7} className={styles.empty}>{err}</td></tr>
                   : data.length === 0
-                    ? <tr><td colSpan={6} className={styles.empty}>
+                    ? <tr><td colSpan={7} className={styles.empty}>
                         {search ? "Arama sonucu bulunamadı." : "Kayıt bulunamadı."}
                       </td></tr>
                     : data.map(t => {
@@ -153,7 +157,12 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
                         return (
                           <tr key={t.ID}>
                             <td className={styles.tdMono} style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
-                              {t.TalepNo || "—"}
+                              <div>{t.TalepNo || "—"}</div>
+                              {t.IcTakipNo && (
+                                <div style={{ fontWeight: 500, fontSize: "0.8em", color: "var(--color-text-tertiary)" }}>
+                                  {t.IcTakipNo}
+                                </div>
+                              )}
                             </td>
                             <td className={styles.tdSecondary}>{t.Tarih}</td>
                             <td className={styles.tdMono} style={{ fontSize: 12 }}>{t.FirmaKodu || "—"}</td>
@@ -169,6 +178,17 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
                                 borderRadius: 20, padding: "3px 10px",
                                 fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
                               }}>{cfg.label}</span>
+                            </td>
+                            <td style={{ textAlign: "center" }}>
+                              <button
+                                onClick={() => router.push(`/musteriler/talepler/${t.ID}`)}
+                                title="Detayı göster"
+                                style={{
+                                  background: "transparent", border: "1px solid var(--color-border)",
+                                  borderRadius: 6, padding: "5px 9px", cursor: "pointer",
+                                  fontSize: 14, lineHeight: 1, color: "var(--color-accent)",
+                                }}
+                              >👁</button>
                             </td>
                           </tr>
                         );

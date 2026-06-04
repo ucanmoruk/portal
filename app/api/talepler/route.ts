@@ -49,6 +49,9 @@ export async function GET(request: NextRequest) {
           SELECT
             v.ID,
             v.[Talep No]          AS TalepNo,
+            -- İç takip kodu: '26' + dbo.Talep.TalepNo (sayı). Eski "UQ193" view'da
+            -- dış kod olarak görünür; iç kod = "26193".
+            N'26' + CAST(t.TalepNo AS NVARCHAR(20)) AS IcTakipNo,
             FORMAT(v.Tarih, 'dd.MM.yyyy') AS Tarih,
             v.FirmaKodu,
             v.[Talep Oluşturan]   AS TalepOlusturan,
@@ -56,6 +59,7 @@ export async function GET(request: NextRequest) {
             v.Durum,
             v.FirmaID
           FROM cosmoroot.VIEW_TALEP_LISTE v
+          INNER JOIN dbo.Talep t ON t.ID = v.ID
           WHERE 1 = 1 ${searchClause}
           ORDER BY v.Tarih DESC, v.ID DESC
           OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -88,7 +92,8 @@ export async function GET(request: NextRequest) {
       pool.request().input("searchLike", `%${search}%`).input("offset", offset).input("limit", limit).query(`
         SELECT
           t.ID,
-          COALESCE(t.DisTalepKodu, CAST(t.TalepNo AS NVARCHAR(50))) AS TalepNo,
+          COALESCE(t.DisTalepKodu, N'26' + CAST(t.TalepNo AS NVARCHAR(20))) AS TalepNo,
+          N'26' + CAST(t.TalepNo AS NVARCHAR(20)) AS IcTakipNo,
           FORMAT(t.Tarih, 'dd.MM.yyyy') AS Tarih,
           t.FirmaKodu,
           ISNULL(f.Firma_Adi, '')   AS TalepOlusturan,
