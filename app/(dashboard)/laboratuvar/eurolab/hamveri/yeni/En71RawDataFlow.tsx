@@ -278,6 +278,7 @@ const purposeOptions = [
   "Projektil / fırlatıcı",
   "Kostüm / giyilebilir",
   "Gıda ile birlikte sunulan",
+  "Dış Ortam Oyuncakları",
 ];
 
 const toyTypeOptions = [
