@@ -7,8 +7,8 @@ import { clientIpFromRequest } from "@/lib/teklifLog";
 // POST /api/teklifler/[id]/portal-gonder
 //
 // Teklifi müşteri portalında görünür kılar (e-posta göndermeden).
-// Sözleşme: TeklifBaslik.TeklifDurum = 'Gönderildi' → müşteri portalı bu teklifi
-// listeler. Onaylandı/Reddedildi durumunu GERİ ALMAZ (sadece Taslak → Gönderildi).
+// Sözleşme: TeklifBaslik.TeklifDurum = 'Onay Bekleniyor' → müşteri portalı bu teklifi
+// listeler. Onaylandı/Reddedildi durumunu GERİ ALMAZ (sadece Taslak → Onay Bekleniyor).
 // Aynı DB paylaşıldığı için ayrı bir aktarım/senkron gerekmez.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function POST(
@@ -29,7 +29,7 @@ export async function POST(
 
     await pool.request()
       .input("ID", Number(id))
-      .query(`UPDATE TeklifBaslik SET TeklifDurum = 'Gönderildi' WHERE ID = @ID AND TeklifDurum = 'Taslak'`);
+      .query(`UPDATE TeklifBaslik SET TeklifDurum = N'Onay Bekleniyor' WHERE ID = @ID AND TeklifDurum = 'Taslak'`);
 
     const res = await pool.request()
       .input("ID", Number(id))

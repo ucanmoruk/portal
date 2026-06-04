@@ -201,10 +201,10 @@ export async function POST(
       attachments,
     });
 
-    // Durumu "Gönderildi" yap
+    // Durumu "Onay Bekleniyor" yap (müşteri kararı bekleniyor)
     await pool.request()
       .input("ID", Number(id))
-      .query(`UPDATE TeklifBaslik SET TeklifDurum = 'Gönderildi' WHERE ID = @ID AND TeklifDurum = 'Taslak'`);
+      .query(`UPDATE TeklifBaslik SET TeklifDurum = N'Onay Bekleniyor' WHERE ID = @ID AND TeklifDurum = 'Taslak'`);
 
     return Response.json({ success: true });
   } catch (e: unknown) {

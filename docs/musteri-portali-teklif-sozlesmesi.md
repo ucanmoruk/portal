@@ -21,7 +21,7 @@
 | `Tarih` | DATETIME | Oluşturma tarihi |
 | `Toplam` | DECIMAL(18,2) | Ara toplam (KDV/iskonto hariç ham) |
 | `Notlar` | NVARCHAR(MAX) | Teklif notu |
-| `TeklifDurum` | NVARCHAR(20) | **Durum kapısı**: `Taslak` / `Gönderildi` / `Onaylandı` / `Reddedildi` |
+| `TeklifDurum` | NVARCHAR(20) | **Durum kapısı**: `Taslak` / `Onay Bekleniyor` / `Onaylandı` / `Reddedildi` |
 | `KdvOran` | INT | KDV oranı (%) |
 | `TeklifKonusu` | NVARCHAR(500) | Teklif konusu |
 | `TeklifVeren` | NVARCHAR(200) | Teklifi veren (iç) |
@@ -89,7 +89,7 @@ SELECT
 FROM TeklifBaslik t
 WHERE t.MusteriID = @firmaId
   AND t.Durum = 'Aktif'
-  AND t.TeklifDurum IN ('Gönderildi','Onaylandı','Reddedildi')   -- Taslak GÖRÜNMEZ
+  AND t.TeklifDurum IN (N'Onay Bekleniyor','Onaylandı','Reddedildi')   -- Taslak GÖRÜNMEZ
 ORDER BY t.ID DESC;
 ```
 - **Müşteriye gösterilen referans:** `DisTeklifKodu` + `/` + iki haneli `RevNo`
@@ -119,7 +119,7 @@ okuduğu için **durum ve geçmiş otomatik senkron** olur (ek aktarım yok).
 UPDATE TeklifBaslik
 SET TeklifDurum = @karar            -- 'Onaylandı' veya 'Reddedildi'
 WHERE ID = @teklifId AND MusteriID = @firmaId
-  AND TeklifDurum = 'Gönderildi';   -- yalnızca bekleyen teklif karara bağlanır
+  AND TeklifDurum = N'Onay Bekleniyor';   -- yalnızca bekleyen teklif karara bağlanır
 
 -- 2) Log (iç portalda 'Geçmiş' sekmesinde görünür)
 INSERT INTO TeklifOnayLog (TeklifID, TeklifNo, Aksiyon, Aciklama, IpAdresi, MusteriAd, MusteriEmail, MusteriYetkili, Tarih)
@@ -168,21 +168,21 @@ kendi içinde yapar.
 
 ## 8. Bildirim ("yeni teklifiniz var")
 Müşteri portalı kendi tarafında üretir (bağımsızlık için):
-- `TeklifDurum = 'Gönderildi'` ve müşterinin **henüz görmediği** teklifler için rozet/bildirim.
+- `TeklifDurum = 'Onay Bekleniyor'` ve müşterinin **henüz görmediği** teklifler için rozet/bildirim.
 - "Görüldü" durumu müşteri portalının **kendi tablosunda** tutulmalı (iç portal şemasına
-  dokunma). Alternatif: müşteri portalı, son giriş zamanından sonra `Gönderildi` olan
+  dokunma). Alternatif: müşteri portalı, son giriş zamanından sonra `Onay Bekleniyor` olan
   teklifleri sayar.
 - İç portaldan ayrıca e-posta gidiyorsa (mail aksiyonu) bu bildirimden bağımsızdır.
 
 ## 9. Durum akışı
 ```
-Taslak  ──(iç: mail gönder / 'Müşteri Portalına Gönder')──▶  Gönderildi
+Taslak  ──(iç: mail gönder / 'Müşteri Portalına Gönder')──▶  Onay Bekleniyor
                                                               │
                               (müşteri portalı)              ├─▶ Onaylandı
                                                               └─▶ Reddedildi
 ```
 - **Taslak**: yalnızca iç portalda; müşteride görünmez.
-- **Gönderildi**: müşteri portalında görünür + karar verebilir.
+- **Onay Bekleniyor**: müşteri portalında görünür + karar verebilir.
 - **Onaylandı/Reddedildi**: kilitli; müşteri portalı yalnızca gösterir.
 
 ## 10. Güvenlik notları
@@ -195,7 +195,7 @@ Taslak  ──(iç: mail gönder / 'Müşteri Portalına Gönder')──▶  Gö
 ---
 
 ### Özet
-- **Aktarım yok** — aynı DB. Teklif `TeklifDurum='Gönderildi'` olunca müşteri portalında belirir.
+- **Aktarım yok** — aynı DB. Teklif `TeklifDurum='Onay Bekleniyor'` olunca müşteri portalında belirir.
 - **Tek kaynak**: `TeklifBaslik` / `TeklifKalem`. Müşteri portalı bunları okur, onay/red'i
   `TeklifDurum` + `TeklifOnayLog`'a yazar.
 - **Kod bağlanmaz**; format **kopyalanır**. Raporlar için de aynı desen uygulanacak.

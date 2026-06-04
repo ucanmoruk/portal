@@ -72,7 +72,7 @@ const PB_OPTIONS = ["TRY", "USD", "EUR"];
 
 const DURUM_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   Taslak:      { label: "Taslak",      color: "#6e6e73", bg: "#f5f5f7" },
-  Gönderildi:  { label: "Gönderildi",  color: "#0071e3", bg: "#e8f0fe" },
+  "Onay Bekleniyor": { label: "Onay Bekleniyor", color: "#9a6700", bg: "#fff3cd" },
   Onaylandı:   { label: "Onaylandı",   color: "#1a7f4b", bg: "#e6f6ee" },
   Reddedildi:  { label: "Reddedildi",  color: "#c0392b", bg: "#fdecea" },
 };
@@ -486,7 +486,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
       const r = await fetch(`/api/teklifler/${t.ID}/portal-gonder`, { method: "POST" });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Gönderilemedi.");
-      setData(prev => prev.map(x => x.ID === t.ID ? { ...x, TeklifDurum: j.teklifDurum || "Gönderildi" } : x));
+      setData(prev => prev.map(x => x.ID === t.ID ? { ...x, TeklifDurum: j.teklifDurum || "Onay Bekleniyor" } : x));
     } catch (e: any) {
       alert(e.message);
     } finally {
@@ -543,7 +543,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
       const j = await r.json();
       if (!r.ok) { setMailErr(j.error || "Gönderilemedi."); return; }
       setMailOk(true);
-      setData(prev => prev.map(t => t.ID === mailTarget.ID && t.TeklifDurum === "Taslak" ? { ...t, TeklifDurum: "Gönderildi" } : t));
+      setData(prev => prev.map(t => t.ID === mailTarget.ID && t.TeklifDurum === "Taslak" ? { ...t, TeklifDurum: "Onay Bekleniyor" } : t));
     } catch { setMailErr("Sunucu hatası."); }
     finally   { setMailSending(false); }
   }
@@ -628,7 +628,9 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                       {search ? "Arama sonucu bulunamadı." : "Henüz teklif oluşturulmamış."}
                     </td></tr>
                   : data.map(t => {
-                      const durumCfg = DURUM_LABELS[t.TeklifDurum] ?? DURUM_LABELS.Taslak;
+                      // Eski 'Gönderildi' verisi → 'Onay Bekleniyor' olarak göster
+                      const durumKey = t.TeklifDurum === "Gönderildi" ? "Onay Bekleniyor" : t.TeklifDurum;
+                      const durumCfg = DURUM_LABELS[durumKey] ?? DURUM_LABELS.Taslak;
                       return (
                         <tr key={t.ID}>
                           <td className={styles.tdMono} style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
@@ -1156,7 +1158,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                   <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
                   <p style={{ fontWeight: 600, fontSize: 16 }}>Mail başarıyla gönderildi.</p>
                   <p style={{ color: "var(--color-text-tertiary)", marginTop: 6 }}>
-                    Teklif durumu &quot;Gönderildi&quot; olarak güncellendi.
+                    Teklif durumu &quot;Onay Bekleniyor&quot; olarak güncellendi.
                   </p>
                   <button className={styles.saveBtn} style={{ marginTop: 20 }} onClick={() => setMailTarget(null)}>Kapat</button>
                 </div>

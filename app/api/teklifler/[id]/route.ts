@@ -87,7 +87,7 @@ export async function PATCH(
     return Response.json({ error: "Geçersiz ID" }, { status: 400 });
   }
 
-  const VALID = ["Taslak", "Gönderildi", "Onaylandı", "Reddedildi"];
+  const VALID = ["Taslak", "Onay Bekleniyor", "Onaylandı", "Reddedildi", "Gönderildi"];
   const body = await request.json();
   const { teklifDurum } = body;
 
