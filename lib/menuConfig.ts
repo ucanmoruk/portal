@@ -40,6 +40,8 @@ export const MENU_TREE: MenuItem[] = [
       { key: "musteriler.musteri-listesi",  label: "Müşteri Listesi",   href: "/musteriler/musteri-listesi"  },
       { key: "musteriler.teklif-listesi",   label: "Teklif Listesi",    href: "/musteriler/teklif-listesi"   },
       { key: "musteriler.proforma-listesi", label: "Proforma Listesi",  href: "/musteriler/proforma-listesi" },
+      { key: "musteriler.analiz-talepleri", label: "Analiz Talepleri",  href: "/musteriler/analiz-talepleri" },
+      { key: "musteriler.destek-talepleri", label: "Destek Talepleri",  href: "/musteriler/destek-talepleri" },
       { key: "musteriler.fatura-takip",     label: "Fatura Takip",      href: "/musteriler/fatura-takip"     },
     ],
   },

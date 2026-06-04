@@ -40,7 +40,8 @@ export async function GET(
           ISNULL(t.TeklifKonusu, 'Fiyat teklifimiz') AS TeklifKonusu,
           ISNULL(t.TeklifVeren,  '')               AS TeklifVeren,
           ISNULL(t.KdvOran, 20)                    AS KdvOran,
-          ISNULL(t.GenelIskonto, 0)                AS GenelIskonto
+          ISNULL(t.GenelIskonto, 0)                AS GenelIskonto,
+          ISNULL(t.KisaAciklama, '')               AS KisaAciklama
         FROM TeklifBaslik t
         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) m ON m.ID = t.MusteriID
         WHERE t.ID = @ID
@@ -127,7 +128,7 @@ export async function PUT(
   try {
     const body = await request.json();
     const {
-      musteriId, satirlar, notlar, teklifKonusu, teklifVeren, kdvOran, genelIskonto,
+      musteriId, satirlar, notlar, teklifKonusu, kisaAciklama, teklifVeren, kdvOran, genelIskonto,
       isRevision = false,         // Yeni: revizyon mı düzeltme mi
       revisionReason = "",        // Yeni: revizyon açıklaması
     } = body;
@@ -167,6 +168,7 @@ export async function PUT(
       .input("Toplam",       parseFloat(toplam.toFixed(2)))
       .input("Notlar",       notlar        || null)
       .input("TeklifKonusu", teklifKonusu  || "Fiyat teklifimiz")
+      .input("KisaAciklama", kisaAciklama  || "Fiyat teklifimiz")
       .input("TeklifVeren",   teklifVeren   || null)
       .input("KdvOran",       parseInt(kdvOran) || 20)
       .input("GenelIskonto",  parseFloat(genelIskonto) || 0)
@@ -174,7 +176,7 @@ export async function PUT(
       .query(`
         UPDATE TeklifBaslik
         SET MusteriID = @MusteriID, Toplam = @Toplam, Notlar = @Notlar,
-            TeklifKonusu = @TeklifKonusu, TeklifVeren = @TeklifVeren,
+            TeklifKonusu = @TeklifKonusu, KisaAciklama = @KisaAciklama, TeklifVeren = @TeklifVeren,
             KdvOran = @KdvOran, GenelIskonto = @GenelIskonto,
             RevNo = @RevNo
         WHERE ID = @ID

@@ -144,6 +144,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   const [musteri,      setMusteri]      = useState<MusteriOpt | null>(null);
   const [satirlar,     setSatirlar]     = useState<Satir[]>([]);
   const [teklifNotlar, setTeklifNotlar] = useState("");
+  const [kisaAciklama, setKisaAciklama] = useState("Fiyat teklifimiz");
   const [kdvOran,      setKdvOran]      = useState("20");
   const [genelIskonto, setGenelIskonto] = useState("0");
   // Teklif global para birimi — değiştiğinde TÜM satırların paraBirimi'ni override eder.
@@ -307,6 +308,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   function resetModal() {
     setMusteri(null); setMusteriQ(""); setMusteriOpts([]);
     setSatirlar([]); setTeklifNotlar("");
+    setKisaAciklama("Fiyat teklifimiz");
     setKdvOran("20"); setGenelIskonto("0");
     setTeklifParaBirimi("TRY");
     setAddMode(null); setHizmetQ(""); setHizmetOpts([]); setPaketler([]);
@@ -322,6 +324,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
     setMusteri({ ID: t.MusteriID, Ad: t.MusteriAd });
     setMusteriQ(t.MusteriAd); setMusteriOpts([]);
     setSatirlar([]); setTeklifNotlar(t.Notlar || "");
+    setKisaAciklama("Fiyat teklifimiz");
     setKdvOran("20"); setGenelIskonto("0");
     setAddMode(null); setHizmetQ(""); setHizmetOpts([]); setPaketler([]);
     setSaveErr(""); setRevizeOfId(null);
@@ -336,6 +339,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
         setKdvOran(String(j.header.KdvOran ?? 20));
         setGenelIskonto(String(j.header.GenelIskonto ?? 0));
         setTeklifNotlar(j.header.Notlar || "");
+        setKisaAciklama(j.header.KisaAciklama || "Fiyat teklifimiz");
       }
       if (j.satirlar) {
         const apiSatirlar = j.satirlar as TeklifApiSatir[];
@@ -364,6 +368,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
     setMusteri({ ID: t.MusteriID, Ad: t.MusteriAd });
     setMusteriQ(t.MusteriAd); setMusteriOpts([]);
     setSatirlar([]); setTeklifNotlar(t.Notlar || "");
+    setKisaAciklama("Fiyat teklifimiz");
     setKdvOran("20"); setGenelIskonto("0");
     setAddMode(null); setHizmetQ(""); setHizmetOpts([]); setPaketler([]);
     setSaveErr(""); setRevizeOfId(t.ID);
@@ -374,6 +379,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
         setKdvOran(String(j.header.KdvOran ?? 20));
         setGenelIskonto(String(j.header.GenelIskonto ?? 0));
         setTeklifNotlar(j.header.Notlar || "");
+        setKisaAciklama(j.header.KisaAciklama || "Fiyat teklifimiz");
       }
       if (j.satirlar) setSatirlar((j.satirlar as TeklifApiSatir[]).map((s) => ({
         _key: nextKey(), hizmetId: s.HizmetID, hizmetAdi: s.HizmetAdi || "",
@@ -427,6 +433,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
       })),
       notlar:       teklifNotlar,
       teklifKonusu: "Fiyat teklifimiz",
+      kisaAciklama: (kisaAciklama || "").trim() || "Fiyat teklifimiz",
       teklifVeren:  userName,
       kdvOran:      kdvOran,
       genelIskonto: genelIskonto,
@@ -1054,6 +1061,14 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                     })()}
                   </div>
                 )}
+              </section>
+
+              {/* Kısa Açıklama — sadece müşteri portalında tablo özetinde görünür */}
+              <section>
+                <label style={labelStyle}>Kısa Açıklama <span style={{ fontWeight: 400, color: "var(--color-text-tertiary)" }}>(müşteri portalında listede görünür)</span></label>
+                <input style={inputStyle}
+                  placeholder="Fiyat teklifimiz"
+                  value={kisaAciklama} onChange={e => setKisaAciklama(e.target.value)} />
               </section>
 
               {/* Teklif Notu */}

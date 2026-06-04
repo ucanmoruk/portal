@@ -23,7 +23,8 @@
 | `Notlar` | NVARCHAR(MAX) | Teklif notu |
 | `TeklifDurum` | NVARCHAR(20) | **Durum kapısı**: `Taslak` / `Onay Bekleniyor` / `Onaylandı` / `Reddedildi` |
 | `KdvOran` | INT | KDV oranı (%) |
-| `TeklifKonusu` | NVARCHAR(500) | Teklif konusu |
+| `TeklifKonusu` | NVARCHAR(500) | Teklif konusu (PDF/mail'de kullanılır) |
+| **`KisaAciklama`** | NVARCHAR(500) | **Müşteri portalı liste açıklaması.** Default `"Fiyat teklifimiz"`. Print/mail'de KULLANILMAZ — yalnızca müşteri portalı tablosunda özet/açıklama olarak gösterilir (örn. *"2026 yıllık test fiyatımız"*). |
 | `TeklifVeren` | NVARCHAR(200) | Teklifi veren (iç) |
 | `GenelIskonto` | DECIMAL(5,2) | Genel iskonto (%) |
 | `Durum` | NVARCHAR(20) | Kayıt durumu: `Aktif` / `Pasif` (soft-delete) |
@@ -84,6 +85,7 @@ SELECT
   t.ID, t.DisTeklifKodu, t.RevNo, t.TeklifDurum,
   FORMAT(t.Tarih, 'dd.MM.yyyy') AS Tarih,
   t.TeklifKonusu,
+  ISNULL(t.KisaAciklama, N'Fiyat teklifimiz') AS KisaAciklama,  -- liste açıklaması
   -- KDV/iskonto dahil genel toplam istenirse kalemlerden hesaplanır (bkz. §6)
   t.Toplam
 FROM TeklifBaslik t

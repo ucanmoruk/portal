@@ -31,6 +31,7 @@ async function ensureTables() {
       TeklifDurum   NVARCHAR(20)  NOT NULL DEFAULT 'Taslak',
       KdvOran       INT           NOT NULL DEFAULT 20,
       TeklifKonusu  NVARCHAR(500) NULL,
+      KisaAciklama  NVARCHAR(500) NULL,           -- müşteri portalında liste açıklaması (print/mail'de kullanılmaz)
       TeklifVeren   NVARCHAR(200) NULL,
       GenelIskonto  DECIMAL(5,2)  NOT NULL DEFAULT 0,
       Durum         NVARCHAR(20)  NOT NULL DEFAULT 'Aktif',
@@ -169,12 +170,13 @@ export async function GET(request: NextRequest) {
           t.Toplam, t.Notlar, t.Durum,
           ISNULL(t.TeklifDurum, 'Taslak') AS TeklifDurum,
           ISNULL(t.OlusturanAd, '') AS OlusturanAd,
+          ISNULL(t.KisaAciklama, '') AS KisaAciklama,
           COUNT(k.ID) AS HizmetSayisi
         FROM TeklifBaslik t
         LEFT JOIN Firma m ON m.ID = t.MusteriID
         LEFT JOIN TeklifKalem k ON k.TeklifID = t.ID
         WHERE t.Durum = 'Aktif' ${searchClause}
-        GROUP BY t.ID, t.TeklifNo, t.DisTeklifKodu, t.RevNo, t.Tarih, t.MusteriID, m.Firma_Adi, t.Toplam, t.Notlar, t.Durum, t.TeklifDurum, t.OlusturanAd
+        GROUP BY t.ID, t.TeklifNo, t.DisTeklifKodu, t.RevNo, t.Tarih, t.MusteriID, m.Firma_Adi, t.Toplam, t.Notlar, t.Durum, t.TeklifDurum, t.OlusturanAd, t.KisaAciklama
         ORDER BY t.ID DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
@@ -205,7 +207,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { musteriId, satirlar, notlar, revizeOfId, teklifKonusu, teklifVeren, kdvOran, genelIskonto, revisionReason } = body;
+    const { musteriId, satirlar, notlar, revizeOfId, teklifKonusu, kisaAciklama, teklifVeren, kdvOran, genelIskonto, revisionReason } = body;
 
     if (!musteriId) {
       return Response.json({ error: "Müşteri seçimi zorunludur." }, { status: 400 });
@@ -251,15 +253,16 @@ export async function POST(request: Request) {
       .input("Toplam",       parseFloat(toplam.toFixed(2)))
       .input("Notlar",       notlar        || null)
       .input("TeklifKonusu", teklifKonusu  || "Fiyat teklifimiz")
+      .input("KisaAciklama", kisaAciklama  || "Fiyat teklifimiz")
       .input("TeklifVeren",  teklifVeren   || null)
       .input("KdvOran",      parseInt(kdvOran) || 20)
       .input("GenelIskonto", parseFloat(genelIskonto) || 0)
       .input("KID",          userId ? parseInt(userId) : null)
       .input("OlusturanAd",  userName || null)
       .query(`
-        INSERT INTO TeklifBaslik (TeklifNo, DisTeklifKodu, RevNo, MusteriID, Tarih, Toplam, Notlar, TeklifKonusu, TeklifVeren, KdvOran, GenelIskonto, Durum, KID, OlusturanAd)
+        INSERT INTO TeklifBaslik (TeklifNo, DisTeklifKodu, RevNo, MusteriID, Tarih, Toplam, Notlar, TeklifKonusu, KisaAciklama, TeklifVeren, KdvOran, GenelIskonto, Durum, KID, OlusturanAd)
         OUTPUT INSERTED.ID
-        VALUES (@TeklifNo, @DisTeklifKodu, @RevNo, @MusteriID, @Tarih, @Toplam, @Notlar, @TeklifKonusu, @TeklifVeren, @KdvOran, @GenelIskonto, 'Aktif', @KID, @OlusturanAd)
+        VALUES (@TeklifNo, @DisTeklifKodu, @RevNo, @MusteriID, @Tarih, @Toplam, @Notlar, @TeklifKonusu, @KisaAciklama, @TeklifVeren, @KdvOran, @GenelIskonto, 'Aktif', @KID, @OlusturanAd)
       `);
 
     const teklifId = insertRes.recordset[0].ID;
