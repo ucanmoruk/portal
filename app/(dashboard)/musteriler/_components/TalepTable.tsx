@@ -207,7 +207,6 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
               <tr>
                 <th style={{ width: 170 }}>Talep No</th>
                 <th style={{ width: 110 }}>Tarih</th>
-                <th style={{ width: 130 }}>Firma Kodu</th>
                 <th>Talep Oluşturan</th>
                 <th>Müşteri</th>
                 <th style={{ width: 160, textAlign: "center" }}>Durum</th>
@@ -216,11 +215,11 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
             </thead>
             <tbody>
               {loading
-                ? <tr><td colSpan={7} className={styles.empty}>Yükleniyor…</td></tr>
+                ? <tr><td colSpan={6} className={styles.empty}>Yükleniyor…</td></tr>
                 : err
-                  ? <tr><td colSpan={7} className={styles.empty}>{err}</td></tr>
+                  ? <tr><td colSpan={6} className={styles.empty}>{err}</td></tr>
                   : data.length === 0
-                    ? <tr><td colSpan={7} className={styles.empty}>
+                    ? <tr><td colSpan={6} className={styles.empty}>
                         {search ? "Arama sonucu bulunamadı." : "Kayıt bulunamadı."}
                       </td></tr>
                     : data.map(t => {
@@ -236,7 +235,6 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
                               )}
                             </td>
                             <td className={styles.tdSecondary}>{t.Tarih}</td>
-                            <td className={styles.tdMono} style={{ fontSize: 12 }}>{t.FirmaKodu || "—"}</td>
                             <td className={styles.tdName}>
                               {t.TalepOlusturan || <em style={{ color: "var(--color-text-tertiary)" }}>—</em>}
                             </td>
