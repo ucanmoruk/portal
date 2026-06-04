@@ -192,6 +192,56 @@ Taslak  ──(iç: mail gönder / 'Müşteri Portalına Gönder')──▶  Ona
   (iç portal Firma yazımını etkilemez; ayrı bir parola kolonu/şeması düşünülebilir).
 - Tüm yazma işlemleri (onay/red) **parametreli** sorgu ile (SQL injection'a karşı).
 
+## 11. Onay sayfası (müşteri portalı)  ← KOPYALANACAK BİLEŞEN
+Müşterinin teklifi **onayladığı / reddettiği** kart. İç portaldaki e-posta/token akışı
+ayrıdır; müşteri portalında **güvenlik = Firma oturumu + (`MusteriID = @firmaId`) kontrolü**
+→ ayrı token GEREKMEZ.
+
+**Kopyalanacak dosya:** `app/teklif-print/[id]/TeklifOnayDocument.tsx`
+(saf sunum + iki callback; DB/session bağımlılığı yok).
+
+### a) UI (müşteri portalı sayfası)
+```tsx
+import TeklifOnayDocument, { type OnayKarar } from "./TeklifOnayDocument";
+
+// §4'teki sorguyla teklifi çek (MusteriID = firmaId ŞART). Karar verilmişse `karar` doldur.
+<TeklifOnayDocument
+  teklif={{ no: "ÜGAM-26-XXXXX/00", musteriAd, musteriYetkili, tarih, durum }}
+  karar={alreadyDecided ? { aksiyon: "Onaylandı", tarih, firmaAd } : null}
+  onApprove={() => approveAction(teklifId, "Onaylandı")}
+  onReject={(aciklama) => approveAction(teklifId, "Reddedildi", aciklama)}
+/>
+```
+
+### b) Server action — onay/red yazımı (tek-kullanım + sahiplik guard)
+```sql
+-- 0) Tek-kullanım + sahiplik: yalnızca BU müşterinin, HÂLÂ bekleyen teklifi karara bağlanır.
+--    rowsAffected = 0 ise: ya başkasının teklifi ya da zaten karar verilmiş → reddet.
+UPDATE TeklifBaslik
+SET TeklifDurum = @karar                 -- 'Onaylandı' | 'Reddedildi'
+WHERE ID = @teklifId
+  AND MusteriID = @firmaId
+  AND TeklifDurum = N'Onay Bekleniyor';
+
+-- 1) Log (iç portalın 'Geçmiş' sekmesinde görünür; @disKodEtiket = ÜGAM-26-XXXXX/00)
+INSERT INTO TeklifOnayLog
+  (TeklifID, TeklifNo, Aksiyon, Aciklama, IpAdresi, MusteriAd, MusteriEmail, MusteriYetkili, Tarih)
+VALUES
+  (@teklifId, @disKodEtiket, @karar, @aciklama, @ip, @firmaAd, @firmaMail, @firmaYetkili, GETDATE());
+```
+- `@karar = 'Reddedildi'` ise `@aciklama` (red/revizyon sebebi) **zorunlu** tutulması önerilir.
+- `UPDATE` 0 satır etkilediyse forma "bu teklif için karar zaten verilmiş / yetkiniz yok"
+  mesajı dön (race ve yetki koruması tek sorguda).
+
+### c) Bildirim (opsiyonel)
+İç portal, müşteri kararını `TeklifDurum` + `TeklifOnayLog`'tan **otomatik** görür (ek iş yok).
+İstersen müşteri portalı da firmaya/şirkete e-posta atabilir (iç portaldaki `onay` route'unun
+yaptığı gibi) — zorunlu değil.
+
+### d) Durumlar
+- **Onay Bekleniyor** → onay formu (Onayla / Reddet).
+- **Onaylandı / Reddedildi** → `karar` dolu → "karar verilmiş" kartı (form kapalı, tek-kullanım).
+
 ---
 
 ### Özet
