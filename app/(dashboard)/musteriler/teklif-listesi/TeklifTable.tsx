@@ -475,6 +475,25 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
     setData(prev => prev.map(t => t.ID === id ? { ...t, TeklifDurum: teklifDurum } : t));
   }
 
+  // ── Müşteri portalına gönder (e-postasız) ───────────────────────────────────
+  const [portalSendingId, setPortalSendingId] = useState<number | null>(null);
+  async function sendToPortal(t: Teklif) {
+    if (!window.confirm(
+      `Bu teklif müşteri portalında görünür olacak:\n\n${t.MusteriAd || "—"}  ·  ${disLabel(t.DisTeklifKodu, t.RevNo)}\n\nGönderilsin mi?`
+    )) return;
+    setPortalSendingId(t.ID);
+    try {
+      const r = await fetch(`/api/teklifler/${t.ID}/portal-gonder`, { method: "POST" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Gönderilemedi.");
+      setData(prev => prev.map(x => x.ID === t.ID ? { ...x, TeklifDurum: j.teklifDurum || "Gönderildi" } : x));
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setPortalSendingId(null);
+    }
+  }
+
   // ── mail modal ────────────────────────────────────────────────────────────
   async function openMail(t: Teklif) {
     setMailTarget(t); setMailErr(""); setMailOk(false);
@@ -678,6 +697,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                               <button className={styles.editBtn}   onClick={() => openEdit(t)}         title="Düzenle">✏️</button>
                               <button className={styles.editBtn}   onClick={() => openMail(t)}          title="Mail gönder">✉️</button>
                               <button className={styles.editBtn}   onClick={() => window.open(`/teklif-print/${t.ID}`, "_blank")} title="Teklif önizleme / PDF indir">🖨️</button>
+                              <button className={styles.editBtn}   onClick={() => sendToPortal(t)} disabled={portalSendingId === t.ID} title="Müşteri portalına gönder">{portalSendingId === t.ID ? "⏳" : "📤"}</button>
                               <button className={styles.deleteBtn} onClick={() => setDeleteTarget(t)}   title="Sil">🗑</button>
                             </div>
                           </td>
