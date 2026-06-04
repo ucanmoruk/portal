@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, ChevronDown, ClipboardCheck, ListChecks, PackageSearch, Ruler, Search, Shapes, Users, X } from "lucide-react";
@@ -1105,8 +1106,8 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
         
       </div>
 
-      <section className="overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 bg-slate-50" style={{ padding: "clamp(16px, 4vw, 20px) clamp(16px, 4vw, 24px)" }}>
+      <section className="rounded-[14px] border border-slate-200 bg-white shadow-sm">
+        <div className="rounded-t-[14px] border-b border-slate-200 bg-slate-50" style={{ padding: "clamp(16px, 4vw, 20px) clamp(16px, 4vw, 24px)" }}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-[1rem] font-extrabold leading-6 text-slate-900">BS EN 71-1:2026 Test Karar Aracı</h2>
@@ -1845,12 +1846,56 @@ function RequirementMultiSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [mounted, setMounted] = useState(false);
+  const [popupRect, setPopupRect] = useState<{ left: number; top: number; width: number; maxHeight: number; placement: "below" | "above" }>({ left: 0, top: 0, width: 0, maxHeight: 560, placement: "below" });
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  // Popup konumunu butona göre hesapla — viewport sınırlarını dikkate al.
+  // Altta yeterli yer yoksa üste aç. maxHeight viewport'a göre dinamik.
+  useEffect(() => {
+    if (!open) return;
+    const computePosition = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const gap = 8;
+      const safetyMargin = 16;
+      const spaceBelow = vh - rect.bottom - gap - safetyMargin;
+      const spaceAbove = rect.top - gap - safetyMargin;
+      const desired = 560;
+      const placement: "below" | "above" =
+        spaceBelow >= 280 || spaceBelow >= spaceAbove ? "below" : "above";
+      const maxHeight = Math.max(220, Math.min(desired, placement === "below" ? spaceBelow : spaceAbove));
+      const top = placement === "below" ? rect.bottom + gap : Math.max(safetyMargin, rect.top - gap - maxHeight);
+      setPopupRect({
+        left: rect.left,
+        top,
+        width: rect.width,
+        maxHeight,
+        placement,
+      });
+    };
+    computePosition();
+    window.addEventListener("scroll", computePosition, true);
+    window.addEventListener("resize", computePosition);
+    return () => {
+      window.removeEventListener("scroll", computePosition, true);
+      window.removeEventListener("resize", computePosition);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const handleClick = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const insideTrigger = containerRef.current?.contains(target);
+      const insidePopup = popupRef.current?.contains(target);
+      if (!insideTrigger && !insidePopup) {
         setOpen(false);
       }
     };
@@ -1900,6 +1945,7 @@ function RequirementMultiSelect({
       )}
 
       <button
+        ref={triggerRef}
         type="button"
         aria-expanded={open}
         aria-haspopup="listbox"
@@ -1922,9 +1968,18 @@ function RequirementMultiSelect({
         <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
-      {open && (
-        <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-          <div className="border-b border-slate-200" style={{ padding: "12px 14px" }}>
+      {open && mounted && createPortal(
+        <div
+          ref={popupRef}
+          className="fixed z-[1000] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+          style={{
+            left: popupRect.left,
+            top: popupRect.top,
+            width: popupRect.width,
+            maxHeight: popupRect.maxHeight,
+          }}
+        >
+          <div className="shrink-0 border-b border-slate-200" style={{ padding: "12px 14px" }}>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
@@ -1938,7 +1993,7 @@ function RequirementMultiSelect({
               />
             </div>
           </div>
-          <div className="max-h-[420px] overflow-y-auto" role="listbox" aria-multiselectable="true">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" role="listbox" aria-multiselectable="true">
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
                 <Search className="h-5 w-5 text-slate-300" />
@@ -1973,7 +2028,7 @@ function RequirementMultiSelect({
               })
             )}
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50" style={{ padding: "12px 16px" }}>
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50" style={{ padding: "12px 16px" }}>
             <span className="text-xs font-semibold text-slate-600">
               {selected.length} seçili · {filtered.length} sonuç
             </span>
@@ -1998,7 +2053,8 @@ function RequirementMultiSelect({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
