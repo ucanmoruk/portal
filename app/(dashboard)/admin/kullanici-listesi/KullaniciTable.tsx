@@ -88,7 +88,11 @@ export default function KullaniciTable() {
       if (!usersRes.ok) throw new Error((await usersRes.json()).error || "Kullanıcı listesi alınamadı");
       if (!birimlerRes.ok) throw new Error((await birimlerRes.json()).error || "Birim listesi alınamadı");
       setUsers(await usersRes.json());
-      setBirimler(await birimlerRes.json());
+      // Hizmet form'una eklenen 3 lab birimi Admin kullanıcı formunda görünmesin
+      // (kullanıcı isteği). Lab birimleri Hizmet form'unda whitelist'le filtreli.
+      const HIDE_FROM_USER_FORM = new Set(["Mikrobiyoloji", "Kimyasal", "Dış Laboratuvar"]);
+      const allBirimler = (await birimlerRes.json()) as Birim[];
+      setBirimler(allBirimler.filter(b => !HIDE_FROM_USER_FORM.has(b.Birim)));
     } catch (e: any) {
       setError(e.message);
     } finally {
