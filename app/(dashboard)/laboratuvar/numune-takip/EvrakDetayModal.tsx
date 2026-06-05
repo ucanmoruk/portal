@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EvrakDetayModal — Numune Kabul evrakına bağlı eşleştirmeler.
@@ -24,11 +24,34 @@ interface TalepEs {
   TalepNo: string; IcTakipNo: string; Durum: string; Tarih: string; FirmaAd: string;
   EslestirmeTarihi: string; EslestirenAd: string;
 }
+interface DosyaEs {
+  EslestirmeID: number;
+  FileName: string;
+  MimeType: string;
+  FileSize: number;
+  EslestirenAd: string;
+  EslestirmeTarihi: string;
+}
 interface Eslestirmeler {
   teklifler: TeklifEs[];
   analizTalepleri: TalepEs[];
   destekTalepleri: TalepEs[];
-  dosyalar: { EslestirmeID: number; Aciklama: string; EslestirenAd: string; EslestirmeTarihi: string }[];
+  dosyalar: DosyaEs[];
+}
+
+function fmtSize(n: number) {
+  if (!n || n < 1024) return `${n || 0} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+function fileIcon(mime: string) {
+  if (!mime) return "📎";
+  if (mime.startsWith("image/")) return "🖼";
+  if (mime === "application/pdf") return "📄";
+  if (mime.includes("word") || mime.endsWith("docx")) return "📝";
+  if (mime.includes("excel") || mime.endsWith("xlsx") || mime.endsWith("csv")) return "📊";
+  if (mime.startsWith("video/")) return "🎬";
+  return "📎";
 }
 
 interface TeklifSec { ID: number; DisTeklifKodu: string | null; TeklifNo: number | null; RevNo: number;
@@ -186,6 +209,8 @@ export default function EvrakDetayModal({ evrakNo, onClose }: { evrakNo: string;
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [secici, setSecici] = useState<SeciciTur | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
@@ -223,6 +248,24 @@ export default function EvrakDetayModal({ evrakNo, onClose }: { evrakNo: string;
       if (!r.ok) { alert("Kaldırılamadı."); return; }
       load();
     } catch (e: any) { alert(e?.message || "Kaldırılamadı."); }
+  };
+
+  const handleUpload = async (file: File) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { alert("Dosya çok büyük (max 10 MB)."); return; }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(`/api/evrak/${encodeURIComponent(evrakNo)}/dosya`, { method: "POST", body: fd });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { alert(j.error || "Yüklenemedi."); return; }
+      load();
+    } catch (e: any) { alert(e?.message || "Yüklenemedi."); }
+    finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   return (
@@ -285,8 +328,34 @@ export default function EvrakDetayModal({ evrakNo, onClose }: { evrakNo: string;
                   <Group title="Dosyalar" count={data.dosyalar.length}>
                     {data.dosyalar.length === 0 ? <Empty>Henüz dosya eklenmedi.</Empty>
                       : data.dosyalar.map(d => (
-                          <div key={d.EslestirmeID} style={{ padding: "10px 12px", border: "1px solid var(--color-border-light)", borderRadius: 8, marginBottom: 6, fontSize: 13 }}>
-                            📎 {d.Aciklama || "(adsız)"}
+                          <div key={d.EslestirmeID} style={{
+                            display: "flex", alignItems: "center", gap: 10,
+                            padding: "10px 12px", border: "1px solid var(--color-border-light)",
+                            borderRadius: 8, marginBottom: 6,
+                          }}>
+                            <a
+                              href={`/api/evrak/${encodeURIComponent(evrakNo)}/dosya/${d.EslestirmeID}`}
+                              target="_blank" rel="noopener noreferrer"
+                              style={{ flex: 1, minWidth: 0, textDecoration: "none", color: "inherit", display: "flex", alignItems: "center", gap: 10 }}
+                              title="Yeni sekmede aç"
+                            >
+                              <span style={{ fontSize: 18 }}>{fileIcon(d.MimeType)}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 600, fontSize: 13, color: "var(--color-accent)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {d.FileName} ↗
+                                </div>
+                                <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
+                                  {fmtSize(d.FileSize)} · {d.EslestirenAd || "—"} · {d.EslestirmeTarihi}
+                                </div>
+                              </div>
+                            </a>
+                            <a
+                              href={`/api/evrak/${encodeURIComponent(evrakNo)}/dosya/${d.EslestirmeID}?download=1`}
+                              title="İndir"
+                              style={{ fontSize: 14, padding: "4px 8px", textDecoration: "none", color: "var(--color-text-secondary)" }}
+                            >⬇</a>
+                            <button onClick={() => remove(d.EslestirmeID)} title="Kaldır"
+                              style={{ background: "transparent", border: "none", cursor: "pointer", color: "#c0392b", fontSize: 14, padding: "2px 6px" }}>✕</button>
                           </div>
                         ))}
                   </Group>
@@ -300,7 +369,14 @@ export default function EvrakDetayModal({ evrakNo, onClose }: { evrakNo: string;
             <ActionBtn onClick={() => setSecici("Teklif")} icon="💼" label="Teklif Eşleştir" />
             <ActionBtn onClick={() => setSecici("AnalizTalep")} icon="🔬" label="Analiz Talep Eşleştir" />
             <ActionBtn onClick={() => setSecici("DestekTalep")} icon="📞" label="Destek Talebi Eşleştir" />
-            <ActionBtn onClick={() => alert("Dosya yükleme yakında.")} icon="📎" label="Dosya Yükle" disabled />
+            <ActionBtn
+              onClick={() => fileInputRef.current?.click()}
+              icon={uploading ? "⏳" : "📎"}
+              label={uploading ? "Yükleniyor…" : "Dosya Yükle"}
+              disabled={uploading}
+            />
+            <input ref={fileInputRef} type="file" hidden
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
           </div>
         </div>
       </div>

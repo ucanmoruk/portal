@@ -88,10 +88,14 @@ export async function GET(
       ORDER BY e.ID DESC
     `);
 
-    // Dosyalar
+    // Dosyalar (FileData hariç — sadece meta)
     const dosyaRes = await pool.request().input("e", evrakNo).query(`
-      SELECT ID AS EslestirmeID, Aciklama, ISNULL(EslestirenAd, '') AS EslestirenAd,
-             FORMAT(EslestirmeTarihi, 'dd.MM.yyyy HH:mm') AS EslestirmeTarihi
+      SELECT ID AS EslestirmeID,
+             ISNULL(FileName, ISNULL(Aciklama, '(adsız)')) AS FileName,
+             ISNULL(MimeType, '')                          AS MimeType,
+             ISNULL(FileSize, 0)                           AS FileSize,
+             ISNULL(EslestirenAd, '')                      AS EslestirenAd,
+             FORMAT(EslestirmeTarihi, 'dd.MM.yyyy HH:mm')  AS EslestirmeTarihi
       FROM NKR_EvrakEslestirme
       WHERE EvrakNo = @e AND Tur = N'Dosya'
       ORDER BY ID DESC
