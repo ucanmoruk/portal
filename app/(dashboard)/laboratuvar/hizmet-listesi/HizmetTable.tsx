@@ -551,17 +551,23 @@ export default function HizmetTable() {
                 </div>
               </div>
 
-              {/* Satır 4: Bölüm */}
-              <div className={styles.formGroup} style={{ marginBottom: 14 }}>
-                <label>Bölüm</label>
-                <select
-                  value={editRow.BolumID != null ? String(editRow.BolumID) : ""}
-                  onChange={e => setEditRow(p => ({ ...p!, BolumID: e.target.value ? Number(e.target.value) : null }))}
-                >
-                  <option value="">— Seçilmedi —</option>
-                  {birimler.map(b => <option key={b.ID} value={b.ID}>{b.Birim}</option>)}
-                </select>
-              </div>
+              {/* Satır 4: Bölüm — yalnız 3 lab birimi (whitelist) */}
+              {(() => {
+                const HIZMET_BOLUM_WHITELIST = ["Mikrobiyoloji", "Kimyasal", "Dış Laboratuvar"];
+                const filtered = birimler.filter(b => HIZMET_BOLUM_WHITELIST.includes(b.Birim));
+                return (
+                  <div className={styles.formGroup} style={{ marginBottom: 14 }}>
+                    <label>Bölüm</label>
+                    <select
+                      value={editRow.BolumID != null ? String(editRow.BolumID) : ""}
+                      onChange={e => setEditRow(p => ({ ...p!, BolumID: e.target.value ? Number(e.target.value) : null }))}
+                    >
+                      <option value="">— Seçilmedi —</option>
+                      {filtered.map(b => <option key={b.ID} value={b.ID}>{b.Birim}</option>)}
+                    </select>
+                  </div>
+                );
+              })()}
 
               {/* Satır 5: Durum — sadece düzenlemede göster */}
               {!isNew && (
