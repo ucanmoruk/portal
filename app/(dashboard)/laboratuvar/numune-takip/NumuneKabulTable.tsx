@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import styles from "@/app/styles/table.module.css";
 import { printBarcodes, type BarcodeNumune } from "../yeni-numune/printBarcode";
+import EvrakDetayModal from "./EvrakDetayModal";
 
 // ── Tipler ──────────────────────────────────────────────────────
 interface NumuneItem {
@@ -96,6 +97,7 @@ export default function NumuneKabulTable() {
   const [selectedIds, setSelectedIds]       = useState<Set<number>>(new Set());
   const [printMenuEvrak, setPrintMenuEvrak] = useState<string | null>(null);
   const [invoiceGroup, setInvoiceGroup] = useState<EvrakGroup | null>(null);
+  const [detayEvrak, setDetayEvrak] = useState<string | null>(null);
   const [invoiceTeklifId, setInvoiceTeklifId] = useState("");
   const [invoiceOffers, setInvoiceOffers] = useState<TeklifOpt[]>([]);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
@@ -601,6 +603,18 @@ export default function NumuneKabulTable() {
                       <path fillRule="evenodd" d="M4 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4Zm0 2h12v8H4V6Zm3 5a1 1 0 0 1 1-1h4a1 1 0 1 1 0 2H8a1 1 0 0 1-1-1Zm1-3a1 1 0 0 0 0 2h2a1 1 0 0 0 0-2H8Z" clipRule="evenodd" />
                     </svg>
                   </button>
+                  {/* Eşleştirmeler / Detay popup */}
+                  <button
+                    className={styles.editBtn}
+                    title="Detay (eşleştirmeler)"
+                    onClick={() => setDetayEvrak(group.evrakNo)}
+                    style={{ color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
+                  >
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+                      <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+                      <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" clipRule="evenodd" />
+                    </svg>
+                  </button>
                 </div>
               </div>
 
@@ -801,6 +815,11 @@ export default function NumuneKabulTable() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Evrak Detayları / Eşleştirmeler Modal */}
+      {detayEvrak && (
+        <EvrakDetayModal evrakNo={detayEvrak} onClose={() => setDetayEvrak(null)} />
       )}
     </>
   );
