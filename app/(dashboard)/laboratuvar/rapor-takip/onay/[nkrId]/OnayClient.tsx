@@ -41,7 +41,10 @@ const formatTarih = (s: string | null | undefined) => {
 const formatDateTime = (s: string | null | undefined) => {
   if (!s) return "—";
   try {
-    const d = new Date(s);
+    // SQL Server DATETIME timezone'suz saklanır; mssql driver JSON'a Z eki
+    // ekleyerek UTC sanıyor → new Date() +3 saat ekler. Z'yi soyup local parse.
+    const cleaned = typeof s === "string" ? s.replace(/Z$/, "") : s;
+    const d = new Date(cleaned);
     if (Number.isNaN(d.getTime())) return String(s);
     return d.toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
   } catch { return String(s); }
