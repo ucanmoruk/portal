@@ -95,7 +95,12 @@ export async function GET(request: NextRequest) {
               LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) rt ON nd.ProjeID = rt.ID
               WHERE  n2.Evrak_No = n.Evrak_No AND n2.Durum = 'Aktif'
                 AND  rt.Ad IS NOT NULL
-            )                                         AS ProjeAd
+            )                                         AS ProjeAd,
+            CAST(CASE WHEN EXISTS (
+              SELECT 1 FROM NKR_EvrakEslestirme
+              WHERE EvrakNo = CAST(n.Evrak_No AS NVARCHAR(50))
+                AND Tur IN (N'Teklif', N'Dosya')
+            ) THEN 1 ELSE 0 END AS BIT)             AS HasEslestirme
           ${baseJoin}
           GROUP BY n.Evrak_No
           ORDER BY n.Evrak_No DESC
@@ -139,13 +144,14 @@ export async function GET(request: NextRequest) {
 
     // ── Merge ──
     const data = groups.map(g => ({
-      evrakNo:      g.Evrak_No,
-      tarih:        g.Tarih,
-      firmaAd:      g.FirmaAd,
-      projeAd:      g.ProjeAd,
-      numuneSayisi: g.NumuneSayisi,
-      odemeDurumu:  g.Odeme_Durumu,
-      numuneler:    numunesByEvrak[g.Evrak_No] ?? [],
+      evrakNo:        g.Evrak_No,
+      tarih:          g.Tarih,
+      firmaAd:        g.FirmaAd,
+      projeAd:        g.ProjeAd,
+      numuneSayisi:   g.NumuneSayisi,
+      odemeDurumu:    g.Odeme_Durumu,
+      hasEslestirme:  Boolean(g.HasEslestirme),
+      numuneler:      numunesByEvrak[g.Evrak_No] ?? [],
     }));
 
     return Response.json({ data, total, page, limit, totalPages: Math.ceil(total / limit) });

@@ -23,6 +23,7 @@ interface EvrakGroup {
   projeAd: string | null;
   numuneSayisi: number;
   odemeDurumu: string | null;
+  hasEslestirme: boolean;
   numuneler: NumuneItem[];
 }
 
@@ -603,12 +604,14 @@ export default function NumuneKabulTable() {
                       <path fillRule="evenodd" d="M4 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4Zm0 2h12v8H4V6Zm3 5a1 1 0 0 1 1-1h4a1 1 0 1 1 0 2H8a1 1 0 0 1-1-1Zm1-3a1 1 0 0 0 0 2h2a1 1 0 0 0 0-2H8Z" clipRule="evenodd" />
                     </svg>
                   </button>
-                  {/* Eşleştirmeler / Detay popup */}
+                  {/* Eşleştirmeler / Detay popup — Teklif veya Dosya eşlenmişse yeşil, aksi mavi */}
                   <button
                     className={styles.editBtn}
-                    title="Detay (eşleştirmeler)"
+                    title={group.hasEslestirme ? "Detay (eşleştirme var)" : "Detay (eşleştirmeler)"}
                     onClick={() => setDetayEvrak(group.evrakNo)}
-                    style={{ color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
+                    style={group.hasEslestirme
+                      ? { color: "#248a3d", border: "1px solid #34c75940" }
+                      : { color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
                   >
                     <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
                       <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
