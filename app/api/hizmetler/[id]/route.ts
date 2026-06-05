@@ -47,7 +47,7 @@ export async function GET(
           Akreditasyon, Sure, NumGereklilik, NumDipnot, NumDipnotEn,
           Fiyat, ParaBirimi, Durumu,
           ISNULL([Limit], '') AS [Limit],
-          ISNULL(Birim, '') AS Birim,
+          ISNULL(BirimText, '') AS Birim,
           ISNULL(LOQ, '') AS LOQ,
           ISNULL(LimitEn, '') AS LimitEn,
           ISNULL(BirimEn, '') AS BirimEn,
@@ -109,7 +109,7 @@ export async function PUT(
       .input("ParaBirimi",    ParaBirimi    || "₺")
       .input("Durumu",        Durumu        || "Aktif")
       .input("Limit",         Limit         || null)
-      .input("Birim",         Birim         || null)
+      .input("BirimText",     Birim         || null)
       .input("LOQ",           LOQ           || null)
       .input("LimitEn",       LimitEn       || null)
       .input("BirimEn",       BirimEn       || null)
@@ -150,7 +150,7 @@ export async function PUT(
         ParaBirimi    = @ParaBirimi,
         Durumu        = @Durumu,
         [Limit]       = @Limit,
-        Birim         = @Birim,
+        BirimText     = @BirimText,
         LOQ           = @LOQ,
         LimitEn       = @LimitEn,
         BirimEn       = @BirimEn,

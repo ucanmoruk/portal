@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
         Akreditasyon, Sure, NumGereklilik, NumDipnot, NumDipnotEn,
         Fiyat, ParaBirimi, Durumu,
         ISNULL([Limit], '') AS [Limit],
-        ISNULL(Birim, '') AS Birim,
+        ISNULL(BirimText, '') AS Birim,
         ISNULL(LOQ, '') AS LOQ,
         ISNULL(LimitEn, '') AS LimitEn,
         ISNULL(BirimEn, '') AS BirimEn,
@@ -138,7 +138,7 @@ export async function POST(request: Request) {
       .input("ParaBirimi",    ParaBirimi    || "₺")
       .input("Durumu",        "Aktif")
       .input("Limit",         Limit         || null)
-      .input("Birim",         Birim         || null)
+      .input("BirimText",     Birim         || null)
       .input("LOQ",           LOQ           || null)
       .input("LimitEn",       LimitEn       || null)
       .input("BirimEn",       BirimEn       || null)
@@ -170,12 +170,12 @@ export async function POST(request: Request) {
       INSERT INTO StokAnalizListesi
         (Kod, Ad, AdEn, Method, MethodEn, Matriks, Akreditasyon,
          Sure, NumGereklilik, NumDipnot, NumDipnotEn, Fiyat, ParaBirimi, Durumu,
-         [Limit], Birim, LOQ, LimitEn, BirimEn, LOQEn${colsPart})
+         [Limit], BirimText, LOQ, LimitEn, BirimEn, LOQEn${colsPart})
       OUTPUT INSERTED.ID
       VALUES
         (@Kod, @Ad, @AdEn, @Method, @MethodEn, @Matriks, @Akreditasyon,
          @Sure, @NumGereklilik, @NumDipnot, @NumDipnotEn, @Fiyat, @ParaBirimi, @Durumu,
-         @Limit, @Birim, @LOQ, @LimitEn, @BirimEn, @LOQEn${valsPart})
+         @Limit, @BirimText, @LOQ, @LimitEn, @BirimEn, @LOQEn${valsPart})
     `);
 
     return Response.json({ id: result.recordset[0].ID }, { status: 201 });
