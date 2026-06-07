@@ -17,12 +17,12 @@ interface NumuneItem {
   Asama?: string;          // Numune Takip aşaması (Kabul Bekliyor / Sonuç Girişi / Onay Bekliyor / Onaylandı)
 }
 
-// Aşama → rozet rengi
+// Aşama → rozet rengi (Numune Takip sekmeleriyle aynı semantik)
 const ASAMA_STYLE: Record<string, { bg: string; color: string }> = {
-  "Kabul Bekliyor": { bg: "#fff3cd",   color: "#9a6700" },
-  "Sonuç Girişi":   { bg: "#e8f0fe",   color: "#0071e3" },
-  "Onay Bekliyor":  { bg: "#ffeed6",   color: "#c06800" },
-  "Onaylandı":      { bg: "#e6f6ee",   color: "#1a7f4b" },
+  "Kabul Bekliyor":    { bg: "#fff3cd",   color: "#9a6700" },
+  "Analiz Aşamasında": { bg: "#e8f0fe",   color: "#0071e3" },
+  "Onay Bekliyor":     { bg: "#ffeed6",   color: "#c06800" },
+  "Onaylandı":         { bg: "#e6f6ee",   color: "#1a7f4b" },
 };
 
 interface EvrakGroup {

@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
             WHEN NOT EXISTS (SELECT 1 FROM NKR_LabKabul k WHERE k.NkrID = n.ID)
               THEN N'Kabul Bekliyor'
             WHEN EXISTS (SELECT 1 FROM NumuneX1 x WHERE x.RaporID = n.ID AND x.SonucKayitTarihi IS NULL)
-              THEN N'Sonuç Girişi'
+              THEN N'Analiz Aşamasında'
             ELSE N'Onay Bekliyor'
           END AS Asama
         FROM NKR n
