@@ -71,8 +71,8 @@ export async function GET(request: NextRequest) {
       SELECT *, COUNT(*) OVER() AS TotalCount
       FROM Pending
       ORDER BY
-        TRY_CAST(Evrak_No AS INT) ASC, Evrak_No ASC,
-        TRY_CAST(RaporNo  AS INT) ASC, RaporNo  ASC,
+        TRY_CAST(Evrak_No AS BIGINT) ASC,
+        TRY_CAST(RaporNo  AS BIGINT) ASC,
         RaporFormati
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `;
