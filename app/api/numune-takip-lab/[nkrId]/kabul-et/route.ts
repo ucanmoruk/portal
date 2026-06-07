@@ -103,6 +103,18 @@ export async function POST(
           VALUES (@NkrID, @RaporFormati, @BolumID, @KabulEdenID, @KabulEdenAd, @Notlar)
         `);
       kabulID = insRes.recordset[0]?.ID ?? null;
+
+      // Numune lab tarafından kabul edildi → "Sonuç Girişi" aşamasına geçti.
+      // NKR.Rapor_Durumu = 'Analiz Aşamasında' (forward-going, idempotent;
+      // halihazırda 'Analiz Aşamasında' veya 'Raporlandı' ise dokunulmaz).
+      await pool.request()
+        .input("NkrID", nkrIdNum)
+        .query(`
+          UPDATE NKR
+          SET Rapor_Durumu = N'Analiz Aşamasında'
+          WHERE ID = @NkrID
+            AND ISNULL(Rapor_Durumu, N'') NOT IN (N'Analiz Aşamasında', N'Raporlandı')
+        `);
     }
 
     // ── LOQ otomatik dolum DB'ye yazmıyor ──
