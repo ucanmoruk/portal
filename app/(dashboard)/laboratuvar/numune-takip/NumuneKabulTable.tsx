@@ -653,14 +653,21 @@ export default function NumuneKabulTable() {
                           borderBottom: "2px solid var(--color-border)",
                         }}>
                           <th style={{ padding: "6px 6px 6px 16px" }} />
-                          {["Rapor No", "Numune Adı", "Rapor Durumu", "Grup / Tür", ""].map((h, i) => (
+                          {([
+                            { h: "Rapor No",     w: undefined },
+                            { h: "Numune Adı",   w: undefined },
+                            { h: "Rapor Durumu", w: 170 },   // "Analiz Aşamasında" tek satırda kalsın
+                            { h: "Grup / Tür",   w: undefined },
+                            { h: "",             w: undefined },
+                          ] as const).map((c, i) => (
                             <th key={i} style={{
                               padding: "6px 12px",
                               textAlign: "left", fontWeight: 700,
                               fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.07em",
                               color: "var(--color-text-secondary)",
                               whiteSpace: "nowrap",
-                            }}>{h}</th>
+                              width: c.w,
+                            }}>{c.h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -711,6 +718,7 @@ export default function NumuneKabulTable() {
                                     display: "inline-block", padding: "2px 9px", borderRadius: 10,
                                     fontSize: "0.72rem", fontWeight: 600,
                                     background: st.bg, color: st.color,
+                                    whiteSpace: "nowrap",
                                   }}>{asama}</span>
                                 );
                               })()}
