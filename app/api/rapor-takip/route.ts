@@ -115,30 +115,6 @@ export async function GET(request: Request) {
       ? "AND EffectiveDurum IN (N'Onayland\u0131', N'Yay\u0131nland\u0131')"
       : "";
 
-    // Kayıtlı (Kullanıcı Kaydet bastı) sonuç sayısı:
-    // - SonucKayitTarihi kolonu varsa → NULL olmayanlar
-    // - Yoksa eski davranış: Sonuc dolu olanlar
-    const sonucCountExpr = hasKayitTarihi
-      ? `(SELECT COUNT(*) FROM NumuneX1 x2
-           INNER JOIN StokAnalizListesi s2 ON s2.ID = x2.AnalizID
-           WHERE x2.RaporID = r.NkrID AND s2.RaporFormati = r.RaporFormati
-             AND x2.[SonucKayitTarihi] IS NOT NULL)`
-      : hasSonuc
-      ? `(SELECT COUNT(*) FROM NumuneX1 x2
-           INNER JOIN StokAnalizListesi s2 ON s2.ID = x2.AnalizID
-           WHERE x2.RaporID = r.NkrID AND s2.RaporFormati = r.RaporFormati
-             AND x2.Sonuc IS NOT NULL AND x2.Sonuc != '')`
-      : "0";
-
-    const overrideSelectExpr = hasOverrideTable
-      ? `(
-            SELECT MAX(o.Durum)
-            FROM NKR_RaporDurumOverride o
-            WHERE o.NkrID = r.NkrID
-              AND UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(r.RaporFormati, N'Ü', N'U'))
-          )`
-      : `NULL`;
-
     // Override tablosunda Notlar kolonu var mı? (Geri Gönder notu için)
     let hasOverrideNotlar = false;
     if (hasOverrideTable) {
@@ -149,59 +125,92 @@ export async function GET(request: Request) {
       );
       hasOverrideNotlar = r.recordset.length > 0;
     }
-    const overrideNotluSelectExpr = hasOverrideNotlar
-      ? `(
-            SELECT MAX(o.Notlar)
-            FROM NKR_RaporDurumOverride o
-            WHERE o.NkrID = r.NkrID
-              AND UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(r.RaporFormati, N'Ü', N'U'))
-          )`
-      : `NULL`;
 
+    // PERFORMANCE: Eski sürüm her satır için 8 correlated subquery çalıştırıyordu
+    // → binlerce kabul'lü rapor olunca 30sn+ sürüp timeout veriyordu. Şimdi
+    // istatistikler tek seferlik GROUP BY CTE'lerinde toplanıp Raporlar'a LEFT
+    // JOIN ediliyor. Semantik birebir korunur.
+    // "Kayıtlı" sonuç koşulu: SonucKayitTarihi varsa onu, yoksa Sonuc'u kullan.
+    const savedCond = hasKayitTarihi
+      ? "x.[SonucKayitTarihi] IS NOT NULL"
+      : hasSonuc
+      ? "x.Sonuc IS NOT NULL AND x.Sonuc != ''"
+      : "1 = 0";
+
+    // PERFORMANCE: SQL Server CTE'leri inline ediyor; tek dev sorguda
+    // fonksiyon-bazlı join + filtre kombinasyonu kötü plan üretip 19sn sürüyordu.
+    // Çözüm: ara sonuçları #temp tablolara materialize et (≈50× hız: 19s → 0.4s).
+    // Temp tablolar batch sonunda DROP edilir; reused pooled connection'da kalıntı
+    // olmaması için baştan IF OBJECT_ID guard'ı ile temizlenir.
     const query = `
-      WITH Raporlar AS (
-        SELECT DISTINCT
-          n.ID                                    AS NkrID,
-          CONVERT(varchar(10), n.Tarih, 23)       AS Tarih,
-          n.Evrak_No,
-          n.RaporNo,
-          n.Barkod,
-          n.Numune_Adi,
-          f.Ad                                    AS FirmaAd,
-          p.Ad                                    AS ProjeAd,
-          s.RaporFormati,
-          ${hasLabKabul ? `CONVERT(varchar(10), lk.KabulTarihi, 23)` : `NULL`} AS KabulTarihi
-        FROM NKR n
-        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f  ON f.ID = n.Firma_ID
-        LEFT JOIN NumuneDetay   nd ON nd.RaporID = n.ID
-        LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) p  ON p.ID = nd.ProjeID
-        INNER JOIN NumuneX1         x1 ON x1.RaporID  = n.ID
-        INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
-          AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
-        ${hasLabKabul ? `${acceptedOnly ? "INNER" : "LEFT"} JOIN NKR_LabKabul lk ON lk.NkrID = n.ID AND lk.RaporFormati = s.RaporFormati` : ""}
-        WHERE n.Durum = 'Aktif'
-          ${searchFilter}
-          ${raporTuruFilter}
-      ),
-      WithStats AS (
+      IF OBJECT_ID('tempdb..#Rap') IS NOT NULL DROP TABLE #Rap;
+      IF OBJECT_ID('tempdb..#HS')  IS NOT NULL DROP TABLE #HS;
+      IF OBJECT_ID('tempdb..#OS')  IS NOT NULL DROP TABLE #OS;
+      IF OBJECT_ID('tempdb..#OV')  IS NOT NULL DROP TABLE #OV;
+
+      SELECT DISTINCT
+        n.ID                                    AS NkrID,
+        CONVERT(varchar(10), n.Tarih, 23)       AS Tarih,
+        n.Evrak_No,
+        n.RaporNo,
+        n.Barkod,
+        n.Numune_Adi,
+        f.Ad                                    AS FirmaAd,
+        p.Ad                                    AS ProjeAd,
+        s.RaporFormati,
+        UPPER(REPLACE(s.RaporFormati, N'Ü', N'U')) AS NormFmt,
+        ${hasLabKabul ? `CONVERT(varchar(10), lk.KabulTarihi, 23)` : `NULL`} AS KabulTarihi
+      INTO #Rap
+      FROM NKR n
+      LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f  ON f.ID = n.Firma_ID
+      LEFT JOIN NumuneDetay   nd ON nd.RaporID = n.ID
+      LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) p  ON p.ID = nd.ProjeID
+      INNER JOIN NumuneX1         x1 ON x1.RaporID  = n.ID
+      INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
+        AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
+      ${hasLabKabul ? `${acceptedOnly ? "INNER" : "LEFT"} JOIN NKR_LabKabul lk ON lk.NkrID = n.ID AND lk.RaporFormati = s.RaporFormati` : ""}
+      WHERE n.Durum = 'Aktif'
+        ${searchFilter}
+        ${raporTuruFilter};
+
+      SELECT x.RaporID AS NkrID, s.RaporFormati,
+        COUNT(*) AS HizmetSayisi,
+        SUM(CASE WHEN ${savedCond} THEN 1 ELSE 0 END) AS SonucluSayisi,
+        MAX(CONVERT(varchar(10), x.Termin, 23)) AS MaxTermin
+      INTO #HS
+      FROM NumuneX1 x
+      INNER JOIN StokAnalizListesi s ON s.ID = x.AnalizID
+        AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
+      GROUP BY x.RaporID, s.RaporFormati;
+
+      ${hasRaporOnay ? `SELECT ro.NkrID, UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U')) AS NormFmt,
+        MAX(ro.Durum) AS RaporOnayDurum,
+        MAX(ro.YayinUrl) AS YayinUrl
+      INTO #OS
+      FROM NKR_RaporOnay ro
+      GROUP BY ro.NkrID, UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U'));` : ``}
+
+      ${hasOverrideTable ? `SELECT o.NkrID, UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) AS NormFmt,
+        MAX(o.Durum) AS OverrideDurum${hasOverrideNotlar ? `,
+        MAX(o.Notlar) AS GeriGonderNotu` : ``}
+      INTO #OV
+      FROM NKR_RaporDurumOverride o
+      GROUP BY o.NkrID, UPPER(REPLACE(o.RaporFormati, N'Ü', N'U'));` : ``}
+
+      WITH WithStats AS (
         SELECT
           r.*,
-          (SELECT COUNT(*) FROM NumuneX1 x2
-             INNER JOIN StokAnalizListesi s2 ON s2.ID = x2.AnalizID
-             WHERE x2.RaporID = r.NkrID AND s2.RaporFormati = r.RaporFormati) AS HizmetSayisi,
-          ${sonucCountExpr} AS SonucluSayisi,
-          ${overrideSelectExpr} AS OverrideDurum,
-          ${overrideNotluSelectExpr} AS GeriGonderNotu,
-          ${hasRaporOnay ? `(
-            SELECT MAX(ro.Durum) FROM NKR_RaporOnay ro
-            WHERE ro.NkrID = r.NkrID
-              AND UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(r.RaporFormati, N'Ü', N'U'))
-          )` : `NULL`} AS RaporOnayDurum,
-          (SELECT MAX(CONVERT(varchar(10), x3.Termin, 23)) FROM NumuneX1 x3
-             INNER JOIN StokAnalizListesi s3 ON s3.ID = x3.AnalizID
-             WHERE x3.RaporID = r.NkrID AND s3.RaporFormati = r.RaporFormati
-               AND x3.Termin IS NOT NULL) AS MaxTermin
-        FROM Raporlar r
+          COALESCE(hs.HizmetSayisi, 0)  AS HizmetSayisi,
+          COALESCE(hs.SonucluSayisi, 0) AS SonucluSayisi,
+          ${hasOverrideTable ? `ov.OverrideDurum` : `NULL`} AS OverrideDurum,
+          ${hasOverrideNotlar ? `ov.GeriGonderNotu` : `NULL`} AS GeriGonderNotu,
+          ${hasRaporOnay ? `os.RaporOnayDurum` : `NULL`} AS RaporOnayDurum,
+          ${hasRaporOnay ? `os.YayinUrl` : `NULL`} AS YayinUrl,
+          hs.MaxTermin AS MaxTermin
+        FROM #Rap r
+        LEFT JOIN #HS hs ON hs.NkrID = r.NkrID AND hs.RaporFormati = r.RaporFormati
+        ${hasRaporOnay ? `LEFT JOIN #OS os ON os.NkrID = r.NkrID AND os.NormFmt = r.NormFmt` : ``}
+        ${hasOverrideTable ? `LEFT JOIN #OV ov ON ov.NkrID = r.NkrID AND ov.NormFmt = r.NormFmt` : ``}
       ),
       WithEffectiveDurum AS (
         SELECT *,
@@ -235,7 +244,12 @@ export async function GET(request: Request) {
       ORDER BY
         RaporNo DESC,
         RaporFormati
-      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+
+      DROP TABLE #Rap;
+      DROP TABLE #HS;
+      ${hasRaporOnay ? `DROP TABLE #OS;` : ``}
+      ${hasOverrideTable ? `DROP TABLE #OV;` : ``}
     `;
 
     const req = pool.request()
@@ -248,9 +262,18 @@ export async function GET(request: Request) {
 
     const result = await req.query(query);
 
-    const total = result.recordset[0]?.TotalCount ?? 0;
+    // Çok-statement batch'te (SELECT INTO + final SELECT + DROP) bizim veri
+    // setimiz TotalCount içeren recordset'tir.
+    const recordsets = (result.recordsets as unknown as Record<string, unknown>[][]) || [];
+    const rows =
+      recordsets.find((rs) => rs && rs.length > 0 && "TotalCount" in rs[0]) ??
+      recordsets[recordsets.length - 1] ??
+      result.recordset ??
+      [];
 
-    const data = result.recordset.map(({ TotalCount: _t, HizmetSayisi, SonucluSayisi, EffectiveDurum, ...row }) => ({
+    const total = Number(rows[0]?.TotalCount ?? 0);
+
+    const data = rows.map(({ TotalCount: _t, NormFmt: _nf, HizmetSayisi, SonucluSayisi, EffectiveDurum, ...row }: any) => ({
       ...row,
       RaporDurumu:
         EffectiveDurum === "Tamamlandi" || EffectiveDurum === "Tamamlandı"

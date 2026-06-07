@@ -27,7 +27,6 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [showGeriModal, setShowGeriModal] = useState(false);
   const [geriNotlar, setGeriNotlar] = useState("");
-  const [yayinUrl, setYayinUrl] = useState("");
 
   // Yetki kontrolü
   useEffect(() => {
@@ -94,10 +93,11 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
     if (busy) return;
     setBusy("yayinla"); setError("");
     try {
+      // URL otomatik üretilir (PDF → FTP); body'de yayinUrl GÖNDERİLMEZ.
       const r = await fetch(`/api/rapor-takip/${nkrId}/yayinla`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format, yayinUrl: yayinUrl || undefined }),
+        body: JSON.stringify({ format }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Yayınlanamadı");
@@ -232,32 +232,20 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
               {busy === "imzali" ? "Hazırlanıyor…" : "🔒 İmzalı PDF İndir"}
             </button>
             {!yayinlandi && canApprove && (
-              <>
-                <input
-                  type="text"
-                  value={yayinUrl}
-                  onChange={e => setYayinUrl(e.target.value)}
-                  placeholder="Yayın URL (opsiyonel)"
-                  style={{
-                    padding: "7px 10px", borderRadius: 8,
-                    border: "1px solid #ffffff33", background: "#ffffff10", color: "#fff",
-                    fontSize: 12, minWidth: 180,
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={handleYayinla}
-                  disabled={busy !== null}
-                  style={{
-                    padding: "8px 18px", borderRadius: 8,
-                    background: "transparent", color: "#bf5af2",
-                    border: "1px solid #bf5af255",
-                    fontSize: 13, fontWeight: 600, cursor: busy ? "wait" : "pointer",
-                  }}
-                >
-                  {busy === "yayinla" ? "Yayınlanıyor…" : "↗ Portalda Yayınla"}
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={handleYayinla}
+                disabled={busy !== null}
+                title="İmzalı PDF üret + sunucuya yükle (Portala Gönder)"
+                style={{
+                  padding: "8px 18px", borderRadius: 8,
+                  background: "transparent", color: "#bf5af2",
+                  border: "1px solid #bf5af255",
+                  fontSize: 13, fontWeight: 600, cursor: busy ? "wait" : "pointer",
+                }}
+              >
+                {busy === "yayinla" ? "Gönderiliyor…" : "↗ Portala Gönder"}
+              </button>
             )}
             {qrDataUrl && (
               // eslint-disable-next-line @next/next/no-img-element

@@ -12,6 +12,10 @@ const mssqlConfigFor = (database: string): mssql.config => ({
   database,
   server: process.env.DB_SERVER || "",
   port: 1433,
+  // 8K+ kayıt × birden fazla join içeren agreg sorgular default 15s'i aşabiliyor.
+  // 60s, dashboard sayma/listeleme için gerçekçi tavan.
+  requestTimeout: 60000,
+  connectionTimeout: 30000,
   pool: {
     max: 10,
     min: 0,

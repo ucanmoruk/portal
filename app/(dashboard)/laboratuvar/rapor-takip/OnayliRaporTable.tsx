@@ -18,6 +18,7 @@ interface RaporRow {
   RaporFormati: string;
   RaporDurumu: "Onaylandı" | "Yayınlandı" | string;
   MaxTermin: string | null;
+  YayinUrl?: string | null;
 }
 
 // Sunucu Onaylandı/Yayınlandı döner. UI: Onaylandı | Gönderildi.
@@ -109,6 +110,7 @@ export default function OnayliRaporTable() {
   const [transitioning, setTrans] = useState(false);
   const [error, setError]     = useState("");
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
+  const [publishingKey, setPublishingKey] = useState<string | null>(null);
 
   const searchTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef     = useRef<AbortController | null>(null);
@@ -203,6 +205,33 @@ export default function OnayliRaporTable() {
       setError(e.message || "İmzalı PDF indirilemedi");
     } finally {
       setDownloadingKey(null);
+    }
+  };
+
+  // Portala Gönder — imzalı PDF üret, FTP'ye yükle, Durum='Yayınlandı' yap.
+  const handlePublish = async (row: RaporRow) => {
+    const key = `${row.NkrID}__${row.RaporFormati}`;
+    if (publishingKey) return;
+    setPublishingKey(key);
+    setError("");
+    try {
+      const res = await fetch(`/api/rapor-takip/${row.NkrID}/yayinla`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: row.RaporFormati }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Portala gönderilemedi");
+      // Satırı yerinde güncelle: Gönderildi + URL
+      setRows(prev => prev.map(r =>
+        r.NkrID === row.NkrID && r.RaporFormati === row.RaporFormati
+          ? { ...r, RaporDurumu: "Yayınlandı", YayinUrl: json.yayinUrl ?? r.YayinUrl }
+          : r
+      ));
+    } catch (e: any) {
+      setError(e.message || "Portala gönderilemedi");
+    } finally {
+      setPublishingKey(null);
     }
   };
 
@@ -358,6 +387,8 @@ export default function OnayliRaporTable() {
         {!loading && visibleRows.map((row, gi) => {
           const key = `${row.NkrID}__${row.RaporFormati}`;
           const isDownloading = downloadingKey === key;
+          const isPublishing = publishingKey === key;
+          const isPublished = row.RaporDurumu === "Yayınlandı";
           return (
             <div
               key={key}
@@ -442,29 +473,57 @@ export default function OnayliRaporTable() {
                   {isDownloading ? "İndiriliyor…" : "PDF İndir"}
                 </button>
               </div>
-              {/* Portala Gönder — pasif (yakında) */}
+              {/* Portala Gönder — imzalı PDF üret + FTP'ye yükle + Yayınlandı yap */}
               <div style={{ display: "flex", justifyContent: "center" }}>
-                <button
-                  type="button"
-                  title="Yakında — müşteri portalına gönderme"
-                  disabled
-                  style={{
-                    border: "1px solid var(--color-border)",
-                    borderRadius: 7,
-                    background: "var(--color-surface-2)",
-                    color: "var(--color-text-tertiary)",
-                    fontSize: "0.72rem",
-                    fontWeight: 700,
-                    padding: "6px 10px",
-                    cursor: "not-allowed",
-                    display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
-                  }}
-                >
-                  <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
-                    <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.254 4.94H9.75a.75.75 0 0 1 0 1.5H3.533l-1.254 4.94a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.288Z"/>
-                  </svg>
-                  Portala Gönder
-                </button>
+                {isPublished ? (
+                  <a
+                    href={row.YayinUrl || undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={row.YayinUrl ? "Yayınlanan PDF'i aç" : "Gönderildi"}
+                    onClick={e => { if (!row.YayinUrl) e.preventDefault(); }}
+                    style={{
+                      border: "1px solid #34c75955",
+                      borderRadius: 7,
+                      background: "#34c75918",
+                      color: "#248a3d",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      padding: "6px 10px",
+                      textDecoration: "none",
+                      cursor: row.YayinUrl ? "pointer" : "default",
+                      display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                    }}
+                  >
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
+                      <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd"/>
+                    </svg>
+                    Gönderildi
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    title="Müşteri portalına gönder (imzalı PDF'i yayınla)"
+                    disabled={isPublishing}
+                    onClick={() => handlePublish(row)}
+                    style={{
+                      border: "1px solid var(--color-accent)",
+                      borderRadius: 7,
+                      background: isPublishing ? "var(--color-surface-2)" : "transparent",
+                      color: isPublishing ? "var(--color-text-tertiary)" : "var(--color-accent)",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      padding: "6px 10px",
+                      cursor: isPublishing ? "wait" : "pointer",
+                      display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                    }}
+                  >
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
+                      <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.254 4.94H9.75a.75.75 0 0 1 0 1.5H3.533l-1.254 4.94a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.288Z"/>
+                    </svg>
+                    {isPublishing ? "Gönderiliyor…" : "Portala Gönder"}
+                  </button>
+                )}
               </div>
             </div>
           );

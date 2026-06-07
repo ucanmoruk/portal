@@ -2,12 +2,46 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
+import { isRaporFtpConfigured, uploadRaporPdfToFtp } from "@/lib/raporPdfUpload";
+import { renderUrlToPdf } from "@/lib/chromiumPdf";
+import { signPdfBuffer, pdfImzaYapilandirildi } from "@/lib/raporPdfSign";
+
+// PDF üretimi (Chromium) + FTP yükleme süre alır.
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+// Onaylı raporun PDF buffer'ını üret. Cookie auth aktarılır → /rapor-onay-print
+// auth'lu canlı sayfası render edilir. P12 sertifika varsa PAdES imza eklenir;
+// yoksa imzasız PDF döner (yükleme yine yapılır).
+async function buildRaporPdf(origin: string, nkrId: number, format: string, cookie: string): Promise<Buffer> {
+  const previewUrl = `${origin}/rapor-onay-print/${nkrId}?format=${encodeURIComponent(format)}`;
+  const pdf = await renderUrlToPdf(previewUrl, {
+    cookieHeader: cookie,
+    printBackground: true,
+    marginTop: 0,
+    marginBottom: 0,
+    marginLeft: 0,
+    marginRight: 0,
+    settleMs: 1500,
+  });
+  if (pdfImzaYapilandirildi()) {
+    try {
+      return await signPdfBuffer(pdf);
+    } catch (e) {
+      console.warn("[yayinla] PDF imza atılamadı, imzasız sürüm yüklenecek:", e);
+    }
+  }
+  return pdf;
+}
 
 // POST /api/rapor-takip/[nkrId]/yayinla
-// Body: { format, yayinUrl? }
-// Önkoşul: onaylı olmalı. Status → "Yayınlandı", YayinTarihi = NOW.
-// NKR_Log'a "Rapor Yayınlandı" girer.
-// Gerçek dış portal entegrasyonu sonradan — şimdilik state + log.
+// Body: { format }
+// Önkoşul: onaylı olmalı. "Portala Gönder" akışı:
+//   1) İmzalı PDF üret → FTP'ye <KarekodToken>.pdf yükle
+//   2) NKR_RaporOnay: Durum='Yayınlandı', YayinTarihi=NOW, YayinUrl=public link
+//   3) NKR_Log'a "Rapor Yayınlandı"
+// FTP yapılandırılmamışsa veya PDF/upload başarısızsa 502 döner (yayınlama
+// yapılmaz) — kullanıcı tekrar deneyebilir.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ nkrId: string }> },
@@ -21,7 +55,6 @@ export async function POST(
 
   const body = await request.json().catch(() => ({}));
   const format = String(body?.format || "").trim();
-  const yayinUrl = String(body?.yayinUrl || "").trim() || null;
   if (!format) return Response.json({ error: "format gerekli" }, { status: 400 });
 
   const userId = ((session.user as any)?.userId ?? null) as number | null;
@@ -37,11 +70,11 @@ export async function POST(
       return Response.json({ error: "NKR_RaporOnay tablosu yok." }, { status: 500 });
     }
 
-    // Onay var mı?
+    // Onay var mı? Token gerekli (PDF dosya adı).
     const exist = await pool.request()
       .input("nkrId", nkrIdNum).input("format", format)
       .query(`
-        SELECT ID, KarekodToken, Durum FROM NKR_RaporOnay
+        SELECT ID, KarekodToken, Durum, YayinUrl FROM NKR_RaporOnay
         WHERE NkrID = @nkrId
           AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
       `);
@@ -49,18 +82,44 @@ export async function POST(
     if (!onay) {
       return Response.json({ error: "Önce raporu Onayla'yın." }, { status: 400 });
     }
+    if (!onay.KarekodToken) {
+      return Response.json({ error: "Onay kaydında karekod token yok." }, { status: 500 });
+    }
 
+    // FTP yoksa yayınlama yapma — kullanıcıya net hata.
+    if (!isRaporFtpConfigured()) {
+      return Response.json(
+        { error: "FTP yapılandırılmadı (RAPOR_FTP_* ortam değişkenleri eksik)." },
+        { status: 503 },
+      );
+    }
+
+    // ── İmzalı PDF üret + FTP'ye yükle ──
+    let yayinUrl: string;
+    try {
+      const pdfBuffer = await buildRaporPdf(
+        request.nextUrl.origin, nkrIdNum, format, request.headers.get("cookie") || "",
+      );
+      const uploaded = await uploadRaporPdfToFtp({ pdfBuffer, token: onay.KarekodToken });
+      yayinUrl = uploaded.publicUrl;
+    } catch (e) {
+      console.error("[yayinla] PDF/FTP yüklemesi başarısız:", e);
+      return Response.json(
+        { error: "Rapor PDF'i sunucuya yüklenemedi. Tekrar deneyin." },
+        { status: 502 },
+      );
+    }
+
+    // ── DB: Yayınlandı + URL ──
     await pool.request()
-      .input("nkrId", nkrIdNum)
-      .input("format", format)
+      .input("id", onay.ID)
       .input("yayinUrl", yayinUrl)
       .query(`
         UPDATE NKR_RaporOnay
         SET Durum = 'Yayınlandı',
             YayinTarihi = GETDATE(),
             YayinUrl = @yayinUrl
-        WHERE NkrID = @nkrId
-          AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
+        WHERE ID = @id
       `);
 
     // NKR_Log → Ürün Geçmişi
@@ -69,21 +128,18 @@ export async function POST(
        WHERE TABLE_NAME = 'NKR_Log' AND TABLE_SCHEMA IN ('dbo', 'cosmoroot')`
     );
     if (logCheck.recordset.length > 0) {
-      const detay = yayinUrl
-        ? `${format} formatı portalda yayınlandı. Karekod: ${onay.KarekodToken} · URL: ${yayinUrl}`
-        : `${format} formatı portalda yayınlandı. Karekod: ${onay.KarekodToken}`;
       await pool.request()
         .input("NKRID", nkrIdNum)
         .input("KullaniciID", userId)
         .input("Eylem", "Rapor Yayınlandı")
-        .input("Aciklama", detay)
+        .input("Aciklama", `${format} formatı portala gönderildi. URL: ${yayinUrl}`)
         .query(
           `INSERT INTO NKR_Log (NKRID, KullaniciID, Eylem, Aciklama, Tarih)
            VALUES (@NKRID, @KullaniciID, @Eylem, @Aciklama, CURRENT_TIMESTAMP)`
         );
     }
 
-    return Response.json({ ok: true, token: onay.KarekodToken, durum: "Yayınlandı" });
+    return Response.json({ ok: true, token: onay.KarekodToken, durum: "Yayınlandı", yayinUrl });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

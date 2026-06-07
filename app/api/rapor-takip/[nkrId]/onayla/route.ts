@@ -13,6 +13,7 @@ function generateToken(): string {
 // POST /api/rapor-takip/[nkrId]/onayla
 // Body: { format }
 // Onayla → karekod token üret, NKR_RaporOnay'a kayıt at, NKR_Log'a logla.
+// NOT: PDF üretimi + FTP yükleme burada DEĞİL — "Portala Gönder" (yayinla) adımında.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ nkrId: string }> },
