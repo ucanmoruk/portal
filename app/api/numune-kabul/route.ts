@@ -122,6 +122,11 @@ export async function GET(request: NextRequest) {
         return `@ev${i}`;
       }).join(", ");
 
+      // Aşama (Numune Takip ile bağlı):
+      //   - Onaylandı       : NKR_RaporOnay'da Durum='Onaylandı'
+      //   - Onay Bekliyor   : tüm NumuneX1.SonucKayitTarihi dolu, onay yok
+      //   - Sonuç Girişi    : NKR_LabKabul var, sonuç tamamlanmamış
+      //   - Kabul Bekliyor  : NKR_LabKabul yok
       const numuneResult = await req3.query(`
         SELECT
           n.ID,
@@ -129,7 +134,16 @@ export async function GET(request: NextRequest) {
           n.RaporNo,
           n.Numune_Adi,
           n.Grup,
-          n.Tur
+          n.Tur,
+          CASE
+            WHEN EXISTS (SELECT 1 FROM NKR_RaporOnay o WHERE o.NkrID = n.ID AND o.Durum = N'Onaylandı')
+              THEN N'Onaylandı'
+            WHEN NOT EXISTS (SELECT 1 FROM NKR_LabKabul k WHERE k.NkrID = n.ID)
+              THEN N'Kabul Bekliyor'
+            WHEN EXISTS (SELECT 1 FROM NumuneX1 x WHERE x.RaporID = n.ID AND x.SonucKayitTarihi IS NULL)
+              THEN N'Sonuç Girişi'
+            ELSE N'Onay Bekliyor'
+          END AS Asama
         FROM NKR n
         WHERE n.Durum = 'Aktif'
           AND n.Evrak_No IN (${inParams})

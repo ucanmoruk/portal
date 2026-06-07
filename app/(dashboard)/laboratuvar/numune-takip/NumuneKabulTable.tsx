@@ -14,7 +14,16 @@ interface NumuneItem {
   Numune_Adi: string;
   Grup: string | null;
   Tur: string | null;
+  Asama?: string;          // Numune Takip aşaması (Kabul Bekliyor / Sonuç Girişi / Onay Bekliyor / Onaylandı)
 }
+
+// Aşama → rozet rengi
+const ASAMA_STYLE: Record<string, { bg: string; color: string }> = {
+  "Kabul Bekliyor": { bg: "#fff3cd",   color: "#9a6700" },
+  "Sonuç Girişi":   { bg: "#e8f0fe",   color: "#0071e3" },
+  "Onay Bekliyor":  { bg: "#ffeed6",   color: "#c06800" },
+  "Onaylandı":      { bg: "#e6f6ee",   color: "#1a7f4b" },
+};
 
 interface EvrakGroup {
   evrakNo: string;
@@ -694,11 +703,17 @@ export default function NumuneKabulTable() {
                               {n.Numune_Adi}
                             </td>
                             <td style={{ padding: "9px 12px" }}>
-                              <span style={{
-                                display: "inline-block", padding: "2px 9px", borderRadius: 10,
-                                fontSize: "0.72rem", fontWeight: 600,
-                                background: "#ff950018", color: "#c06800",
-                              }}>Devam Ediyor</span>
+                              {(() => {
+                                const asama = n.Asama || "Kabul Bekliyor";
+                                const st = ASAMA_STYLE[asama] ?? { bg: "#f5f5f7", color: "#6e6e73" };
+                                return (
+                                  <span style={{
+                                    display: "inline-block", padding: "2px 9px", borderRadius: 10,
+                                    fontSize: "0.72rem", fontWeight: 600,
+                                    background: st.bg, color: st.color,
+                                  }}>{asama}</span>
+                                );
+                              })()}
                             </td>
                             <td style={{ padding: "9px 12px", color: "var(--color-text-secondary)" }}>
                               {[n.Grup, n.Tur].filter(Boolean).join(" / ") || "—"}
