@@ -124,7 +124,8 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
                ISNULL(o.OnaylayanAd, '') AS OnaylayanAd,
                ''                  AS OnaylayanSoyad
         FROM NKR_RaporOnay o
-        WHERE o.NkrID = @nkrId AND o.RaporFormati = @format
+        WHERE o.NkrID = @nkrId
+          AND UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
       `);
     const r = onayRes.recordset[0];
     if (r) {

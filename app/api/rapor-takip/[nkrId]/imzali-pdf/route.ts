@@ -48,7 +48,9 @@ export async function GET(
     // Onay durumu kapısı (yalnızca onaylı raporlar imzalı PDF olarak indirilebilir).
     const data = await loadRaporViewData(nkrIdNum, format);
     if (!data) return Response.json({ error: "Rapor bulunamadı." }, { status: 404 });
-    if (!data.onay || data.onay.durum !== "Onaylandı") {
+    // Onaylı VEYA Yayınlanmış raporlar imzalı PDF olarak indirilebilir.
+    const durum = data.onay?.durum;
+    if (!data.onay || (durum !== "Onaylandı" && durum !== "Yayınlandı")) {
       return Response.json(
         { error: "Bu rapor henüz onaylanmamış. Önce raporu onaylayın." },
         { status: 409 },
