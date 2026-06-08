@@ -105,46 +105,57 @@ export async function GET() {
         ? "x.Sonuc IS NOT NULL AND x.Sonuc != ''"
         : "1 = 0";
 
-      const onayJoin  = hasRaporOnay
-        ? `LEFT JOIN NKR_RaporOnay ro ON ro.NkrID = ar.NkrID AND ro.RaporFormati = ar.RaporFormati`
-        : "";
-      const onayCol   = hasRaporOnay ? "ro.Durum" : "NULL";
-      const ovJoin    = hasOverride
-        ? `LEFT JOIN NKR_RaporDurumOverride ov ON ov.NkrID = ar.NkrID AND ov.RaporFormati = ar.RaporFormati`
-        : "";
-      const ovCol     = hasOverride ? "ov.Durum" : "NULL";
-
       const req = pool.request();
       // mssql.Request#timeout — bu sorgu özelinde 60s'e çek
       (req as unknown as { timeout?: number }).timeout = 60000;
 
+      // PERFORMANCE: SQL Server CTE'leri inline edip kötü plan üretiyordu (sayma
+      // 1-2 dk sürüyordu). Ara sonuçları #temp tablolara materialize ediyoruz
+      // (rapor-takip listesiyle AYNI desen → tutarlı + hızlı).
+      // Onay/Override eşleşmesi normalized (Ü→U) — liste route'uyla birebir aynı.
       const r = await req.query(`
-        WITH Saved AS (
-          SELECT x.RaporID AS NkrID, s.RaporFormati, COUNT(*) AS SavedCount
-          FROM NumuneX1 x
-          INNER JOIN StokAnalizListesi s ON s.ID = x.AnalizID
-            AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
-          WHERE ${savedWhere}
-          GROUP BY x.RaporID, s.RaporFormati
-        ),
-        AcceptedReports AS (
-          SELECT DISTINCT n.ID AS NkrID, s.RaporFormati
-          FROM NKR n
-          INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
-          INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-            AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
-          INNER JOIN NKR_LabKabul k ON k.NkrID = n.ID AND k.RaporFormati = s.RaporFormati
-          WHERE n.Durum = 'Aktif'
-        ),
-        WithStatus AS (
+        IF OBJECT_ID('tempdb..#Saved') IS NOT NULL DROP TABLE #Saved;
+        IF OBJECT_ID('tempdb..#Acc')   IS NOT NULL DROP TABLE #Acc;
+        IF OBJECT_ID('tempdb..#OS')    IS NOT NULL DROP TABLE #OS;
+        IF OBJECT_ID('tempdb..#OV')    IS NOT NULL DROP TABLE #OV;
+
+        SELECT x.RaporID AS NkrID, s.RaporFormati, COUNT(*) AS SavedCount
+        INTO #Saved
+        FROM NumuneX1 x
+        INNER JOIN StokAnalizListesi s ON s.ID = x.AnalizID
+          AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
+        WHERE ${savedWhere}
+        GROUP BY x.RaporID, s.RaporFormati;
+
+        SELECT DISTINCT n.ID AS NkrID, s.RaporFormati,
+          UPPER(REPLACE(s.RaporFormati, N'Ü', N'U')) AS NormFmt
+        INTO #Acc
+        FROM NKR n
+        INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
+        INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
+          AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
+        INNER JOIN NKR_LabKabul k ON k.NkrID = n.ID AND k.RaporFormati = s.RaporFormati
+        WHERE n.Durum = 'Aktif';
+
+        ${hasRaporOnay ? `SELECT ro.NkrID, UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U')) AS NormFmt,
+          MAX(ro.Durum) AS RaporOnayDurum
+        INTO #OS FROM NKR_RaporOnay ro
+        GROUP BY ro.NkrID, UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U'));` : ``}
+
+        ${hasOverride ? `SELECT o.NkrID, UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) AS NormFmt,
+          MAX(o.Durum) AS OverrideDurum
+        INTO #OV FROM NKR_RaporDurumOverride o
+        GROUP BY o.NkrID, UPPER(REPLACE(o.RaporFormati, N'Ü', N'U'));` : ``}
+
+        WITH WithStatus AS (
           SELECT ar.NkrID, ar.RaporFormati,
-            ${onayCol} AS RaporOnayDurum,
-            ${ovCol}   AS OverrideDurum,
+            ${hasRaporOnay ? "os.RaporOnayDurum" : "NULL"} AS RaporOnayDurum,
+            ${hasOverride ? "ov.OverrideDurum" : "NULL"}   AS OverrideDurum,
             COALESCE(sv.SavedCount, 0) AS SavedCount
-          FROM AcceptedReports ar
-          ${onayJoin}
-          ${ovJoin}
-          LEFT JOIN Saved sv ON sv.NkrID = ar.NkrID AND sv.RaporFormati = ar.RaporFormati
+          FROM #Acc ar
+          ${hasRaporOnay ? `LEFT JOIN #OS os ON os.NkrID = ar.NkrID AND os.NormFmt = ar.NormFmt` : ``}
+          ${hasOverride ? `LEFT JOIN #OV ov ON ov.NkrID = ar.NkrID AND ov.NormFmt = ar.NormFmt` : ``}
+          LEFT JOIN #Saved sv ON sv.NkrID = ar.NkrID AND sv.RaporFormati = ar.RaporFormati
         ),
         Eff AS (
           SELECT COALESCE(
@@ -158,11 +169,24 @@ export async function GET() {
           ) AS EffDurum
           FROM WithStatus
         )
-        SELECT EffDurum, COUNT(*) AS c FROM Eff GROUP BY EffDurum
+        SELECT EffDurum, COUNT(*) AS c FROM Eff GROUP BY EffDurum;
+
+        DROP TABLE #Saved;
+        DROP TABLE #Acc;
+        ${hasRaporOnay ? `DROP TABLE #OS;` : ``}
+        ${hasOverride ? `DROP TABLE #OV;` : ``}
       `);
 
+      // Çok-statement batch: EffDurum içeren recordset'i seç (SELECT INTO/DROP
+      // recordset döndürmez ama sürücü farkına karşı güvenli seçim).
+      const rsets = (r.recordsets as unknown as Array<Array<{ EffDurum: string; c: number | string }>>) || [];
+      const effRows =
+        rsets.find((rs) => rs && rs.length > 0 && "EffDurum" in rs[0]) ??
+        (r.recordset as Array<{ EffDurum: string; c: number | string }>) ??
+        [];
+
       const unknown: Array<{ d: string; c: number }> = [];
-      for (const row of r.recordset as Array<{ EffDurum: string; c: number | string }>) {
+      for (const row of effRows) {
         const d = String(row.EffDurum || "");
         const c = Number(row.c || 0);
         if (d === "Bekliyor" || d === "Analiz Devam Ediyor") sonuc += c;
