@@ -43,12 +43,12 @@ export async function GET(request: NextRequest) {
                  ISNULL(s.Akreditasyon,'') AS Akreditasyon,
                  ISNULL(s.Matriks,'')      AS Matriks,
                  s.Sure,
-                 ''                        AS [Limit],
-                 ISNULL(s.Birim,'')        AS Birim,
-                 ''                        AS LOQ,
-                 ''                        AS LimitEn,
-                 ''                        AS BirimEn,
-                 ''                        AS LOQEn,
+                 ISNULL(s.[Limit],'')      AS [Limit],
+                 ISNULL(s.BirimText,'')    AS Birim,
+                 ISNULL(s.LOQ,'')          AS LOQ,
+                 ISNULL(s.LimitEn,'')      AS LimitEn,
+                 ISNULL(s.BirimEn,'')      AS BirimEn,
+                 ISNULL(s.LOQEn,'')        AS LOQEn,
                  NULL                      AS BolumID,
                  ''                        AS BolumAdi
           FROM StokAnalizListesi s

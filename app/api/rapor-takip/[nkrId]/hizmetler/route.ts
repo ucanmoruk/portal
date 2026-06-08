@@ -46,10 +46,11 @@ export async function GET(
     const limitEnSel          = existingCols.has("LimitEn")          ? "ISNULL(x1.LimitEn,'') AS LimitEn,"           : "'' AS LimitEn,";
     const birimEnSel          = existingCols.has("BirimEn")          ? "ISNULL(x1.BirimEn,'') AS BirimEn,"           : "'' AS BirimEn,";
     const kayitTarihiSel      = existingCols.has("SonucKayitTarihi") ? "x1.[SonucKayitTarihi] AS SonucKayitTarihi,"   : "NULL AS SonucKayitTarihi,";
-    // Birim: NumuneX1'den al, yoksa StokAnalizListesi.Matriks'e düş
+    // Birim: NumuneX1'den al, yoksa StokAnalizListesi.BirimText'e düş
+    // (Matriks = numune matrisi "Kozmetik", birim değil; BirimText = "kob/g").
     const birimSel            = existingCols.has("Birim")
-      ? "ISNULL(x1.Birim, s.Matriks) AS Birim,"
-      : "s.Matriks AS Birim,";
+      ? "ISNULL(x1.Birim, s.BirimText) AS Birim,"
+      : "s.BirimText AS Birim,";
 
     const req = pool.request()
       .input("nkrId",        nkrIdNum)

@@ -268,7 +268,7 @@ export async function PUT(
       const analizIds = [...new Set(hizmetler.map((h: any) => Number(h.AnalizID)))];
       const stalRes = await pool.request().query(`
         SELECT ID,
-          ISNULL([Limit], '') AS LimitDeger, ISNULL(Matriks,  '') AS Birim,
+          ISNULL([Limit], '') AS LimitDeger, ISNULL(BirimText, '') AS Birim,
           ISNULL(LimitEn,    '') AS LimitEn,    ISNULL(BirimEn,  '') AS BirimEn,
           ISNULL(LOQ,        '') AS LOQ,         ISNULL(LOQEn,   '') AS LOQEn
         FROM StokAnalizListesi WHERE ID IN (${analizIds.join(",")})
