@@ -3,6 +3,16 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 
+// İşlem (Onayla/Geri Gönder) sonrası sekmeyi kapat. Bu sayfa window.open ile
+// açıldığından window.close() çalışır; tarayıcı engellerse (örn. doğrudan URL
+// ile açılmışsa) kısa bir süre sonra fallback adrese yönlendir.
+function closeOrGo(fallbackUrl: string) {
+  window.close();
+  setTimeout(() => {
+    if (!window.closed) window.location.href = fallbackUrl;
+  }, 400);
+}
+
 interface OnayInfo {
   token: string;
   durum: string;
@@ -20,7 +30,7 @@ interface Props {
 }
 
 export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Props) {
-  const [onay, setOnay] = useState<OnayInfo | null>(initialOnay);
+  const [onay] = useState<OnayInfo | null>(initialOnay);
   const [canApprove, setCanApprove] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<"onayla" | "geri" | "yayinla" | "imzali" | null>(null);
   const [error, setError] = useState("");
@@ -59,15 +69,12 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Onaylanamadı");
-      // Refresh
-      const dRes = await fetch(`/api/rapor-takip/${nkrId}/onay-durum?format=${encodeURIComponent(format)}`, { cache: "no-store" });
-      const dJson = await dRes.json();
-      if (dJson.onay) setOnay(dJson.onay);
-      // Sayfayı yeniden yükle → yeni onay durumu ile rapor altı imza alanı dolu görünür
-      window.location.reload();
+      // Onaylandı → sekmeyi kapat (kapanmazsa rapor takip listesine dön).
+      closeOrGo("/laboratuvar/rapor-takip");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Hata");
-    } finally { setBusy(null); }
+      setBusy(null);
+    }
   };
 
   const handleGeriGonder = async () => {
@@ -81,8 +88,8 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Geri gönderilemedi");
-      // Geri Gelenler tabına yönlendir
-      window.location.href = "/laboratuvar/numune-takip-lab?tab=geri";
+      // Geri gönderildi → sekmeyi kapat (kapanmazsa Geri Gelenler tabına dön).
+      closeOrGo("/laboratuvar/numune-takip-lab?tab=geri");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Hata");
       setBusy(null);
