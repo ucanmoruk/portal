@@ -100,7 +100,7 @@ const statisticalBasisRows: Array<[string, string, string, string]> = [
     [
         "Tekrarlanabilirlik",
         "Aynı koşullarda elde edilen paralel sonuçların dağılımı ile ortalama, standart sapma, RSDr ve tekrarlanabilirlik limiti hesaplanır.",
-        "RSD% = (s / x̄) x 100; r = 2,83 x Sr",
+        "RSD% = (s / x̄) x 100; r = 2,8 x Sr",
         "Sr tekrarlanabilirlik standart sapmasıdır. r limiti aynı laboratuvar ve kısa zaman aralığı koşulundaki farkların değerlendirilmesinde kullanılır.",
     ],
     [
@@ -1289,7 +1289,7 @@ function renderAppendixContent(moduleKey: string, value: unknown): React.ReactNo
         const levels = Array.isArray(record.levels) ? record.levels : [];
         return (
             <>
-                <p className="report-note">Formül: Her düzeyde ortalama, standart sapma, RSDr ve tekrarlanabilirlik limiti r = 2,83 x Sr hesaplanır.</p>
+                <p className="report-note">Formül: Her düzeyde ortalama, standart sapma, RSDr ve tekrarlanabilirlik limiti r = 2,8 x Sr hesaplanır.</p>
                 <div className="report-subblock">
                     <h4>Çalışma Bilgileri</h4>
                 <Table

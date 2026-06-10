@@ -70,8 +70,8 @@ const moduleCriteria: Record<string, { criterion: string; rule: string }> = {
         rule: "LOD = x̄ + 3s, LOQ = x̄ + 10s; tekrar sayısı en az 7 olmalıdır.",
     },
     PRECISION_REPEATABILITY: {
-        criterion: "Tekrarlanabilirlik standart sapması ve r = 2,83 × Sr değerlendirilir.",
-        rule: "Tekrarlanabilirlik standart sapması ve r = 2,83 × Sr değerlendirilir.",
+        criterion: "Tekrarlanabilirlik standart sapması ve r = 2,8 × Sr değerlendirilir.",
+        rule: "Tekrarlanabilirlik standart sapması ve r = 2,8 × Sr değerlendirilir.",
     },
     PRECISION_REPRODUCIBILITY: {
         criterion: "F hesap < F kritik (uygulanan güven düzeyinde).",
@@ -856,7 +856,7 @@ function renderAuditCalculation(moduleKey: string, value: unknown, formulaHint: 
         // ────────────────────────────────────────────────────────────────────
         return (
             <>
-                <FormulaLine label="Formül">RSDr (%) = (s / x̄) · 100 ; r = 2,83 · Sr</FormulaLine>
+                <FormulaLine label="Formül">RSDr (%) = (s / x̄) · 100 ; r = 2,8 · Sr</FormulaLine>
                 {levels.map((level, idx) => {
                     const lr = asRecord(level);
                     const analystStats = asRecord(lr.analysts);
@@ -1612,7 +1612,7 @@ const statisticalBasisRows: Array<[string, string, string, string]> = [
     [
         "Tekrarlanabilirlik",
         "Aynı koşullarda elde edilen paralel sonuçların dağılımı ile ortalama, standart sapma, RSDr ve tekrarlanabilirlik limiti hesaplanır.",
-        "RSD% = (s / x̄) x 100; r = 2,83 x Sr",
+        "RSD% = (s / x̄) x 100; r = 2,8 x Sr",
         "Sr tekrarlanabilirlik standart sapmasıdır. r limiti aynı laboratuvar ve kısa zaman aralığı için kullanılır.",
     ],
     [

@@ -307,7 +307,7 @@ Elde edilen sonuçlar incelendiğinde, her bir test örneği ve paralel örnekte
         const stdDev = sampleStdDev(values);
         const rsdr = Number.isFinite(stdDev) && mean !== 0 ? stdDev / mean : Number.NaN;
         const rsdrPoolPart = Number.isFinite(rsdr) && n > 1 ? Math.pow(rsdr, 2) * (n - 1) : Number.NaN;
-        const repeatabilityLimit = Number.isFinite(stdDev) ? 2.83 * stdDev : Number.NaN;
+        const repeatabilityLimit = Number.isFinite(stdDev) ? 2.8 * stdDev : Number.NaN;
         const grubbs = calculateGrubbs(values);
 
         return { values, n, mean, stdDev, rsdr, rsdrPoolPart, repeatabilityLimit, grubbs };
@@ -409,7 +409,7 @@ Elde edilen sonuçlar incelendiğinde, her bir test örneği ve paralel örnekte
                 ["(RSDr2)*(n-1)", "rsdrPoolPart"],
                 ["Xort", "mean"],
                 ["RSDr", "rsdr"],
-                ["r:2,83*Sr", "repeatabilityLimit"],
+                ["r:2,8*Sr", "repeatabilityLimit"],
             ] as const;
             const getDiffResult = (analyst: string | undefined, rowIndex: number) => {
                 if (!analyst) return { diff: Number.NaN, hasStatus: false, isSuitable: false };

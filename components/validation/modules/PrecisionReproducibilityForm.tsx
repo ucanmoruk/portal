@@ -327,7 +327,7 @@ Ftest > 1   ve   Ftest < Fkritik`;
             const rsdr = Number.isFinite(stdDev) && mean !== 0 ? stdDev / mean : Number.NaN;
             const nMinusOne = count > 1 ? count - 1 : Number.NaN;
             const rsdrPoolPart = Number.isFinite(rsdr) && Number.isFinite(nMinusOne) ? Math.pow(rsdr, 2) * nMinusOne : Number.NaN;
-            const repeatabilityLimit = Number.isFinite(stdDev) ? 2.83 * stdDev : Number.NaN;
+            const repeatabilityLimit = Number.isFinite(stdDev) ? 2.8 * stdDev : Number.NaN;
             const grubbs = calculateGrubbs(values);
             return [analyst, { count, mean, variance, stdDev, rsdr, rsdrPoolPart, repeatabilityLimit, nMinusOne, grubbs }];
         }));
@@ -576,7 +576,7 @@ Ftest > 1   ve   Ftest < Fkritik`;
                                                         ["s²", "variance"],
                                                         ["Xort", "mean"],
                                                         ["Std Sapma (Sr)", "stdDev"],
-                                                        ["r:2,83*Sr", "repeatabilityLimit"],
+                                                        ["r:2,8*Sr", "repeatabilityLimit"],
                                                         ["n-1", "nMinusOne"],
                                                         ["RSDr", "rsdr"],
                                                         ["(RSDr2)*(n-1)", "rsdrPoolPart"],
