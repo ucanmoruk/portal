@@ -76,7 +76,9 @@ export async function GET(
     // PAdES dijital imza göm (self-signed köprü sertifika).
     const signed = await signPdfBuffer(pdf);
 
-    const fileName = `Rapor-${data.header.RaporNo || nkrIdNum}-imzali.pdf`;
+    // Dış kod öncelikli — yoksa iç rapor no fallback. "/" karakterleri "-" yapılır.
+    const baseKod = (data.onay?.disRaporKodu || data.header.RaporNo || String(nkrIdNum)).replace(/\//g, "-");
+    const fileName = `${baseKod}-imzali.pdf`;
     return new Response(new Uint8Array(signed), {
       status: 200,
       headers: {
@@ -85,9 +87,16 @@ export async function GET(
         "Cache-Control": "no-store",
       },
     });
-  } catch (e) {
-    // İç hata detayını (Chrome yolu, DB sürücü mesajı vb.) istemciye sızdırma.
+  } catch (e: any) {
     console.error("[imzali-pdf]", e);
-    return Response.json({ error: "İmzalı PDF oluşturulamadı." }, { status: 500 });
+    // Hata mesajını yüzeyle çıkar — sertifika/Chromium/cookie/network sorunu net görünsün.
+    // (Geçici teşhis modu; hassas detay yoksa kalabilir.)
+    const detay =
+      typeof e?.message === "string" ? e.message :
+      typeof e === "string" ? e : "Bilinmeyen hata";
+    return Response.json(
+      { error: `İmzalı PDF oluşturulamadı: ${detay.slice(0, 400)}` },
+      { status: 500 },
+    );
   }
 }

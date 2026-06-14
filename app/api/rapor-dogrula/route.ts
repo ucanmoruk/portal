@@ -42,9 +42,25 @@ function deriveDogrulamaKod(token: string): string {
 
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
-  const raporNoInput = (sp.get("raporNo") || "").trim();
-  const tokenInput = (sp.get("token") || "").trim();
-  const authToken = (sp.get("auth") || "").trim();
+  const raporNoRaw = (sp.get("raporNo") || "").trim();
+  const tokenRaw = (sp.get("token") || "").trim();
+  const authRaw = (sp.get("auth") || "").trim();
+
+  // Token / kod beyaz boşluklardan temizlenir — kullanıcı "QRS FUYZW" gibi
+  // boşluklu yapıştırırsa veya görsel kolaylık için ayırırsa.
+  const tokenInput = tokenRaw.replace(/\s+/g, "");
+  const authToken = authRaw.replace(/\s+/g, "");
+
+  // raporNo: kullanıcı "ÜGAM/GE26/K9RX" (revizyonsuz) veya "ÜGAM/GE26/K9RX/00"
+  // (revizyonlu) veya iç "26060126" girebilir. /NN suffix'i ayır, base + rev'i çıkar.
+  let raporNoInput = raporNoRaw;
+  let baseDisKod = raporNoRaw;
+  let expectedRev: number | null = null;
+  const revMatch = raporNoRaw.match(/^(.+)\/(\d{1,2})$/);
+  if (revMatch) {
+    baseDisKod = revMatch[1];
+    expectedRev = parseInt(revMatch[2], 10);
+  }
 
   if (!raporNoInput || !tokenInput) {
     return Response.json(
@@ -74,48 +90,47 @@ export async function GET(request: NextRequest) {
     );
     const hasDisKod = disKodCol.recordset.length > 0;
 
-    // raporNo eşleşmesi: kullanıcı ÜGAM/RR26/XXXX/NN (revizyon dahil) veya ÜGAM/RR26/XXXX
-    // (revizyonsuz) veya iç RaporNo girmiş olabilir. Hepsini tek WHERE'de karşıla.
+    // raporNo eşleşmesi (SQL): iç RaporNo OR base DisRaporKodu. Revizyon kontrolü
+    // JS tarafında yapılır — SQL string concat'lerden kaçınmak için.
     const raporNoFilter = hasDisKod
-      ? `(
-          CAST(n.RaporNo AS NVARCHAR(50)) = @raporNo
-          OR o.DisRaporKodu = @raporNo
-          OR o.DisRaporKodu + '/' + RIGHT('00' + CAST(ISNULL(n.Revno, 0) AS NVARCHAR(2)), 2) = @raporNo
-        )`
+      ? `(CAST(n.RaporNo AS NVARCHAR(50)) = @raporNo OR o.DisRaporKodu = @baseDisKod)`
       : `CAST(n.RaporNo AS NVARCHAR(50)) = @raporNo`;
 
-    // Token eşleşmesi: önce authToken (varsa tam token), sonra tokenInput'un
-    // ya KarekodToken ya da türetilen 8-karakter dogrulamaKod olduğu varsayımıyla
-    // tüm raporNo eşleşmelerini çekip JS tarafında karşılaştır.
-    const r = await pool.request()
-      .input("raporNo", raporNoInput)
-      .query(`
-        SELECT
-          o.KarekodToken,
-          n.RaporNo,
-          ISNULL(n.Revno, 0)                        AS RevizyonNo,
-          CONVERT(varchar(10), o.YayinTarihi, 104)  AS YayinTarihi,
-          ISNULL(f.Firma_Adi, '')                   AS FirmaAd,
-          ISNULL(n.Numune_Adi, '')                  AS NumuneAd,
-          o.RaporFormati,
-          o.Durum,
-          o.YayinUrl
-          ${hasDisKod ? ", o.DisRaporKodu" : ""}
-        FROM NKR_RaporOnay o
-        INNER JOIN NKR n ON n.ID = o.NkrID
-        LEFT JOIN Firma f ON f.ID = n.Firma_ID
-        WHERE ${raporNoFilter}
-      `);
+    const req = pool.request().input("raporNo", raporNoInput);
+    if (hasDisKod) req.input("baseDisKod", baseDisKod);
+
+    const r = await req.query(`
+      SELECT
+        o.KarekodToken,
+        n.RaporNo,
+        ISNULL(n.Revno, 0)                        AS RevizyonNo,
+        CONVERT(varchar(10), o.YayinTarihi, 104)  AS YayinTarihi,
+        ISNULL(f.Firma_Adi, '')                   AS FirmaAd,
+        ISNULL(n.Numune_Adi, '')                  AS NumuneAd,
+        o.RaporFormati,
+        o.Durum,
+        o.YayinUrl
+        ${hasDisKod ? ", o.DisRaporKodu" : ""}
+      FROM NKR_RaporOnay o
+      INNER JOIN NKR n ON n.ID = o.NkrID
+      LEFT JOIN Firma f ON f.ID = n.Firma_ID
+      WHERE ${raporNoFilter}
+    `);
 
     if (r.recordset.length === 0) {
       return Response.json({ valid: false }, { headers: CORS });
     }
 
-    // Token karşılaştırması (case-insensitive 8-karakter kod için)
+    // JS tarafında: revizyon kontrolü + token eşleşmesi
     const tokenUpper = tokenInput.toUpperCase();
     const isLikelyFullToken = tokenInput.length >= 16;
 
     const matchRow = r.recordset.find((row: any) => {
+      // Eğer kullanıcı /NN belirttiyse revizyon eşleşmeli
+      if (expectedRev !== null) {
+        const dbRev = Number(row.RevizyonNo ?? 0);
+        if (dbRev !== expectedRev) return false;
+      }
       const dbToken = String(row.KarekodToken || "");
       // 1) authToken (URL'de QR'den) varsa — daima tam token kontrol et
       if (authToken && dbToken === authToken) return true;
@@ -160,6 +175,10 @@ export async function GET(request: NextRequest) {
       { headers: CORS },
     );
   } catch (e: any) {
-    return Response.json({ valid: false, error: e.message }, { status: 500, headers: CORS });
+    console.error("[rapor-dogrula] hata:", {
+      raporNoRaw, baseDisKod, expectedRev, tokenLen: tokenInput.length,
+      msg: e?.message, stack: e?.stack,
+    });
+    return Response.json({ valid: false, error: e?.message || "Sunucu hatası" }, { status: 500, headers: CORS });
   }
 }

@@ -179,7 +179,7 @@ export async function GET(request: Request) {
         p.Ad                                    AS ProjeAd,
         s.RaporFormati,
         UPPER(REPLACE(s.RaporFormati, N'Ü', N'U')) AS NormFmt,
-        ${hasLabKabul ? `CONVERT(varchar(10), lk.KabulTarihi, 23)` : `NULL`} AS KabulTarihi
+        CONVERT(varchar(10), n.Tarih, 23) AS KabulTarihi
       INTO #Rap
       FROM NKR n
       LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f  ON f.ID = n.Firma_ID

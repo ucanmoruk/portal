@@ -205,8 +205,10 @@ export default function OnayliRaporTable() {
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = objUrl;
-      // Dosya adi: "BarkodNo - UrunAdi.pdf" (yoksa RaporNo/NkrID fallback).
-      const idPart = sanitizeFileName(String(row.Barkod || row.RaporNo || row.NkrID));
+      // Dosya adi: "ÜGAM-RR26-XXXX - UrunAdi.pdf" — dış kod öncelikli.
+      // DisRaporKodu yoksa Barkod / RaporNo / NkrID sırasıyla fallback.
+      const idSource = row.DisRaporKodu || row.Barkod || row.RaporNo || String(row.NkrID);
+      const idPart = sanitizeFileName(String(idSource).replace(/\//g, "-"));
       const namePart = sanitizeFileName(String(row.Numune_Adi || ""));
       a.download = namePart
         ? `${idPart} - ${namePart}.pdf`
