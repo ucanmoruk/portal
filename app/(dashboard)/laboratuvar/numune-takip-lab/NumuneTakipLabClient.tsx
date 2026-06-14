@@ -122,7 +122,9 @@ export default function NumuneTakipLabClient() {
       {/* Ana tablar */}
       <div style={tabContainer}>
         {MAIN_TABS.map(t => {
-          const n = counts[t.key as keyof Counts];
+          // counts byFormatLab Record alanını da içerdiği için number'a daralt
+          const v = counts[t.key as keyof Counts];
+          const n: number = typeof v === "number" ? v : 0;
           const active = mainTab === t.key;
           return (
             <button
