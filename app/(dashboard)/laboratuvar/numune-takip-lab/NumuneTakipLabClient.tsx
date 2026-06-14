@@ -50,7 +50,24 @@ const subTabContainer: React.CSSProperties = {
   background: "var(--color-bg)",
 };
 
-interface Counts { kabul: number; sonuc: number; geri: number; onay: number; }
+interface Counts {
+  kabul: number; sonuc: number; geri: number; onay: number;
+  // Sonuç Girişi format sekmelerinin rozetleri için: anahtar
+  // UPPER+normalize edilmiş RaporFormati (örn "GENEL", "UGDR", "DIGER").
+  byFormatLab?: Record<string, number>;
+}
+
+// FORMAT_TABS etiketlerini API anahtarına uydurur (Türkçe karakter + büyük harf).
+function normFmt(s: string): string {
+  return s
+    .replace(/Ü/g, "U").replace(/ü/g, "U")
+    .replace(/İ/g, "I").replace(/ı/g, "I")
+    .replace(/Ö/g, "O").replace(/ö/g, "O")
+    .replace(/Ç/g, "C").replace(/ç/g, "C")
+    .replace(/Ş/g, "S").replace(/ş/g, "S")
+    .replace(/Ğ/g, "G").replace(/ğ/g, "G")
+    .toUpperCase();
+}
 
 export default function NumuneTakipLabClient() {
   const searchParams = useSearchParams();
@@ -59,7 +76,7 @@ export default function NumuneTakipLabClient() {
   // Kabul Et sonrası ilgili format tab'ını "kirli" işaretle
   const [refreshKey, setRefreshKey] = useState<Record<string, number>>({});
   // Tab sayıları
-  const [counts, setCounts] = useState<Counts>({ kabul: 0, sonuc: 0, geri: 0, onay: 0 });
+  const [counts, setCounts] = useState<Counts>({ kabul: 0, sonuc: 0, geri: 0, onay: 0, byFormatLab: {} });
 
   const fetchCounts = useCallback(() => {
     fetch("/api/numune-takip-lab/counts", { cache: "no-store" })
@@ -69,6 +86,7 @@ export default function NumuneTakipLabClient() {
         sonuc: Number(j.sonuc ?? 0),
         geri:  Number(j.geri  ?? 0),
         onay:  Number(j.onay  ?? 0),
+        byFormatLab: j.byFormatLab ?? {},
       }))
       .catch(() => { /* yoksay */ });
   }, []);
@@ -137,16 +155,29 @@ export default function NumuneTakipLabClient() {
         <>
           {/* Nested rapor formatı tabları */}
           <div style={subTabContainer}>
-            {FORMAT_TABS.map(f => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFormatTab(f)}
-                style={tabBtn(formatTab === f)}
-              >
-                {f}
-              </button>
-            ))}
+            {FORMAT_TABS.map(f => {
+              const active = formatTab === f;
+              const n = counts.byFormatLab?.[normFmt(f)] ?? 0;
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFormatTab(f)}
+                  style={tabBtn(active)}
+                >
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                    {f}
+                    <span style={{
+                      padding: "1px 7px", borderRadius: 9,
+                      background: active ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.08)",
+                      color: active ? "#fff" : "var(--color-text-secondary)",
+                      fontSize: "0.7rem", fontWeight: 700,
+                      fontVariantNumeric: "tabular-nums",
+                    }}>{n}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           <RaporTakipTable

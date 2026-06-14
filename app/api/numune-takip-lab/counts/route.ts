@@ -97,6 +97,9 @@ export async function GET() {
   //   3) WithStatus: 3 basit LEFT JOIN (her biri 1:1, UNIQUE constraint sayesinde)
   //   4) Final GROUP BY EffDurum
   let sonuc = 0, geri = 0, onay = 0;
+  // Sonuç Girişi içindeki format sekmelerine (Genel/Challenge/...) numune sayısı.
+  // Anahtar: UPPER(REPLACE(RaporFormati, 'Ü', 'U')) — UI normalize'i ile birebir aynı.
+  const byFormatLab: Record<string, number> = {};
   if (hasLabKabul) {
     try {
       const savedWhere = hasKayitTarihi
@@ -148,7 +151,7 @@ export async function GET() {
         GROUP BY o.NkrID, UPPER(REPLACE(o.RaporFormati, N'Ü', N'U'));` : ``}
 
         WITH WithStatus AS (
-          SELECT ar.NkrID, ar.RaporFormati,
+          SELECT ar.NkrID, ar.RaporFormati, ar.NormFmt,
             ${hasRaporOnay ? "os.RaporOnayDurum" : "NULL"} AS RaporOnayDurum,
             ${hasOverride ? "ov.OverrideDurum" : "NULL"}   AS OverrideDurum,
             COALESCE(sv.SavedCount, 0) AS SavedCount
@@ -158,7 +161,7 @@ export async function GET() {
           LEFT JOIN #Saved sv ON sv.NkrID = ar.NkrID AND sv.RaporFormati = ar.RaporFormati
         ),
         Eff AS (
-          SELECT COALESCE(
+          SELECT NormFmt, COALESCE(
             RaporOnayDurum,
             CASE
               WHEN OverrideDurum IN (N'Tamamlandı', N'Tamamlandi') THEN N'Onay Bekleniyor'
@@ -169,7 +172,7 @@ export async function GET() {
           ) AS EffDurum
           FROM WithStatus
         )
-        SELECT EffDurum, COUNT(*) AS c FROM Eff GROUP BY EffDurum;
+        SELECT EffDurum, NormFmt, COUNT(*) AS c FROM Eff GROUP BY EffDurum, NormFmt;
 
         DROP TABLE #Saved;
         DROP TABLE #Acc;
@@ -179,17 +182,23 @@ export async function GET() {
 
       // Çok-statement batch: EffDurum içeren recordset'i seç (SELECT INTO/DROP
       // recordset döndürmez ama sürücü farkına karşı güvenli seçim).
-      const rsets = (r.recordsets as unknown as Array<Array<{ EffDurum: string; c: number | string }>>) || [];
+      type Row = { EffDurum: string; NormFmt: string; c: number | string };
+      const rsets = (r.recordsets as unknown as Array<Array<Row>>) || [];
       const effRows =
         rsets.find((rs) => rs && rs.length > 0 && "EffDurum" in rs[0]) ??
-        (r.recordset as Array<{ EffDurum: string; c: number | string }>) ??
+        (r.recordset as Array<Row>) ??
         [];
 
       const unknown: Array<{ d: string; c: number }> = [];
       for (const row of effRows) {
         const d = String(row.EffDurum || "");
+        const fmt = String(row.NormFmt || "");
         const c = Number(row.c || 0);
-        if (d === "Bekliyor" || d === "Analiz Devam Ediyor") sonuc += c;
+        if (d === "Bekliyor" || d === "Analiz Devam Ediyor") {
+          sonuc += c;
+          // Sonuç Girişi format sekmesi rozetleri için biriktir
+          byFormatLab[fmt] = (byFormatLab[fmt] || 0) + c;
+        }
         else if (d === "Geri Gönderildi") geri += c;
         else if (d === "Onay Bekleniyor")  onay += c;
         else if (d === "Onaylandı" || d === "Yayınlandı") { /* görmezden gel */ }
@@ -206,7 +215,7 @@ export async function GET() {
     }
   }
 
-  const payload: Record<string, unknown> = { kabul, sonuc, geri, onay };
+  const payload: Record<string, unknown> = { kabul, sonuc, geri, onay, byFormatLab };
   if (Object.keys(errors).length > 0) payload.errors = errors;
   return Response.json(payload);
 }

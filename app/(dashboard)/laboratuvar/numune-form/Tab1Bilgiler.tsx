@@ -309,14 +309,6 @@ export default function Tab1Bilgiler({ form, onChange, lookup, loadingNos }: Pro
 
         <div className={t1.gridKayitRow2}>
           <div className={styles.formGroup}>
-            <label>Teklif No</label>
-            <input style={sel} value={form.Teklif_No} onChange={e => onChange({ Teklif_No: e.target.value })} />
-          </div>
-          <div className={styles.formGroup}>
-            <label>Talep No</label>
-            <input style={sel} value={form.Talep_No} onChange={e => onChange({ Talep_No: e.target.value })} />
-          </div>
-          <div className={styles.formGroup}>
             <label>Karar kuralı</label>
             <select style={sel} value={form.Karar} onChange={e => onChange({ Karar: e.target.value })}>
               <option value="">Seçin</option>

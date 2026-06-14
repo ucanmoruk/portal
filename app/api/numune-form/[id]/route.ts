@@ -4,6 +4,7 @@ import { cosmoPool } from "@/lib/db";
 import { nkrUgdTipFkColumn } from "@/lib/nkrUgdTipColumn";
 import { hasNkrFormulTable, hasNkrLogTable, nkrHasColumn } from "@/lib/numuneFormTables";
 import { loadLabUgdrTexts, saveLabUgdrTexts } from "@/lib/labUgdrStorage";
+import { ensureDisRaporKodlari } from "@/lib/disKod";
 
 // Limit ve LOQ değerine göre Sonuç ve SonucEn otomatik hesapla
 function computeSonucAuto(
@@ -347,6 +348,16 @@ export async function PUT(
 
       const colList = `RaporID, AnalizID, Termin, x3ID, Limit, Birim, LimitEn, BirimEn, LOQ, LOQEn${extraCols.length > 0 ? ", " + extraCols.join(", ") : ""}`;
       await pool.request().query(`INSERT INTO NumuneX1 (${colList}) VALUES ${values}`);
+    }
+
+    // ── 3.5. Dış Rapor Kodları (ÜGAM/RR26/XXXX) — her format için tahsis et ──
+    // Onay anına bırakmıyoruz; numune kayıt anında allocate edelim ki Numune Kabul
+    // listesinde hemen görünsün. Helper idempotent — tekrar çalışırsa yeni satır eklemez.
+    try {
+      await ensureDisRaporKodlari(pool, nkrId);
+    } catch (e) {
+      console.error("[numune-form PUT] ensureDisRaporKodlari failed:", e);
+      // Kayıt kaydedildi — DisKod allocation kritik değil, sessizce geç.
     }
 
     // ── 4. NKR_Formul — sil + yeniden ekle ───────────────────────

@@ -90,7 +90,7 @@
 
 .evrakGrid {
   display: grid;
-  grid-template-columns: 148px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 72px;
+  grid-template-columns: 148px minmax(0,1fr) minmax(0,1fr);
   gap: 10px 14px;
   align-items: end;
 }

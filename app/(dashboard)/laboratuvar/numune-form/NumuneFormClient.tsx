@@ -38,12 +38,11 @@ function di(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function normalizePartialDate(v: string): string | null {
-  if (!v) return null;
-  const parts = v.split("-");
-  if (parts.length === 1) return `${parts[0]}-01-01`;     // year only
-  if (parts.length === 2) return `${parts[0]}-${parts[1]}-01`; // year+month
-  return v; // full date
+// UretimTarihi / SKT serbest TEXT alandır (DB: nvarchar(20)). Kullanıcının yazdığı
+// değer olduğu gibi gönderilir — "2026-30", "Q4-2026", "Mar/2026" hepsi kabul edilir.
+// Boş string null'a çevrilir, başka normalizasyon yapılmaz.
+function passthroughText(v: string): string | null {
+  return v && v.trim() ? v.trim() : null;
 }
 
 function mapApiToForm(
@@ -200,8 +199,8 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
       Miktar: form.Miktar || null,
       Birim: form.Birim || null,
       SeriNo: form.SeriNo || null,
-      UretimTarihi: normalizePartialDate(form.UretimTarihi),
-      SKT: normalizePartialDate(form.SKT),
+      UretimTarihi: passthroughText(form.UretimTarihi),
+      SKT: passthroughText(form.SKT),
     },
     hizmetler: hizmetler.map(({ AnalizID, Termin, x3ID, Limit, Birim }) => ({
       AnalizID,

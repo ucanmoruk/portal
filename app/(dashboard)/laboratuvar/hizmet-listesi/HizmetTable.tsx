@@ -39,7 +39,8 @@ const EMPTY: Partial<Hizmet> = {
   Matriks: "", Akreditasyon: "Yok", Sure: undefined,
   NumGereklilik: "", NumDipnot: "", NumDipnotEn: "",
   Fiyat: undefined, ParaBirimi: "₺", Durumu: "Aktif",
-  RaporFormati: "", YetkiliID: null, BolumID: null,
+  // Rapor Formati bos kalmasin — varsayilan Genel.
+  RaporFormati: "Genel", YetkiliID: null, BolumID: null,
   Limit: "", Birim: "", LOQ: "", LimitEn: "", BirimEn: "", LOQEn: "",
 };
 
@@ -137,7 +138,13 @@ export default function HizmetTable() {
   };
 
   const openNew  = () => { setIsNew(true);  setFormError(""); setEditRow({ ...EMPTY }); setModalTab(0); };
-  const openEdit = (row: Hizmet) => { setIsNew(false); setFormError(""); setEditRow({ ...row }); setModalTab(0); };
+  const openEdit = (row: Hizmet) => {
+    setIsNew(false); setFormError("");
+    // Rapor Formati bos kayitlar icin otomatik Genel sec
+    const rf = String(row.RaporFormati || "").trim();
+    setEditRow({ ...row, RaporFormati: rf || "Genel" });
+    setModalTab(0);
+  };
   const closeEdit = () => { setEditRow(null); setModalTab(0); };
 
   // ── Pagination helpers ──

@@ -440,12 +440,7 @@ export default function KabulBekleyenlerTab({ onAccepted }: Props = {}) {
                   }}>
                     {row.Numune_Adi}
                   </div>
-                  <div style={{
-                    fontSize: "0.74rem", color: "var(--color-text-tertiary)",
-                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                  }}>
-                    {row.FirmaAd ?? "—"}{row.ProjeAd ? ` · ${row.ProjeAd}` : ""}
-                  </div>
+                  {/* Firma adı + Proje adı bu sekmede gizli — sadece Numune adı görünür */}
                 </div>
                 <div><FormatBadge format={row.RaporFormati} /></div>
                 <div style={{ display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>

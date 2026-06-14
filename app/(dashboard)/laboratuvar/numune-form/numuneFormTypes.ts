@@ -124,7 +124,7 @@ export function emptyForm(): NkrFormData {
     Firma_ID: null,
     FirmaAd: "",
     ProjeID: null,
-    ProjeAd: "",
+    ProjeAd: "Diğer",
     Numune_Adi: "",
     Numune_Adi_En: "",
     Miktar: "",

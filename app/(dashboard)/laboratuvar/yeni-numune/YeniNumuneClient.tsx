@@ -88,12 +88,10 @@ function emptyCard(partial: Partial<NumuneCard> = {}): NumuneCard {
   };
 }
 
-function normalizePartialDate(v: string): string | null {
-  if (!v) return null;
-  const parts = v.split("-");
-  if (parts.length === 1) return `${parts[0]}-01-01`;
-  if (parts.length === 2) return `${parts[0]}-${parts[1]}-01`;
-  return v;
+// UretimTarihi / SKT serbest TEXT alandır (DB: nvarchar(20)). Kullanıcının yazdığı
+// değer olduğu gibi gönderilir — tarih normalizasyonu YAPILMAZ.
+function passthroughText(v: string): string | null {
+  return v && v.trim() ? v.trim() : null;
 }
 
 // ── FirmaSearch typeahead ──────────────────────────────────
@@ -505,7 +503,7 @@ export default function YeniNumuneClient() {
   const [evrak, setEvrak] = useState<EvrakForm>({
     Tarih: today, Evrak_No: "", Teklif_No: "", Talep_No: "",
     Karar: "Basit Karar Kuralı", Dil: "Türkçe",
-    Firma_ID: null, FirmaAd: "", ProjeID: null, ProjeAd: "", Grup: "Özel",
+    Firma_ID: null, FirmaAd: "", ProjeID: null, ProjeAd: "Diğer", Grup: "Özel",
   });
   const [evrakOpen, setEvrakOpen] = useState(true);
   const [evrakSaved, setEvrakSaved] = useState(false);
@@ -620,8 +618,8 @@ export default function YeniNumuneClient() {
         Miktar: card.Miktar || null,
         Birim: card.Birim || null,
         SeriNo: card.SeriNo || null,
-        UretimTarihi: normalizePartialDate(card.UretimTarihi),
-        SKT: normalizePartialDate(card.SKT),
+        UretimTarihi: passthroughText(card.UretimTarihi),
+        SKT: passthroughText(card.SKT),
       },
       hizmetler: card.hizmetler.map(h => ({ AnalizID: h.AnalizID, Termin: h.Termin || null, x3ID: h.x3ID })),
       formul: [],
@@ -696,14 +694,6 @@ export default function YeniNumuneClient() {
               <div className={yn.fg}>
                 <label>Evrak No {loadingNos && <span style={{ fontWeight: 400, color: "var(--color-text-tertiary)", fontSize: "0.7rem" }}>…</span>}</label>
                 <input style={sel} value={evrak.Evrak_No} onChange={e => patchEvrak({ Evrak_No: e.target.value })} />
-              </div>
-              <div className={yn.fg}>
-                <label>Teklif No</label>
-                <input style={sel} value={evrak.Teklif_No} onChange={e => patchEvrak({ Teklif_No: e.target.value })} />
-              </div>
-              <div className={yn.fg}>
-                <label>Talep No</label>
-                <input style={sel} value={evrak.Talep_No} onChange={e => patchEvrak({ Talep_No: e.target.value })} />
               </div>
             </div>
             <div className={yn.evrakGrid2}>
