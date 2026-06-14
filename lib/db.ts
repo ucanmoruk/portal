@@ -40,35 +40,51 @@ const getMssqlPoolFor = (database: string) => {
 
   let connection = mssqlPools.get(database);
   if (!connection) {
-    connection = new mssql.ConnectionPool(mssqlConfigFor(database))
-      .connect()
-      .then((pool) => {
-        console.log(`MSSQL veritabanina baglanildi: ${database}`);
-        // POOL RESILIENCE: Vercel hot Lambda'da pool cache'i tutulur. Sunucu idle
-        // timeout ile bağlantıyı kapatırsa sonraki istek ECONNRESET alır ve pool
-        // ölü kalır. Error/close olaylarında cache'i temizle → sonraki istek
-        // taze pool oluştursun. (Etkilenen istek de retry edilir.)
-        const invalidate = (reason: string) => (err?: unknown) => {
-          console.log(`MSSQL pool invalidated (${database}, ${reason}):`, err);
-          if (mssqlPools.get(database) === connection) {
-            mssqlPools.delete(database);
-          }
-          // Pool'u zorla kapat — yeni connect'in temiz başlaması için
-          try { pool.close(); } catch { /* ignore */ }
-        };
-        pool.on("error", invalidate("pool error"));
-        pool.on("close", invalidate("pool close"));
-        return pool;
-      })
-      .catch((err) => {
-        console.log(`MSSQL baglanti hatasi (${database}): `, err);
-        mssqlPools.delete(database);
-        throw err;
-      });
+    connection = createFreshPool(database);
     mssqlPools.set(database, connection);
+  } else {
+    // POOL HEALTH CHECK: cached pool ölü olabilir (sunucu idle timeout ile
+    // kapatmış). pool.connected false ise veya bir alttaki connection.connecting
+    // takılı kalmışsa cache'i temizle → taze pool dön.
+    connection = connection.then(async (pool) => {
+      if (!pool.connected) {
+        console.log(`MSSQL pool stale (${database}), reconnecting…`);
+        try { await pool.close(); } catch { /* ignore */ }
+        mssqlPools.delete(database);
+        const fresh = createFreshPool(database);
+        mssqlPools.set(database, fresh);
+        return fresh;
+      }
+      return pool;
+    }) as Promise<mssql.ConnectionPool>;
   }
   return connection;
 };
+
+// Pool oluştur + idle/error handler bağla
+function createFreshPool(database: string): Promise<mssql.ConnectionPool> {
+  return new mssql.ConnectionPool(mssqlConfigFor(database))
+    .connect()
+    .then((pool) => {
+      console.log(`MSSQL veritabanina baglanildi: ${database}`);
+      const cachedRef = mssqlPools.get(database);
+      const invalidate = (reason: string) => (err?: unknown) => {
+        console.log(`MSSQL pool invalidated (${database}, ${reason}):`, err);
+        if (mssqlPools.get(database) === cachedRef) {
+          mssqlPools.delete(database);
+        }
+        try { pool.close(); } catch { /* ignore */ }
+      };
+      pool.on("error", invalidate("pool error"));
+      pool.on("close", invalidate("pool close"));
+      return pool;
+    })
+    .catch((err) => {
+      console.log(`MSSQL baglanti hatasi (${database}): `, err);
+      mssqlPools.delete(database);
+      throw err;
+    });
+}
 
 // Bir kez retry ile sarmalayıcı — ECONNRESET / ETIMEDOUT / "Connection lost"
 // gibi geçici hatalarda pool'u invalidate edip 1 sefer daha dener.

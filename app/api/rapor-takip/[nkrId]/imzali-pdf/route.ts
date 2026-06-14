@@ -46,7 +46,20 @@ export async function GET(
 
   try {
     // Onay durumu kapısı (yalnızca onaylı raporlar imzalı PDF olarak indirilebilir).
-    const data = await loadRaporViewData(nkrIdNum, format);
+    // Vercel hot Lambda'da MSSQL pool ölü kalabilir → ECONNRESET olursa 1 kez retry.
+    let data: Awaited<ReturnType<typeof loadRaporViewData>> = null;
+    try {
+      data = await loadRaporViewData(nkrIdNum, format);
+    } catch (e: any) {
+      const msg = String(e?.message ?? e ?? "").toLowerCase();
+      if (msg.includes("econnreset") || msg.includes("connection lost")) {
+        console.log("[imzali-pdf] ECONNRESET, retry…");
+        await new Promise(r => setTimeout(r, 300));
+        data = await loadRaporViewData(nkrIdNum, format);
+      } else {
+        throw e;
+      }
+    }
     if (!data) return Response.json({ error: "Rapor bulunamadı." }, { status: 404 });
     // Onaylı VEYA Yayınlanmış raporlar imzalı PDF olarak indirilebilir.
     const durum = data.onay?.durum;
