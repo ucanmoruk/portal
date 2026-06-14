@@ -44,6 +44,20 @@ const getMssqlPoolFor = (database: string) => {
       .connect()
       .then((pool) => {
         console.log(`MSSQL veritabanina baglanildi: ${database}`);
+        // POOL RESILIENCE: Vercel hot Lambda'da pool cache'i tutulur. Sunucu idle
+        // timeout ile bağlantıyı kapatırsa sonraki istek ECONNRESET alır ve pool
+        // ölü kalır. Error/close olaylarında cache'i temizle → sonraki istek
+        // taze pool oluştursun. (Etkilenen istek de retry edilir.)
+        const invalidate = (reason: string) => (err?: unknown) => {
+          console.log(`MSSQL pool invalidated (${database}, ${reason}):`, err);
+          if (mssqlPools.get(database) === connection) {
+            mssqlPools.delete(database);
+          }
+          // Pool'u zorla kapat — yeni connect'in temiz başlaması için
+          try { pool.close(); } catch { /* ignore */ }
+        };
+        pool.on("error", invalidate("pool error"));
+        pool.on("close", invalidate("pool close"));
         return pool;
       })
       .catch((err) => {
@@ -55,6 +69,24 @@ const getMssqlPoolFor = (database: string) => {
   }
   return connection;
 };
+
+// Bir kez retry ile sarmalayıcı — ECONNRESET / ETIMEDOUT / "Connection lost"
+// gibi geçici hatalarda pool'u invalidate edip 1 sefer daha dener.
+async function withRetry<T>(database: string, op: (pool: mssql.ConnectionPool) => Promise<T>): Promise<T> {
+  try {
+    const pool = await getMssqlPoolFor(database);
+    return await op(pool);
+  } catch (err: any) {
+    const msg = String(err?.message ?? err ?? "").toLowerCase();
+    const isTransient = msg.includes("econnreset") || msg.includes("connection lost")
+      || msg.includes("etimedout") || msg.includes("epipe") || err?.code === "ECONNRESET";
+    if (!isTransient) throw err;
+    console.log(`MSSQL retry (${database}) after transient error:`, msg);
+    mssqlPools.delete(database);
+    const pool = await getMssqlPoolFor(database);
+    return await op(pool);
+  }
+}
 
 // Varsayılan MSSQL havuzu — eski davranışı korur (DB_NAME).
 const getMssqlPool = () => getMssqlPoolFor(process.env.DB_NAME || "");
