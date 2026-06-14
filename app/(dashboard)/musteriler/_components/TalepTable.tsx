@@ -32,20 +32,31 @@ interface ApiResponse {
 }
 
 const DURUM_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  // Ortak
   "Yeni Talep":          { label: "Yeni Talep",          color: "#9a6700", bg: "#fff3cd" },
+  "Pasif":               { label: "Pasif",               color: "#6e6e73", bg: "#f5f5f7" },
+  // Analiz
   "Numune Bekleniyor":   { label: "Numune Bekleniyor",   color: "#9a6700", bg: "#fff3cd" },
   "Analiz Aşamasında":   { label: "Analiz Aşamasında",   color: "#0071e3", bg: "#e8f0fe" },
   "Raporlandı":          { label: "Raporlandı",          color: "#1a7f4b", bg: "#e6f6ee" },
-  "Pasif":               { label: "Pasif",               color: "#6e6e73", bg: "#f5f5f7" },
+  // Destek
+  "Müşteri Yanıtı":      { label: "Müşteri Yanıtı",      color: "#9a6700", bg: "#fff3cd" },
+  "Cevaplandı":          { label: "Cevaplandı",          color: "#0071e3", bg: "#e8f0fe" },
+  "Kapandı":             { label: "Kapandı",             color: "#1a7f4b", bg: "#e6f6ee" },
 };
 
-// Filtre çubuğunda gösterilecek 4 durum
-const FILTRE_DURUMLAR = ["Yeni Talep", "Numune Bekleniyor", "Analiz Aşamasında", "Raporlandı"] as const;
-// İç portaldan elle değiştirilebilen 3 durum (Yeni Talep otomatik müşteri portalında oluşur)
-const DEGISEBILIR_DURUMLAR = ["Numune Bekleniyor", "Analiz Aşamasında", "Raporlandı"] as const;
+// Tur'a göre filtre çubuğunda gösterilecek durumlar
+const FILTRE_ANALIZ  = ["Yeni Talep", "Numune Bekleniyor", "Analiz Aşamasında", "Raporlandı"] as const;
+const FILTRE_DESTEK  = ["Yeni Talep", "Müşteri Yanıtı", "Cevaplandı", "Kapandı"] as const;
+// İç portaldan elle değiştirilebilen durumlar (Yeni Talep müşteri portalında otomatik oluşur)
+const DEGISEBILIR_ANALIZ = ["Numune Bekleniyor", "Analiz Aşamasında", "Raporlandı"] as const;
+const DEGISEBILIR_DESTEK = ["Müşteri Yanıtı", "Cevaplandı", "Kapandı"] as const;
 
 export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
   const router = useRouter();
+  // Tur'a göre filtre + değiştirilebilir durum seti
+  const FILTRE_DURUMLAR     = tur === "Destek" ? FILTRE_DESTEK     : FILTRE_ANALIZ;
+  const DEGISEBILIR_DURUMLAR = tur === "Destek" ? DEGISEBILIR_DESTEK : DEGISEBILIR_ANALIZ;
   const [data,       setData]       = useState<Talep[]>([]);
   const [total,      setTotal]      = useState(0);
   const [page,       setPage]       = useState(1);
@@ -86,8 +97,13 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
     }
   }, [tur]);
 
-  // İlk yükleme + tur değiştiğinde
-  useEffect(() => { fetchData(1, "", limit); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [tur]);
+  // İlk yükleme + tur değiştiğinde — eski filtreyi sıfırla (durum setleri farklı)
+  useEffect(() => {
+    durumFilterRef.current = "";
+    setDurumFilter("");
+    fetchData(1, "", limit);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [tur]);
 
   // Sayfa / limit değişimi
   useEffect(() => { fetchData(page, search, limit); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [page, limit]);
@@ -281,7 +297,11 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
                             </td>
                             <td style={{ textAlign: "center" }}>
                               <button
-                                onClick={() => router.push(`/musteriler/talepler/${t.ID}`)}
+                                onClick={() => router.push(
+                                  tur === "Destek"
+                                    ? `/musteriler/destek-talepleri/${t.ID}`
+                                    : `/musteriler/talepler/${t.ID}`
+                                )}
                                 title="Detayı göster"
                                 style={{
                                   background: "transparent", border: "1px solid var(--color-border)",
