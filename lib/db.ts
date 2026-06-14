@@ -42,24 +42,37 @@ const getMssqlPoolFor = (database: string) => {
   if (!connection) {
     connection = createFreshPool(database);
     mssqlPools.set(database, connection);
-  } else {
-    // POOL HEALTH CHECK: cached pool ölü olabilir (sunucu idle timeout ile
-    // kapatmış). pool.connected false ise veya bir alttaki connection.connecting
-    // takılı kalmışsa cache'i temizle → taze pool dön.
-    connection = connection.then(async (pool) => {
-      if (!pool.connected) {
-        console.log(`MSSQL pool stale (${database}), reconnecting…`);
-        try { await pool.close(); } catch { /* ignore */ }
-        mssqlPools.delete(database);
-        const fresh = createFreshPool(database);
-        mssqlPools.set(database, fresh);
-        return fresh;
-      }
-      return pool;
-    }) as Promise<mssql.ConnectionPool>;
+    return connection;
   }
-  return connection;
+  // POOL HEALTH CHECK: cached pool dead/half-open olabilir (sunucu idle timeout).
+  // pool.connected false ise ya da son ping > PING_TTL_MS önce ise gerçek ping at.
+  // Ping başarısız → cache temizle + taze pool. Ping başarılı → cache hit.
+  return connection.then(async (pool) => {
+    const last = poolLastPing.get(database) || 0;
+    const now = Date.now();
+    const needsPing = !pool.connected || (now - last > PING_TTL_MS);
+    if (!needsPing) return pool;
+    try {
+      await pool.request().query("SELECT 1 AS x");
+      poolLastPing.set(database, now);
+      return pool;
+    } catch (err) {
+      console.log(`MSSQL pool ping failed (${database}), reconnecting…`, err);
+      try { await pool.close(); } catch { /* ignore */ }
+      mssqlPools.delete(database);
+      poolLastPing.delete(database);
+      const fresh = createFreshPool(database);
+      mssqlPools.set(database, fresh);
+      const freshPool = await fresh;
+      poolLastPing.set(database, Date.now());
+      return freshPool;
+    }
+  });
 };
+
+// Son ping zamanı per database — sık ping yapmamak için TTL kontrolü.
+const poolLastPing = new Map<string, number>();
+const PING_TTL_MS = 60_000; // 1 dakikada bir taze ping (kabul edilebilir overhead)
 
 // Pool oluştur + idle/error handler bağla
 function createFreshPool(database: string): Promise<mssql.ConnectionPool> {
@@ -67,6 +80,8 @@ function createFreshPool(database: string): Promise<mssql.ConnectionPool> {
     .connect()
     .then((pool) => {
       console.log(`MSSQL veritabanina baglanildi: ${database}`);
+      // Taze pool — connect() yeni başardığı için lastPing'i şimdi olarak işaretle.
+      poolLastPing.set(database, Date.now());
       const cachedRef = mssqlPools.get(database);
       const invalidate = (reason: string) => (err?: unknown) => {
         console.log(`MSSQL pool invalidated (${database}, ${reason}):`, err);
