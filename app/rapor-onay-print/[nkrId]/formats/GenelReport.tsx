@@ -2,6 +2,7 @@ import { JetBrains_Mono } from "next/font/google";
 import OnayToolbar from "../OnayToolbar";
 import type { ReportFormatProps } from "../reportTypes";
 import { TableBody } from "@/components/ui/table";
+import { disRaporLabel } from "@/lib/disKod";
 
 const jetbrains = JetBrains_Mono({
   subsets: ["latin", "latin-ext"],
@@ -57,17 +58,54 @@ export default function GenelReport({
     sirketAdi,
   } = meta;
 
+  // Test raporunda DAİMA dış kod gösterilir (ÜGAM/RR26/XXXX/NN).
+  // DisKod yoksa (eski kayıt / migration 018 koşulmamış) iç koda düş.
+  const revNum = parseInt(revNo, 10) || 0;
+  const raporKodu = onay?.disRaporKodu
+    ? disRaporLabel(onay.disRaporKodu, revNum)
+    : `${header.RaporNo} / ${revNo}`;
+
+  // Bu rapora dahil edilen analizlerden en az biri akredite mi?
+  // Akredite analiz yoksa TÜRKAK logosu ve sağdaki 3-satırlık kutu gizlenir.
+  const hasAkredite = hizmetler.some(
+    (h) => String(h.Akreditasyon || "").trim().toLowerCase() === "var"
+  );
+
+  // .akredite-box hücreleri SABIT 20mm × 8mm. AB-2015-T ve MM-YY normal boyutta
+  // kalır; SADECE rapor kodu hücresi uzunsa font küçültülür — kutuya dokunulmaz.
+  const _kodLen = raporKodu.length;
+  const akrKodFontSize =
+    _kodLen <= 10 ? 10.5 : _kodLen <= 14 ? 8.5 : _kodLen <= 18 ? 7 : 6;
+
   return (
     <>
       <style>{`
         @page { size: A4; margin: 0; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
+
         .root {
-          font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
+          /* ── Tasarım belirteçleri (tek noktadan yönetim) ── */
+          --ink:        #141414;  /* birincil metin */
+          --ink-strong: #000000;  /* başlık / vurgu */
+          --ink-soft:   #555555;  /* ikincil metin */
+          --ink-faint:  #8a8a8a;  /* tarih / üçüncül */
+          --rule:       #000000;  /* tam çizgiler */
+          --rule-soft:  #dcdcdc;  /* ince ayraçlar */
+          --accent:     #4A46E5;  /* e-imza */
+          --accent-bg:  #eef0fd;
+          --accent-bd:  #c7c9f5;
+
+          /* next/font ile yüklenen JetBrains Mono'yu (latin-ext: ş ğ İ ı ç) öncele */
+          font-family: var(--font-rapor), 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
           background: #e9ecef;
-          color: #1d1d1f;
-          font-size: 10.5px;
-          line-height: 1.45;
+          color: var(--ink);
+          font-size: 10px;
+          line-height: 1.5;
+          letter-spacing: -0.02em;
+          font-variant-ligatures: none;
+          -webkit-font-smoothing: antialiased;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
           min-height: 100vh;
         }
         .page {
@@ -75,7 +113,7 @@ export default function GenelReport({
           min-height: 297mm;
           margin: 24px auto 64px;
           background: #fff;
-          padding: 8mm 8mm 8mm 8mm;
+          padding: 8mm;
           box-shadow: 0 4px 24px rgba(0,0,0,0.08);
           display: flex;
           flex-direction: column;
@@ -98,7 +136,7 @@ export default function GenelReport({
           height: 30mm;
           width: auto;
           object-fit: contain;
-          transform: translateX(5px);
+          transform: translateX(9px);
         }
 
         /* ───── DENEY RAPORU BAŞLIK ───── */
@@ -108,37 +146,43 @@ export default function GenelReport({
           align-items: center;
         }
         .report-title {
-          font-size: 25px;
+          font-size: 26px;
           font-weight: 800;
-          color: #000000;
+          letter-spacing: -0.04em;
+          color: var(--ink-strong);
         }
         .akredite-box {
           border-collapse: collapse;
+          width: 20mm;
+          table-layout: fixed;
         }
         .akredite-box td {
-          border: 1px solid #000;
-          width: 2.14cm;
-          height: 0.69cm;
+          border: 1px solid var(--rule);
+          width: 20mm;
+          height: 8mm;
           text-align: center;
           vertical-align: middle;
-          font-size: 11px;
-          padding: 0 2px;
+          font-size: 10.5px;
+          letter-spacing: -0.02em;
+          padding: 0 1px;
+          overflow: hidden;
+          word-break: break-all;
+          line-height: 1.1;
         }
 
-        /* ───── ÜST META BAR (2x2: Rapor No/Rev · Sayfa · Kabul · Yayın) ───── */
+        /* ───── ÜST META BAR (Rapor No/Rev · Kabul · Yayın) ───── */
         .meta-box {
           display: grid;
           grid-template-columns: 1fr 1fr;
           margin-top: 2mm;
-          font-size: 12px;
+          font-size: 10.5px;
         }
-
-        .meta-table{
-          font-size: 11px;              
-          letter-spacing: -0.05em;     
-          margin-top: 30px;}
+        .meta-table {
+          font-size: 10.5px;
+          letter-spacing: -0.03em;
+          margin-top: 6mm;
+        }
         .meta-table strong { font-weight: 700; }
-
 
         /* ───── MÜŞTERİ / NUMUNE TABLOSU (2 sütun) ───── */
         .info-table {
@@ -149,92 +193,100 @@ export default function GenelReport({
         }
         .info-table th {
           background: #ffffff;
-          color: #000000;
-          font-size: 12px;
-          letter-spacing: -0.05em;
+          color: var(--ink-strong);
+          font-size: 11.5px;
+          letter-spacing: -0.03em;
           font-weight: 700;
           text-align: left;
           width: 55%;
+          padding-bottom: 3px;
+          border-bottom: 1px solid var(--rule-soft);
         }
         .info-table td {
           vertical-align: top;
-          line-height: 1.55;
+          line-height: 1.6;
+          padding-top: 3px;
         }
         .info-table .firma-ad {
           font-size: 11px;
+          font-weight: 600;
           padding-top: 5px;
-          letter-spacing: -0.05em;
+          letter-spacing: -0.03em;
         }
         .info-table .info-line {
-          color: #1d1d1f;
-          font-size:10px;
-          letter-spacing: -0.05em;
+          color: var(--ink);
+          font-size: 9.5px;
+          letter-spacing: -0.03em;
         }
-      
 
         /* ───── TEST SONUÇLARI SECTION ───── */
         .results-section {
           margin-top: 5mm;
         }
         .results-title {
-          background: #ffffff;
-          color: #000000;
-          font-size: 12px;
+          color: var(--ink-strong);
+          font-size: 11.5px;
           font-weight: 700;
           text-align: left;
-          letter-spacing: -0.05em;
+          letter-spacing: -0.03em;
+          padding-bottom: 3px;
+          border-bottom: 1px solid var(--rule-soft);
         }
-        .results-subtitle {          
-          font-size: 10px;
-          color: #000000;
-          background: #ffffff;
+        .results-subtitle {
+          font-size: 9.5px;
+          color: var(--ink);
           padding-top: 4px;
           padding-bottom: 10px;
-          letter-spacing: -0.05em;
+          letter-spacing: -0.03em;
         }
         .results {
-          border-collapse: collapse; 
+          border-collapse: collapse;
           width: 100%;
+          margin-top: 3mm;
         }
-          .results tr:last-child td {
-            padding-bottom: 7px;
-           }
+        .results tr:last-child td {
+          padding-bottom: 7px;
+          border-bottom: 1.5px solid var(--rule);
+        }
         .results thead th {
           background: #ffffff;
           font-weight: 600;
-          color: #000000;
+          color: var(--ink-strong);
           padding-top: 6px;
           padding-bottom: 6px;
-          border-bottom: 2px solid #000000;
+          border-bottom: 2px solid var(--rule);
           text-align: left;
-          font-size: 11.5px;
-          letter-spacing: -0.05em;
+          font-size: 10.5px;
+          letter-spacing: -0.03em;
         }
         .results tbody td {
           padding-top: 7px;
+          padding-bottom: 6px;
           vertical-align: middle;
           font-size: 10px;
           text-align: left;
-          letter-spacing: -0.05em;
+          letter-spacing: -0.03em;
+          border-bottom: 1px solid var(--rule-soft);
         }
         .results tbody td.center { text-align: left; }
-        .results tbody td.muted { color: #000000; font-size: 8px; }
+        .results tbody td.muted { color: var(--ink-soft); font-size: 8.5px; }
         .results tbody td.bold { font-weight: 700; }
-        .deg-gecer { color: #000000; font-weight: 700; text-align: center; }
-        .deg-kaldi { color: #000000; font-weight: 700; text-align: center; }
-        .deg-other { color: #000000; t }
+        .deg-gecer { color: var(--ink-strong); font-weight: 700; text-align: center; letter-spacing: 0.02em; }
+        .deg-kaldi { color: var(--ink-strong); font-weight: 700; text-align: center; letter-spacing: 0.02em; }
+        .deg-other { color: var(--ink-strong); font-weight: 700; text-align: center; }
 
-        /* ───── NOTLAR ───── */
-        .notlar {ext-align: center;
+        /* ───── NOTLAR / AÇIKLAMALAR ───── */
+        .notlar {
           margin-top: 5mm;
           font-size: 9px;
-          color: #000000;
+          color: var(--ink);
+          line-height: 1.55;
         }
         .notlar-title {
-          background: #ffffff;
-          color: #000000;
-          font-size: 9px;
+          color: var(--ink-strong);
+          font-size: 11.5px;
           font-weight: 700;
+          letter-spacing: -0.03em;
         }
         .notlar-body {
         }
@@ -242,7 +294,7 @@ export default function GenelReport({
         .notlar-body p:last-child { margin-bottom: 0; }
         .notlar-body .legend {
           font-weight: 700;
-          color: #1d1d1f;
+          color: var(--ink);
         }
 
         /* ───── ONAY BLOĞU ───── */
@@ -260,10 +312,10 @@ export default function GenelReport({
           flex-direction: column;
         }
         .approval-cell-title {
-          background: #ffffff;
-          color: #000000;
+          color: var(--ink-strong);
           font-size: 11px;
           font-weight: 700;
+          letter-spacing: -0.03em;
           text-align: left;
         }
         .approval-cell-body {
@@ -271,7 +323,7 @@ export default function GenelReport({
           display: flex;
           flex-direction: column;
           justify-content: center;
-          align-items: left;
+          align-items: flex-start;
           padding: 5px;
           text-align: left;
         }
@@ -280,29 +332,31 @@ export default function GenelReport({
           align-items: center;
           width: fit-content;
           gap: 4px;
-          background: #e8f4f8;
-          color: #4A46E5;
-          border: 1px solid #b8dbe3;
-          padding: 2px 8px;
+          background: var(--accent-bg);
+          color: var(--accent);
+          border: 1px solid var(--accent-bd);
+          padding: 2px 9px;
           border-radius: 999px;
           font-size: 9px;
           font-weight: 600;
+          letter-spacing: -0.01em;
         }
         .approval-name {
           font-weight: 700;
           font-size: 10px;
-          margin-top: 2mm;          
+          letter-spacing: -0.02em;
+          margin-top: 2mm;
           text-align: left;
           width: 100%;
         }
         .approval-date {
           font-size: 8.5px;
-          color: #6e6e73;
+          color: var(--ink-faint);
           margin-top: 1px;
         }
         .approval-role {
           font-size: 9px;
-          color: #6e6e73;
+          color: var(--ink-soft);
           margin-top: 1px;
         }
 
@@ -312,19 +366,69 @@ export default function GenelReport({
           justify-content: space-between;
           align-items: flex-end;
           font-size: 9px;
-          color: #6e6e73;
+          color: var(--ink-soft);
           margin-top: 4mm;
           padding-top: 3mm;
+        }
+
+        .FooterNot {
+          font-size: 7px;
+          line-height: 1.5;
+          color: var(--ink-soft);
+          text-align: justify;
+        }
+
+        .endof {
+          padding-top: 10mm;
+          font-weight: 800;
+          font-size: 10px;
+          letter-spacing: 0.04em;
+          text-align: center;
+        }
+
+        /* ───── ALT BİLGİ (genel kapsayıcı) ───── */
+        .rapor-altbilgi {
+          width: 100%;
+          font-size: 8.5px;
+          color: var(--ink-soft);
+          padding-top: 7px;
+          position: relative;
+          box-sizing: border-box;
+        }
+        .sirket-bilgisi {
+          text-align: center;
+          margin-bottom: 12px;
+          line-height: 1.7;
+        }
+        .dokuman-bilgisi {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+        }
+        .sol-alt {
+          text-align: left;
+        }
+        .sag-alt {
+          text-align: right;
+          font-weight: 700;
         }
 
         @media print {
           body { background: #fff; }
           .onay-toolbar { display: none !important; }
+          /* TEK SAYFA garantisi: min-height yerine SABIT height + overflow:hidden.
+             rapor-altbilgi (firma adı/Sayfa No) doğal akışta sayfa sonuna gelir;
+             içerik 297mm'i aşarsa ikinci sayfa yerine kırpılır. */
           .page {
-            width: 210mm; max-width: 210mm; min-height: 297mm;
+            width: 210mm; max-width: 210mm;
+            height: 297mm; min-height: 297mm; max-height: 297mm;
             margin: 0 auto; box-shadow: none;
-            padding: 8mm 8mm 8mm 8mm;
+            padding: 8mm;
+            overflow: hidden;
+            page-break-after: avoid;
+            page-break-inside: avoid;
           }
+          html, body { height: 297mm; overflow: hidden; }
         }
       `}</style>
 
@@ -337,26 +441,30 @@ export default function GenelReport({
         />
 
         <div className="page">
-          {/* ───── HEADER: Sol logo + Sağ Türkak/ilac-MRA ───── */}
+          {/* ───── HEADER: Sol logo + (akredite varsa) Sağ Türkak/ilac-MRA ───── */}
           <div className="header">
             <div className="header-logo">
               <img src="/unique-logo-wide.png" alt="UNIQUE ANALYSE" />
             </div>
-            <div className="header-akredite">
-              <img src="/turkak-ilac.jpg" alt="TÜRKAK AB-2015-T · ilac-MRA" />
-            </div>
+            {hasAkredite && (
+              <div className="header-akredite">
+                <img src="/turkak-ilac.jpg" alt="TÜRKAK AB-2015-T · ilac-MRA" />
+              </div>
+            )}
           </div>
 
-          {/* ───── DENEY RAPORU BAŞLIK + akreditasyon kutusu ───── */}
+          {/* ───── DENEY RAPORU BAŞLIK + (akredite varsa) akreditasyon kutusu ───── */}
           <div className="title-row">
             <div className="report-title">DENEY RAPORU</div>
-            <table className="akredite-box">
-              <tbody>
-                <tr><td>AB-2015-T</td></tr>
-                <tr><td>{header.RaporNo}/{revNo}</td></tr>
-                <tr><td>{toMMYY(yayinTarihi)}</td></tr>
-              </tbody>
-            </table>
+            {hasAkredite && (
+              <table className="akredite-box">
+                <tbody>
+                  <tr><td>AB-2015-T</td></tr>
+                  <tr><td style={{ fontSize: `${akrKodFontSize}px` }}>{raporKodu}</td></tr>
+                  <tr><td>{toMMYY(yayinTarihi)}</td></tr>
+                </tbody>
+              </table>
+            )}
           </div>
 
           {/* ───── ÜST META: Rapor No/Rev · Sayfa · Kabul · Yayın ───── */}
@@ -365,7 +473,7 @@ export default function GenelReport({
             <tbody>
               <tr>
                 <td style={{ paddingBottom: "4px" , width: "20%" }}><strong>Rapor No / Rev. No:</strong></td>
-                <td style={{ paddingBottom: "4px" , width: "50%" }}>{header.RaporNo} / {revNo}</td>
+                <td style={{ paddingBottom: "4px" , width: "50%" }}>{raporKodu}</td>
                 <td style={{ paddingBottom: "4px" }}><strong></strong></td>
                 <td style={{ paddingBottom: "4px"  }}></td>
               </tr>
@@ -380,7 +488,7 @@ export default function GenelReport({
           <div style={{marginTop: "4px", borderBottom: "2px solid #000000"}}></div>
 
           {/* ───── MÜŞTERİ / NUMUNE BİLGİLERİ (2 sütun) ───── */}
-          <table className="info-table">
+          <table className="info-table" style={{ marginTop: 20 }}>
             <thead>
               <tr>
                 <th>MÜŞTERİ BİLGİLERİ</th>
@@ -391,7 +499,7 @@ export default function GenelReport({
               <tr>
                 <td>
                   <div className="firma-ad">{header.FirmaAd || "—"}</div>
-                  <div className="info-line">{header.FirmaAdres}</div>
+                  <div className="info-line" style={{ width: "90%" }}>{header.FirmaAdres}</div>
                   <div className="info-line">{header.FirmaYetkili || "—"}</div>
                   <div className="info-line">{header.FirmaEmail}</div>
                 </td>
@@ -407,11 +515,11 @@ export default function GenelReport({
                   )}
                   <div className="info-line">
                     <span className="info-label">Üretim Tarihi: </span>
-                    {fmtTarih(String(header.UretimTarihi || ""))}
+                    {String(header.UretimTarihi || "—")}
                   </div>
                   <div className="info-line">
                     <span className="info-label">Son Kullanım Tarihi: </span>
-                    {fmtTarih(String(header.SKT || ""))}
+                    {String(header.SKT || "—")}
                   </div>
                   <div className="info-line">
                     <span className="info-label">Seri/Lot No/Ürün Kodu: </span>
@@ -423,7 +531,7 @@ export default function GenelReport({
           </table>
 
           {/* ───── TEST SONUÇLARI ───── */}
-          <div className="results-section">
+          <div className="results-section" style={{ marginTop: 30 }}>
             <div className="results-title">TEST SONUÇLARI</div>
             <div className="notlar-body"> </div>
             <table className="results">
@@ -472,35 +580,20 @@ export default function GenelReport({
 
           {/* ───── NOTLAR ───── */}
           <div className="notlar">
-          <div className="results-title" style={{marginBottom:"4px"}}>AÇIKLAMALAR</div>    
+          <div className="results-title" style={{marginBottom: "7px"}}>AÇIKLAMALAR</div> 
               {testBaslangic && testBitis ? (
                 <>
-                  Müşteri talebi doğrultusunda yapılan testlerin uygulama periyodu{" "}
-                  <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong> aralığındadır.{" "}
+                  Analiz Periyodu: {" "}
+                  <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
                 </>
               ) : null}
             <br></br>Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir. 
-            <div className="notlar-title" style={{ marginTop: 5 }}>NOTLAR</div>
-            <div className="notlar-body">
-              <span className="legend">LOQ:</span> Tespit Limiti, <span className="legend">Ö.B.:</span> Ölçüm Belirsizliği
-               <br></br>&ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.
-               <br></br>
-                Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Analiz Raporları geçersizdir.
-                {" "}{sirketAdi}&apos;nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya
-                herhangi bir başka amaçla kullanılamaz.
-              
-            <br></br>
-                Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.
-                Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından
-                beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal
-                zorunluluklardan laboratuvarımız sorumlu değildir.
-              <br></br>
-                <span className="legend">Karar Kuralı:</span>{" "} Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır.
-                
-            </div>
+   
           </div>
 
-          {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ───── */}
+          {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ─────  */}
+          <div className="endof">* Rapor Sonu *</div>
+          
           <div className="approval-block">
             <div className="approval-cell" style={{width:200, paddingTop:"15px"}}>
               <div className="approval-cell-title" style={{paddingLeft:"5px"}}>Raporu Hazırlayan</div>
@@ -535,12 +628,20 @@ export default function GenelReport({
                 />
               </div>
               <div className="approval-cell-body">
-                {karekod?.imzaHash && (
+                {karekod?.dogrulamaKod && (
                   <div
-                    title="Belge dijital imzası (SHA-256/HMAC)"
-                    style={{ fontSize: "5.5px", lineHeight: 1.25, color: "#646464", wordBreak: "break-all", padding: "0 3px", textAlign: "center" }}
+                    title="Doğrulama Kodu — manuel doğrulamada bu kod kullanılır"
+                    style={{
+                      textAlign: "center",
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      letterSpacing: "0.14em",
+                      color: "#000",
+                      fontFamily: "monospace",
+                      padding: "1px 0",
+                    }}
                   >
-                    Dijital İmza: {karekod.imzaHash.slice(0, 32)}
+                    {karekod.dogrulamaKod}
                   </div>
                 )}
               </div>
@@ -548,11 +649,31 @@ export default function GenelReport({
           </div>
 
           {/* ───── FOOTER ───── */}
-             <div className="footer" style={{marginTop:"5px"}}>
-            <span> {process.env.SIRKET_EMAIL || "info@uniqueanalyse.com"}</span>
-            <span>Ek-1.PR.20 Geçerlilik Tarihi: 25.11.2024 / 01</span>            
-            <span className="page-number">Sayfa: 1 / 1</span>            
+
+  <div className="FooterNot">
+                &ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Deney Raporları geçersizdir.{" "}{sirketAdi}&apos;nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya herhangi bir başka amaçla kullanılamaz.Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal zorunluluklardan laboratuvarımız sorumlu değildir. Karar Kuralı: Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır.
           </div>
+
+             <div style={{marginTop:"10px"}}></div>
+       
+
+<div className="rapor-altbilgi">
+  <div className="sirket-bilgisi">
+    <strong>UNIQUE ANALİZ BELGELENDİRME ve GÖZETİM HİZMETLERİ LTD. ŞTİ.</strong><br></br>
+    Atatürk Mah. Hadımköy Yolu Cad. No:10 İç Kapı No:7 Esenyurt / İstanbul | info@uniqueanalyse.com
+  </div>
+
+  <div className="dokuman-bilgisi">
+    <div className="sol-alt">
+      Ek-1.PR.20/Rev.02/12.06.2026
+    </div>
+    <div className="sag-alt">
+      Sayfa: 1 / 1
+    </div>
+  </div>
+</div>
+
+
 
 
         </div>

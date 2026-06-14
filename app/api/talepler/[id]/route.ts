@@ -39,6 +39,7 @@ export async function GET(
           ISNULL(r.Adres, '')      AS RaporAdres,
           ISNULL(r.Yetkili, '')    AS RaporYetkili,
           ISNULL(r.Iletisim, '')   AS RaporIletisim,
+          ISNULL(r.Mail, '')       AS RaporMail,
           ISNULL(r.Karar, '')      AS Karar,
           ISNULL(r.Dil, '')        AS Dil,
           ISNULL(r.Iade, '')       AS Iade,
@@ -83,9 +84,14 @@ export async function GET(
 }
 
 // PATCH /api/talepler/[id] — talep durumunu güncelle.
-// Yalnızca 3 manuel durum izinli (Yeni Talep otomatik, müşteri portalında oluşur):
-//   Numune Bekleniyor | Analiz Aşamasında | Raporlandı
-const VALID_DURUMLAR = new Set(["Numune Bekleniyor", "Analiz Aşamasında", "Raporlandı"]);
+// Yeni Talep otomatik müşteri portalında oluşur. Personel manuel olarak şu durumlara
+// geçirebilir:
+//   Analiz : Numune Bekleniyor | Analiz Aşamasında | Raporlandı
+//   Destek : Müşteri Yanıtı     | Cevaplandı        | Kapandı
+const VALID_DURUMLAR = new Set([
+  "Numune Bekleniyor", "Analiz Aşamasında", "Raporlandı",
+  "Müşteri Yanıtı",    "Cevaplandı",         "Kapandı",
+]);
 
 export async function PATCH(
   request: Request,

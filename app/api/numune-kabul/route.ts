@@ -30,13 +30,31 @@ export async function GET(request: NextRequest) {
   try {
     const pool = await cosmoPool;
 
-    // Arama: Evrak_No, RaporNo, FirmaAd, NumuneAdi üzerinde
+    // Migration 018: NKR_RaporOnay.DisRaporKodu — kolon yoksa arama/gösterim
+    // dışı kalır (graceful degrade).
+    const disKodCheck = await pool.request().query(`
+      SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = 'NKR_RaporOnay' AND COLUMN_NAME = 'DisRaporKodu'
+    `);
+    const hasDisRaporKodu = disKodCheck.recordset.length > 0;
+
+    // DisRaporKodu (ÜGAM/RR26/XXXX) NKR_RaporOnay tablosunda — EXISTS ile arar.
+    const disKodSearchClause = (hasDisRaporKodu && search)
+      ? `OR EXISTS (
+             SELECT 1 FROM NKR_RaporOnay ro
+             WHERE ro.NkrID = n.ID
+               AND LOWER(COALESCE(ro.DisRaporKodu, '')) LIKE LOWER(@searchLike)
+           )`
+      : "";
+
+    // Arama: Evrak_No, RaporNo, FirmaAd, NumuneAdi (+ DisRaporKodu) üzerinde
     const searchClause = search
       ? `AND (
           LOWER(ISNULL(CAST(n.Evrak_No AS NVARCHAR), '')) LIKE LOWER(@searchLike)
           OR LOWER(ISNULL(CAST(n.RaporNo AS NVARCHAR), '')) LIKE LOWER(@searchLike)
           OR LOWER(ISNULL(f.Ad, '')) LIKE LOWER(@searchLike)
           OR LOWER(ISNULL(n.Numune_Adi, '')) LIKE LOWER(@searchLike)
+          ${disKodSearchClause}
         )`
       : "";
 
@@ -127,11 +145,20 @@ export async function GET(request: NextRequest) {
       //   - Onay Bekliyor   : tüm NumuneX1.SonucKayitTarihi dolu, onay yok
       //   - Sonuç Girişi    : NKR_LabKabul var, sonuç tamamlanmamış
       //   - Kabul Bekliyor  : NKR_LabKabul yok
+      // DisRaporKodu(lar): bir NKR'nin birden fazla rapor formatı varsa virgülle
+      // birleştirilir. Kolon yoksa NULL döner (graceful).
+      const disKodSelect = hasDisRaporKodu
+        ? `(SELECT STRING_AGG(ro.DisRaporKodu, N', ')
+             FROM NKR_RaporOnay ro
+             WHERE ro.NkrID = n.ID AND ro.DisRaporKodu IS NOT NULL)`
+        : `CAST(NULL AS NVARCHAR(400))`;
+
       const numuneResult = await req3.query(`
         SELECT
           n.ID,
           n.Evrak_No,
           n.RaporNo,
+          ${disKodSelect} AS DisRaporKodu,
           n.Numune_Adi,
           n.Grup,
           n.Tur,

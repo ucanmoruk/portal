@@ -3,7 +3,8 @@ import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 import { writeInternalTeklifLog, teklifNoLabel, clientIpFromRequest } from "@/lib/teklifLog";
-import { icTeklifRange, randomDisKod } from "@/lib/teklifNo";
+import { icTeklifRange } from "@/lib/teklifNo";
+import { randomDisKodTeklif } from "@/lib/disKod";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Teklifler — MSSQL massgrup_cosmo · YENİ tablolar TeklifBaslik / TeklifKalem
@@ -77,14 +78,14 @@ async function nextIcTeklifNo(pool: any): Promise<number> {
 async function genUniqueDisKod(pool: any): Promise<string> {
   const year = new Date().getFullYear();
   for (let i = 0; i < 25; i++) {
-    const kod = randomDisKod(year);
+    const kod = randomDisKodTeklif(year);
     const exists = await pool.request()
       .input("kod", kod)
       .query(`SELECT TOP 1 ID FROM TeklifBaslik WHERE DisTeklifKodu = @kod`);
     if (!exists.recordset.length) return kod;
   }
   // Aşırı düşük olasılık: yine de benzersizleştir
-  return randomDisKod(year) + String(Date.now()).slice(-2);
+  return randomDisKodTeklif(year) + String(Date.now()).slice(-2);
 }
 
 async function insertSatirlar(pool: any, teklifId: number, satirlar: any[]) {
@@ -114,6 +115,17 @@ function calcToplam(satirlar: any[]): number {
     const i    = parseFloat(s.iskonto) || 0;
     return sum + adet * f * (1 - i / 100);
   }, 0);
+}
+
+// Notlar kolonu icerigi: oncelikli olarak Kisa Aciklama (diger portal tb.Notlar'i
+// kisa aciklama olarak okuyor). Teklif Notu doluysa kisa aciklamanin altina eklenir.
+// Idempotent: teklifNotu zaten "kisaAciklama\n\n..." prefix'i ile geliyorsa cift yazmaz.
+function composeNotlar(kisaAciklama: any, teklifNotu: any): string | null {
+  const k = String(kisaAciklama ?? "").trim() || "Fiyat teklifimiz";
+  let n = String(teklifNotu ?? "").trim();
+  if (n.startsWith(k + "\n\n")) n = n.slice(k.length + 2).trim();
+  else if (n === k) n = "";
+  return n ? `${k}\n\n${n}` : k;
 }
 
 // ----------------------------------------------------------------
@@ -251,7 +263,7 @@ export async function POST(request: Request) {
       .input("MusteriID",    Number(musteriId))
       .input("Tarih",        new Date())
       .input("Toplam",       parseFloat(toplam.toFixed(2)))
-      .input("Notlar",       notlar        || null)
+      .input("Notlar",       composeNotlar(kisaAciklama, notlar))
       .input("TeklifKonusu", teklifKonusu  || "Fiyat teklifimiz")
       .input("KisaAciklama", kisaAciklama  || "Fiyat teklifimiz")
       .input("TeklifVeren",  teklifVeren   || null)

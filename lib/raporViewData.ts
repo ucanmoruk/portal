@@ -87,7 +87,7 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
         ISNULL(s.Ad, '')           AS Ad,
         ISNULL(s.Akreditasyon, '') AS Akreditasyon,
         ISNULL(s.Method, '')       AS Metot,
-        ISNULL(x1.Birim, ISNULL(s.Matriks, '')) AS Birim,
+        ISNULL(x1.Birim, ISNULL(s.BirimText, '')) AS Birim,
         x1.[Limit]                  AS LimitDeger,
         ISNULL(s.LOQ, '')          AS LOQ,
         x1.Sonuc                    AS Sonuc,
@@ -101,14 +101,6 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
     `);
   const hizmetler = hizmetRes.recordset as HizmetRow[];
 
-  // Test başlangıç ve bitiş tarihi (min/max termin)
-  const terminTarihler = hizmetler
-    .map((h) => h.Termin)
-    .filter((t): t is string => !!t)
-    .sort();
-  const testBaslangic = terminTarihler[0] || null;
-  const testBitis = terminTarihler[terminTarihler.length - 1] || null;
-
   // ───── Onay bilgisi ─────
   let onay: OnayInfo | null = null;
   const onayTblCheck = await pool.request().query(
@@ -116,13 +108,20 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
      WHERE TABLE_NAME = 'NKR_RaporOnay' AND TABLE_SCHEMA IN ('dbo','cosmoroot')`,
   );
   if (onayTblCheck.recordset.length > 0) {
+    // Migration 018: DisRaporKodu kolonu — yoksa NULL döner (eski şema graceful degrade)
+    const disKodCol = await pool.request().query(
+      `SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_NAME = 'NKR_RaporOnay' AND COLUMN_NAME = 'DisRaporKodu'`
+    );
+    const hasDisKod = disKodCol.recordset.length > 0;
     const onayRes = await pool.request()
       .input("nkrId", nkrIdNum)
       .input("format", format)
       .query(`
         SELECT o.KarekodToken, o.Durum, o.OnayTarihi, o.YayinTarihi, o.YayinUrl,
                ISNULL(o.OnaylayanAd, '') AS OnaylayanAd,
-               ''                  AS OnaylayanSoyad
+               ''                  AS OnaylayanSoyad,
+               ${hasDisKod ? "o.DisRaporKodu" : "CAST(NULL AS NVARCHAR(40)) AS DisRaporKodu"}
         FROM NKR_RaporOnay o
         WHERE o.NkrID = @nkrId
           AND UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
@@ -138,15 +137,48 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
         yayinTarihi: r.YayinTarihi,
         yayinUrl: r.YayinUrl,
         onaylayanAd: [ad, soyad].filter(Boolean).join(" ") || null,
+        disRaporKodu: r.DisRaporKodu ?? null,
       };
     }
   }
 
   // ───── Karekod (QR) + dijital imza ─────
+  // Yeni doğrulama sistemi: https://dogrulama.uniqueanalyse.com/
+  // URL şu üç parçayı taşır:
+  //   t = KarekodToken (gerçek auth)
+  //   r = Rapor numarası (dış kod öncelikli, yoksa iç kod)
+  //   k = 8 karakterlik doğrulama kodu (QR altında müşteriye gösterilir, manuel girişte de kullanılır)
+  // Ek olarak rastgele decoy param eklenir → URL fingerprinting/tracking zorlaşır.
+  // Müşteri QR okuduğunda doğrulama sayfası bu üçünü otomatik doldurur; sadece "Doğrula"ya basar.
   let karekod: KarekodInfo | null = null;
   if (onay?.token) {
-    const dogrulamaBase = (process.env.NEXT_PUBLIC_DOGRULAMA_URL || "https://uniqueanalyse.com").replace(/\/+$/, "");
-    const dogrulamaUrl = `${dogrulamaBase}/rapordogrulama/${onay.token}`;
+    const dogrulamaBase = (process.env.NEXT_PUBLIC_DOGRULAMA_URL || "https://dogrulama.uniqueanalyse.com").replace(/\/+$/, "");
+
+    // Doğrulama kodu: token'dan ilk 8 alfasayısal karakter, karışıklık önleyici filtre (I,L,O,0,1 yok), büyük harf.
+    const dogrulamaKod = onay.token
+      .replace(/[^A-Z0-9]/gi, "")
+      .replace(/[ILO01]/gi, "")
+      .toUpperCase()
+      .slice(0, 8)
+      .padEnd(8, "X");
+
+    const raporNoForVerify = onay.disRaporKodu || header.RaporNo || "";
+
+    // Decoy: her render'da değişen rastgele param — URL fingerprinting'i zorlaştırır.
+    const decoy = Math.random().toString(36).slice(2, 12);
+    // Doğrulama sitesi paramları:
+    //   raporNo → Rapor numarası alanına yazılır (form auto-fill)
+    //   token   → Doğrulama Kodu alanına yazılır (8 karakter, insan-okunur)
+    //   auth    → 24 karakter tam KarekodToken — form'a yansıtılmaz, backend güçlü
+    //             auth katmanı (brute-force koruması). Manuel girişte kullanılmaz.
+    //   v       → decoy/anti-tracking
+    const params = new URLSearchParams({
+      raporNo: raporNoForVerify,
+      token: dogrulamaKod,
+      auth: onay.token,
+      v: decoy,
+    });
+    const dogrulamaUrl = `${dogrulamaBase}/?${params.toString()}`;
 
     let qrDataUrl = "";
     try {
@@ -178,16 +210,32 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
       imzaHash = null;
     }
 
-    karekod = { url: dogrulamaUrl, qrDataUrl, imzaHash };
+    karekod = { url: dogrulamaUrl, qrDataUrl, imzaHash, dogrulamaKod, raporNoForVerify };
   }
 
   const sirketAdi = process.env.SIRKET_ADI || "UNIQUE Analiz Belgelendirme ve Gözetim Hizmetleri Ltd. Şti.";
 
+  // Yayın tarihi: onay yoksa raporun yazdırıldığı günün tarihi gösterilir.
+  // Sıra: (1) gerçek yayın tarihi  (2) onay tarihi  (3) bugün
   const yayinTarihi = onay?.yayinTarihi
     ? fmtDate(onay.yayinTarihi)
     : onay?.onayTarihi
       ? fmtDate(onay.onayTarihi)
-      : "—";
+      : fmtDate(new Date());
+
+  // Analiz Periyodu: Numune Kabul Tarihi → Rapor Onay Tarihi
+  // Onay henüz yoksa raporun yazdırıldığı gün son tarih olur (önizleme tutarlılığı).
+  // PDF formatter'ları "YYYY-MM-DD" prefix bekliyor — Date objesini ISO'ya çevir.
+  const toIsoDate = (d: unknown): string | null => {
+    if (!d) return null;
+    if (d instanceof Date) return d.toISOString().slice(0, 10);
+    const s = String(d);
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    const parsed = new Date(s);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+  };
+  const testBaslangic: string | null = toIsoDate(header.Tarih);
+  const testBitis: string | null = toIsoDate(onay?.onayTarihi) ?? toIsoDate(new Date());
 
   const meta: RaporMeta = {
     revNo: "0",

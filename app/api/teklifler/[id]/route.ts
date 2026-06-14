@@ -3,6 +3,17 @@ import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { writeInternalTeklifLog, teklifNoLabel, clientIpFromRequest } from "@/lib/teklifLog";
 
+// Notlar kolonu icerigi: oncelikli olarak Kisa Aciklama (diger portal tb.Notlar'i
+// kisa aciklama olarak okuyor). Teklif Notu doluysa kisa aciklamanin altina eklenir.
+// Idempotent: teklifNotu zaten "kisaAciklama\n\n..." prefix'i ile geliyorsa cift yazmaz.
+function composeNotlar(kisaAciklama: any, teklifNotu: any): string | null {
+  const k = String(kisaAciklama ?? "").trim() || "Fiyat teklifimiz";
+  let n = String(teklifNotu ?? "").trim();
+  if (n.startsWith(k + "\n\n")) n = n.slice(k.length + 2).trim();
+  else if (n === k) n = "";
+  return n ? `${k}\n\n${n}` : k;
+}
+
 // ----------------------------------------------------------------
 // GET  /api/teklifler/[id]  — header + satirlar
 // ----------------------------------------------------------------
@@ -166,7 +177,7 @@ export async function PUT(
       .input("ID",           teklifId)
       .input("MusteriID",    Number(musteriId))
       .input("Toplam",       parseFloat(toplam.toFixed(2)))
-      .input("Notlar",       notlar        || null)
+      .input("Notlar",       composeNotlar(kisaAciklama, notlar))
       .input("TeklifKonusu", teklifKonusu  || "Fiyat teklifimiz")
       .input("KisaAciklama", kisaAciklama  || "Fiyat teklifimiz")
       .input("TeklifVeren",   teklifVeren   || null)

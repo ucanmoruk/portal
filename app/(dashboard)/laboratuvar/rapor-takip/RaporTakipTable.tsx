@@ -758,7 +758,7 @@ export default function RaporTakipTable({
         {/* Başlık satırı */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: `${phase ? "0" : "32px"} 24px 80px 108px 108px 1fr 108px 170px 100px ${phase === "approval" ? "0" : phase === "returned" ? "180px" : "110px"} ${phase === "returned" ? "0 0 0" : "36px 36px 36px"}`,
+          gridTemplateColumns: `${phase ? "0" : "32px"} 24px 80px 108px 108px 1fr ${phase === "lab" ? "0" : "108px"} 170px 100px ${phase === "approval" ? "0" : phase === "returned" ? "180px" : phase === "lab" ? "140px" : "110px"} ${(phase === "returned" || phase === "lab") ? "0 0 0" : "36px 36px 36px"}`,
           alignItems: "center",
           padding: "8px 16px",
           borderBottom: "1px solid var(--color-border-light)",
@@ -770,11 +770,15 @@ export default function RaporTakipTable({
               onChange={toggleSelectAll} style={{ cursor: "pointer", width: 16, height: 16 }} />
           )}
           <div />
-          {["Tarih", "Evrak No", "Rapor No", "Firma / Proje · Numune", "Rapor Türü", "Durum", "Termin", "", "", "", ""].map((h, i) => (
+          {["Tarih", "Evrak No", "Rapor No", phase === "approval" ? "Firma / Proje · Numune" : "Numune Adı", phase === "lab" ? "" : "Rapor Türü", "Durum", "Termin", "", "", "", ""].map((h, i) => (
             <div key={i} style={{
               fontSize: "0.69rem", fontWeight: 600, textTransform: "uppercase",
               letterSpacing: "0.06em", color: "var(--color-text-tertiary)",
-              textAlign: i >= 6 ? "center" : "left",
+              // phase=lab → Durum (i=5) başlığı sağa hizalı, padding'le hücre içinde sağa kayar.
+              textAlign: i >= 6 ? "center" : (phase === "lab" && i === 5) ? "right" : "left",
+              paddingRight: (phase === "lab" && i === 5) ? 8 : 0,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
             }}>{h}</div>
           ))}
         </div>
@@ -829,7 +833,7 @@ export default function RaporTakipTable({
                 onClick={() => toggleRow(row)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: `${phase ? "0" : "32px"} 24px 80px 108px 108px 1fr 108px 170px 100px ${phase === "approval" ? "0" : phase === "returned" ? "180px" : "110px"} ${phase === "returned" ? "0 0 0" : "36px 36px 36px"}`,
+                  gridTemplateColumns: `${phase ? "0" : "32px"} 24px 80px 108px 108px 1fr ${phase === "lab" ? "0" : "108px"} 170px 100px ${phase === "approval" ? "0" : phase === "returned" ? "180px" : phase === "lab" ? "140px" : "110px"} ${(phase === "returned" || phase === "lab") ? "0 0 0" : "36px 36px 36px"}`,
                   alignItems: "center",
                   padding: "12px 16px",
                   cursor: "pointer",
@@ -896,17 +900,21 @@ export default function RaporTakipTable({
                   )}
                 </div>
 
-                {/* Firma / Numune */}
+                {/* Firma / Numune — phase=lab ve phase=returned'da firma + proje gizli */}
                 <div style={{ minWidth: 0 }}>
+                  {(phase !== "lab" && phase !== "returned") && (
+                    <div style={{
+                      fontWeight: 500, fontSize: "0.845rem", color: "var(--color-text-primary)",
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}>
+                      {row.FirmaAd ?? "—"}
+                      {row.ProjeAd && <span style={{ color: "var(--color-text-tertiary)" }}> · {row.ProjeAd}</span>}
+                    </div>
+                  )}
                   <div style={{
-                    fontWeight: 500, fontSize: "0.845rem", color: "var(--color-text-primary)",
-                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                  }}>
-                    {row.FirmaAd ?? "—"}
-                    {row.ProjeAd && <span style={{ color: "var(--color-text-tertiary)" }}> · {row.ProjeAd}</span>}
-                  </div>
-                  <div style={{
-                    fontSize: "0.77rem", color: "var(--color-text-secondary)",
+                    fontSize: "0.845rem",
+                    color: (phase === "lab" || phase === "returned") ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                    fontWeight: (phase === "lab" || phase === "returned") ? 600 : 400,
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   }}>
                     {row.Numune_Adi}
@@ -914,11 +922,16 @@ export default function RaporTakipTable({
                   </div>
                 </div>
 
-                {/* Rapor Türü */}
-                <div><FormatBadge format={row.RaporFormati} /></div>
+                {/* Rapor Türü — phase=lab'da grid hücresi var ama içerik gizli (width=0).
+                    NOT: display:none KULLANMA — grid item'i tamamen kaldırır, sonraki tüm hücreler sola kayar. */}
+                <div style={{ display: "flex", justifyContent: "flex-start", overflow: "hidden" }}>
+                  {phase !== "lab" && <FormatBadge format={row.RaporFormati} />}
+                </div>
 
-                {/* Durum */}
-                <div><DurumBadge durum={row.RaporDurumu} done={row.SonucluSayisi} total={row.HizmetSayisi} /></div>
+                {/* Durum — phase=lab'da hücrede sağa hizalı */}
+                <div style={{ display: "flex", justifyContent: phase === "lab" ? "flex-end" : "flex-start", paddingRight: phase === "lab" ? 8 : 0 }}>
+                  <DurumBadge durum={row.RaporDurumu} done={row.SonucluSayisi} total={row.HizmetSayisi} />
+                </div>
 
                 {/* Termin */}
                 <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums", textAlign: "center" }}>
@@ -964,36 +977,45 @@ export default function RaporTakipTable({
                     }
 
                     const allSaved = row.HizmetSayisi > 0 && row.SonucluSayisi >= row.HizmetSayisi;
-                    const showButton = row.RaporDurumu === "Onay Bekleniyor"  // Geri Al
-                                    || row.RaporDurumu === "Onaylandı"
-                                    || row.RaporDurumu === "Yayınlandı"
-                                    || (row.RaporDurumu === "Analiz Devam Ediyor" && allSaved);
+                    // phase=lab → "Onaya Gönder" DAİMA görünür; allSaved değilse pasif.
+                    // Diğer phase'larda eski kural: Onay Bekleniyor / Onaylandı / Yayınlandı / allSaved.
+                    const showButton = phase === "lab"
+                      ? true
+                      : (row.RaporDurumu === "Onay Bekleniyor"
+                          || row.RaporDurumu === "Onaylandı"
+                          || row.RaporDurumu === "Yayınlandı"
+                          || (row.RaporDurumu === "Analiz Devam Ediyor" && allSaved));
                     if (!showButton) return null;
+                    const isLabPasif = phase === "lab" && !allSaved;
                     return (
                     <button
                       type="button"
                       title={
-                        row.RaporDurumu === "Onaylandı" || row.RaporDurumu === "Yayınlandı"
+                        isLabPasif
+                          ? "Önce tüm analizlerin sonuçları girilmeli"
+                          : row.RaporDurumu === "Onaylandı" || row.RaporDurumu === "Yayınlandı"
                           ? "Rapor onaylanmış — durum değiştirilemez"
                           : row.RaporDurumu === "Onay Bekleniyor"
                           ? "Raporu laboratuvara geri gönder (Geri Gönderildi)"
                           : "Onaya gönder (Onay Bekleniyor)"
                       }
-                      disabled={row.RaporDurumu === "Onaylandı" || row.RaporDurumu === "Yayınlandı"}
+                      disabled={isLabPasif || row.RaporDurumu === "Onaylandı" || row.RaporDurumu === "Yayınlandı"}
                       onClick={() => toggleCompletion(row)}
                       style={{
-                        border: "1px solid #0b5c8e30",
+                        border: isLabPasif ? "1px solid var(--color-border)" : "1px solid #0b5c8e30",
                         borderRadius: 7,
-                        background: "#0b5c8e14",
-                        color: "#0b5c8e",
+                        background: isLabPasif ? "var(--color-surface-2)" : "#0b5c8e14",
+                        color: isLabPasif ? "var(--color-text-tertiary)" : "#0b5c8e",
                         fontSize: "0.68rem",
                         fontWeight: 700,
                         padding: "5px 8px",
-                        cursor: "pointer",
+                        cursor: isLabPasif ? "not-allowed" : "pointer",
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {row.RaporDurumu === "Onay Bekleniyor" ? "Geri Al" : "Onaya Gönder"}
+                      {phase === "lab"
+                        ? "Onaya Gönder"
+                        : row.RaporDurumu === "Onay Bekleniyor" ? "Geri Al" : "Onaya Gönder"}
                     </button>
                     );
                   })()}
@@ -1005,20 +1027,7 @@ export default function RaporTakipTable({
                     - phase=approval → boş (PDF Önizleme 2. slot'ta zaten)
                     - default → Word/PDF indir */}
                 <div style={{ display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
-                  {phase === "lab" && (
-                    <IconBtn
-                      title="Hamveri (PDF) — yeni sekmede"
-                      color="var(--color-accent)"
-                      onClick={() => window.open(
-                        `/laboratuvar/numune-takip-lab/hamveri/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}`,
-                        "_blank", "noopener,noreferrer",
-                      )}
-                    >
-                      <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
-                        <path fillRule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm2 6a.75.75 0 0 1 .75-.75h.5a.75.75 0 0 1 0 1.5h-.5A.75.75 0 0 1 6 10Zm0 2.5a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 12.5Zm0 2.5a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 15Z" clipRule="evenodd" />
-                      </svg>
-                    </IconBtn>
-                  )}
+                  {/* phase=lab → ikonlar kaldırıldı, ana CTA üstteki "Onaya Gönder" butonu */}
                   {!phase && !acceptedOnly && (
                     <IconBtn
                       title="PDF indir"
@@ -1038,9 +1047,9 @@ export default function RaporTakipTable({
                 </div>
 
                 {/* 2. Slot: PDF Önizleme (göz) — onay sayfasını yeni sekmede aç.
-                    Lab + Approval'da görünür. Returned'da gizli (yer Tekrar Onaya Gönder'e ait). */}
+                    Sadece Approval'da görünür. Lab + Returned'da gizli. */}
                 <div style={{ display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
-                  {(phase === "lab" || phase === "approval") ? (
+                  {phase === "approval" ? (
                     <IconBtn
                       title="PDF Önizleme — rapor formatı (yeni sekmede)"
                       color="#bf5af2"

@@ -11,6 +11,7 @@ interface RaporRow {
   KabulTarihi: string | null;
   Evrak_No: string;
   RaporNo: string;
+  DisRaporKodu?: string | null;
   Barkod?: string | null;
   Numune_Adi: string;
   FirmaAd: string | null;
@@ -21,8 +22,8 @@ interface RaporRow {
   YayinUrl?: string | null;
 }
 
-// Sunucu Onaylandı/Yayınlandı döner. UI: Onaylandı | Gönderildi.
-function durumLabel(d: string): "Onaylandı" | "Gönderildi" | string {
+// Sunucu Onaylandı/Yayınlandı/Arşiv döner. UI: Onaylandı | Gönderildi | Arşiv.
+function durumLabel(d: string): "Onaylandı" | "Gönderildi" | "Arşiv" | string {
   if (d === "Yayınlandı") return "Gönderildi";
   return d;
 }
@@ -31,7 +32,8 @@ function DurumBadge({ durum }: { durum: string }) {
   const label = durumLabel(durum);
   const map: Record<string, { bg: string; fg: string }> = {
     "Onaylandı":  { bg: "#34c75918", fg: "#248a3d" },
-    "Gönderildi":{ bg: "#bf5af218", fg: "#8944ab" },
+    "Gönderildi": { bg: "#bf5af218", fg: "#8944ab" },
+    "Arşiv":      { bg: "#8e8e9322", fg: "#3a3a3c" },
   };
   const c = map[label] ?? { bg: "#8e8e9318", fg: "#636366" };
   return (
@@ -102,8 +104,8 @@ export default function OnayliRaporTable() {
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch]   = useState("");
   const [year, setYear]       = useState("2026");
-  // Boş = Tümü (Onaylandı + Yayınlandı/Gönderildi), "Onaylandı", "Yayınlandı"
-  const [durum, setDurum]     = useState<"" | "Onaylandı" | "Yayınlandı">("");
+  // İlk girişte sadece "Onaylandı" görünür. Tüm / Gönderildi / Arşiv kullanıcı seçimiyle açılır.
+  const [durum, setDurum]     = useState<"" | "Onaylandı" | "Yayınlandı" | "Arşiv">("Onaylandı");
   const [raporTuru, setRaporTuru] = useState("");
   const [faturaDurumu, setFaturaDurumu] = useState<"" | "Fatura kesilmedi" | "Ödeme bekliyor" | "Ödendi">("");
   const [loading, setLoading] = useState(true);
@@ -111,6 +113,18 @@ export default function OnayliRaporTable() {
   const [error, setError]     = useState("");
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
   const [publishingKey, setPublishingKey] = useState<string | null>(null);
+
+  // Çoklu seçim — key = `${NkrID}__${RaporFormati}`
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState<"arsivle" | "mail" | null>(null);
+
+  // Mail modal
+  const [mailOpen, setMailOpen] = useState(false);
+  const [mailTo, setMailTo] = useState("");
+  const [mailCc, setMailCc] = useState("");
+  const [mailKonu, setMailKonu] = useState("");
+  const [mailMesaj, setMailMesaj] = useState("");
+  const [mailError, setMailError] = useState("");
 
   const searchTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef     = useRef<AbortController | null>(null);
@@ -251,7 +265,92 @@ export default function OnayliRaporTable() {
     ? rows.filter(() => faturaDurumu === "Fatura kesilmedi") // placeholder: hepsi "Fatura kesilmedi" şu an
     : rows;
 
-  const gridCols = "108px 108px 108px 120px 1fr 108px 110px 130px 78px 130px";
+  // Grid: [✓] [Kabul] [Termin] [Evrak] [Rapor No] [Firma/Proje·Numune — geniş] [Rapor Türü] [Durum] [Fatura] [PDF ikon] [Mail ikon]
+  // Sol blok sıkışık, orta blok geniş, sağ blok sıkışık ve sona ikon butonlar
+  const gridCols = "28px 86px 86px 86px 110px 1fr 90px 100px 110px 38px 38px";
+
+  const allSelected = visibleRows.length > 0 && visibleRows.every(r => selectedKeys.has(`${r.NkrID}__${r.RaporFormati}`));
+  const someSelected = selectedKeys.size > 0;
+  const toggleAll = () => {
+    if (allSelected) setSelectedKeys(new Set());
+    else setSelectedKeys(new Set(visibleRows.map(r => `${r.NkrID}__${r.RaporFormati}`)));
+  };
+  const toggleOne = (k: string) => {
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      next.has(k) ? next.delete(k) : next.add(k);
+      return next;
+    });
+  };
+  const selectedItems = (): Array<{ nkrId: number; raporFormati: string; row?: RaporRow }> => {
+    const m = new Map(visibleRows.map(r => [`${r.NkrID}__${r.RaporFormati}`, r]));
+    return Array.from(selectedKeys).map(k => {
+      const r = m.get(k);
+      if (!r) {
+        const [n, f] = k.split("__");
+        return { nkrId: Number(n), raporFormati: f };
+      }
+      return { nkrId: r.NkrID, raporFormati: r.RaporFormati, row: r };
+    });
+  };
+
+  const handleArsivle = async () => {
+    const items = selectedItems().map(({ nkrId, raporFormati }) => ({ nkrId, raporFormati }));
+    if (items.length === 0) return;
+    if (!confirm(`${items.length} rapor arşivlenecek. Onaylıyor musun?`)) return;
+    setBulkBusy("arsivle");
+    setError("");
+    try {
+      const res = await fetch("/api/rapor-takip/arsivle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Arşivleme başarısız");
+      setSelectedKeys(new Set());
+      fetchData(page, search, limit, year, durum, raporTuru, { clearFirst: false });
+    } catch (e: any) {
+      setError(e.message || "Arşivleme başarısız");
+    } finally {
+      setBulkBusy(null);
+    }
+  };
+
+  const openMailModal = () => {
+    const sel = selectedItems();
+    if (sel.length === 0) return;
+    // Varsayılan konu — ilk raporun firmasından isim
+    const firstFirma = sel[0]?.row?.FirmaAd ?? "";
+    setMailKonu(`Analiz Raporu${firstFirma ? " — " + firstFirma : ""}`);
+    setMailTo(""); setMailCc(""); setMailMesaj(""); setMailError("");
+    setMailOpen(true);
+  };
+
+  const handleMailGonder = async () => {
+    const items = selectedItems().map(({ nkrId, raporFormati }) => ({ nkrId, raporFormati }));
+    const to = mailTo.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+    const cc = mailCc.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+    if (items.length === 0) { setMailError("Rapor seçilmedi."); return; }
+    if (to.length === 0) { setMailError("En az bir alıcı (To) girilmeli."); return; }
+    setBulkBusy("mail");
+    setMailError("");
+    try {
+      const res = await fetch("/api/rapor-takip/mail-gonder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items, to, cc, konu: mailKonu, mesaj: mailMesaj }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Mail gönderilemedi");
+      setMailOpen(false);
+      setSelectedKeys(new Set());
+    } catch (e: any) {
+      setMailError(e.message || "Mail gönderilemedi");
+    } finally {
+      setBulkBusy(null);
+    }
+  };
 
   return (
     <>
@@ -277,6 +376,51 @@ export default function OnayliRaporTable() {
             )}
           </div>
           <span className={styles.totalCount}>{total} rapor</span>
+          {someSelected && (
+            <div style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: 8 }}>
+              <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", padding: "0 6px" }}>
+                {selectedKeys.size} seçili
+              </span>
+              <button
+                type="button"
+                onClick={handleArsivle}
+                disabled={!!bulkBusy}
+                style={{
+                  padding: "6px 12px", borderRadius: 7,
+                  border: "1px solid var(--color-border)",
+                  background: bulkBusy === "arsivle" ? "var(--color-surface-2)" : "#ff950018",
+                  color: "#c06800",
+                  fontSize: "0.78rem", fontWeight: 700,
+                  cursor: bulkBusy ? "wait" : "pointer",
+                  display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                }}
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
+                  <path d="M2 3a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3Zm2 5h12v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Zm4 3a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5A.75.75 0 0 1 8 11Z"/>
+                </svg>
+                Arşivle
+              </button>
+              <button
+                type="button"
+                onClick={openMailModal}
+                disabled={!!bulkBusy}
+                style={{
+                  padding: "6px 12px", borderRadius: 7,
+                  border: "1px solid var(--color-accent)",
+                  background: bulkBusy === "mail" ? "var(--color-surface-2)" : "var(--color-accent)",
+                  color: "#fff",
+                  fontSize: "0.78rem", fontWeight: 700,
+                  cursor: bulkBusy ? "wait" : "pointer",
+                  display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                }}
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
+                  <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.254 4.94H9.75a.75.75 0 0 1 0 1.5H3.533l-1.254 4.94a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.288Z"/>
+                </svg>
+                Mail Gönder
+              </button>
+            </div>
+          )}
         </div>
         <div className={styles.toolbarRight} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           {/* Yıl */}
@@ -303,6 +447,7 @@ export default function OnayliRaporTable() {
             <option value="">Tüm Durumlar</option>
             <option value="Onaylandı">Onaylandı</option>
             <option value="Yayınlandı">Gönderildi</option>
+            <option value="Arşiv">Arşiv</option>
           </select>
 
           {/* Fatura */}
@@ -333,21 +478,34 @@ export default function OnayliRaporTable() {
         <div style={{
           display: "grid",
           gridTemplateColumns: gridCols,
-          gap: 12,
+          gap: 8,
           alignItems: "center",
-          padding: "10px 16px",
+          padding: "10px 14px",
           borderBottom: "1px solid var(--color-border-light)",
           background: "var(--color-surface)",
           minWidth: 1200,
         }}>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleAll}
+              style={{ cursor: "pointer", width: 14, height: 14, accentColor: "var(--color-accent)" }}
+              title={allSelected ? "Hiçbirini seçme" : "Tümünü seç"}
+            />
+          </div>
           {[
             "Kabul Tarihi", "Termin Tarihi", "Evrak No", "Rapor No",
             "Firma / Proje · Numune", "Rapor Türü", "Durum", "Fatura", "", "",
           ].map((h, i) => (
             <div key={i} style={{
-              fontSize: "0.69rem", fontWeight: 600, textTransform: "uppercase",
+              fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase",
               letterSpacing: "0.06em", color: "var(--color-text-tertiary)",
-              textAlign: i >= 5 && i <= 7 ? "center" : "left",
+              // Rapor Türü(5), Durum(6), Fatura(7) → sağa hizalı + sağa padding (Rapor Türü/Durum/Fatura sağa yaklaşsın)
+              textAlign: i >= 5 && i <= 7 ? "right" : "left",
+              paddingRight: i >= 5 && i <= 7 ? 6 : 0,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
             }}>{h}</div>
           ))}
         </div>
@@ -389,36 +547,54 @@ export default function OnayliRaporTable() {
           const isDownloading = downloadingKey === key;
           const isPublishing = publishingKey === key;
           const isPublished = row.RaporDurumu === "Yayınlandı";
+          const isSelected = selectedKeys.has(key);
           return (
             <div
               key={key}
               style={{
                 display: "grid",
                 gridTemplateColumns: gridCols,
-                gap: 12,
+                gap: 8,
                 alignItems: "center",
-                padding: "12px 16px",
+                padding: "10px 14px",
                 borderBottom: gi < visibleRows.length - 1 ? "1px solid var(--color-border-light)" : "none",
+                background: isSelected ? "var(--color-accent-light, #0071e30a)" : "transparent",
                 minWidth: 1200,
               }}
             >
+              {/* Checkbox */}
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggleOne(key)}
+                  style={{ cursor: "pointer", width: 14, height: 14, accentColor: "var(--color-accent)" }}
+                />
+              </div>
               {/* Kabul Tarihi */}
-              <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
+              <div style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
                 {formatTarih(row.KabulTarihi)}
               </div>
               {/* Termin Tarihi */}
-              <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
+              <div style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
                 {formatTarih(row.MaxTermin)}
               </div>
               {/* Evrak No */}
-              <div style={{ fontWeight: 600, fontSize: "0.82rem", color: "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>
+              <div style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>
                 {row.Evrak_No}
               </div>
-              {/* Rapor No */}
-              <div style={{ fontWeight: 700, fontSize: "0.82rem", color: "var(--color-accent)", fontVariantNumeric: "tabular-nums" }}>
-                {row.RaporNo}
+              {/* Rapor No (üstte iç, varsa altta dış ÜGAM kodu) */}
+              <div style={{ fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--color-accent)" }}>
+                  {row.RaporNo}
+                </div>
+                {row.DisRaporKodu && (
+                  <div style={{ fontWeight: 500, fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {row.DisRaporKodu}
+                  </div>
+                )}
               </div>
-              {/* Firma / Proje · Numune */}
+              {/* Firma / Proje · Numune — geniş */}
               <div style={{ minWidth: 0 }}>
                 <div style={{
                   fontWeight: 500, fontSize: "0.845rem", color: "var(--color-text-primary)",
@@ -435,19 +611,19 @@ export default function OnayliRaporTable() {
                   {row.Barkod ? ` · Barkod: ${row.Barkod}` : ""}
                 </div>
               </div>
-              {/* Rapor Türü */}
-              <div style={{ display: "flex", justifyContent: "center" }}>
+              {/* Rapor Türü — sağa hizalı */}
+              <div style={{ display: "flex", justifyContent: "flex-end", paddingRight: 6 }}>
                 <FormatBadge format={row.RaporFormati} />
               </div>
-              {/* Durum */}
-              <div style={{ display: "flex", justifyContent: "center" }}>
+              {/* Durum — sağa hizalı */}
+              <div style={{ display: "flex", justifyContent: "flex-end", paddingRight: 6 }}>
                 <DurumBadge durum={row.RaporDurumu} />
               </div>
-              {/* Fatura */}
-              <div style={{ display: "flex", justifyContent: "center" }}>
+              {/* Fatura — sağa hizalı */}
+              <div style={{ display: "flex", justifyContent: "flex-end", paddingRight: 6 }}>
                 <FaturaBadge durum="Fatura kesilmedi" />
               </div>
-              {/* PDF İndir */}
+              {/* PDF İndir — ikon buton */}
               <div style={{ display: "flex", justifyContent: "center" }}>
                 <button
                   type="button"
@@ -455,50 +631,45 @@ export default function OnayliRaporTable() {
                   disabled={isDownloading}
                   onClick={() => downloadImzaliPdf(row)}
                   style={{
-                    border: "1px solid var(--color-accent)",
+                    width: 30, height: 30,
+                    border: "1px solid var(--color-border)",
                     borderRadius: 7,
-                    background: isDownloading ? "var(--color-surface-2)" : "var(--color-accent)",
-                    color: isDownloading ? "var(--color-text-tertiary)" : "#fff",
-                    fontSize: "0.72rem",
-                    fontWeight: 700,
-                    padding: "6px 10px",
+                    background: isDownloading ? "var(--color-surface-2)" : "transparent",
+                    color: "var(--color-accent)",
                     cursor: isDownloading ? "wait" : "pointer",
-                    display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    padding: 0,
                   }}
                 >
-                  <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                     <path fillRule="evenodd" d="M10 3a.75.75 0 0 1 .75.75v6.59l1.95-2.1a.75.75 0 1 1 1.1 1.02l-3.25 3.5a.75.75 0 0 1-1.1 0L6.2 9.26a.75.75 0 0 1 1.1-1.02l1.95 2.1V3.75A.75.75 0 0 1 10 3Z" clipRule="evenodd"/>
                     <path d="M3.5 13.75a.75.75 0 0 1 1.5 0v1.75a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5v-1.75a.75.75 0 0 1 1.5 0v1.75A2 2 0 0 1 14.5 17.5h-9A2 2 0 0 1 3.5 15.5v-1.75Z"/>
                   </svg>
-                  {isDownloading ? "İndiriliyor…" : "PDF İndir"}
                 </button>
               </div>
-              {/* Portala Gönder — imzalı PDF üret + FTP'ye yükle + Yayınlandı yap */}
+              {/* Portala Gönder — ikon buton */}
               <div style={{ display: "flex", justifyContent: "center" }}>
                 {isPublished ? (
                   <a
                     href={row.YayinUrl || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
-                    title={row.YayinUrl ? "Yayınlanan PDF'i aç" : "Gönderildi"}
+                    title={row.YayinUrl ? "Yayınlanan PDF'i aç (gönderildi)" : "Gönderildi"}
                     onClick={e => { if (!row.YayinUrl) e.preventDefault(); }}
                     style={{
+                      width: 30, height: 30,
                       border: "1px solid #34c75955",
                       borderRadius: 7,
                       background: "#34c75918",
                       color: "#248a3d",
-                      fontSize: "0.72rem",
-                      fontWeight: 700,
-                      padding: "6px 10px",
                       textDecoration: "none",
                       cursor: row.YayinUrl ? "pointer" : "default",
-                      display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                      display: "flex", alignItems: "center", justifyContent: "center",
                     }}
                   >
-                    <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                       <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd"/>
                     </svg>
-                    Gönderildi
                   </a>
                 ) : (
                   <button
@@ -507,21 +678,19 @@ export default function OnayliRaporTable() {
                     disabled={isPublishing}
                     onClick={() => handlePublish(row)}
                     style={{
-                      border: "1px solid var(--color-accent)",
+                      width: 30, height: 30,
+                      border: "1px solid var(--color-border)",
                       borderRadius: 7,
                       background: isPublishing ? "var(--color-surface-2)" : "transparent",
-                      color: isPublishing ? "var(--color-text-tertiary)" : "var(--color-accent)",
-                      fontSize: "0.72rem",
-                      fontWeight: 700,
-                      padding: "6px 10px",
+                      color: "var(--color-accent)",
                       cursor: isPublishing ? "wait" : "pointer",
-                      display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      padding: 0,
                     }}
                   >
-                    <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                       <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.254 4.94H9.75a.75.75 0 0 1 0 1.5H3.533l-1.254 4.94a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.288Z"/>
                     </svg>
-                    {isPublishing ? "Gönderiliyor…" : "Portala Gönder"}
                   </button>
                 )}
               </div>
@@ -529,6 +698,127 @@ export default function OnayliRaporTable() {
           );
         })}
       </div>
+
+      {/* Mail Gönder Modal */}
+      {mailOpen && (
+        <div
+          onClick={() => !bulkBusy && setMailOpen(false)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 1000, padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "var(--color-bg)", borderRadius: 14, width: "100%", maxWidth: 560,
+              padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+              maxHeight: "90vh", overflow: "auto",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "var(--color-text-primary)" }}>
+                Mail Gönder · {selectedKeys.size} rapor
+              </h3>
+              <button
+                type="button"
+                onClick={() => !bulkBusy && setMailOpen(false)}
+                disabled={!!bulkBusy}
+                style={{ border: "none", background: "transparent", cursor: bulkBusy ? "wait" : "pointer", color: "var(--color-text-tertiary)", fontSize: 24, lineHeight: 1, padding: 0 }}
+              >×</button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 4 }}>
+                  Alıcı (To) · virgülle çoklu
+                </label>
+                <input
+                  type="text"
+                  value={mailTo}
+                  onChange={e => setMailTo(e.target.value)}
+                  placeholder="musteri@firma.com"
+                  disabled={!!bulkBusy}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid var(--color-border)", fontSize: "0.85rem", background: "var(--color-surface)" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 4 }}>
+                  CC (opsiyonel)
+                </label>
+                <input
+                  type="text"
+                  value={mailCc}
+                  onChange={e => setMailCc(e.target.value)}
+                  placeholder="ek@firma.com"
+                  disabled={!!bulkBusy}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid var(--color-border)", fontSize: "0.85rem", background: "var(--color-surface)" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 4 }}>
+                  Konu
+                </label>
+                <input
+                  type="text"
+                  value={mailKonu}
+                  onChange={e => setMailKonu(e.target.value)}
+                  disabled={!!bulkBusy}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid var(--color-border)", fontSize: "0.85rem", background: "var(--color-surface)" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 4 }}>
+                  Mesaj (opsiyonel)
+                </label>
+                <textarea
+                  value={mailMesaj}
+                  onChange={e => setMailMesaj(e.target.value)}
+                  disabled={!!bulkBusy}
+                  rows={4}
+                  placeholder="Müşteriye yazılacak ek not…"
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid var(--color-border)", fontSize: "0.85rem", background: "var(--color-surface)", resize: "vertical", fontFamily: "inherit" }}
+                />
+              </div>
+              <div style={{ fontSize: "0.74rem", color: "var(--color-text-tertiary)", padding: "8px 10px", background: "var(--color-surface-2)", borderRadius: 7 }}>
+                Seçili {selectedKeys.size} raporun imzalı PDF'leri mail ekinde gönderilecek. İlk PDF üretimi sunucu tarafında 5-15 saniye sürebilir.
+              </div>
+              {mailError && (
+                <div style={{ color: "#c00", fontSize: "0.8rem", padding: "8px 10px", background: "#ff3b3010", borderRadius: 7 }}>
+                  {mailError}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18 }}>
+              <button
+                type="button"
+                onClick={() => setMailOpen(false)}
+                disabled={!!bulkBusy}
+                style={{
+                  padding: "8px 14px", borderRadius: 7, border: "1px solid var(--color-border)",
+                  background: "transparent", color: "var(--color-text-secondary)",
+                  fontSize: "0.85rem", fontWeight: 600, cursor: bulkBusy ? "wait" : "pointer",
+                }}
+              >Vazgeç</button>
+              <button
+                type="button"
+                onClick={handleMailGonder}
+                disabled={!!bulkBusy}
+                style={{
+                  padding: "8px 14px", borderRadius: 7, border: "none",
+                  background: "var(--color-accent)", color: "#fff",
+                  fontSize: "0.85rem", fontWeight: 700, cursor: bulkBusy ? "wait" : "pointer",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}
+              >
+                {bulkBusy === "mail" ? "Gönderiliyor…" : "Gönder"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sayfalama */}
       {!loading && totalPages > 1 && (

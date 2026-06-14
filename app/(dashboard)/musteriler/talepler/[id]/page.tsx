@@ -24,6 +24,7 @@ interface TalepHeader {
   RaporAdres: string;
   RaporYetkili: string;
   RaporIletisim: string;
+  RaporMail: string;
   Karar: string;
   Dil: string;
   Iade: string;
@@ -101,6 +102,7 @@ export default async function TalepDetayPage({ params }: { params: Promise<{ id:
         ISNULL(r.Adres, '')      AS RaporAdres,
         ISNULL(r.Yetkili, '')    AS RaporYetkili,
         ISNULL(r.Iletisim, '')   AS RaporIletisim,
+        ISNULL(r.Mail, '')       AS RaporMail,
         ISNULL(r.Karar, '')      AS Karar,
         ISNULL(r.Dil, '')        AS Dil,
         ISNULL(r.Iade, '')       AS Iade,
@@ -141,9 +143,15 @@ export default async function TalepDetayPage({ params }: { params: Promise<{ id:
     );
   }
 
+  // Destek talepleri için ayrı detay sayfası kullanılır (konuşma alanı içerir).
+  // Eski URL ile gelinirse oraya yönlendir.
+  if (h.Tur === "Destek") {
+    redirect(`/musteriler/destek-talepleri/${nid}`);
+  }
+
   const numuneler = numuneRes.recordset as NumuneRow[];
   const durumCfg = DURUM_COLORS[h.Durum] ?? { color: "#6e6e73", bg: "#f5f5f7" };
-  const backUrl = h.Tur === "Destek" ? "/musteriler/destek-talepleri" : "/musteriler/analiz-talepleri";
+  const backUrl = "/musteriler/analiz-talepleri";
 
   return (
     <div className={styles.page}>
@@ -183,6 +191,7 @@ export default async function TalepDetayPage({ params }: { params: Promise<{ id:
         <Field label="Adres"            value={h.RaporAdres} />
         <Field label="Yetkili"          value={h.RaporYetkili} />
         <Field label="İletişim"         value={h.RaporIletisim} />
+        <Field label="Rapor gönderilecek mail adresi" value={h.RaporMail} />
         <Field label="Üretici Firma"    value={h.UreticiFirma} />
         <Field label="Karar"            value={h.Karar} />
         <Field label="Rapor Dili"       value={h.Dil} />

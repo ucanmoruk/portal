@@ -11,6 +11,7 @@ interface NumuneItem {
   ID: number;
   Evrak_No: string;
   RaporNo: string;
+  DisRaporKodu?: string | null;  // ÜGAM/RR26/XXXX (birden fazla varsa virgülle)
   Numune_Adi: string;
   Grup: string | null;
   Tur: string | null;
@@ -45,6 +46,15 @@ interface TeklifOpt {
 
 // Fatura kesilmiş = yalnızca bu iki durum; diğerleri (null dahil) → Faturalandır aktif
 const isFaturali = (d: string | null) => d === "Ödendi" || d === "Bekliyor";
+
+// Sayfa ilk acildiginda tarih filtresi varsayilani: son 4 ay (bugun - 4 ay → bugun).
+function lastFourMonthsRange(): { tarihBas: string; tarihBit: string } {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth() - 4, today.getDate());
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return { tarihBas: fmt(start), tarihBit: fmt(today) };
+}
 
 // ── Yardımcı bileşenler ──────────────────────────────────────────
 function OdemeBadge({ durum }: { durum: string | null }) {
@@ -89,11 +99,13 @@ export default function NumuneKabulTable() {
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch]         = useState("");
   // ── Filtreler ──
-  const [tarihBas, setTarihBas]           = useState("");
-  const [tarihBit, setTarihBit]           = useState("");
+  // Varsayilan: son 4 ay. Kullanici "Temizle" yaparsa tum tarihlere doner.
+  const defaultRange = lastFourMonthsRange();
+  const [tarihBas, setTarihBas]           = useState(defaultRange.tarihBas);
+  const [tarihBit, setTarihBit]           = useState(defaultRange.tarihBit);
   const [odemeFilter, setOdemeFilter]     = useState("");
   const [raporDurumFilter, setRaporDurumFilter] = useState("");
-  const filtersRef = useRef({ tarihBas: "", tarihBit: "", odeme: "", raporDurumu: "" });
+  const filtersRef = useRef({ tarihBas: defaultRange.tarihBas, tarihBit: defaultRange.tarihBit, odeme: "", raporDurumu: "" });
   const [loading, setLoading]       = useState(true);
   const [transitioning, setTransitioning] = useState(false); // sayfa geçişi (skeleton değil, overlay)
   const [error, setError]           = useState("");
@@ -705,6 +717,16 @@ export default function NumuneKabulTable() {
                               >
                                 {n.RaporNo}
                               </a>
+                              {n.DisRaporKodu && (
+                                <div style={{
+                                  fontWeight: 500, fontSize: "0.7rem",
+                                  color: "var(--color-text-tertiary)",
+                                  fontVariantNumeric: "tabular-nums",
+                                  marginTop: 1,
+                                }}>
+                                  {n.DisRaporKodu}
+                                </div>
+                              )}
                             </td>
                             <td style={{ padding: "9px 12px", color: "var(--color-text-primary)", fontWeight: 500 }}>
                               {n.Numune_Adi}

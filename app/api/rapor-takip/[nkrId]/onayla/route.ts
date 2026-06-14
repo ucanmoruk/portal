@@ -4,10 +4,31 @@ import { cosmoPool } from "@/lib/db";
 import { randomBytes } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { imzalaVeKaydet } from "@/lib/raporImzaData";
+import { randomDisKodRapor } from "@/lib/disKod";
 
 // 32 karakterlik URL-safe token
 function generateToken(): string {
   return randomBytes(18).toString("base64url"); // ~24 char
+}
+
+// Benzersiz dış rapor kodu üret: ÜGAM/RR26/XXXX (çakışırsa tekrar dener).
+// Eğer DisRaporKodu kolonu yoksa null döner (eski şemada graceful degrade).
+async function genUniqueDisRaporKodu(pool: any, raporFormati: string): Promise<string | null> {
+  const colCheck = await pool.request().query(
+    `SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_NAME = 'NKR_RaporOnay' AND COLUMN_NAME = 'DisRaporKodu'`
+  );
+  if (colCheck.recordset.length === 0) return null;
+
+  const year = new Date().getFullYear();
+  for (let i = 0; i < 25; i++) {
+    const kod = randomDisKodRapor(year, raporFormati);
+    const exists = await pool.request()
+      .input("kod", kod)
+      .query(`SELECT TOP 1 ID FROM NKR_RaporOnay WHERE DisRaporKodu = @kod`);
+    if (!exists.recordset.length) return kod;
+  }
+  return randomDisKodRapor(year, raporFormati) + String(Date.now()).slice(-2);
 }
 
 // POST /api/rapor-takip/[nkrId]/onayla
@@ -57,16 +78,81 @@ export async function POST(
       `);
 
     if (existRes.recordset[0]) {
-      // İdempotent: mevcut token'ı döndür.
-      // İmza eksikse (önceden onaylanmış ya da imza atılamamış) burada tamamla (backfill).
+      // Mevcut satır var — placeholder (Durum=NULL, ensureDisRaporKodlari ile oluşturulmuş)
+      // VEYA gerçekten onaylanmış olabilir. Durum'a göre dallan:
+      //  - Durum gerçek onay durumu ('Onaylandı'/'Yayınlandı') ise idempotent dön
+      //  - Durum NULL veya farklı ise BU çağrı onaylama → Durum'u 'Onaylandı' yap
       const mevcutId = existRes.recordset[0].ID;
+      const mevcutDurum = existRes.recordset[0].Durum;
+      const zatenOnayli = mevcutDurum === "Onaylandı" || mevcutDurum === "Yayınlandı";
+
+      if (!zatenOnayli) {
+        // Placeholder satırı → bu çağrı asıl onay. Durum + onaylayan bilgisini set et.
+        await pool.request()
+          .input("id", mevcutId)
+          .input("onaylayan", userId)
+          .input("onaylayanAd", userName)
+          .query(`
+            UPDATE NKR_RaporOnay
+            SET Durum = N'Onaylandı',
+                OnaylayanID = @onaylayan,
+                OnaylayanAd = @onaylayanAd,
+                OnayTarihi = GETDATE()
+            WHERE ID = @id
+          `);
+      }
+
       const imzaHash = await imzalaVeKaydet(pool, mevcutId, nkrIdNum, format);
+
+      // DisRaporKodu backfill (kolon varsa ve boşsa)
+      let disKodFinal: string | null = null;
+      const curKodRes = await pool.request()
+        .input("id", mevcutId)
+        .query(`
+          IF COL_LENGTH('NKR_RaporOnay','DisRaporKodu') IS NOT NULL
+            SELECT DisRaporKodu FROM NKR_RaporOnay WHERE ID = @id
+          ELSE
+            SELECT CAST(NULL AS NVARCHAR(40)) AS DisRaporKodu
+        `);
+      const curKod = curKodRes.recordset[0]?.DisRaporKodu as string | null | undefined;
+      if (!curKod) {
+        const yeniKod = await genUniqueDisRaporKodu(pool, format);
+        if (yeniKod) {
+          await pool.request().input("id", mevcutId).input("kod", yeniKod).query(
+            `UPDATE NKR_RaporOnay SET DisRaporKodu = @kod WHERE ID = @id`
+          );
+          disKodFinal = yeniKod;
+        }
+      } else {
+        disKodFinal = curKod;
+      }
+
+      // Onay logu — sadece bu çağrı gerçek onay ise
+      if (!zatenOnayli) {
+        const logCheck = await pool.request().query(
+          `SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_NAME = 'NKR_Log' AND TABLE_SCHEMA IN ('dbo', 'cosmoroot')`
+        );
+        if (logCheck.recordset.length > 0) {
+          await pool.request()
+            .input("NKRID", nkrIdNum)
+            .input("KullaniciID", userId)
+            .input("Eylem", "Rapor Onaylandı")
+            .input("Aciklama", `${format} formatı onaylandı.`)
+            .query(
+              `INSERT INTO NKR_Log (NKRID, KullaniciID, Eylem, Aciklama, Tarih)
+               VALUES (@NKRID, @KullaniciID, @Eylem, @Aciklama, CURRENT_TIMESTAMP)`
+            );
+        }
+      }
+
       return Response.json({
         ok: true,
-        alreadyApproved: true,
+        alreadyApproved: zatenOnayli,
         token: existRes.recordset[0].KarekodToken,
-        durum: existRes.recordset[0].Durum,
+        durum: zatenOnayli ? mevcutDurum : "Onaylandı",
         imzaHash,
+        disRaporKodu: disKodFinal,
       });
     }
 
@@ -81,13 +167,24 @@ export async function POST(
     }
     if (!token) return Response.json({ error: "Token üretilemedi" }, { status: 500 });
 
+    // Dış rapor kodu üret (kolon yoksa null döner, INSERT'te koşullu eklenir)
+    const disRaporKodu = await genUniqueDisRaporKodu(pool, format);
+    const hasDisKodCol = disRaporKodu !== null;
+
     const insRes = await pool.request()
       .input("nkrId", nkrIdNum)
       .input("format", format)
       .input("token", token)
       .input("onaylayan", userId)
       .input("onaylayanAd", userName)
-      .query(`
+      .input("disKod", disRaporKodu)
+      .query(hasDisKodCol
+        ? `
+        INSERT INTO NKR_RaporOnay (NkrID, RaporFormati, KarekodToken, Durum, OnaylayanID, OnaylayanAd, DisRaporKodu)
+        OUTPUT INSERTED.ID
+        VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan, @onaylayanAd, @disKod)
+      `
+        : `
         INSERT INTO NKR_RaporOnay (NkrID, RaporFormati, KarekodToken, Durum, OnaylayanID, OnaylayanAd)
         OUTPUT INSERTED.ID
         VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan, @onaylayanAd)
@@ -120,6 +217,7 @@ export async function POST(
       token,
       durum: "Onaylandı",
       imzaHash,
+      disRaporKodu,
     });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });

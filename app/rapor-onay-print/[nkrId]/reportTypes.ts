@@ -40,6 +40,8 @@ export interface OnayInfo {
   yayinTarihi: string | null;
   yayinUrl: string | null;
   onaylayanAd: string | null;
+  /** ÜGAM/RR26/XXXX — onay anında üretilir, migration 018 sonrası dolar. */
+  disRaporKodu: string | null;
 }
 
 export interface ReportMeta {
@@ -55,12 +57,16 @@ export interface ReportMeta {
 }
 
 export interface KarekodInfo {
-  /** Karekodun gösterdiği public doğrulama adresi. */
+  /** Karekodun gösterdiği public doğrulama adresi (query param'li, müşteri otomatik doğrulama formuna düşer). */
   url: string;
   /** QR kodun data URL'i (PNG, base64). Boşsa onay henüz yapılmamıştır. */
   qrDataUrl: string;
   /** Belge dijital imzası (SHA-256/HMAC hex) — varsa. */
   imzaHash: string | null;
+  /** QR'ın altında müşteriye gösterilen 8 karakterli doğrulama kodu. Manuel doğrulamada bu kullanılır. */
+  dogrulamaKod: string;
+  /** Doğrulama sayfasında "Rapor No" alanına yazılacak değer (dış kod > iç kod). */
+  raporNoForVerify: string;
 }
 
 export interface ReportFormatProps {

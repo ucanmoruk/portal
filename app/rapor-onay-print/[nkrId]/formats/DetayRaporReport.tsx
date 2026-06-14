@@ -51,6 +51,18 @@ export default function DetayRaporReport({
     sirketAdi,
   } = meta;
 
+  // Bu rapora dahil edilen analizlerden en az biri akredite mi?
+  // Akredite analiz yoksa TÜRKAK logosu ve sağdaki 3-satırlık kutu gizlenir.
+  const hasAkredite = hizmetler.some(
+    (h) => String(h.Akreditasyon || "").trim().toLowerCase() === "var"
+  );
+
+  // .akredite-box hücreleri SABIT 20mm × 8mm. AB-2015-T ve MM-YY normal boyutta
+  // kalır; SADECE rapor kodu hücresi uzunsa font küçültülür — kutuya dokunulmaz.
+  const _kodLen = `${header.RaporNo}/${revNo}`.length;
+  const akrKodFontSize =
+    _kodLen <= 10 ? 10.5 : _kodLen <= 14 ? 8.5 : _kodLen <= 18 ? 7 : 6;
+
   // Header bloğu — her iki sayfada da aynı şekilde gösterilen üst kısım
   // title:        sayfa başlığı (varsayılan "DENEY RAPORU")
   // showAkredite: sağ üstteki TÜRKAK/ilac-MRA logosunu göster (varsayılan true)
@@ -69,13 +81,15 @@ export default function DetayRaporReport({
 
       <div className="title-row">
         <div className="report-title">{title}</div>
-        <table className="akredite-box">
-          <tbody>
-            <tr><td>AB-2015-T</td></tr>
-            <tr><td>{header.RaporNo}/{revNo}</td></tr>
-            <tr><td>{toMMYY(yayinTarihi)}</td></tr>
-          </tbody>
-        </table>
+        {showAkredite && (
+          <table className="akredite-box">
+            <tbody>
+              <tr><td>AB-2015-T</td></tr>
+              <tr><td style={{ fontSize: `${akrKodFontSize}px` }}>{header.RaporNo}/{revNo}</td></tr>
+              <tr><td>{toMMYY(yayinTarihi)}</td></tr>
+            </tbody>
+          </table>
+        )}
       </div>
 
       <table className="meta-table">
@@ -175,8 +189,8 @@ export default function DetayRaporReport({
 
         .title-row { display: flex; justify-content: space-between; align-items: center; }
         .report-title { font-size: 25px; font-weight: 800; color: #000; }
-        .akredite-box { border-collapse: collapse; }
-        .akredite-box td { border: 1px solid #000; width: 2.14cm; height: 0.69cm; text-align: center; vertical-align: middle; font-size: 11px; padding: 0 2px; }
+        .akredite-box { border-collapse: collapse; width: 20mm; table-layout: fixed; }
+        .akredite-box td { border: 1px solid #000; width: 20mm; height: 8mm; text-align: center; vertical-align: middle; font-size: 11px; padding: 0 1px; overflow: hidden; word-break: break-all; line-height: 1.1; }
 
         .meta-table { font-size: 11px; letter-spacing: -0.05em; margin-top: 30px; }
         .meta-table strong { font-weight: 700; }
@@ -221,8 +235,18 @@ export default function DetayRaporReport({
         @media print {
           body { background: #fff; }
           .onay-toolbar { display: none !important; }
-          .page { width: 210mm; max-width: 210mm; min-height: 297mm; margin: 0 auto; box-shadow: none; padding: 8mm; }
+          /* HER SAYFA SABIT A4: height 297mm + overflow:hidden — alt bilgi
+             satırı (Sayfa No vb.) bir sonraki yaprağa atmaz. EK-1 sayfası
+             page.break ile zorlanır. */
+          .page {
+            width: 210mm; max-width: 210mm;
+            height: 297mm; min-height: 297mm; max-height: 297mm;
+            margin: 0 auto; box-shadow: none; padding: 8mm;
+            overflow: hidden;
+            page-break-inside: avoid;
+          }
           .page.break { page-break-after: always; }
+          html, body { overflow: hidden; }
         }
       `}</style>
 
@@ -238,7 +262,7 @@ export default function DetayRaporReport({
             SAYFA 1 — GENEL FORMAT
             ═══════════════════════════════════════════════════════════ */}
         <div className="page break">
-          <HeaderBlock />
+          <HeaderBlock showAkredite={hasAkredite} />
 
           <table className="info-table">
             <thead>
@@ -250,8 +274,8 @@ export default function DetayRaporReport({
             <tbody>
               <tr>
                 <td>
-                  <div className="firma-ad">{header.FirmaAd || "—"}</div>
-                  <div className="info-line">{header.FirmaAdres}</div>
+                  <div className="firma-ad" >{header.FirmaAd || "—"}</div>
+                  <div className="info-line" style={{ width: "90%" }}>{header.FirmaAdres}</div>
                   <div className="info-line">{header.FirmaYetkili || "—"}</div>
                   <div className="info-line">{header.FirmaEmail}</div>
                 </td>
@@ -263,15 +287,15 @@ export default function DetayRaporReport({
                       {header.TesteMiktar} {header.TesteMiktarBirim}
                     </div>
                   )}
-                  <div className="info-line"><span className="info-label">Üretim Tarihi: </span>{fmtTarih(String(header.UretimTarihi || ""))}</div>
-                  <div className="info-line"><span className="info-label">Son Kullanım Tarihi: </span>{fmtTarih(String(header.SKT || ""))}</div>
+                  <div className="info-line"><span className="info-label">Üretim Tarihi: </span>{String(header.UretimTarihi || "—")}</div>
+                  <div className="info-line"><span className="info-label">Son Kullanım Tarihi: </span>{String(header.SKT || "—")}</div>
                   <div className="info-line"><span className="info-label">Seri/Lot No/Ürün Kodu: </span>{header.SeriNo || "—"}</div>
                 </td>
               </tr>
             </tbody>
           </table>
 
-          <div className="results-section">
+          <div className="results-section" style={{ marginTop: 50 }}>
             <div className="results-title">TEST SONUÇLARI</div>
             <div className="notlar-body"> </div>
             <table className="results">

@@ -40,6 +40,13 @@ export async function GET(request: Request) {
     `);
     const hasRaporOnay = raporOnayTblCheck.recordset.length > 0;
 
+    // Migration 018: NKR_RaporOnay.DisRaporKodu — kolon yoksa null döner.
+    const disRaporKoduCheck = await pool.request().query(`
+      SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = 'NKR_RaporOnay' AND COLUMN_NAME = 'DisRaporKodu'
+    `);
+    const hasDisRaporKodu = hasRaporOnay && disRaporKoduCheck.recordset.length > 0;
+
     // NOT: Postgres mirror'da public şemasında lowercase legacy tablolar olabilir;
     // bizim hedeflediğimiz CamelCase kolonlu tablo dbo şemasındadır. Schema filtresi
     // olmazsa "tablo var" sanılıp sonra `o.NkrID does not exist` hatası alınır.
@@ -65,6 +72,16 @@ export async function GET(request: Request) {
     `);
     const hasKayitTarihi = kayitCheck.recordset.length > 0;
 
+    // DisRaporKodu (ÜGAM/RR26/XXXX) NKR_RaporOnay tablosunda — n.ID üzerinden
+    // EXISTS ile aranır. Kolon yoksa aramaya dahil edilmez.
+    const disKodSearchClause = (hasDisRaporKodu && search)
+      ? `OR EXISTS (
+             SELECT 1 FROM NKR_RaporOnay ro
+             WHERE ro.NkrID = n.ID
+               AND LOWER(COALESCE(ro.DisRaporKodu, '')) LIKE LOWER(@search)
+           )`
+      : "";
+
     const searchFilter = search
       ? `AND (
              LOWER(COALESCE(CAST(n.Evrak_No AS NVARCHAR), '')) LIKE LOWER(@search)
@@ -72,6 +89,7 @@ export async function GET(request: Request) {
           OR LOWER(COALESCE(CAST(n.Barkod AS NVARCHAR), '')) LIKE LOWER(@search)
           OR LOWER(COALESCE(n.Numune_Adi, '')) LIKE LOWER(@search)
           OR LOWER(COALESCE(f.Ad, '')) LIKE LOWER(@search)
+          ${disKodSearchClause}
         )`
       : "";
 
@@ -99,6 +117,8 @@ export async function GET(request: Request) {
       ? "AND EffectiveDurum = N'Geri G\u00f6nderildi'"
       : raporDurumu === "Tamamland\u0131"
       ? "AND (EffectiveDurum = N'Tamamland\u0131' OR EffectiveDurum = N'Tamamlandi')"
+      : raporDurumu === "Ar\u015fiv"
+      ? "AND EffectiveDurum = N'Ar\u015fiv'"
       : "";
 
     // Phase filtresi \u2014 geni\u015f kapsam, raporDurumu (filter dropdown) ile daralt\u0131l\u0131r.
@@ -112,7 +132,7 @@ export async function GET(request: Request) {
       : phase === "returned"
       ? "AND EffectiveDurum = N'Geri G\u00f6nderildi'"
       : phase === "approved"
-      ? "AND EffectiveDurum IN (N'Onayland\u0131', N'Yay\u0131nland\u0131')"
+      ? "AND EffectiveDurum IN (N'Onayland\u0131', N'Yay\u0131nland\u0131', N'Ar\u015fiv')"
       : "";
 
     // Override tablosunda Notlar kolonu var mı? (Geri Gönder notu için)
@@ -185,7 +205,8 @@ export async function GET(request: Request) {
 
       ${hasRaporOnay ? `SELECT ro.NkrID, UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U')) AS NormFmt,
         MAX(ro.Durum) AS RaporOnayDurum,
-        MAX(ro.YayinUrl) AS YayinUrl
+        MAX(ro.YayinUrl) AS YayinUrl,
+        ${hasDisRaporKodu ? `MAX(ro.DisRaporKodu)` : `CAST(NULL AS NVARCHAR(40))`} AS DisRaporKodu
       INTO #OS
       FROM NKR_RaporOnay ro
       GROUP BY ro.NkrID, UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U'));` : ``}
@@ -206,6 +227,7 @@ export async function GET(request: Request) {
           ${hasOverrideNotlar ? `ov.GeriGonderNotu` : `NULL`} AS GeriGonderNotu,
           ${hasRaporOnay ? `os.RaporOnayDurum` : `NULL`} AS RaporOnayDurum,
           ${hasRaporOnay ? `os.YayinUrl` : `NULL`} AS YayinUrl,
+          ${hasDisRaporKodu ? `os.DisRaporKodu` : `CAST(NULL AS NVARCHAR(40))`} AS DisRaporKodu,
           hs.MaxTermin AS MaxTermin
         FROM #Rap r
         LEFT JOIN #HS hs ON hs.NkrID = r.NkrID AND hs.RaporFormati = r.RaporFormati
@@ -242,7 +264,9 @@ export async function GET(request: Request) {
       SELECT *, COUNT(*) OVER() AS TotalCount
       FROM Filtered
       ORDER BY
-        RaporNo DESC,
+        ${phase === "lab"
+          ? `CASE WHEN MaxTermin IS NULL THEN 1 ELSE 0 END, MaxTermin ASC, RaporNo DESC,`
+          : `RaporNo DESC,`}
         RaporFormati
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
 

@@ -57,13 +57,18 @@ export default async function TeklifPrintPage({
   const satirRes = await pool.request()
     .input("TeklifID", Number(id))
     .query(`
-      SELECT HizmetAdi, ISNULL(Adet,1) AS Adet,
-             Fiyat, ParaBirimi, Iskonto,
-             ISNULL(Metot,'') AS Metot, ISNULL(Akreditasyon,'') AS Akreditasyon,
-             Notlar
-      FROM TeklifKalem
-      WHERE TeklifID = @TeklifID
-      ORDER BY ID
+      SELECT
+        k.HizmetAdi,
+        ISNULL(k.Adet, 1) AS Adet,
+        k.Fiyat, k.ParaBirimi, k.Iskonto,
+        ISNULL(k.Metot, '') AS Metot,
+        -- Snapshot bos veya null ise StokAnalizListesi'nden live degeri al
+        ISNULL(NULLIF(LTRIM(RTRIM(ISNULL(k.Akreditasyon, ''))), ''), ISNULL(s.Akreditasyon, '')) AS Akreditasyon,
+        k.Notlar
+      FROM TeklifKalem k
+      LEFT JOIN StokAnalizListesi s ON s.ID = k.HizmetID
+      WHERE k.TeklifID = @TeklifID
+      ORDER BY k.ID
     `);
   const satirlar = satirRes.recordset as TeklifSatir[];
 

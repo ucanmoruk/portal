@@ -2,9 +2,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
+import { randomDisKodTalep } from "@/lib/disKod";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/talepler?tur=Analiz|Destek&search=&page=1&limit=20
+// GET  /api/talepler?tur=Analiz|Destek&search=&page=1&limit=20  — listele
+// POST /api/talepler  — yeni Talep olustur (iç TalepNo = MAX+1, dış kod = ÜGAM/A26/XXXX)
 //
 // Müşteri portalında oluşturulan TALEPLER (Analiz / Destek).
 // Analiz için cosmoroot.VIEW_TALEP_LISTE (Tur='Analiz' filtreli) kullanılır.
@@ -115,6 +117,149 @@ export async function GET(request: NextRequest) {
     return Response.json({
       data: dataRes.recordset, total, page, limit, totalPages: Math.ceil(total / limit),
     });
+  } catch (e: any) {
+    return Response.json({ error: e.message }, { status: 500 });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/talepler  — Yeni talep oluştur
+//
+// Body:
+// {
+//   tur: "Analiz" | "Destek",
+//   firmaKodu: string,
+//   sozlesme?: number,
+//   yetkili?: number,
+//   raporlama?: { firma, adres, yetkili, iletisim, mail, karar, dil, iade, ureticiFirma, note },
+//   fatura?:    { firma, adres, vergiDairesi, vergiNo, mail },
+//   numuneler?: Array<{ numune, ozellik?, analiz?, metot? }>,
+// }
+//
+// İç TalepNo: global MAX(TalepNo) + 1. Dış kod: ÜGAM/A26/XXXX (benzersiz, retry).
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function nextTalepNo(pool: any): Promise<number> {
+  const r = await pool.request().query(
+    `SELECT ISNULL(MAX(TalepNo), 0) + 1 AS nextNo FROM dbo.Talep`
+  );
+  return r.recordset[0].nextNo as number;
+}
+
+async function genUniqueDisTalepKodu(pool: any): Promise<string> {
+  const year = new Date().getFullYear();
+  for (let i = 0; i < 25; i++) {
+    const kod = randomDisKodTalep(year);
+    const exists = await pool.request()
+      .input("kod", kod)
+      .query(`SELECT TOP 1 ID FROM dbo.Talep WHERE DisTalepKodu = @kod`);
+    if (!exists.recordset.length) return kod;
+  }
+  return randomDisKodTalep(year) + String(Date.now()).slice(-2);
+}
+
+export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
+
+  const userId = (session.user as any)?.userId ?? null;
+
+  let body: any;
+  try { body = await request.json(); }
+  catch { return Response.json({ error: "Geçersiz JSON" }, { status: 400 }); }
+
+  const tur = String(body?.tur || "").trim();
+  if (tur !== "Analiz" && tur !== "Destek") {
+    return Response.json({ error: "tur 'Analiz' veya 'Destek' olmalı." }, { status: 400 });
+  }
+  const firmaKodu = String(body?.firmaKodu || "").trim();
+  if (!firmaKodu) {
+    return Response.json({ error: "firmaKodu zorunlu." }, { status: 400 });
+  }
+
+  const sozlesme = Number.isFinite(Number(body?.sozlesme)) ? Number(body.sozlesme) : null;
+  const yetkili  = Number.isFinite(Number(body?.yetkili))  ? Number(body.yetkili)  : null;
+
+  try {
+    const pool = await cosmoPool;
+
+    const talepNo = await nextTalepNo(pool);
+    const disKod  = await genUniqueDisTalepKodu(pool);
+
+    const insRes = await pool.request()
+      .input("TalepNo",      talepNo)
+      .input("DisTalepKodu", disKod)
+      .input("FirmaKodu",    firmaKodu)
+      .input("Sozlesme",     sozlesme)
+      .input("Yetkili",      yetkili)
+      .input("Tur",          tur)
+      .input("Durum",        "Yeni Talep")
+      .input("Olusturan",    userId ? Number(userId) : null)
+      .query(`
+        INSERT INTO dbo.Talep (Tarih, FirmaKodu, Sozlesme, Durum, TalepNo, Yetkili, Tur, Olusturan, DisTalepKodu)
+        OUTPUT INSERTED.ID
+        VALUES (CAST(GETDATE() AS DATE), @FirmaKodu, @Sozlesme, @Durum, @TalepNo, @Yetkili, @Tur, @Olusturan, @DisTalepKodu)
+      `);
+    const talepId = insRes.recordset[0].ID as number;
+
+    // TalepRaporlama (opsiyonel — body.raporlama varsa)
+    const r = body?.raporlama;
+    if (r && typeof r === "object") {
+      await pool.request()
+        .input("TalepID",      talepId)
+        .input("Firma",        r.firma        || null)
+        .input("Adres",        r.adres        || null)
+        .input("Yetkili",      r.yetkili      || null)
+        .input("Iletisim",     r.iletisim     || null)
+        .input("Mail",         r.mail         || null)
+        .input("Karar",        r.karar        || null)
+        .input("Dil",          r.dil          || null)
+        .input("Iade",         r.iade         || null)
+        .input("UreticiFirma", r.ureticiFirma || null)
+        .input("Note",         r.note         || null)
+        .query(`
+          INSERT INTO dbo.TalepRaporlama (TalepID, Firma, Adres, Yetkili, Iletisim, Mail, Karar, Dil, Iade, UreticiFirma, Note)
+          VALUES (@TalepID, @Firma, @Adres, @Yetkili, @Iletisim, @Mail, @Karar, @Dil, @Iade, @UreticiFirma, @Note)
+        `);
+    }
+
+    // TalepFatura (opsiyonel)
+    const f = body?.fatura;
+    if (f && typeof f === "object") {
+      await pool.request()
+        .input("TalepID",      talepId)
+        .input("Firma",        f.firma        || null)
+        .input("Adres",        f.adres        || null)
+        .input("VergiDairesi", f.vergiDairesi || null)
+        .input("VergiNo",      f.vergiNo      || null)
+        .input("Mail",         f.mail         || null)
+        .query(`
+          INSERT INTO dbo.TalepFatura (TalepID, Firma, Adres, VergiDairesi, VergiNo, Mail)
+          VALUES (@TalepID, @Firma, @Adres, @VergiDairesi, @VergiNo, @Mail)
+        `);
+    }
+
+    // TalepNumune (opsiyonel — çoklu)
+    if (Array.isArray(body?.numuneler)) {
+      for (const n of body.numuneler) {
+        if (!n?.numune) continue;
+        await pool.request()
+          .input("TalepID", talepId)
+          .input("Numune",  String(n.numune))
+          .input("Ozellik", n.ozellik || null)
+          .input("Analiz",  n.analiz  || null)
+          .input("Metot",   n.metot   || null)
+          .query(`
+            INSERT INTO dbo.TalepNumune (TalepID, Numune, Ozellik, Analiz, Metot)
+            VALUES (@TalepID, @Numune, @Ozellik, @Analiz, @Metot)
+          `);
+      }
+    }
+
+    return Response.json(
+      { id: talepId, talepNo, disTalepKodu: disKod },
+      { status: 201 }
+    );
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

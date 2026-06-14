@@ -2,6 +2,7 @@ import { JetBrains_Mono } from "next/font/google";
 import OnayToolbar from "../OnayToolbar";
 import type { ReportFormatProps } from "../reportTypes";
 import { TableBody } from "@/components/ui/table";
+import { disRaporLabel } from "@/lib/disKod";
 
 const jetbrains = JetBrains_Mono({
   subsets: ["latin", "latin-ext"],
@@ -56,6 +57,25 @@ export default function ChallengeReport({
     docKodu,
     sirketAdi,
   } = meta;
+
+  // Test raporunda DAİMA dış kod gösterilir (ÜGAM/RR26/XXXX/NN).
+  // DisKod yoksa (eski kayıt / migration 018 koşulmamış) iç koda düş.
+  const revNum = parseInt(revNo, 10) || 0;
+  const raporKodu = onay?.disRaporKodu
+    ? disRaporLabel(onay.disRaporKodu, revNum)
+    : `${header.RaporNo} / ${revNo}`;
+
+  // Bu rapora dahil edilen analizlerden en az biri akredite mi?
+  // Akredite analiz yoksa TÜRKAK logosu ve sağdaki 3-satırlık kutu gizlenir.
+  const hasAkredite = hizmetler.some(
+    (h) => String(h.Akreditasyon || "").trim().toLowerCase() === "var"
+  );
+
+  // .akredite-box hücreleri SABIT 20mm × 8mm. AB-2015-T ve MM-YY normal boyutta
+  // kalır; SADECE rapor kodu hücresi uzunsa font küçültülür — kutuya dokunulmaz.
+  const _kodLen = raporKodu.length;
+  const akrKodFontSize =
+    _kodLen <= 10 ? 10.5 : _kodLen <= 14 ? 8.5 : _kodLen <= 18 ? 7 : 6;
 
   return (
     <>
@@ -114,15 +134,20 @@ export default function ChallengeReport({
         }
         .akredite-box {
           border-collapse: collapse;
+          width: 20mm;
+          table-layout: fixed;
         }
         .akredite-box td {
           border: 1px solid #000;
-          width: 2.14cm;
-          height: 0.69cm;
+          width: 20mm;
+          height: 8mm;
           text-align: center;
           vertical-align: middle;
           font-size: 11px;
-          padding: 0 2px;
+          padding: 0 1px;
+          overflow: hidden;
+          word-break: break-all;
+          line-height: 1.1;
         }
 
         /* ───── ÜST META BAR (2x2: Rapor No/Rev · Sayfa · Kabul · Yayın) ───── */
@@ -345,11 +370,18 @@ export default function ChallengeReport({
         @media print {
           body { background: #fff; }
           .onay-toolbar { display: none !important; }
+          /* TEK SAYFA garantisi: sabit height + overflow:hidden. Içerik 297mm'i
+             aşarsa ikinci sayfaya geçmek yerine kırpılır. */
           .page {
-            width: 210mm; max-width: 210mm; min-height: 297mm;
+            width: 210mm; max-width: 210mm;
+            height: 297mm; min-height: 297mm; max-height: 297mm;
             margin: 0 auto; box-shadow: none;
             padding: 8mm 8mm 8mm 8mm;
+            overflow: hidden;
+            page-break-after: avoid;
+            page-break-inside: avoid;
           }
+          html, body { height: 297mm; overflow: hidden; }
         }
       `}</style>
 
@@ -362,26 +394,30 @@ export default function ChallengeReport({
         />
 
         <div className="page">
-          {/* ───── HEADER: Sol logo + Sağ Türkak/ilac-MRA ───── */}
+          {/* ───── HEADER: Sol logo + (akredite varsa) Sağ Türkak/ilac-MRA ───── */}
           <div className="header">
             <div className="header-logo">
               <img src="/unique-logo-wide.png" alt="UNIQUE ANALYSE" />
             </div>
-            <div className="header-akredite">
-              <img src="/turkak-ilac.jpg" alt="TÜRKAK AB-2015-T · ilac-MRA" />
-            </div>
+            {hasAkredite && (
+              <div className="header-akredite">
+                <img src="/turkak-ilac.jpg" alt="TÜRKAK AB-2015-T · ilac-MRA" />
+              </div>
+            )}
           </div>
 
-          {/* ───── DENEY RAPORU BAŞLIK + akreditasyon kutusu ───── */}
+          {/* ───── DENEY RAPORU BAŞLIK + (akredite varsa) akreditasyon kutusu ───── */}
           <div className="title-row">
             <div className="report-title">DENEY RAPORU</div>
-            <table className="akredite-box">
-              <tbody>
-                <tr><td>AB-2015-T</td></tr>
-                <tr><td>{header.RaporNo}/{revNo}</td></tr>
-                <tr><td>{toMMYY(yayinTarihi)}</td></tr>
-              </tbody>
-            </table>
+            {hasAkredite && (
+              <table className="akredite-box">
+                <tbody>
+                  <tr><td>AB-2015-T</td></tr>
+                  <tr><td style={{ fontSize: `${akrKodFontSize}px` }}>{raporKodu}</td></tr>
+                  <tr><td>{toMMYY(yayinTarihi)}</td></tr>
+                </tbody>
+              </table>
+            )}
           </div>
 
           {/* ───── ÜST META: Rapor No/Rev · Sayfa · Kabul · Yayın ───── */}
@@ -390,7 +426,7 @@ export default function ChallengeReport({
             <tbody>
               <tr>
                 <td style={{ paddingBottom: "4px" , width: "20%" }}><strong>Rapor No / Rev. No:</strong></td>
-                <td style={{ paddingBottom: "4px" , width: "50%" }}>{header.RaporNo} / {revNo}</td>
+                <td style={{ paddingBottom: "4px" , width: "50%" }}>{raporKodu}</td>
                 <td style={{ paddingBottom: "4px" }}><strong></strong></td>
                 <td style={{ paddingBottom: "4px"  }}></td>
               </tr>
@@ -416,7 +452,7 @@ export default function ChallengeReport({
               <tr>
                 <td>
                   <div className="firma-ad">{header.FirmaAd || "—"}</div>
-                  <div className="info-line">{header.FirmaAdres}</div>
+                  <div className="info-line" style={{ width: "90%" }}>{header.FirmaAdres}</div>
                   <div className="info-line">{header.FirmaYetkili || "—"}</div>
                   <div className="info-line">{header.FirmaEmail}</div>
                 </td>
@@ -432,11 +468,11 @@ export default function ChallengeReport({
                   )}
                   <div className="info-line">
                     <span className="info-label">Üretim Tarihi: </span>
-                    {fmtTarih(String(header.UretimTarihi || ""))}
+                    {String(header.UretimTarihi || "—")}
                   </div>
                   <div className="info-line">
                     <span className="info-label">Son Kullanım Tarihi: </span>
-                    {fmtTarih(String(header.SKT || ""))}
+                    {String(header.SKT || "—")}
                   </div>
                   <div className="info-line">
                     <span className="info-label">Seri/Lot No/Ürün Kodu: </span>
@@ -644,12 +680,20 @@ export default function ChallengeReport({
                 />
               </div>
               <div className="approval-cell-body">
-                {karekod?.imzaHash && (
+                {karekod?.dogrulamaKod && (
                   <div
-                    title="Belge dijital imzası (SHA-256/HMAC)"
-                    style={{ fontSize: "5.5px", lineHeight: 1.25, color: "#646464", wordBreak: "break-all", padding: "0 3px", textAlign: "center" }}
+                    title="Doğrulama Kodu — manuel doğrulamada bu kod kullanılır"
+                    style={{
+                      textAlign: "center",
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      letterSpacing: "0.14em",
+                      color: "#000",
+                      fontFamily: "monospace",
+                      padding: "1px 0",
+                    }}
                   >
-                    Dijital İmza: {karekod.imzaHash.slice(0, 32)}
+                    {karekod.dogrulamaKod}
                   </div>
                 )}
               </div>
