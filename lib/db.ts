@@ -72,7 +72,9 @@ const getMssqlPoolFor = (database: string) => {
 
 // Son ping zamanı per database — sık ping yapmamak için TTL kontrolü.
 const poolLastPing = new Map<string, number>();
-const PING_TTL_MS = 60_000; // 1 dakikada bir taze ping (kabul edilebilir overhead)
+// 5sn — pool half-open durumda kalıp ECONNRESET vermesin diye sıkı kontrol.
+// Ping ~5ms, request başına maliyet kabul edilebilir.
+const PING_TTL_MS = 5_000;
 
 // Pool oluştur + idle/error handler bağla
 function createFreshPool(database: string): Promise<mssql.ConnectionPool> {
@@ -521,16 +523,62 @@ export default poolPromise;
 // Step 1: ADDITIVE — varsayılan poolPromise davranışı değişmez. Route grupları
 // Step 2'de tek tek bu havuzlara taşınacak. Hepsi `await cosmoPool` gibi kullanılır.
 
+// Pool wrapper'ı — request().query() çağrılarını sarmalayıp ECONNRESET olursa
+// pool'u invalidate edip taze pool ile 1 kez retry eder. Routes hiç değişmez.
+function wrapPoolWithRetry(database: string, pool: mssql.ConnectionPool): mssql.ConnectionPool {
+  const isTransient = (err: any) => {
+    const msg = String(err?.message ?? err ?? "").toLowerCase();
+    return msg.includes("econnreset") || msg.includes("connection lost")
+      || msg.includes("etimedout") || msg.includes("epipe") || err?.code === "ECONNRESET";
+  };
+  return new Proxy(pool, {
+    get(target, prop) {
+      if (prop !== "request") return Reflect.get(target, prop);
+      return () => {
+        const req = target.request();
+        const origQuery = req.query.bind(req);
+        const origBatch = (req as any).batch?.bind(req);
+        const wrap = (origFn: any) => async (sql: any) => {
+          try { return await origFn(sql); }
+          catch (err: any) {
+            if (!isTransient(err)) throw err;
+            console.log(`MSSQL transient error (${database}), retry with fresh pool…`);
+            mssqlPools.delete(database);
+            poolLastPing.delete(database);
+            try { await target.close(); } catch { /* ignore */ }
+            const fresh = await getMssqlPoolFor(database);
+            const freshReq = fresh.request();
+            // Eski request'in input'larını taze req'e geçir
+            const inputs = (req as any).parameters || {};
+            for (const k of Object.keys(inputs)) {
+              try { freshReq.input(k, inputs[k].value); } catch { /* ignore */ }
+            }
+            return await freshReq.query(sql);
+          }
+        };
+        const wrappedQuery = wrap(origQuery);
+        if (origBatch) (req as any).batch = wrap(origBatch);
+        req.query = wrappedQuery as typeof req.query;
+        return req;
+      };
+    },
+  });
+}
+
 /** Müşteriler + Laboratuvar → MSSQL massgrup_cosmo */
 export const cosmoPool: PromiseLike<mssql.ConnectionPool> = {
   then: (onfulfilled, onrejected) =>
-    getMssqlPoolFor(MSSQL_COSMO_DB).then(onfulfilled, onrejected),
+    getMssqlPoolFor(MSSQL_COSMO_DB)
+      .then((p) => wrapPoolWithRetry(MSSQL_COSMO_DB, p))
+      .then(onfulfilled, onrejected),
 };
 
 /** Spektrotek → MSSQL massgrup_root */
 export const rootPool: PromiseLike<mssql.ConnectionPool> = {
   then: (onfulfilled, onrejected) =>
-    getMssqlPoolFor(MSSQL_ROOT_DB).then(onfulfilled, onrejected),
+    getMssqlPoolFor(MSSQL_ROOT_DB)
+      .then((p) => wrapPoolWithRetry(MSSQL_ROOT_DB, p))
+      .then(onfulfilled, onrejected),
 };
 
 /** Formül Kontrol + ÜGD + Root Kozmetik → Neon Postgres (compat).
