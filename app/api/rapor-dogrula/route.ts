@@ -145,10 +145,22 @@ export async function GET(request: NextRequest) {
       return Response.json({ valid: false }, { headers: CORS });
     }
 
-    const yayinlandi = matchRow.Durum === "Yayınlandı" && !!matchRow.YayinUrl;
-    if (!yayinlandi) {
+    // Doğrulama geçerli sayılması için: Yayınlandı VEYA Arşiv durumunda olup
+    // YayinUrl (FTP'deki PDF) doluysa OK. 'Arşiv' geriye dönük tarihsel raporlar
+    // için kullanılır — müşteri eski QR ile yine doğrulama yapabilir.
+    const yayinUrl = String(matchRow.YayinUrl || "").trim();
+    const hasPdf = yayinUrl.length > 0;
+    const aktifDurum = matchRow.Durum === "Yayınlandı" || matchRow.Durum === "Arşiv";
+    const valid = hasPdf && aktifDurum;
+    if (!valid) {
       return Response.json(
-        { valid: false, durum: matchRow.Durum, error: "Rapor henüz yayınlanmadı." },
+        {
+          valid: false,
+          durum: matchRow.Durum,
+          error: !hasPdf
+            ? "Rapor henüz yayınlanmadı."
+            : "Bu rapor doğrulama için uygun değil.",
+        },
         { headers: CORS },
       );
     }

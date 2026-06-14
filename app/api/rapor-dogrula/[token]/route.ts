@@ -51,6 +51,18 @@ export async function GET(
     const row = r.recordset[0];
     if (!row) return Response.json({ valid: false });
 
+    // Sadece Onaylandı / Yayınlandı / Arşiv durumdaki raporlar doğrulanır.
+    // Durum NULL (placeholder satır) veya başka durum → reddet.
+    const aktifDurum =
+      row.Durum === "Onaylandı" || row.Durum === "Yayınlandı" || row.Durum === "Arşiv";
+    if (!aktifDurum) {
+      return Response.json({
+        valid: false,
+        durum: row.Durum,
+        error: "Bu rapor doğrulama için uygun değil.",
+      });
+    }
+
     // ───── Belge bütünlüğü kontrolü ─────
     // Onay anındaki imzayı, raporun GÜNCEL içeriğinden yeniden hesaplanan imzayla
     // karşılaştır. Eşleşmezse rapor onaydan sonra değiştirilmiş demektir.
