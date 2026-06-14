@@ -42,88 +42,113 @@ const getMssqlPoolFor = (database: string) => {
   if (!connection) {
     connection = createFreshPool(database);
     mssqlPools.set(database, connection);
-    return connection;
   }
-  // POOL HEALTH CHECK: cached pool dead/half-open olabilir (sunucu idle timeout).
-  // pool.connected false ise ya da son ping > PING_TTL_MS önce ise gerçek ping at.
-  // Ping başarısız → cache temizle + taze pool. Ping başarılı → cache hit.
-  return connection.then(async (pool) => {
-    const last = poolLastPing.get(database) || 0;
-    const now = Date.now();
-    const needsPing = !pool.connected || (now - last > PING_TTL_MS);
-    if (!needsPing) return pool;
-    try {
-      await pool.request().query("SELECT 1 AS x");
-      poolLastPing.set(database, now);
-      return pool;
-    } catch (err) {
-      console.log(`MSSQL pool ping failed (${database}), reconnecting…`, err);
-      try { await pool.close(); } catch { /* ignore */ }
-      mssqlPools.delete(database);
-      poolLastPing.delete(database);
-      const fresh = createFreshPool(database);
-      mssqlPools.set(database, fresh);
-      const freshPool = await fresh;
-      poolLastPing.set(database, Date.now());
-      return freshPool;
-    }
-  });
+  return connection;
 };
 
-// Son ping zamanı per database — sık ping yapmamak için TTL kontrolü.
-const poolLastPing = new Map<string, number>();
-// 5sn — pool half-open durumda kalıp ECONNRESET vermesin diye sıkı kontrol.
-// Ping ~5ms, request başına maliyet kabul edilebilir.
-const PING_TTL_MS = 5_000;
+// Geçici (transient) bağlantı hatası mı? — ECONNRESET, half-open socket vb.
+function isTransientDbError(err: any): boolean {
+  const msg = String(err?.message ?? err ?? "").toLowerCase();
+  return (
+    msg.includes("econnreset") ||
+    msg.includes("connection lost") ||
+    msg.includes("connection is closed") ||
+    msg.includes("connection closed") ||
+    msg.includes("etimedout") ||
+    msg.includes("esockettimedout") ||
+    msg.includes("epipe") ||
+    msg.includes("socket hang up") ||
+    err?.code === "ECONNRESET" ||
+    err?.code === "ECONNCLOSED"
+  );
+}
 
-// Pool oluştur + idle/error handler bağla
+// Pool oluştur (connect retry ile) + idle/error handler bağla.
+// Vercel cold start'ta uzak (Türkiye) MSSQL'e TLS handshake bazen reset olur →
+// 3 denemeye kadar artan bekleme ile yeniden dene.
 function createFreshPool(database: string): Promise<mssql.ConnectionPool> {
-  return new mssql.ConnectionPool(mssqlConfigFor(database))
-    .connect()
-    .then((pool) => {
+  const attempt = async (n: number): Promise<mssql.ConnectionPool> => {
+    try {
+      const pool = await new mssql.ConnectionPool(mssqlConfigFor(database)).connect();
       console.log(`MSSQL veritabanina baglanildi: ${database}`);
-      // Taze pool — connect() yeni başardığı için lastPing'i şimdi olarak işaretle.
-      poolLastPing.set(database, Date.now());
       const cachedRef = mssqlPools.get(database);
       const invalidate = (reason: string) => (err?: unknown) => {
         console.log(`MSSQL pool invalidated (${database}, ${reason}):`, err);
-        if (mssqlPools.get(database) === cachedRef) {
-          mssqlPools.delete(database);
-        }
+        if (mssqlPools.get(database) === cachedRef) mssqlPools.delete(database);
         try { pool.close(); } catch { /* ignore */ }
       };
       pool.on("error", invalidate("pool error"));
       pool.on("close", invalidate("pool close"));
       return pool;
-    })
-    .catch((err) => {
+    } catch (err) {
+      if (n < 3 && isTransientDbError(err)) {
+        console.log(`MSSQL connect retry ${n}/3 (${database})…`);
+        await new Promise((r) => setTimeout(r, 250 * n));
+        return attempt(n + 1);
+      }
       console.log(`MSSQL baglanti hatasi (${database}): `, err);
-      mssqlPools.delete(database);
       throw err;
-    });
+    }
+  };
+  const p = attempt(1).catch((err) => {
+    // Başarısız pool'u cache'te bırakma
+    if (mssqlPools.get(database) === p) mssqlPools.delete(database);
+    throw err;
+  });
+  return p;
 }
 
-// Bir kez retry ile sarmalayıcı — ECONNRESET / ETIMEDOUT / "Connection lost"
-// gibi geçici hatalarda pool'u invalidate edip 1 sefer daha dener.
-async function withRetry<T>(database: string, op: (pool: mssql.ConnectionPool) => Promise<T>): Promise<T> {
-  try {
-    const pool = await getMssqlPoolFor(database);
-    return await op(pool);
-  } catch (err: any) {
-    const msg = String(err?.message ?? err ?? "").toLowerCase();
-    const isTransient = msg.includes("econnreset") || msg.includes("connection lost")
-      || msg.includes("etimedout") || msg.includes("epipe") || err?.code === "ECONNRESET";
-    if (!isTransient) throw err;
-    console.log(`MSSQL retry (${database}) after transient error:`, msg);
-    mssqlPools.delete(database);
-    const pool = await getMssqlPoolFor(database);
-    return await op(pool);
+// ── Resilient pool/request — stale target'a ASLA bağlı kalmaz ──────────────
+// Sorun: route `await cosmoPool` ile pool'u bir kez alıp tutuyor, sonra çok
+// kez .request() çağırıyor. Vercel Lambda thaw sonrası pool ölmüşse, sabit
+// target'lı bir sarmalayıcı ölü pool'a takılı kalır. Bu sınıf her .query()'de
+// o anki sağlıklı pool'u getMssqlPoolFor ile yeniden edinir ve ECONNRESET'te
+// pool'u invalidate edip 1 kez retry eder. Routes hiç değişmez.
+
+class ResilientRequest {
+  private inputCalls: unknown[][] = [];
+  constructor(private database: string) {}
+
+  input(...args: unknown[]) {
+    this.inputCalls.push(args);
+    return this;
+  }
+
+  private buildReal(pool: mssql.ConnectionPool) {
+    const r = pool.request();
+    for (const args of this.inputCalls) (r.input as (...a: unknown[]) => unknown)(...args);
+    return r;
+  }
+
+  private async run(method: "query" | "batch", sql: string): Promise<any> {
+    let pool = await getMssqlPoolFor(this.database);
+    try {
+      return await (this.buildReal(pool) as any)[method](sql);
+    } catch (err) {
+      if (!isTransientDbError(err)) throw err;
+      console.log(`MSSQL transient (${this.database}) → fresh pool + retry`);
+      mssqlPools.delete(this.database);
+      try { (await pool.close?.()); } catch { /* ignore */ }
+      pool = await getMssqlPoolFor(this.database);
+      return await (this.buildReal(pool) as any)[method](sql);
+    }
+  }
+
+  query(sql: string) { return this.run("query", sql); }
+  batch(sql: string) { return this.run("batch", sql); }
+}
+
+class ResilientPool {
+  constructor(private database: string) {}
+  request() { return new ResilientRequest(this.database); }
+  // transaction cosmo/root'ta kullanılmıyor; gerekirse gerçek pool'a düşer.
+  async transaction() {
+    const pool = await getMssqlPoolFor(this.database);
+    return pool.transaction();
   }
 }
 
 // Varsayılan MSSQL havuzu — eski davranışı korur (DB_NAME).
-const getMssqlPool = () => getMssqlPoolFor(process.env.DB_NAME || "");
-
 // Menü bazlı MSSQL veritabanı adları (bkz. DB yönlendirme haritası).
 const MSSQL_COSMO_DB = process.env.MSSQL_COSMO_DB || "massgrup_cosmo";
 const MSSQL_ROOT_DB = process.env.MSSQL_ROOT_DB || "massgrup_root";
@@ -513,7 +538,10 @@ const poolPromise: PromiseLike<mssql.ConnectionPool> = {
     if (usePostgres) {
       return Promise.resolve(new PgCompatPool() as any).then(onfulfilled, onrejected);
     }
-    return getMssqlPool().then(onfulfilled, onrejected);
+    // MSSQL dalı da resilient (lazy retry) — varsayılan DB_NAME üzerinden.
+    return Promise.resolve(
+      new ResilientPool(process.env.DB_NAME || "") as unknown as mssql.ConnectionPool,
+    ).then(onfulfilled, onrejected);
   },
 };
 
@@ -523,61 +551,17 @@ export default poolPromise;
 // Step 1: ADDITIVE — varsayılan poolPromise davranışı değişmez. Route grupları
 // Step 2'de tek tek bu havuzlara taşınacak. Hepsi `await cosmoPool` gibi kullanılır.
 
-// Pool wrapper'ı — request().query() çağrılarını sarmalayıp ECONNRESET olursa
-// pool'u invalidate edip taze pool ile 1 kez retry eder. Routes hiç değişmez.
-function wrapPoolWithRetry(database: string, pool: mssql.ConnectionPool): mssql.ConnectionPool {
-  const isTransient = (err: any) => {
-    const msg = String(err?.message ?? err ?? "").toLowerCase();
-    return msg.includes("econnreset") || msg.includes("connection lost")
-      || msg.includes("etimedout") || msg.includes("epipe") || err?.code === "ECONNRESET";
-  };
-  return new Proxy(pool, {
-    get(target, prop) {
-      if (prop !== "request") return Reflect.get(target, prop);
-      return () => {
-        const req = target.request();
-        const origQuery = req.query.bind(req);
-        const origBatch = (req as any).batch?.bind(req);
-        const wrap = (origFn: any) => async (sql: any) => {
-          try { return await origFn(sql); }
-          catch (err: any) {
-            if (!isTransient(err)) throw err;
-            console.log(`MSSQL transient error (${database}), retry with fresh pool…`);
-            mssqlPools.delete(database);
-            poolLastPing.delete(database);
-            try { await target.close(); } catch { /* ignore */ }
-            const fresh = await getMssqlPoolFor(database);
-            const freshReq = fresh.request();
-            // Eski request'in input'larını taze req'e geçir
-            const inputs = (req as any).parameters || {};
-            for (const k of Object.keys(inputs)) {
-              try { freshReq.input(k, inputs[k].value); } catch { /* ignore */ }
-            }
-            return await freshReq.query(sql);
-          }
-        };
-        const wrappedQuery = wrap(origQuery);
-        if (origBatch) (req as any).batch = wrap(origBatch);
-        req.query = wrappedQuery as typeof req.query;
-        return req;
-      };
-    },
-  });
-}
-
-/** Müşteriler + Laboratuvar → MSSQL massgrup_cosmo */
+/** Müşteriler + Laboratuvar → MSSQL massgrup_cosmo (resilient — lazy retry) */
 export const cosmoPool: PromiseLike<mssql.ConnectionPool> = {
   then: (onfulfilled, onrejected) =>
-    getMssqlPoolFor(MSSQL_COSMO_DB)
-      .then((p) => wrapPoolWithRetry(MSSQL_COSMO_DB, p))
+    Promise.resolve(new ResilientPool(MSSQL_COSMO_DB) as unknown as mssql.ConnectionPool)
       .then(onfulfilled, onrejected),
 };
 
-/** Spektrotek → MSSQL massgrup_root */
+/** Spektrotek → MSSQL massgrup_root (resilient — lazy retry) */
 export const rootPool: PromiseLike<mssql.ConnectionPool> = {
   then: (onfulfilled, onrejected) =>
-    getMssqlPoolFor(MSSQL_ROOT_DB)
-      .then((p) => wrapPoolWithRetry(MSSQL_ROOT_DB, p))
+    Promise.resolve(new ResilientPool(MSSQL_ROOT_DB) as unknown as mssql.ConnectionPool)
       .then(onfulfilled, onrejected),
 };
 
