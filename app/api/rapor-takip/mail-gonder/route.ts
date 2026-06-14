@@ -51,12 +51,15 @@ export async function POST(request: Request) {
     const sirketWeb   = cfg.SIRKET_WEB   || process.env.SIRKET_WEB   || "";
     const sirketEmail = cfg.SIRKET_EMAIL || process.env.SIRKET_EMAIL || "";
     const sirketAdres = cfg.SIRKET_ADRES || process.env.SIRKET_ADRES || "";
-    const mailHost    = cfg.MAIL_HOST    || process.env.MAIL_HOST    || "";
+    // Host/user'da gizli boşluk veya yanlışlıkla yapıştırılan protokol öneki
+    // (https://, smtp://) getaddrinfo'yu bozar → temizle.
+    const mailHost    = (cfg.MAIL_HOST || process.env.MAIL_HOST || "")
+      .trim().replace(/^[a-z]+:\/\//i, "").replace(/\/.*$/, "");
     const mailPort    = parseInt(cfg.MAIL_PORT || process.env.MAIL_PORT || "587");
     const mailSecure  = (cfg.MAIL_SECURE ?? process.env.MAIL_SECURE ?? "false") === "true";
-    const mailUser    = cfg.MAIL_USER    || process.env.MAIL_USER    || "";
+    const mailUser    = (cfg.MAIL_USER || process.env.MAIL_USER || "").trim();
     const mailPass    = cfg.MAIL_PASS    || process.env.MAIL_PASS    || "";
-    const mailFrom    = cfg.MAIL_FROM    || process.env.MAIL_FROM    || mailUser;
+    const mailFrom    = (cfg.MAIL_FROM   || process.env.MAIL_FROM    || mailUser).trim();
     if (!mailHost || !mailUser || !mailPass) {
       return Response.json({ error: "SMTP ayarları yapılmamış." }, { status: 500 });
     }
