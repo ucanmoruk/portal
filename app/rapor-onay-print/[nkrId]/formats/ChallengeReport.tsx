@@ -1,6 +1,7 @@
 import { JetBrains_Mono } from "next/font/google";
 import OnayToolbar from "../OnayToolbar";
-import type { ReportFormatProps } from "../reportTypes";
+import type { ReportFormatProps, KarekodInfo } from "../reportTypes";
+import { disRaporLabel } from "@/lib/disKod";
 
 const jetbrains = JetBrains_Mono({
   subsets: ["latin", "latin-ext"],
@@ -31,62 +32,51 @@ function degerlendirmeLabel(d: string | null): { text: string; cls: string } {
   return { text: v, cls: "deg-other" };
 }
 
-export default function DetayRaporReport({
-  nkrId,
-  format,
-  header,
-  hizmetler,
-  testBaslangic,
-  testBitis,
-  onay,
-  meta,
-  karekod,
-}: ReportFormatProps) {
-  const {
-    revNo,
-    kabulTarihi,
-    yayinTarihi,
-    hazirlayanAd,
-    onaylayanAd,
-    sirketAdi,
-  } = meta;
-
-  // Bu rapora dahil edilen analizlerden en az biri akredite mi?
-  // Akredite analiz yoksa TÜRKAK logosu ve sağdaki 3-satırlık kutu gizlenir.
-  const hasAkredite = hizmetler.some(
-    (h) => String(h.Akreditasyon || "").trim().toLowerCase() === "var"
-  );
-
-  // .akredite-box hücreleri SABIT 20mm × 8mm. AB-2015-T ve MM-YY normal boyutta
-  // kalır; SADECE rapor kodu hücresi uzunsa font küçültülür — kutuya dokunulmaz.
-  const _kodLen = `${header.RaporNo}/${revNo}`.length;
-  const akrKodFontSize =
-    _kodLen <= 10 ? 10.5 : _kodLen <= 14 ? 8.5 : _kodLen <= 18 ? 7 : 6;
-
-  // Sağdaki 3 satırlık akreditasyon kutusu (AB-2015-T / Rapor No / MM-YY)
-  const AkrediteBox = () => (
+// Sağdaki 3 satırlık akreditasyon kutusu (AB-2015-T / Rapor Kodu / MM-YY)
+function AkrediteBox({ kod, yayinTarihi, fontSize }: {
+  kod: string;
+  yayinTarihi: string;
+  fontSize: number;
+}) {
+  return (
     <table className="akredite-box">
       <tbody>
         <tr><td>AB-2015-T</td></tr>
-        <tr><td style={{ fontSize: `${akrKodFontSize}px` }}>{header.RaporNo}/{revNo}</td></tr>
+        <tr><td style={{ fontSize: `${fontSize}px` }}>{kod}</td></tr>
         <tr><td>{toMMYY(yayinTarihi)}</td></tr>
       </tbody>
     </table>
   );
+}
 
-  // Header bloğu — her iki sayfada da aynı şekilde gösterilen üst kısım
-  // title:           sayfa başlığı (varsayılan "DENEY RAPORU")
-  // showAkredite:     sağdaki 3 satırlık akreditasyon kutusunu göster (varsayılan true)
-  // showAkrediteLogo: sağ üstteki TÜRKAK/ilac-MRA logosunu göster (varsayılan = showAkredite)
-  // akrediteInHeader: kutuyu başlık satırı yerine logo satırında (logonun karşısında)
-  //                   göster — logo, kutuyla aynı satırda dikey ortalanarak biraz aşağı iner
-  const HeaderBlock = ({
-    title = "DENEY RAPORU",
-    showAkredite = true,
-    showAkrediteLogo = showAkredite,
-    akrediteInHeader = false,
-    showKabulTarihi = true,
-  }: { title?: string; showAkredite?: boolean; showAkrediteLogo?: boolean; akrediteInHeader?: boolean; showKabulTarihi?: boolean }) => (
+// Header bloğu — her iki sayfada da aynı şekilde gösterilen üst kısım
+// title:           sayfa başlığı (varsayılan "DENEY RAPORU")
+// showAkredite:     sağdaki 3 satırlık akreditasyon kutusunu göster (varsayılan true)
+// showAkrediteLogo: sağ üstteki TÜRKAK/ilac-MRA logosunu göster (varsayılan = showAkredite)
+// akrediteInHeader: kutuyu başlık satırı yerine logo satırında (logonun karşısında)
+//                   göster — logo, kutuyla aynı satırda dikey ortalanarak biraz aşağı iner
+function HeaderBlock({
+  title = "DENEY RAPORU",
+  showAkredite = true,
+  showAkrediteLogo = showAkredite,
+  akrediteInHeader = false,
+  showKabulTarihi = true,
+  raporKodu,
+  kabulTarihi,
+  yayinTarihi,
+  akrKodFontSize,
+}: {
+  title?: string;
+  showAkredite?: boolean;
+  showAkrediteLogo?: boolean;
+  akrediteInHeader?: boolean;
+  showKabulTarihi?: boolean;
+  raporKodu: string;
+  kabulTarihi: string;
+  yayinTarihi: string;
+  akrKodFontSize: number;
+}) {
+  return (
     <>
       <div className="header">
         <div className="header-logo">
@@ -97,19 +87,23 @@ export default function DetayRaporReport({
             <img src="/turkak-ilac.jpg" alt="TÜRKAK AB-2015-T · ilac-MRA" />
           </div>
         )}
-        {showAkredite && akrediteInHeader && <AkrediteBox />}
+        {showAkredite && akrediteInHeader && (
+          <AkrediteBox kod={raporKodu} yayinTarihi={yayinTarihi} fontSize={akrKodFontSize} />
+        )}
       </div>
 
       <div className="title-row" style={akrediteInHeader ? { marginTop: "6mm" } : undefined}>
         <div className="report-title">{title}</div>
-        {showAkredite && !akrediteInHeader && <AkrediteBox />}
+        {showAkredite && !akrediteInHeader && (
+          <AkrediteBox kod={raporKodu} yayinTarihi={yayinTarihi} fontSize={akrKodFontSize} />
+        )}
       </div>
 
       <table className="meta-table">
         <tbody>
           <tr>
             <td style={{ paddingBottom: "4px", width: "20%" }}><strong>Rapor No / Rev. No:</strong></td>
-            <td style={{ paddingBottom: "4px", width: "50%" }}>{header.RaporNo} / {revNo}</td>
+            <td style={{ paddingBottom: "4px", width: "50%" }}>{raporKodu}</td>
             {showKabulTarihi ? (
               <>
                 <td style={{ paddingBottom: "4px" }}></td>
@@ -135,9 +129,11 @@ export default function DetayRaporReport({
       <div style={{ marginTop: "4px", borderBottom: "2px solid #000000" }}></div>
     </>
   );
+}
 
-  // İmza bloğu — son sayfada (2. sayfa)
-  const ApprovalBlock = () => (
+// İmza bloğu — son sayfada (2. sayfa)
+function ApprovalBlock({ hazirlayanAd, karekod }: { hazirlayanAd: string; karekod: KarekodInfo | null }) {
+  return (
     <div className="approval-block">
       <div className="approval-cell" style={{ width: 200, paddingTop: "15px" }}>
         <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>Raporu Hazırlayan</div>
@@ -190,6 +186,46 @@ export default function DetayRaporReport({
       </div>
     </div>
   );
+}
+
+export default function DetayRaporReport({
+  nkrId,
+  format,
+  header,
+  hizmetler,
+  testBaslangic,
+  testBitis,
+  onay,
+  meta,
+  karekod,
+}: ReportFormatProps) {
+  const {
+    revNo,
+    kabulTarihi,
+    yayinTarihi,
+    hazirlayanAd,
+    onaylayanAd,
+    sirketAdi,
+  } = meta;
+
+  // Test raporunda DAİMA dış kod gösterilir (ÜGAM/RR26/XXXX/NN — Challenge için RR=CH).
+  // DisKod yoksa (eski kayıt / migration 018 koşulmamış) iç koda düş.
+  const revNum = parseInt(revNo, 10) || 0;
+  const raporKodu = onay?.disRaporKodu
+    ? disRaporLabel(onay.disRaporKodu, revNum)
+    : `${header.RaporNo} / ${revNo}`;
+
+  // Bu rapora dahil edilen analizlerden en az biri akredite mi?
+  // Akredite analiz yoksa TÜRKAK logosu ve sağdaki 3-satırlık kutu gizlenir.
+  const hasAkredite = hizmetler.some(
+    (h) => String(h.Akreditasyon || "").trim().toLowerCase() === "var"
+  );
+
+  // .akredite-box hücreleri SABIT 20mm × 8mm. AB-2015-T ve MM-YY normal boyutta
+  // kalır; SADECE rapor kodu hücresi uzunsa font küçültülür — kutuya dokunulmaz.
+  const _kodLen = raporKodu.length;
+  const akrKodFontSize =
+    _kodLen <= 10 ? 10.5 : _kodLen <= 14 ? 8.5 : _kodLen <= 18 ? 7 : 6;
 
   return (
     <>
@@ -567,7 +603,7 @@ export default function DetayRaporReport({
             SAYFA 1 — GENEL FORMAT TASARIMI
             ═══════════════════════════════════════════════════════════ */}
         <div className="page break">
-          <HeaderBlock showAkredite={hasAkredite} />
+          <HeaderBlock showAkredite={hasAkredite} raporKodu={raporKodu} kabulTarihi={kabulTarihi} yayinTarihi={yayinTarihi} akrKodFontSize={akrKodFontSize} />
 
           {/* ───── MÜŞTERİ / NUMUNE BİLGİLERİ (2 sütun) ───── */}
           <table className="info-table" style={{ marginTop: 20 }}>
@@ -635,11 +671,11 @@ export default function DetayRaporReport({
                 <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
               </>
             ) : null}
-            <br />Müşteri talebi doğrultusunda yapılan testler 'TİTCK Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz'a göre değerlendirilmiştir.
+            <br />Müşteri talebi doğrultusunda yapılan testler &apos;TİTCK Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz&apos;a göre değerlendirilmiştir.
           </div>
 
           {/* ───── İMZA BLOĞU ───── */}
-          <ApprovalBlock />
+          <ApprovalBlock hazirlayanAd={hazirlayanAd} karekod={karekod} />
 
           {/* ───── FOOTER NOTU ───── */}
           <div className="FooterNot">
@@ -670,7 +706,7 @@ export default function DetayRaporReport({
             SAYFA 2 — CHALLENGE TABLOLARI (EK.1)
             ═══════════════════════════════════════════════════════════ */}
         <div className="page">
-          <HeaderBlock title="DENEY RAPORU - EK.1"  showAkredite={hasAkredite} showAkrediteLogo={false} akrediteInHeader showKabulTarihi={false} />
+          <HeaderBlock title="DENEY RAPORU - EK.1" showAkredite={hasAkredite} showAkrediteLogo={false} akrediteInHeader showKabulTarihi={false} raporKodu={raporKodu} kabulTarihi={kabulTarihi} yayinTarihi={yayinTarihi} akrKodFontSize={akrKodFontSize} />
 
           <div className="results-section">
             <div className="results-title" >*KORUYUCU ETKİNLİK TESTİ SONUÇLARI</div> ISO 11930
