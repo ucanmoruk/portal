@@ -116,7 +116,8 @@ export default function OnayliRaporTable() {
 
   // Çoklu seçim — key = `${NkrID}__${RaporFormati}`
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [bulkBusy, setBulkBusy] = useState<"arsivle" | "mail" | null>(null);
+  const [bulkBusy, setBulkBusy] = useState<"arsivle" | "mail" | "yayinla" | null>(null);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   // Mail modal
   const [mailOpen, setMailOpen] = useState(false);
@@ -296,6 +297,54 @@ export default function OnayliRaporTable() {
     });
   };
 
+  // Toplu Portala Gönder — seçili her rapor için /yayinla'yı sırayla çağırır.
+  // Her biri ayrı Chromium PDF + FTP yükleme yaptığı için seri (paralel değil)
+  // çalışır; ilerleme gösterilir. Zaten Yayınlanmış olanlar atlanır.
+  const handleBulkPublish = async () => {
+    const sel = selectedItems();
+    const targets = sel.filter(s => s.row?.RaporDurumu !== "Yayınlandı");
+    if (targets.length === 0) {
+      setError("Seçili raporların tümü zaten gönderilmiş.");
+      return;
+    }
+    if (!confirm(`${targets.length} rapor müşteri portalına gönderilecek. Onaylıyor musun?`)) return;
+    setBulkBusy("yayinla");
+    setError("");
+    setBulkProgress({ done: 0, total: targets.length });
+    const basarisiz: string[] = [];
+    try {
+      for (let i = 0; i < targets.length; i++) {
+        const t = targets[i];
+        try {
+          const res = await fetch(`/api/rapor-takip/${t.nkrId}/yayinla`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ format: t.raporFormati }),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(json.error || "hata");
+          // Satırı yerinde güncelle
+          setRows(prev => prev.map(r =>
+            r.NkrID === t.nkrId && r.RaporFormati === t.raporFormati
+              ? { ...r, RaporDurumu: "Yayınlandı", YayinUrl: json.yayinUrl ?? r.YayinUrl }
+              : r
+          ));
+        } catch (e: any) {
+          basarisiz.push(`${t.row?.RaporNo ?? t.nkrId} (${t.raporFormati}): ${e.message || "hata"}`);
+        }
+        setBulkProgress({ done: i + 1, total: targets.length });
+      }
+      setSelectedKeys(new Set());
+      if (basarisiz.length > 0) {
+        setError(`${basarisiz.length}/${targets.length} gönderilemedi:\n${basarisiz.slice(0, 5).join("\n")}`);
+      }
+      fetchData(page, search, limit, year, durum, raporTuru, { clearFirst: false });
+    } finally {
+      setBulkBusy(null);
+      setBulkProgress(null);
+    }
+  };
+
   const handleArsivle = async () => {
     const items = selectedItems().map(({ nkrId, raporFormati }) => ({ nkrId, raporFormati }));
     if (items.length === 0) return;
@@ -381,8 +430,30 @@ export default function OnayliRaporTable() {
           {someSelected && (
             <div style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: 8 }}>
               <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", padding: "0 6px" }}>
-                {selectedKeys.size} seçili
+                {bulkBusy === "yayinla" && bulkProgress
+                  ? `Gönderiliyor ${bulkProgress.done}/${bulkProgress.total}…`
+                  : `${selectedKeys.size} seçili`}
               </span>
+              <button
+                type="button"
+                onClick={handleBulkPublish}
+                disabled={!!bulkBusy}
+                title="Seçili raporları müşteri portalına gönder (imzalı PDF yayınla)"
+                style={{
+                  padding: "6px 12px", borderRadius: 7,
+                  border: "1px solid #34c759",
+                  background: bulkBusy === "yayinla" ? "var(--color-surface-2)" : "#34c75918",
+                  color: "#248a3d",
+                  fontSize: "0.78rem", fontWeight: 700,
+                  cursor: bulkBusy ? "wait" : "pointer",
+                  display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                }}
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
+                  <path d="M3.105 2.288a.75.75 0 0 0-.826.95l1.254 4.94H9.75a.75.75 0 0 1 0 1.5H3.533l-1.254 4.94a.75.75 0 0 0 .826.95 28.896 28.896 0 0 0 15.293-7.154.75.75 0 0 0 0-1.115A28.897 28.897 0 0 0 3.105 2.288Z"/>
+                </svg>
+                Portala Gönder
+              </button>
               <button
                 type="button"
                 onClick={handleArsivle}
