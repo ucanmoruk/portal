@@ -5,6 +5,36 @@ type InputValue = string | number | boolean | Date | null | undefined | Buffer;
 
 const usePostgres = Boolean(process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL);
 
+// ── Geçici soket hatası guard'ı (process'e bir kez kurulur) ─────────────────
+// MSSQL/tedious soketleri worker teardown'ında veya yarı-açık bağlantıda EPIPE
+// ya da ECONNRESET fırlatabilir. Bu hatalar pool.on("error") handler'ına
+// ULAŞMADAN process seviyesinde uncaughtException olur; dev'de Turbopack render
+// worker'ını, prod'da lambda'yı öldürür → "Jest worker exceeding retry limit".
+// Burada SADECE geçici ağ hatalarını (isTransientDbError) yutuyoruz; soket dışı
+// her hata normal şekilde yukarı kabarıp süreci çökertmeye devam eder.
+declare global {
+  // eslint-disable-next-line no-var
+  var __dbSocketGuardInstalled: boolean | undefined;
+}
+
+if (!globalThis.__dbSocketGuardInstalled && typeof process !== "undefined") {
+  globalThis.__dbSocketGuardInstalled = true;
+  process.on("uncaughtException", (err) => {
+    if (isTransientDbError(err)) {
+      console.warn("[db] geçici soket hatası yutuldu (uncaughtException):", (err as { code?: string })?.code ?? err);
+      return;
+    }
+    throw err; // soket dışı hatalar normal şekilde çöksün
+  });
+  process.on("unhandledRejection", (reason) => {
+    if (isTransientDbError(reason)) {
+      console.warn("[db] geçici soket reddi yutuldu (unhandledRejection):", (reason as { code?: string })?.code ?? reason);
+      return;
+    }
+    throw reason; // soket dışı rejection'lar normal şekilde yüzeye çıksın
+  });
+}
+
 // Sunucu/kimlik ortak; yalnızca veritabanı adı değişir (massgrup_cosmo, massgrup_root, ...)
 const mssqlConfigFor = (database: string): mssql.config => ({
   user: process.env.DB_USER,
