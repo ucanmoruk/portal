@@ -169,7 +169,15 @@ class ResilientRequest {
 }
 
 class ResilientPool {
-  constructor(private database: string) {}
+  // ÖNEMLI: gerçek mssql.ConnectionPool'da `.config` olur. Bazı helper'lar
+  // (örn. lib/labUgdrStorage.ts) dialect'i `pool.config` varlığıyla belirler:
+  // config varsa MSSQL, yoksa Postgres. ResilientPool MSSQL'i temsil ettiği için
+  // config'i MUTLAKA expose etmeliyiz; aksi halde MSSQL'e Postgres SQL'i gider
+  // ("Incorrect syntax near ..." hatası).
+  readonly config: mssql.config;
+  constructor(private database: string) {
+    this.config = mssqlConfigFor(database);
+  }
   request() { return new ResilientRequest(this.database); }
   // transaction cosmo/root'ta kullanılmıyor; gerekirse gerçek pool'a düşer.
   async transaction() {
