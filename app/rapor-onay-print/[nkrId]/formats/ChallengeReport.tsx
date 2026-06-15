@@ -1,8 +1,6 @@
 import { JetBrains_Mono } from "next/font/google";
 import OnayToolbar from "../OnayToolbar";
 import type { ReportFormatProps } from "../reportTypes";
-import { TableBody } from "@/components/ui/table";
-import { disRaporLabel } from "@/lib/disKod";
 
 const jetbrains = JetBrains_Mono({
   subsets: ["latin", "latin-ext"],
@@ -19,23 +17,21 @@ function fmtTarih(s: string | null | undefined): string {
   return v.slice(0, 10);
 }
 
-// DD.MM.YYYY → MM-YY (eşleşmezse olduğu gibi döner)
 function toMMYY(s: string): string {
   const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
   if (!m) return s;
   return `${m[2]}-${m[3].slice(2)}`;
 }
 
-// Test sonucu değerlendirme metnine göre etiket
 function degerlendirmeLabel(d: string | null): { text: string; cls: string } {
   if (!d || !d.trim()) return { text: "—", cls: "deg-other" };
   const v = d.trim();
-  if (v === "Uygun") return { text: "GEÇER", cls: "deg-gecer" };
-  if (v === "Uygun Değil") return { text: "KALDI", cls: "deg-kaldi" };
+  if (v === "Uygun") return { text: "UYGUN", cls: "deg-gecer" };
+  if (v === "Uygun Değil") return { text: "UYGUN DEĞİL", cls: "deg-kaldi" };
   return { text: v, cls: "deg-other" };
 }
 
-export default function ChallengeReport({
+export default function DetayRaporReport({
   nkrId,
   format,
   header,
@@ -51,19 +47,9 @@ export default function ChallengeReport({
     kabulTarihi,
     yayinTarihi,
     hazirlayanAd,
-    hazirlayanUnvan,
     onaylayanAd,
-    onaylayanUnvan,
-    docKodu,
     sirketAdi,
   } = meta;
-
-  // Test raporunda DAİMA dış kod gösterilir (ÜGAM/RR26/XXXX/NN).
-  // DisKod yoksa (eski kayıt / migration 018 koşulmamış) iç koda düş.
-  const revNum = parseInt(revNo, 10) || 0;
-  const raporKodu = onay?.disRaporKodu
-    ? disRaporLabel(onay.disRaporKodu, revNum)
-    : `${header.RaporNo} / ${revNo}`;
 
   // Bu rapora dahil edilen analizlerden en az biri akredite mi?
   // Akredite analiz yoksa TÜRKAK logosu ve sağdaki 3-satırlık kutu gizlenir.
@@ -73,33 +59,180 @@ export default function ChallengeReport({
 
   // .akredite-box hücreleri SABIT 20mm × 8mm. AB-2015-T ve MM-YY normal boyutta
   // kalır; SADECE rapor kodu hücresi uzunsa font küçültülür — kutuya dokunulmaz.
-  const _kodLen = raporKodu.length;
+  const _kodLen = `${header.RaporNo}/${revNo}`.length;
   const akrKodFontSize =
     _kodLen <= 10 ? 10.5 : _kodLen <= 14 ? 8.5 : _kodLen <= 18 ? 7 : 6;
+
+  // Sağdaki 3 satırlık akreditasyon kutusu (AB-2015-T / Rapor No / MM-YY)
+  const AkrediteBox = () => (
+    <table className="akredite-box">
+      <tbody>
+        <tr><td>AB-2015-T</td></tr>
+        <tr><td style={{ fontSize: `${akrKodFontSize}px` }}>{header.RaporNo}/{revNo}</td></tr>
+        <tr><td>{toMMYY(yayinTarihi)}</td></tr>
+      </tbody>
+    </table>
+  );
+
+  // Header bloğu — her iki sayfada da aynı şekilde gösterilen üst kısım
+  // title:           sayfa başlığı (varsayılan "DENEY RAPORU")
+  // showAkredite:     sağdaki 3 satırlık akreditasyon kutusunu göster (varsayılan true)
+  // showAkrediteLogo: sağ üstteki TÜRKAK/ilac-MRA logosunu göster (varsayılan = showAkredite)
+  // akrediteInHeader: kutuyu başlık satırı yerine logo satırında (logonun karşısında)
+  //                   göster — logo, kutuyla aynı satırda dikey ortalanarak biraz aşağı iner
+  const HeaderBlock = ({
+    title = "DENEY RAPORU",
+    showAkredite = true,
+    showAkrediteLogo = showAkredite,
+    akrediteInHeader = false,
+    showKabulTarihi = true,
+  }: { title?: string; showAkredite?: boolean; showAkrediteLogo?: boolean; akrediteInHeader?: boolean; showKabulTarihi?: boolean }) => (
+    <>
+      <div className="header">
+        <div className="header-logo">
+          <img src="/unique-logo-wide.png" alt="UNIQUE ANALYSE" />
+        </div>
+        {showAkrediteLogo && (
+          <div className="header-akredite">
+            <img src="/turkak-ilac.jpg" alt="TÜRKAK AB-2015-T · ilac-MRA" />
+          </div>
+        )}
+        {showAkredite && akrediteInHeader && <AkrediteBox />}
+      </div>
+
+      <div className="title-row" style={akrediteInHeader ? { marginTop: "6mm" } : undefined}>
+        <div className="report-title">{title}</div>
+        {showAkredite && !akrediteInHeader && <AkrediteBox />}
+      </div>
+
+      <table className="meta-table">
+        <tbody>
+          <tr>
+            <td style={{ paddingBottom: "4px", width: "20%" }}><strong>Rapor No / Rev. No:</strong></td>
+            <td style={{ paddingBottom: "4px", width: "50%" }}>{header.RaporNo} / {revNo}</td>
+            {showKabulTarihi ? (
+              <>
+                <td style={{ paddingBottom: "4px" }}></td>
+                <td style={{ paddingBottom: "4px" }}></td>
+              </>
+            ) : (
+              <>
+                <td style={{ paddingBottom: "4px" }}><strong>Rapor Yayın Tarihi:</strong> </td>
+                <td style={{ paddingBottom: "4px" }}>{yayinTarihi}</td>
+              </>
+            )}
+          </tr>
+          {showKabulTarihi && (
+            <tr>
+              <td style={{ paddingBottom: "4px", width: "20%" }}><strong>Numune Kabul Tarihi:</strong> </td>
+              <td style={{ paddingBottom: "4px" }}>{kabulTarihi}</td>
+              <td style={{ paddingBottom: "4px" }}><strong>Rapor Yayın Tarihi:</strong> </td>
+              <td style={{ paddingBottom: "4px" }}>{yayinTarihi}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <div style={{ marginTop: "4px", borderBottom: "2px solid #000000" }}></div>
+    </>
+  );
+
+  // İmza bloğu — son sayfada (2. sayfa)
+  const ApprovalBlock = () => (
+    <div className="approval-block">
+      <div className="approval-cell" style={{ width: 200, paddingTop: "15px" }}>
+        <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>Raporu Hazırlayan</div>
+        <div className="e-imza-pill" style={{ marginTop: 10 }}>✓ E-İmzalıdır</div>
+        <div className="approval-cell-body">
+          <div className="approval-name">{hazirlayanAd} <span style={{ fontSize: "9px", color: "#646464" }}>Raportör</span></div>
+        </div>
+      </div>
+      <div className="approval-cell" style={{ width: 300, paddingTop: "15px" }}>
+        <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>Onaylayan</div>
+        <div className="e-imza-pill" style={{ marginTop: 10 }}>✓ E-İmzalıdır</div>
+        <div className="approval-cell-body">
+          <div className="approval-name">Alaettin ÖZDEMİR <span style={{ fontSize: "9px", color: "#646464" }}>Laboratuvar Müdürü</span></div>
+        </div>
+      </div>
+      <div className="approval-cell">
+        <div className="approval-cell-title">
+          <img src="/unique-seal.png" alt="UNIQUE ANALYSE" style={{ width: 90 }} />
+        </div>
+        <div className="approval-cell-body"></div>
+      </div>
+      <div className="approval-cell">
+        <div className="approval-cell-title">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={karekod?.qrDataUrl || "/karekod.png"}
+            alt="Rapor Doğrulama Karekodu"
+            title={karekod?.url || "Rapor doğrulama"}
+            style={{ width: 90 }}
+          />
+        </div>
+        <div className="approval-cell-body">
+          {karekod?.dogrulamaKod && (
+            <div
+              title="Doğrulama Kodu — manuel doğrulamada bu kod kullanılır"
+              style={{
+                textAlign: "center",
+                fontSize: "9px",
+                fontWeight: 700,
+                letterSpacing: "0.14em",
+                color: "#000",
+                fontFamily: "monospace",
+                padding: "1px 0",
+              }}
+            >
+              {karekod.dogrulamaKod}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
       <style>{`
         @page { size: A4; margin: 0; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
+
         .root {
-          font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
+          /* ── Tasarım belirteçleri (tek noktadan yönetim) ── */
+          --ink:        #141414;  /* birincil metin */
+          --ink-strong: #000000;  /* başlık / vurgu */
+          --ink-soft:   #555555;  /* ikincil metin */
+          --ink-faint:  #8a8a8a;  /* tarih / üçüncül */
+          --rule:       #000000;  /* tam çizgiler */
+          --rule-soft:  #dcdcdc;  /* ince ayraçlar */
+          --accent:     #4A46E5;  /* e-imza */
+          --accent-bg:  #eef0fd;
+          --accent-bd:  #c7c9f5;
+
+          /* next/font ile yüklenen JetBrains Mono'yu (latin-ext: ş ğ İ ı ç) öncele */
+          font-family: var(--font-rapor), 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
           background: #e9ecef;
-          color: #1d1d1f;
-          font-size: 10.5px;
-          line-height: 1.45;
+          color: var(--ink);
+          font-size: 10px;
+          line-height: 1.5;
+          letter-spacing: -0.02em;
+          font-variant-ligatures: none;
+          -webkit-font-smoothing: antialiased;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
           min-height: 100vh;
         }
         .page {
           max-width: 210mm;
           min-height: 297mm;
-          margin: 24px auto 64px;
+          margin: 24px auto;
           background: #fff;
-          padding: 8mm 8mm 8mm 8mm;
+          padding: 8mm;
           box-shadow: 0 4px 24px rgba(0,0,0,0.08);
           display: flex;
           flex-direction: column;
         }
+        .page.break { page-break-after: always; }
 
         /* ───── HEADER ───── */
         .header {
@@ -118,7 +251,7 @@ export default function ChallengeReport({
           height: 30mm;
           width: auto;
           object-fit: contain;
-          transform: translateX(5px);
+          transform: translateX(9px);
         }
 
         /* ───── DENEY RAPORU BAŞLIK ───── */
@@ -128,9 +261,10 @@ export default function ChallengeReport({
           align-items: center;
         }
         .report-title {
-          font-size: 25px;
+          font-size: 26px;
           font-weight: 800;
-          color: #000000;
+          letter-spacing: -0.04em;
+          color: var(--ink-strong);
         }
         .akredite-box {
           border-collapse: collapse;
@@ -138,32 +272,32 @@ export default function ChallengeReport({
           table-layout: fixed;
         }
         .akredite-box td {
-          border: 1px solid #000;
+          border: 1px solid var(--rule);
           width: 20mm;
           height: 8mm;
           text-align: center;
           vertical-align: middle;
-          font-size: 11px;
+          font-size: 10.5px;
+          letter-spacing: -0.02em;
           padding: 0 1px;
           overflow: hidden;
           word-break: break-all;
           line-height: 1.1;
         }
 
-        /* ───── ÜST META BAR (2x2: Rapor No/Rev · Sayfa · Kabul · Yayın) ───── */
+        /* ───── ÜST META BAR (Rapor No/Rev · Kabul · Yayın) ───── */
         .meta-box {
           display: grid;
           grid-template-columns: 1fr 1fr;
           margin-top: 2mm;
-          font-size: 12px;
+          font-size: 10.5px;
         }
-
-        .meta-table{
-          font-size: 11px;              
-          letter-spacing: -0.05em;     
-          margin-top: 30px;}
+        .meta-table {
+          font-size: 10.5px;
+          letter-spacing: -0.03em;
+          margin-top: 6mm;
+        }
         .meta-table strong { font-weight: 700; }
-
 
         /* ───── MÜŞTERİ / NUMUNE TABLOSU (2 sütun) ───── */
         .info-table {
@@ -174,92 +308,100 @@ export default function ChallengeReport({
         }
         .info-table th {
           background: #ffffff;
-          color: #000000;
-          font-size: 12px;
-          letter-spacing: -0.05em;
+          color: var(--ink-strong);
+          font-size: 11.5px;
+          letter-spacing: -0.03em;
           font-weight: 700;
           text-align: left;
           width: 55%;
+          padding-bottom: 3px;
+          border-bottom: 1px solid var(--rule-soft);
         }
         .info-table td {
           vertical-align: top;
-          line-height: 1.55;
+          line-height: 1.6;
+          padding-top: 3px;
         }
         .info-table .firma-ad {
           font-size: 11px;
+          font-weight: 600;
           padding-top: 5px;
-          letter-spacing: -0.05em;
+          letter-spacing: -0.03em;
         }
         .info-table .info-line {
-          color: #1d1d1f;
-          font-size:10px;
-          letter-spacing: -0.05em;
+          color: var(--ink);
+          font-size: 9.5px;
+          letter-spacing: -0.03em;
         }
-      
 
         /* ───── TEST SONUÇLARI SECTION ───── */
         .results-section {
           margin-top: 5mm;
         }
         .results-title {
-          background: #ffffff;
-          color: #000000;
-          font-size: 12px;
+          color: var(--ink-strong);
+          font-size: 11.5px;
           font-weight: 700;
           text-align: left;
-          letter-spacing: -0.05em;
+          letter-spacing: -0.03em;
+          padding-bottom: 3px;
+          border-bottom: 1px solid var(--rule-soft);
         }
-        .results-subtitle {          
-          font-size: 10px;
-          color: #000000;
-          background: #ffffff;
+        .results-subtitle {
+          font-size: 9.5px;
+          color: var(--ink);
           padding-top: 4px;
           padding-bottom: 10px;
-          letter-spacing: -0.05em;
+          letter-spacing: -0.03em;
         }
         .results {
-          border-collapse: collapse; 
+          border-collapse: collapse;
           width: 100%;
+          margin-top: 3mm;
         }
-          .results tr:last-child td {
-            padding-bottom: 7px;
-           }
+        .results tr:last-child td {
+          padding-bottom: 7px;
+          border-bottom: 1.5px solid var(--rule);
+        }
         .results thead th {
           background: #ffffff;
           font-weight: 600;
-          color: #000000;
+          color: var(--ink-strong);
           padding-top: 6px;
           padding-bottom: 6px;
-          border-bottom: 2px solid #000000;
+          border-bottom: 2px solid var(--rule);
           text-align: left;
-          font-size: 11.5px;
-          letter-spacing: -0.05em;
+          font-size: 10.5px;
+          letter-spacing: -0.03em;
         }
         .results tbody td {
           padding-top: 7px;
+          padding-bottom: 6px;
           vertical-align: middle;
           font-size: 10px;
           text-align: left;
-          letter-spacing: -0.05em;
+          letter-spacing: -0.03em;
+          border-bottom: 1px solid var(--rule-soft);
         }
         .results tbody td.center { text-align: left; }
-        .results tbody td.muted { color: #000000; font-size: 8px; }
+        .results tbody td.muted { color: var(--ink-soft); font-size: 8.5px; }
         .results tbody td.bold { font-weight: 700; }
-        .deg-gecer { color: #000000; font-weight: 700; text-align: center; }
-        .deg-kaldi { color: #000000; font-weight: 700; text-align: center; }
-        .deg-other { color: #000000; t }
+        .deg-gecer { color: var(--ink-strong); font-weight: 700; text-align: center; letter-spacing: 0.02em; }
+        .deg-kaldi { color: var(--ink-strong); font-weight: 700; text-align: center; letter-spacing: 0.02em; }
+        .deg-other { color: var(--ink-strong); font-weight: 700; text-align: center; }
 
-        /* ───── NOTLAR ───── */
-        .notlar {ext-align: center;
+        /* ───── NOTLAR / AÇIKLAMALAR ───── */
+        .notlar {
           margin-top: 5mm;
           font-size: 9px;
-          color: #000000;
+          color: var(--ink);
+          line-height: 1.55;
         }
         .notlar-title {
-          background: #ffffff;
-          color: #000000;
-          font-size: 9px;
+          color: var(--ink-strong);
+          font-size: 11.5px;
           font-weight: 700;
+          letter-spacing: -0.03em;
         }
         .notlar-body {
         }
@@ -267,7 +409,7 @@ export default function ChallengeReport({
         .notlar-body p:last-child { margin-bottom: 0; }
         .notlar-body .legend {
           font-weight: 700;
-          color: #1d1d1f;
+          color: var(--ink);
         }
 
         /* ───── ONAY BLOĞU ───── */
@@ -285,10 +427,10 @@ export default function ChallengeReport({
           flex-direction: column;
         }
         .approval-cell-title {
-          background: #ffffff;
-          color: #000000;
+          color: var(--ink-strong);
           font-size: 11px;
           font-weight: 700;
+          letter-spacing: -0.03em;
           text-align: left;
         }
         .approval-cell-body {
@@ -296,7 +438,7 @@ export default function ChallengeReport({
           display: flex;
           flex-direction: column;
           justify-content: center;
-          align-items: left;
+          align-items: flex-start;
           padding: 5px;
           text-align: left;
         }
@@ -305,50 +447,32 @@ export default function ChallengeReport({
           align-items: center;
           width: fit-content;
           gap: 4px;
-          background: #e8f4f8;
-          color: #4A46E5;
-          border: 1px solid #b8dbe3;
-          padding: 2px 8px;
+          background: var(--accent-bg);
+          color: var(--accent);
+          border: 1px solid var(--accent-bd);
+          padding: 2px 9px;
           border-radius: 999px;
           font-size: 9px;
           font-weight: 600;
+          letter-spacing: -0.01em;
         }
         .approval-name {
           font-weight: 700;
           font-size: 10px;
-          margin-top: 2mm;          
+          letter-spacing: -0.02em;
+          margin-top: 2mm;
           text-align: left;
           width: 100%;
         }
         .approval-date {
           font-size: 8.5px;
-          color: #6e6e73;
+          color: var(--ink-faint);
           margin-top: 1px;
         }
         .approval-role {
           font-size: 9px;
-          color: #6e6e73;
+          color: var(--ink-soft);
           margin-top: 1px;
-        }
-
-        .inner-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr); 
-          gap: 4px; 
-        }
-
-        .grid-header {
-          grid-column: span 4; /* En önemli kısım: 4 sütun boyunca uzanmasını sağlar! */
-          background-color: #ffffff; /* Farklı görünmesi için koyu gri arka plan */
-          padding: 8px;
-          text-align: center;
-          font-weight: bold;
-        }
-
-        .grid-item {
-          background-color: #fff; 
-          padding: 5px;
-          text-align: center;
         }
 
         /* ───── FOOTER ───── */
@@ -357,31 +481,77 @@ export default function ChallengeReport({
           justify-content: space-between;
           align-items: flex-end;
           font-size: 9px;
-          color: #6e6e73;
+          color: var(--ink-soft);
           margin-top: 4mm;
           padding-top: 3mm;
         }
 
-        .FooterNot{
-        font-size:6px;
-        text-align: justify;
+        .FooterNot {
+          font-size: 7px;
+          line-height: 1.5;
+          color: var(--ink-soft);
+          text-align: justify;
+        }
+
+        .endof {
+          padding-top: 10mm;
+          font-weight: 800;
+          font-size: 10px;
+          letter-spacing: 0.04em;
+          text-align: center;
+        }
+
+        /* ───── ALT BİLGİ (genel kapsayıcı) ───── */
+        .rapor-altbilgi {
+          width: 100%;
+          font-size: 8.5px;
+          color: var(--ink-soft);
+          padding-top: 7px;
+          position: relative;
+          box-sizing: border-box;
+        }
+        .sirket-bilgisi {
+          text-align: center;
+          margin-bottom: 12px;
+          line-height: 1.7;
+        }
+        .dokuman-bilgisi {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+        }
+        .sol-alt {
+          text-align: left;
+        }
+        .sag-alt {
+          text-align: right;
+          font-weight: 700;
+        }
+
+         .endof {
+          padding-top: 10mm;
+          font-weight: 800;
+          font-size: 10px;
+          letter-spacing: 0.04em;
+          text-align: center;
         }
 
         @media print {
           body { background: #fff; }
           .onay-toolbar { display: none !important; }
-          /* TEK SAYFA garantisi: sabit height + overflow:hidden. Içerik 297mm'i
-             aşarsa ikinci sayfaya geçmek yerine kırpılır. */
+          /* HER SAYFA SABIT A4: height 297mm + overflow:hidden — alt bilgi
+             satırı (Sayfa No vb.) bir sonraki yaprağa atmaz. EK-1 sayfası
+             page.break ile zorlanır. (Genel tasarımındaki page-break-after:avoid
+             KOPYALANMAZ — 2 sayfalı yapıyı bozardı.) */
           .page {
             width: 210mm; max-width: 210mm;
             height: 297mm; min-height: 297mm; max-height: 297mm;
-            margin: 0 auto; box-shadow: none;
-            padding: 8mm 8mm 8mm 8mm;
+            margin: 0 auto; box-shadow: none; padding: 8mm;
             overflow: hidden;
-            page-break-after: avoid;
             page-break-inside: avoid;
           }
-          html, body { height: 297mm; overflow: hidden; }
+          .page.break { page-break-after: always; }
+          html, body { overflow: hidden; }
         }
       `}</style>
 
@@ -393,55 +563,14 @@ export default function ChallengeReport({
           raporNo={header.RaporNo}
         />
 
-        <div className="page">
-          {/* ───── HEADER: Sol logo + (akredite varsa) Sağ Türkak/ilac-MRA ───── */}
-          <div className="header">
-            <div className="header-logo">
-              <img src="/unique-logo-wide.png" alt="UNIQUE ANALYSE" />
-            </div>
-            {hasAkredite && (
-              <div className="header-akredite">
-                <img src="/turkak-ilac.jpg" alt="TÜRKAK AB-2015-T · ilac-MRA" />
-              </div>
-            )}
-          </div>
-
-          {/* ───── DENEY RAPORU BAŞLIK + (akredite varsa) akreditasyon kutusu ───── */}
-          <div className="title-row">
-            <div className="report-title">DENEY RAPORU</div>
-            {hasAkredite && (
-              <table className="akredite-box">
-                <tbody>
-                  <tr><td>AB-2015-T</td></tr>
-                  <tr><td style={{ fontSize: `${akrKodFontSize}px` }}>{raporKodu}</td></tr>
-                  <tr><td>{toMMYY(yayinTarihi)}</td></tr>
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* ───── ÜST META: Rapor No/Rev · Sayfa · Kabul · Yayın ───── */}
-
-          <table className="meta-table">
-            <tbody>
-              <tr>
-                <td style={{ paddingBottom: "4px" , width: "20%" }}><strong>Rapor No / Rev. No:</strong></td>
-                <td style={{ paddingBottom: "4px" , width: "50%" }}>{raporKodu}</td>
-                <td style={{ paddingBottom: "4px" }}><strong></strong></td>
-                <td style={{ paddingBottom: "4px"  }}></td>
-              </tr>
-              <tr>
-                <td style={{ paddingBottom: "4px" , width: "20%" }}><strong>Numune Kabul Tarihi:</strong> </td>
-                <td style={{ paddingBottom: "4px"  }}>{kabulTarihi}</td>
-                <td style={{ paddingBottom: "4px"  }}><strong>Rapor Yayın Tarihi:</strong> </td>
-                <td style={{ paddingBottom: "4px"  }}>{yayinTarihi}</td>
-              </tr>
-            </tbody>
-          </table>
-          <div style={{marginTop: "4px", borderBottom: "2px solid #000000"}}></div>
+        {/* ═══════════════════════════════════════════════════════════
+            SAYFA 1 — GENEL FORMAT TASARIMI
+            ═══════════════════════════════════════════════════════════ */}
+        <div className="page break">
+          <HeaderBlock showAkredite={hasAkredite} />
 
           {/* ───── MÜŞTERİ / NUMUNE BİLGİLERİ (2 sütun) ───── */}
-          <table className="info-table">
+          <table className="info-table" style={{ marginTop: 20 }}>
             <thead>
               <tr>
                 <th>MÜŞTERİ BİLGİLERİ</th>
@@ -457,263 +586,262 @@ export default function ChallengeReport({
                   <div className="info-line">{header.FirmaEmail}</div>
                 </td>
                 <td>
-                  <div className="firma-ad">
-                    {header.Numune_Adi}
-                  </div>
+                  <div className="firma-ad">{header.Numune_Adi}</div>
                   {(header.TesteMiktar || header.TesteMiktarBirim) && (
                     <div className="info-line">
                       <span className="info-label">Miktar: </span>
                       {header.TesteMiktar} {header.TesteMiktarBirim}
                     </div>
                   )}
-                  <div className="info-line">
-                    <span className="info-label">Üretim Tarihi: </span>
-                    {String(header.UretimTarihi || "—")}
-                  </div>
-                  <div className="info-line">
-                    <span className="info-label">Son Kullanım Tarihi: </span>
-                    {String(header.SKT || "—")}
-                  </div>
-                  <div className="info-line">
-                    <span className="info-label">Seri/Lot No/Ürün Kodu: </span>
-                    {header.SeriNo || "—"}
-                  </div>
+                  <div className="info-line"><span className="info-label">Üretim Tarihi: </span>{String(header.UretimTarihi || "—")}</div>
+                  <div className="info-line"><span className="info-label">Son Kullanım Tarihi: </span>{String(header.SKT || "—")}</div>
+                  <div className="info-line"><span className="info-label">Seri/Lot No/Ürün Kodu: </span>{header.SeriNo || "—"}</div>
                 </td>
               </tr>
             </tbody>
           </table>
 
-      
-
           {/* ───── TEST SONUÇLARI ───── */}
-          <div className="results-section">
-            <div className="results-title">TEST SONUÇLARI</div> *Koruyucu Etkinlik (Challenge) Testi – ISO 11930
+          <div className="results-section" style={{ marginTop: 30 }}>
+            <div className="results-title">TEST SONUÇLARI</div>
             <div className="notlar-body"> </div>
-            <table className="limit-table" style={{width: "100%", marginTop: 10, borderCollapse: "collapse", tableLayout: "fixed", fontSize: "9.5px", lineHeight: 1.1}}>
+            <table className="results">
               <thead>
                 <tr>
-                  <th rowSpan={2} style={{ width: "21%", textAlign: "left", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px 5px" }}>Parametre</th>
-                  <th rowSpan={2} style={{ width: "11%", textAlign: "left", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px 5px" }}>İnokülasyon (Cfu) N</th>
-                  <th colSpan={4} style={{ textAlign: "left", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px 5px" }}>Numune Sayımı kob/g </th>
-                  <th colSpan={3} style={{ textAlign: "left", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px 5px" }}>Düşüş (Log)</th>
-                  <th rowSpan={2} style={{ width: "15%", textAlign: "left", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px 5px" }}>Değerlendirme</th>
-                 </tr>
-                  <tr>
-                    <th style={{ width: "11%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>0. Gün<br />N0</th>
-                    <th style={{ width: "7%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>7. Gün N7</th>
-                    <th style={{ width: "7%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>14. Gün N14</th>
-                    <th style={{ width: "7%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>28. Gün N28</th>
-                    <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>7. Gün<br />N7</th>
-                    <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>14. Gün N14</th>
-                    <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle", border: "1px solid #ccc", padding: "2px" }}>28. Gün N28</th>
-                  </tr>
+                  <th style={{ width: 120 }}>Analiz Adı</th> 
+                  <th style={{ width: 150, paddingLeft: 5 }}>Metot</th>
+                  <th style={{ width: 70 }}>Sonuç</th>
+                  <th style={{ width: 100, textAlign: "center" }}>Değerlendirme</th>
+                </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>Pseudomonas aeruginosa</td>
+                  <td style={{ paddingRight: 10 }}>*Koruyucu Etkinlik Testi</td>
+                  <td className="center" style={{ paddingLeft: 5 }}>ISO 11930:2019/Amd 1:2022</td>
+                  <td className="center">Bkz. Ek-1</td>
+                  <td className="deg-gecer" style={{ textAlign: "center" }}>{degerlendirmeLabel("Uygun").text}</td>
+                </tr>
+   
+              </tbody>
+            </table>
+          </div>
+
+          {/* ───── NOTLAR ───── */}
+          <div className="notlar">
+            <div className="results-title" style={{ marginBottom: "7px" }}>AÇIKLAMALAR</div>
+            {testBaslangic && testBitis ? (
+              <>
+                Analiz Periyodu: {" "}
+                <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
+              </>
+            ) : null}
+            <br />Müşteri talebi doğrultusunda yapılan testler 'TİTCK Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz'a göre değerlendirilmiştir.
+          </div>
+
+          {/* ───── İMZA BLOĞU ───── */}
+          <ApprovalBlock />
+
+          {/* ───── FOOTER NOTU ───── */}
+          <div className="FooterNot">
+            &ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Deney Raporları geçersizdir.{" "}{sirketAdi}&apos;nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya herhangi bir başka amaçla kullanılamaz.Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal zorunluluklardan laboratuvarımız sorumlu değildir. Karar Kuralı: Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır.
+          </div>
+
+          <div style={{ marginTop: "10px" }}></div>
+
+          {/* ───── ALT BİLGİ ───── */}
+          <div className="rapor-altbilgi">
+            <div className="sirket-bilgisi">
+              <strong>UNIQUE ANALİZ BELGELENDİRME ve GÖZETİM HİZMETLERİ LTD. ŞTİ.</strong><br />
+              Atatürk Mah. Hadımköy Yolu Cad. No:10 İç Kapı No:7 Esenyurt / İstanbul | info@uniqueanalyse.com
+            </div>
+
+            <div className="dokuman-bilgisi">
+              <div className="sol-alt">
+                Ek-1.PR.20/Rev.02/12.06.2026
+              </div>
+              <div className="sag-alt">
+                Sayfa: 1 / 2
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════
+            SAYFA 2 — CHALLENGE TABLOLARI (EK.1)
+            ═══════════════════════════════════════════════════════════ */}
+        <div className="page">
+          <HeaderBlock title="DENEY RAPORU - EK.1"  showAkredite={hasAkredite} showAkrediteLogo={false} akrediteInHeader showKabulTarihi={false} />
+
+          <div className="results-section">
+            <div className="results-title" >*KORUYUCU ETKİNLİK TESTİ SONUÇLARI</div> ISO 11930
+            <div className="notlar-body" style={{paddingTop: 10, textAlign:"justify"}}> 
+            <strong>Protokol:</strong> Test, uygun mikroorganizmaların belirli inokulum seviyelerinde hazırlanması ve belirli zaman aralıklarında numuneye bu mikroorganizmalardan ekim yapılarak sayılmasını kapsar. Test koşulları içinde 7. , 14. ve 28. günlerde numuneye ekim yapılan mikroorganizma sayısında belirgin bir düşüş veya artışın gözlenip gözlenmediğine bakılarak ürünün koruyucu özelliğinin yeterliliğine karar verilir.
+            </div>
+            {/* Sonuç tablosu (sıkıştırılmış satır yüksekliği) */}
+            <table className="limit-table" style={{ width: "100%", marginTop: 10, borderCollapse: "collapse", tableLayout: "fixed", fontSize: "9.5px", lineHeight: 1.1 }}>
+              <thead>
+                <tr>
+                  <th rowSpan={2} style={{ width: "21%", textAlign: "left", verticalAlign: "middle", borderBottom: "1px solid #000000", padding: "2px 5px" }}>Parametre</th>
+                  <th rowSpan={2} style={{ width: "11%", textAlign: "left", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px 5px" }}>İnokülasyon (Cfu) N</th>
+                  <th colSpan={4} style={{ textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #ccc", padding: "7px 5px" }}>Numune Sayımı kob/g</th>
+                  <th colSpan={3} style={{ textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #ccc", padding: "7px 5px", borderRight : "none", }}>Düşüş (Log)</th>
+                </tr>
+                <tr>
+                  <th style={{ width: "11%", textAlign: "center", verticalAlign: "middle", padding: "2px" }}>0. Gün<br />N0</th>
+                  <th style={{ width: "7%", textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px" }}>7. Gün<br />N7</th>
+                  <th style={{ width: "7%", textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px" }}>14. Gün<br />N14</th>
+                  <th style={{ width: "7%", textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px" }}>28. Gün<br />N28</th>
+                  <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle",  padding: "2px" }}>7. Gün<br />N7</th>
+                  <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px" }}>14. Gün<br />N14</th>
+                  <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle", borderRight : "none", padding: "2px" }}>28. Gün<br />N28</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{textAlign: "center"}}>
+                  <td style={{ border: "1px solid #ccc", padding: "5px 5px",  borderLeft: "none" , textAlign: "left" }}>Pseudomonas aeruginosa</td>
                   <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,7 x 10^7</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,7 x 10^7</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>3.2x10^5</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1.8x10^4</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td rowSpan={5} style={{ border: "1px solid #ccc", padding: "2px 5px", textAlign: "center", verticalAlign: "middle", fontWeight: 700 }}>Uygun</td>
+                  <td style={{ borderTop: "1px solid #000000", padding: "2px 5px" }}>1,7 x 10^7</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderLeft: "1px solid #ccc", borderTop: "1px solid #000",  padding: "2px 5px" }}>&gt;4,24</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;4,24</td>
+                  <td style={{ borderRight: "none", borderTop: "1px solid #000", padding: "2px 5px" }}>&gt;4,24</td>
                 </tr>
-                <tr>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>Escherichia coli</td>
+                <tr style={{textAlign: "center"}}>
+                  <td style={{ border: "1px solid #ccc", padding: "5px 5px" ,  borderLeft: "none", textAlign: "left"}}>Escherichia coli</td>
                   <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,9 x 10^7</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,9 x 10^7</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>3.2x10^5</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1.8x10^4</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>10</td>
+                  <td style={{ borderTop: "1px solid #ccc", padding: "2px 5px" }}>1,9 x 10^7</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderLeft: "1px solid #ccc", borderTop: "1px solid #ccc", padding: "2px 5px" }}>&gt;4,28</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;4,28</td>
+                  <td style={{ borderRight: "none", borderTop: "1px solid #ccc",  padding: "2px 5px" }}>&gt;4,28</td>
                 </tr>
-                <tr>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>Staphylococcus aureus</td>
+                <tr style={{textAlign: "center"}}>
+                  <td style={{ border: "1px solid #ccc", padding: "5px 5px",  borderLeft: "none", textAlign: "left" }}>Staphylococcus aureus</td>
                   <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,5 x 10^7</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,5 x 10^7</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>3.2x10^5</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1.8x10^4</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>10</td>
+                  <td style={{ borderTop: "1px solid #ccc", padding: "2px 5px" }}>1,5 x 10^7</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderLeft: "1px solid #ccc", borderTop: "1px solid #ccc", padding: "2px 5px" }}>&gt;4,18</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;4,18</td>
+                  <td style={{ borderRight: "none",borderTop: "1px solid #ccc", padding: "2px 5px" }}>&gt;4,18</td>
                 </tr>
-                <tr>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>Candida albicans</td>
+                <tr style={{textAlign: "center"}}>
+                  <td style={{ border: "1px solid #ccc", padding: "5px 5px",  borderLeft: "none", textAlign: "left" }}>Candida albicans</td>
                   <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,8 x 10^6</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,8 x 10^7</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>4.0x10^4</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>2.5x10^3</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>10</td>
+                  <td style={{ borderTop: "1px solid #ccc", padding: "2px 5px" }}>1,8 x 10^7</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderLeft: "1px solid #ccc", borderTop: "1px solid #ccc", borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;3,26</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;3,26</td>
+                  <td style={{ borderRight: "none", borderTop: "1px solid #ccc", borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;3,26</td>
                 </tr>
-                <tr>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>Aspergillus brasiliensis</td>
+                <tr style={{textAlign: "center"}}>
+                  <td style={{ border: "1px solid #ccc", padding: "5px 5px" ,  borderLeft: "none", textAlign: "left"}}>Aspergillus brasiliensis</td>
                   <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,4 x 10^6</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,4 x 10^7</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>-</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>2.5x10^3</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>10</td>
+                  <td style={{ borderBottom: "1px solid #ccc",  borderTop: "1px solid #ccc", padding: "2px 5px" }}>1,4 x 10^7</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>-</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
+                  <td style={{ borderLeft: "1px solid #ccc", borderBottom: "1px solid #ccc", padding: "2px 5px" }}>-</td>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;3,15</td>
+                  <td style={{ borderBottom: "1px solid #ccc",  borderRight: "none", padding: "2px 5px" }}>&gt;3,15</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          {/* --limitler-- */}
-         <div style={{marginTop:"10px"}}>Test Limitleri</div>
-          <table className="limit-table" style={{ width: "100%", marginTop:"5px",
-            tableLayout: "fixed", borderCollapse: "collapse", textAlign: "center", verticalAlign: "middle", fontSize: "9.5px", lineHeight: 1.1 }}>
-  <thead>
-    {/* 1. SATIR: Ana Başlıklar (Mikroorganizmalar) */}
-    <tr>
-      <th style={{ width:"20%", border: "1px solid #ccc", padding: "2px 5px", verticalAlign:"middle"}}>
-        Mikroorganizma
-      </th>
-      <th colSpan={3} style={{ border: "1px solid #ccc", padding: "2px 5px", verticalAlign:"middle" }}>
-        Bacteria</th>
-      <th colSpan={3} style={{ border: "1px solid #ccc", padding: "2px 5px", verticalAlign:"middle"}}>
-        C.Albicans </th>
-      <th colSpan={2} style={{ border: "1px solid #ccc", padding: "2px 5px", verticalAlign:"middle"}}>
-        A.brasiliensis </th>
-    </tr>
+          {/* Limit tablosu */}
+          <div className="results-title" style={{ marginTop: "25px"}}>LİMİTLER</div> 
+          <table className="limit-table" style={{ width: "100%", marginTop: "10px", tableLayout: "fixed", borderCollapse: "collapse", textAlign: "center", verticalAlign: "middle", fontSize: "9.5px", lineHeight: 1.1 }}>
+            <thead>
+              <tr>
+                <th style={{ width: "20%", borderBottom: "1px solid #000000", padding: "5px 5px", verticalAlign: "left" }}>Mikroorganizma</th>
+                <th colSpan={3} style={{ borderBottom: "1px solid #000000",  padding: "2px 5px", verticalAlign: "middle" }}>Bacteria</th>
+                <th colSpan={3} style={{ borderBottom: "1px solid #000000",  padding: "2px 5px", verticalAlign: "middle" }}>C.Albicans</th>
+                <th colSpan={2} style={{ borderBottom: "1px solid #000000",  padding: "2px 5px", verticalAlign: "middle" }}>A.brasiliensis</th>
+              </tr>
+              <tr>
+                <th style={{ borderRight: "1px solid #ccc", textAlign:"left", padding: "5px 5px", verticalAlign: "middle" }}>Örnekleme Süresi</th>
+                <th style={{ width: "7%", borderBottom: "1px solid #ccc", padding: "2px" }}>T7</th>
+                <th style={{ width: "7%", borderBottom: "1px solid #ccc", padding: "2px" }}>T14</th>
+                <th style={{ width: "7%", borderBottom: "1px solid #ccc", padding: "2px" }}>T28</th>
+                <th style={{ width: "7%", borderBottom: "1px solid #ccc", borderLeft: "1px solid #ccc", padding: "2px" }}>T7</th>
+                <th style={{ width: "7%", borderBottom: "1px solid #ccc", padding: "2px" }}>T14</th>
+                <th style={{ width: "7%", borderBottom: "1px solid #ccc", padding: "2px" }}>T28</th>
+                <th style={{ width: "7%", borderLeft: "1px solid #ccc", borderBottom: "1px solid #ccc", padding: "2px" }}>T14</th>
+                <th style={{ width: "7%", borderBottom: "1px solid #ccc", padding: "2px" }}>T28</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ borderTop: "1px solid #ccc", borderRight: "1px solid #ccc", textAlign:"left",  padding: "5px 5px", fontWeight: "bold" }}>Kriter A</td>
+                <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥3</td>
+                <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥3 ve NIᵇ</td>
+                <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥3 ve NI</td>
+                <td style={{ borderBottom: "1px solid #ccc", borderLeft: "1px solid #ccc", padding: "2px" }}>≥1</td>
+                <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
+                <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
+                <td style={{ borderLeft: "1px solid #ccc",borderBottom: "1px solid #ccc",padding: "2px" }}>≥0C</td>
+                <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
+              </tr>
+              <tr>
+                <td style={{ borderTop: "1px solid #ccc", borderRight: "1px solid #ccc", borderBottom: "1px solid #ccc",textAlign:"left", padding: "5px 5px", fontWeight: "bold" }}>Kriter B</td>
+                <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>-</td>
+                <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥3</td>
+                <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥3 ve NI</td>
+                <td style={{ borderBottom: "1px solid #ccc", borderLeft: "1px solid #ccc", padding: "2px" }}>-</td>
+                <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥1</td>
+                <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
+                <td style={{ borderLeft: "1px solid #ccc", borderBottom: "1px solid #ccc",padding: "2px" }}>≥0</td>
+                <td style={{  borderBottom: "1px solid #ccc",padding: "2px" }}>≥0 ve NI</td>
+              </tr>
+            </tbody>
+          </table>
 
-    {/* 2. SATIR: Alt Başlıklar (Süreler) */}
-    <tr>
-      <th style={{ border: "1px solid #ccc", padding: "2px 5px", verticalAlign:"middle" }}>
-        Örnekleme Süresi
-      </th>
-      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px" }}>T7</th>
-      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px" }}>T14</th>
-      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px" }}>T28</th>
-      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px" }}>T7</th>
-      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px"}}>T14</th>
-      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px" }}>T28</th>
-      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px"}}>T14</th>
-      <th style={{ width: "7%", border: "1px solid #ccc", padding: "2px" }}>T28</th>
-    </tr>
-  </thead>
 
-  <tbody>
-    {/* 3. SATIR: Kriter A Verileri */}
-    <tr>
-      <td style={{ border: "1px solid #ccc", padding: "2px 5px", fontWeight: "bold" }}>Kriter A</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥3</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥3 ve NIᵇ</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥3 ve NI</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥1</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥0C</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
-    </tr>
-
-    {/* 4. SATIR: Kriter B Verileri */}
-    <tr>
-      <td style={{ border: "1px solid #ccc", padding: "2px 5px", fontWeight: "bold" }}>Kriter B</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>-</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥3</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥3 ve NI</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>-</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥1</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥0</td>
-      <td style={{ border: "1px solid #ccc", padding: "2px" }}>≥0 ve NI</td>
-    </tr>
-  </tbody>
-</table>
-
-              {/* ───── NOTLAR ───── */}
           <div className="notlar">
-          <div className="results-title" style={{marginBottom:"4px"}}>AÇIKLAMALAR</div>    
-              {testBaslangic && testBitis ? (
-                <>
-                  Müşteri talebi doğrultusunda yapılan testlerin uygulama periyodu{" "}
-                  <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong> aralığındadır.{" "}
-                </>
-              ) : null}
-            <br></br>Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir. 
-         
+            a. Bu testte kabul edilebilir sapma 0,5 log kabul edilir.
+            <br></br>b. NI : Önceki ekim süresinden itibaren sayımda artış yok.
+            <br></br>c. lgNₒ = lgNₓ   olduğunda  Rₓ =0  (başlangıç sayımından sonra artış yok).
           </div>
 
-          {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ───── */}
-          <div className="approval-block">
-            <div className="approval-cell" style={{width:200, paddingTop:"15px"}}>
-              <div className="approval-cell-title" style={{paddingLeft:"5px"}}>Raporu Hazırlayan</div>
-              <div className="e-imza-pill" style={{marginTop:10}}>✓ E-İmzalıdır</div>
-              <div className="approval-cell-body">
-                <div className="approval-name">{hazirlayanAd} <span style={{fontSize:"9px" , color:"#646464"}}>Raportör</span></div>
-              </div>
+               <div className="results-title" style={{ marginTop: "25px"}}>DEĞERLENDİRME</div> 
+            <p>Test edilen numune, ISO 11930:2019/Amd 1:2022 standardında belirtilen limitlere göre koruyucu etkinlik gerekliliklerini sağlamaktadır. 
+            Test sonucu: <b>UYGUN</b> </p>
+
+          {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ─────  */}
+          <div className="endof">* Rapor Sonu *</div>
+ 
+
+<div className="approval-cell-title" style={{marginTop: "auto", display: "flex", justifyContent: "flex-end" }}>
+          <img src="/unique-seal.png" alt="UNIQUE ANALYSE" style={{ width: 80 }} />
+        </div>
+ {/* ───── ALT BİLGİ ───── */}
+          <div className="footer" style={{ marginTop: "auto" }}>
+
+          <div className="rapor-altbilgi">
+            <div className="sirket-bilgisi">
+              <strong>UNIQUE ANALİZ BELGELENDİRME ve GÖZETİM HİZMETLERİ LTD. ŞTİ.</strong><br />
+              Atatürk Mah. Hadımköy Yolu Cad. No:10 İç Kapı No:7 Esenyurt / İstanbul | info@uniqueanalyse.com
             </div>
-            <div className="approval-cell" style={{width:300, paddingTop:"15px"}}>
-              <div className="approval-cell-title" style={{paddingLeft:"5px"}}>Onaylayan</div>
-              <div className="e-imza-pill" style={{marginTop:10}}>✓ E-İmzalıdır</div>
-              <div className="approval-cell-body">
-                <div className="approval-name">Alaettin ÖZDEMİR <span style={{fontSize:"9px" , color:"#646464"}}>Laboratuvar Müdürü</span></div>
-             
+
+            <div className="dokuman-bilgisi">
+              <div className="sol-alt">
+                Ek-1.PR.20/Rev.02/12.06.2026
               </div>
-            </div>
-            <div className="approval-cell">
-              <div className="approval-cell-title">
-                <img src="/unique-seal.png" alt="UNIQUE ANALYSE" style={{width: 90}}/>
-              </div>
-              <div className="approval-cell-body">
-              </div>
-            </div>
-            <div className="approval-cell">
-              <div className="approval-cell-title">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={karekod?.qrDataUrl || "/karekod.png"}
-                  alt="Rapor Doğrulama Karekodu"
-                  title={karekod?.url || "Rapor doğrulama"}
-                  style={{ width: 90 }}
-                />
-              </div>
-              <div className="approval-cell-body">
-                {karekod?.dogrulamaKod && (
-                  <div
-                    title="Doğrulama Kodu — manuel doğrulamada bu kod kullanılır"
-                    style={{
-                      textAlign: "center",
-                      fontSize: "9px",
-                      fontWeight: 700,
-                      letterSpacing: "0.14em",
-                      color: "#000",
-                      fontFamily: "monospace",
-                      padding: "1px 0",
-                    }}
-                  >
-                    {karekod.dogrulamaKod}
-                  </div>
-                )}
+              <div className="sag-alt">
+                Sayfa: 2 / 2
               </div>
             </div>
           </div>
+        </div>
 
-          {/* ───── FOOTER ───── */}
-
-          <div className="FooterNot">
-                &ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Analiz Raporları geçersizdir.{" "}{sirketAdi}&apos;nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya herhangi bir başka amaçla kullanılamaz.Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal zorunluluklardan laboratuvarımız sorumlu değildir. Karar Kuralı: Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır.
-          </div>
-
-
-
-
-             <div className="footer" style={{marginTop:"5px"}}>
-            <span> {process.env.SIRKET_EMAIL || "info@uniqueanalyse.com"}</span>
-            <span>Ek-1.PR.20 Geçerlilik Tarihi: 25.11.2024 / 01</span>            
-            <span className="page-number">Sayfa: 1 / 1</span>            
-          </div>
 
 
         </div>
