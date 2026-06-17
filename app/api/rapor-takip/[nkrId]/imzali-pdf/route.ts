@@ -49,9 +49,10 @@ export async function GET(
     // ECONNRESET retry'ı artık DB pool katmanında (lib/db.ts ResilientRequest).
     const data = await loadRaporViewData(nkrIdNum, format);
     if (!data) return Response.json({ error: "Rapor bulunamadı." }, { status: 404 });
-    // Onaylı VEYA Yayınlanmış raporlar imzalı PDF olarak indirilebilir.
+    // Onaylı / Yayınlanmış / Arşivlenmiş raporlar imzalı PDF olarak indirilebilir.
+    // "Arşiv" = önceden onaylanmış, sonradan arşive alınmış rapor → indirilebilir olmalı.
     const durum = data.onay?.durum;
-    if (!data.onay || (durum !== "Onaylandı" && durum !== "Yayınlandı")) {
+    if (!data.onay || (durum !== "Onaylandı" && durum !== "Yayınlandı" && durum !== "Arşiv")) {
       return Response.json(
         { error: "Bu rapor henüz onaylanmamış. Önce raporu onaylayın." },
         { status: 409 },

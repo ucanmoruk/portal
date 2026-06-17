@@ -80,7 +80,8 @@ export async function POST(request: Request) {
       const fmt = String(it.raporFormati || "").trim();
       const data = await loadRaporViewData(nkrId, fmt);
       if (!data) continue;
-      if (!data.onay || (data.onay.durum !== "Onaylandı" && data.onay.durum !== "Yayınlandı")) continue;
+      // Onaylı / Yayınlanmış / Arşivlenmiş (önceden onaylı) raporlar maillenebilir.
+      if (!data.onay || (data.onay.durum !== "Onaylandı" && data.onay.durum !== "Yayınlandı" && data.onay.durum !== "Arşiv")) continue;
 
       const previewUrl = `${origin}/rapor-onay-print/${nkrId}?format=${encodeURIComponent(fmt)}`;
       const pdf = await renderUrlToPdf(previewUrl, {
