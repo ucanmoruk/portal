@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
+import { loadBilesenSonuclar, saveBilesenSonuclar } from "@/lib/altParametre";
 import { NextRequest } from "next/server";
 
 // Değerlendirme Türkçe → İngilizce çeviri
@@ -81,7 +82,15 @@ export async function GET(
       ORDER BY s.Kod
     `);
 
-    return Response.json(result.recordset);
+    // Alt parametreler (bileşenler) — katalog + girilmiş sonuçlar
+    const hizmetler = result.recordset as Array<{ X1ID: number; AnalizID: number; altParametreler?: unknown }>;
+    const pairs = hizmetler
+      .map((h) => ({ x1Id: Number(h.X1ID), analizId: Number(h.AnalizID) }))
+      .filter((p) => Number.isFinite(p.x1Id) && Number.isFinite(p.analizId));
+    const bilesenMap = await loadBilesenSonuclar(pool, pairs);
+    for (const h of hizmetler) h.altParametreler = bilesenMap[String(h.X1ID)] || [];
+
+    return Response.json(hizmetler);
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }
@@ -102,7 +111,7 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const updates: { x1Id: number; sonuc: string; sonucEn?: string; degerlendirme: string }[] = body.updates || [];
+    const updates: { x1Id: number; sonuc: string; sonucEn?: string; degerlendirme: string; altParametreler?: unknown }[] = body.updates || [];
 
     if (updates.length === 0) return Response.json({ ok: true });
 
@@ -184,6 +193,11 @@ export async function PATCH(
         SET ${sets.join(", ")}
         WHERE ID = @x1Id AND RaporID = @nkrId
       `);
+
+      // Alt parametre (bileşen) sonuçları — gönderildiyse replace et (tablo yoksa no-op)
+      if (Array.isArray(upd.altParametreler)) {
+        await saveBilesenSonuclar(pool, upd.x1Id, upd.altParametreler);
+      }
 
       // Ürün Geçmişi log girişi
       if (hasLog) {

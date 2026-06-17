@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
+import type { BilesenSonuc } from "@/lib/altParametre";
 import { useRouter } from "next/navigation";
 import styles from "@/app/styles/table.module.css";
 
@@ -41,6 +42,7 @@ interface HizmetDetay {
   Termin: string | null;
   /** NULL ise kullanıcı henüz Kaydet basmadı (Sonuc auto-fill ile dolu olabilir) */
   SonucKayitTarihi: string | null;
+  altParametreler?: BilesenSonuc[];
 }
 
 interface LocalEdit {
@@ -191,6 +193,8 @@ export default function RaporTakipTable({
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
   // Yerel düzenlemeler: key → { x1Id → LocalEdit }
   const [editMap, setEditMap]     = useState<Record<string, Record<number, LocalEdit>>>({});
+  // Bileşen (alt parametre) sonuç düzenlemeleri — key → x1Id → BilesenSonuc[]
+  const [bilesenMap, setBilesenMap] = useState<Record<string, Record<number, BilesenSonuc[]>>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<Record<string, string>>({});
 
@@ -301,14 +305,19 @@ export default function RaporTakipTable({
 
         // Başlangıç editMap'ini doldur
         const initial: Record<number, LocalEdit> = {};
+        const bilesenInitial: Record<number, BilesenSonuc[]> = {};
         data.forEach(h => {
           initial[h.X1ID] = {
             sonuc:         h.Sonuc         ?? "",
             sonucEn:       h.SonucEn       ?? "",
             degerlendirme: h.Degerlendirme ?? "",
           };
+          if (h.altParametreler && h.altParametreler.length > 0) {
+            bilesenInitial[h.X1ID] = h.altParametreler.map(b => ({ ...b }));
+          }
         });
         setEditMap(prev => ({ ...prev, [key]: initial }));
+        setBilesenMap(prev => ({ ...prev, [key]: bilesenInitial }));
       } catch (e: any) {
         setError(e.message);
       } finally {
@@ -322,6 +331,18 @@ export default function RaporTakipTable({
       ...prev,
       [key]: { ...prev[key], [x1Id]: { ...prev[key]?.[x1Id], [field]: value } },
     }));
+  };
+
+  // Bileşen (alt parametre) alanı düzenle
+  const setBilesenValue = (
+    key: string, x1Id: number, base: BilesenSonuc[], idx: number,
+    field: "Sonuc" | "SonucEn" | "Degerlendirme", value: string,
+  ) => {
+    setBilesenMap(prev => {
+      const cur = prev[key]?.[x1Id] ?? base.map(b => ({ ...b }));
+      const next = cur.map((b, i) => (i === idx ? { ...b, [field]: value } : b));
+      return { ...prev, [key]: { ...prev[key], [x1Id]: next } };
+    });
   };
 
   // Per-row Kaydet için ayrı state — savingRowId (X1ID)
@@ -353,7 +374,7 @@ export default function RaporTakipTable({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          updates: [{ x1Id, sonuc: edit.sonuc, sonucEn: edit.sonucEn, degerlendirme: edit.degerlendirme }],
+          updates: [{ x1Id, sonuc: edit.sonuc, sonucEn: edit.sonucEn, degerlendirme: edit.degerlendirme, altParametreler: bilesenMap[key]?.[x1Id] }],
           raporFormati: row.RaporFormati,
         }),
       });
@@ -394,6 +415,7 @@ export default function RaporTakipTable({
       sonuc: vals.sonuc,
       sonucEn: vals.sonucEn,
       degerlendirme: vals.degerlendirme,
+      altParametreler: bilesenMap[key]?.[Number(x1Id)],
     }));
 
     setSavingKey(key);
@@ -1173,6 +1195,7 @@ export default function RaporTakipTable({
                         <tbody>
                           {hizmetler.map((h, hi) => {
                             const edit = edits[h.X1ID] ?? { sonuc: h.Sonuc ?? "", sonucEn: h.SonucEn ?? "", degerlendirme: h.Degerlendirme ?? "" };
+                            const bilesenler = bilesenMap[key]?.[h.X1ID] ?? (h.altParametreler || []);
                             // "Kayıtlı" = kullanıcı Kaydet bastı.
                             // Bunun göstergesi: NumuneX1.SonucKayitTarihi NULL değil.
                             // Sonuc kolonu auto-fill (LOQ) ile dolu gelebilir, bu yüzden
@@ -1204,10 +1227,10 @@ export default function RaporTakipTable({
                               cursor: "not-allowed",
                             };
                             return (
+                              <Fragment key={h.X1ID}>
                               <tr
-                                key={h.X1ID}
                                 style={{
-                                  borderBottom: hi < hizmetler.length - 1
+                                  borderBottom: (hi < hizmetler.length - 1 || bilesenler.length > 0)
                                     ? "1px solid var(--color-border-light)" : "none",
                                   // Kilitli (kaydedilmiş) satır: hafif yeşil zemin + sol kenar şeridi
                                   background: isLocked ? "#34c75908" : "transparent",
@@ -1364,6 +1387,62 @@ export default function RaporTakipTable({
                                   )}
                                 </td>
                               </tr>
+
+                              {/* Alt parametreler (bileşenler) — Sonuç + Değerlendirme girişi */}
+                              {bilesenler.length > 0 && (
+                                <tr style={{
+                                  background: isLocked ? "#34c75906" : "rgba(0,0,0,0.012)",
+                                  borderLeft: isLocked ? "3px solid #34c759" : "3px solid transparent",
+                                  borderBottom: hi < hizmetler.length - 1 ? "1px solid var(--color-border-light)" : "none",
+                                }}>
+                                  <td />
+                                  <td colSpan={9} style={{ padding: "2px 12px 12px 30px" }}>
+                                    <div style={{ fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-text-tertiary)", margin: "4px 0 6px" }}>
+                                      Alt Parametreler
+                                    </div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "minmax(120px,1.4fr) 130px 66px 66px 90px 140px", gap: 8, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--color-text-tertiary)", paddingBottom: 3 }}>
+                                      <span>Bileşen</span><span>Sonuç</span>
+                                      <span style={{ textAlign: "center" }}>Birim</span>
+                                      <span style={{ textAlign: "center" }}>LOQ</span>
+                                      <span style={{ textAlign: "center" }}>Limit</span>
+                                      <span>Değerlendirme</span>
+                                    </div>
+                                    {bilesenler.map((bp, bi) => (
+                                      <div key={bi} style={{ display: "grid", gridTemplateColumns: "minmax(120px,1.4fr) 130px 66px 66px 90px 140px", gap: 8, alignItems: "center", padding: "3px 0" }}>
+                                        <span style={{ fontSize: "0.8rem", color: "var(--color-text-primary)", fontWeight: 500 }}>{bp.BilesenAdi || "—"}</span>
+                                        <input
+                                          value={bp.Sonuc || ""}
+                                          disabled={isLocked}
+                                          placeholder="sonuç"
+                                          onChange={e => setBilesenValue(key, h.X1ID, bilesenler, bi, "Sonuc", e.target.value)}
+                                          style={{ width: "100%", padding: "4px 7px", borderWidth: 1, borderStyle: "solid", borderColor: "var(--color-border)", borderRadius: 6, fontSize: "0.8rem", outline: "none", background: isLocked ? "transparent" : "var(--color-bg)", color: "var(--color-text-primary)" }}
+                                        />
+                                        <span style={{ fontSize: "0.74rem", color: "var(--color-text-secondary)", textAlign: "center" }}>{bp.Birim || "—"}</span>
+                                        <span style={{ fontSize: "0.74rem", color: "var(--color-text-secondary)", textAlign: "center" }}>{bp.LOQ || "—"}</span>
+                                        <span style={{ fontSize: "0.74rem", color: "var(--color-text-secondary)", textAlign: "center" }}>{bp.Limit || "—"}</span>
+                                        <select
+                                          value={bp.Degerlendirme || ""}
+                                          disabled={isLocked}
+                                          onChange={e => setBilesenValue(key, h.X1ID, bilesenler, bi, "Degerlendirme", e.target.value)}
+                                          style={{
+                                            width: "100%", padding: "4px 6px", borderWidth: 1, borderStyle: "solid", borderColor: "var(--color-border)", borderRadius: 6,
+                                            fontSize: "0.78rem", outline: "none", cursor: isLocked ? "not-allowed" : "pointer",
+                                            background: bp.Degerlendirme === "Uygun" ? "#34c75914" : bp.Degerlendirme === "Uygun Değil" ? "#ff2d5514" : "var(--color-bg)",
+                                            color: bp.Degerlendirme === "Uygun" ? "#248a3d" : bp.Degerlendirme === "Uygun Değil" ? "#c1001a" : "var(--color-text-secondary)",
+                                            fontWeight: bp.Degerlendirme ? 600 : 400,
+                                          }}
+                                        >
+                                          <option value="">—</option>
+                                          <option value="Uygun">Uygun</option>
+                                          <option value="Uygun Değil">Uygun Değil</option>
+                                          <option value="D.Y.">D.Y.</option>
+                                        </select>
+                                      </div>
+                                    ))}
+                                  </td>
+                                </tr>
+                              )}
+                              </Fragment>
                             );
                           })}
                         </tbody>

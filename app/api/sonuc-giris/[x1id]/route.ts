@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
+import { saveBilesenSonuclar } from "@/lib/altParametre";
 
 // ── PATCH /api/sonuc-giris/[x1id] — Sonuç, Değerlendirme, Durum güncelle ───
 export async function PATCH(
@@ -49,6 +50,11 @@ export async function PATCH(
     }
 
     await req.query(`UPDATE NumuneX1 SET ${sets.join(", ")} WHERE ID = @x1Id`);
+
+    // Alt parametre (bileşen) sonuçları — gönderildiyse replace et (tablo yoksa no-op)
+    if (Array.isArray(body.altParametreler)) {
+      await saveBilesenSonuclar(pool, x1Id, body.altParametreler);
+    }
 
     return Response.json({ ok: true });
   } catch (e: any) {

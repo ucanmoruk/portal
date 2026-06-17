@@ -28,7 +28,25 @@ interface Hizmet {
   LimitEn?: string;            // NEW: English limit
   BirimEn?: string;            // NEW: English unit
   LOQEn?: string;              // NEW: English LOQ
+  altParametreler?: AltParametre[];  // NEW: alt parametreler (bileşenler)
 }
+
+// Hizmete bağlı bileşen/alt parametre (StokAnalizAltParametre)
+interface AltParametre {
+  BilesenAdi?: string;
+  BilesenAdiEn?: string;
+  Birim?: string;
+  BirimEn?: string;
+  LOQ?: string;
+  LOQEn?: string;
+  Limit?: string;
+  LimitEn?: string;
+}
+
+const EMPTY_ALT: AltParametre = {
+  BilesenAdi: "", BilesenAdiEn: "", Birim: "", BirimEn: "",
+  LOQ: "", LOQEn: "", Limit: "", LimitEn: "",
+};
 
 interface Birim { ID: number; Birim: string; }
 
@@ -42,6 +60,7 @@ const EMPTY: Partial<Hizmet> = {
   // Rapor Formati bos kalmasin — varsayilan Genel.
   RaporFormati: "Genel", YetkiliID: null, BolumID: null,
   Limit: "", Birim: "", LOQ: "", LimitEn: "", BirimEn: "", LOQEn: "",
+  altParametreler: [],
 };
 
 export default function HizmetTable() {
@@ -142,10 +161,32 @@ export default function HizmetTable() {
     setIsNew(false); setFormError("");
     // Rapor Formati bos kayitlar icin otomatik Genel sec
     const rf = String(row.RaporFormati || "").trim();
-    setEditRow({ ...row, RaporFormati: rf || "Genel" });
+    setEditRow({ ...row, RaporFormati: rf || "Genel", altParametreler: row.altParametreler || [] });
     setModalTab(0);
+    // Alt parametreleri detay endpoint'inden yükle (liste GET'i taşımıyor)
+    fetch(`/api/hizmetler/${row.ID}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d && Array.isArray(d.altParametreler)) {
+          setEditRow(p => (p && p.ID === row.ID ? { ...p, altParametreler: d.altParametreler } : p));
+        }
+      })
+      .catch(() => {});
   };
   const closeEdit = () => { setEditRow(null); setModalTab(0); };
+
+  // ── Alt parametre satır yönetimi ──
+  const addAltParam = () =>
+    setEditRow(p => (p ? { ...p, altParametreler: [...(p.altParametreler || []), { ...EMPTY_ALT }] } : p));
+  const removeAltParam = (i: number) =>
+    setEditRow(p => (p ? { ...p, altParametreler: (p.altParametreler || []).filter((_, idx) => idx !== i) } : p));
+  const updAltParam = (i: number, key: keyof AltParametre, val: string) =>
+    setEditRow(p => {
+      if (!p) return p;
+      const arr = [...(p.altParametreler || [])];
+      arr[i] = { ...arr[i], [key]: val };
+      return { ...p, altParametreler: arr };
+    });
 
   // ── Pagination helpers ──
   const goTo = (p: number) => { if (p >= 1 && p <= totalPages) setPage(p); };
@@ -398,6 +439,25 @@ export default function HizmetTable() {
                   >
                     Teknik Bilgiler
                   </button>
+                  <button
+                    onClick={() => setModalTab(2)}
+                    style={{
+                      padding: "8px 12px",
+                      outline: "none",
+                      borderTop: "none",
+                      borderRight: "none",
+                      borderLeft: "none",
+                      borderBottom: modalTab === 2 ? "2px solid var(--color-accent)" : "2px solid transparent",
+                      color: modalTab === 2 ? "var(--color-accent)" : "var(--color-text-secondary)",
+                      fontSize: "0.85rem",
+                      fontWeight: modalTab === 2 ? 500 : 400,
+                      cursor: "pointer",
+                      background: "none",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    Alt Parametreler
+                  </button>
                 </div>
               </div>
               <button className={styles.modalClose} onClick={closeEdit}>
@@ -587,6 +647,89 @@ export default function HizmetTable() {
                 </div>
               )}
 
+                </>
+              )}
+
+              {/* ── TAB 2: Alt Parametreler ── */}
+              {modalTab === 2 && (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <span style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
+                      Hizmete ait bileşenler — her biri ayrı satır (ör. ağır metaller → Pb, Cd, As…)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={addAltParam}
+                      style={{
+                        padding: "6px 12px", fontSize: "0.8rem", fontWeight: 500, cursor: "pointer",
+                        color: "var(--color-accent)", background: "var(--color-accent-bg, #eef0fd)",
+                        border: "1px solid var(--color-accent)", borderRadius: 8, whiteSpace: "nowrap",
+                      }}
+                    >
+                      + Satır Ekle
+                    </button>
+                  </div>
+
+                  {(editRow.altParametreler || []).length === 0 && (
+                    <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--color-text-tertiary)", fontSize: "0.85rem", border: "1px dashed var(--color-border)", borderRadius: 8 }}>
+                      Henüz alt parametre yok. &quot;+ Satır Ekle&quot; ile ekleyin.
+                    </div>
+                  )}
+
+                  {(editRow.altParametreler || []).map((ap, i) => (
+                    <div key={i} style={{ border: "1px solid var(--color-border)", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <strong style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>#{i + 1}</strong>
+                        <button
+                          type="button"
+                          onClick={() => removeAltParam(i)}
+                          style={{ padding: "3px 9px", fontSize: "0.75rem", cursor: "pointer", color: "#c0392b", background: "none", border: "1px solid #e3b6b1", borderRadius: 6 }}
+                        >
+                          Sil
+                        </button>
+                      </div>
+                      <div className={styles.formGrid} style={{ marginBottom: 10 }}>
+                        <div className={styles.formGroup}>
+                          <label>Bileşen Adı (TR)</label>
+                          <input value={ap.BilesenAdi || ""} onChange={e => updAltParam(i, "BilesenAdi", e.target.value)} />
+                        </div>
+                        <div className={styles.formGroup}>
+                          <label>Bileşen Adı (EN)</label>
+                          <input value={ap.BilesenAdiEn || ""} onChange={e => updAltParam(i, "BilesenAdiEn", e.target.value)} />
+                        </div>
+                      </div>
+                      <div className={styles.formGrid} style={{ marginBottom: 10 }}>
+                        <div className={styles.formGroup}>
+                          <label>Birim (TR)</label>
+                          <input value={ap.Birim || ""} onChange={e => updAltParam(i, "Birim", e.target.value)} placeholder="ör: ppm" />
+                        </div>
+                        <div className={styles.formGroup}>
+                          <label>Birim (EN)</label>
+                          <input value={ap.BirimEn || ""} onChange={e => updAltParam(i, "BirimEn", e.target.value)} placeholder="e.g. ppm" />
+                        </div>
+                      </div>
+                      <div className={styles.formGrid} style={{ marginBottom: 10 }}>
+                        <div className={styles.formGroup}>
+                          <label>LOQ (TR)</label>
+                          <input value={ap.LOQ || ""} onChange={e => updAltParam(i, "LOQ", e.target.value)} placeholder="ör: 1" />
+                        </div>
+                        <div className={styles.formGroup}>
+                          <label>LOQ (EN)</label>
+                          <input value={ap.LOQEn || ""} onChange={e => updAltParam(i, "LOQEn", e.target.value)} placeholder="e.g. 1" />
+                        </div>
+                      </div>
+                      <div className={styles.formGrid}>
+                        <div className={styles.formGroup}>
+                          <label>Limit (TR)</label>
+                          <input value={ap.Limit || ""} onChange={e => updAltParam(i, "Limit", e.target.value)} placeholder="ör: 0-100" />
+                        </div>
+                        <div className={styles.formGroup}>
+                          <label>Limit (EN)</label>
+                          <input value={ap.LimitEn || ""} onChange={e => updAltParam(i, "LimitEn", e.target.value)} placeholder="e.g. 0-100" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </>
               )}
             </div>

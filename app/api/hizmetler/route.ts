@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
+import { saveAltParametreler } from "@/lib/altParametre";
 import { type NextRequest } from "next/server";
 
 // Hangi kolonların mevcut olduğunu kontrol et (30s TTL cache — ALTER TABLE sonrası
@@ -178,7 +179,11 @@ export async function POST(request: Request) {
          @Limit, @BirimText, @LOQ, @LimitEn, @BirimEn, @LOQEn${valsPart})
     `);
 
-    return Response.json({ id: result.recordset[0].ID }, { status: 201 });
+    const newId = result.recordset[0].ID;
+    // Alt parametreler (tablo yoksa no-op)
+    await saveAltParametreler(pool, newId, body.altParametreler);
+
+    return Response.json({ id: newId }, { status: 201 });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

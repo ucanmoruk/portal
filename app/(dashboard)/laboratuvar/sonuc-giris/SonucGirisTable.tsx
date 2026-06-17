@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import styles from "@/app/styles/table.module.css";
+import type { BilesenSonuc } from "@/lib/altParametre";
 
 // ── Tipler ──────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ interface HizmetRow {
   BirimEn: string;
   Durum: string | null;
   YetkiliAd: string | null;
+  altParametreler?: BilesenSonuc[];
 }
 
 interface NumuneGroup {
@@ -174,6 +176,9 @@ export default function SonucGirisTable() {
   const [error, setError]             = useState("");
 
   const [editMap, setEditMap]                 = useState<Record<number, LocalEdit>>({});
+  // Bileşen (alt parametre) sonuç düzenlemeleri — X1ID → BilesenSonuc[]. Düzenlenince
+  // editMap[x1Id].dirty da işaretlenir ki "Kaydet" butonu çıksın.
+  const [bilesenEdits, setBilesenEdits]       = useState<Record<number, BilesenSonuc[]>>({});
   const [collapsedNkrIds, setCollapsedNkrIds] = useState<Set<number>>(new Set());
   const [revizyon, setRevizyon]               = useState<RevizyonState | null>(null);
 
@@ -302,6 +307,22 @@ export default function SonucGirisTable() {
       return { ...prev, [x1Id]: { ...cur, [field]: val, dirty: true, saveError: "" } };
     });
 
+  // Bileşen (alt parametre) alanı düzenle — base = satırın yüklü bileşenleri.
+  const setBilesen = (
+    x1Id: number, base: BilesenSonuc[], idx: number,
+    field: "Sonuc" | "SonucEn" | "Degerlendirme", val: string,
+  ) => {
+    setBilesenEdits(prev => {
+      const cur = prev[x1Id] ?? base.map(b => ({ ...b }));
+      return { ...prev, [x1Id]: cur.map((b, i) => (i === idx ? { ...b, [field]: val } : b)) };
+    });
+    setEditMap(prev => {
+      const cur = prev[x1Id];
+      if (!cur || cur.durum === "Tamamlandı") return prev;
+      return { ...prev, [x1Id]: { ...cur, dirty: true, saveError: "" } };
+    });
+  };
+
   const handleSave = async (x1Id: number, opts: { force?: boolean } = {}) => {
     const edit = editMap[x1Id];
     if (!edit || (!edit.dirty && !opts.force)) return;
@@ -319,6 +340,8 @@ export default function SonucGirisTable() {
           limitEn:       edit.limitEn,
           degerlendirme: edit.degerlendirme,
           durum:         "Tamamlandı",
+          // Bileşen sonuçları yalnızca düzenlendiyse gönderilir (yoksa dokunulmaz).
+          altParametreler: bilesenEdits[x1Id],
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Kayıt hatası");
@@ -621,6 +644,7 @@ export default function SonucGirisTable() {
                         const isTamam    = edit.durum === "Tamamlandı";
                         const isDisabled = isTamam || edit.saving;
                         const isLast     = ri === group.hizmetler.length - 1;
+                        const bilesenler = bilesenEdits[row.X1ID] ?? (row.altParametreler || []);
 
                         const degEn = edit.degerlendirme === "Uygun"       ? "Pass"
                                     : edit.degerlendirme === "Uygun Değil" ? "Fail"
@@ -628,10 +652,10 @@ export default function SonucGirisTable() {
                                     : null;
 
                         return (
+                          <Fragment key={row.X1ID}>
                           <tr
-                            key={row.X1ID}
                             style={{
-                              borderBottom: isLast ? "none" : "1px solid var(--color-border-light)",
+                              borderBottom: (isLast && bilesenler.length === 0) ? "none" : "1px solid var(--color-border-light)",
                               background: isTamam
                                 ? "rgba(52,199,89,0.025)"
                                 : edit.dirty ? "rgba(0,113,227,0.02)" : undefined,
@@ -816,6 +840,65 @@ export default function SonucGirisTable() {
                               </div>
                             </td>
                           </tr>
+
+                          {/* Alt parametreler (bileşenler) — Sonuç + Değerlendirme girişi */}
+                          {bilesenler.length > 0 && (
+                            <tr style={{
+                              borderBottom: isLast ? "none" : "1px solid var(--color-border-light)",
+                              background: isTamam ? "rgba(52,199,89,0.02)" : "rgba(0,0,0,0.012)",
+                            }}>
+                              <td />
+                              <td colSpan={8} style={{ padding: "2px 10px 10px 28px" }}>
+                                <div style={{ fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-text-tertiary)", margin: "4px 0 6px" }}>
+                                  Alt Parametreler
+                                </div>
+                                <div style={{ display: "grid", gridTemplateColumns: "minmax(120px,1.4fr) 120px 64px 64px 80px 132px", gap: 8, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--color-text-tertiary)", paddingBottom: 3 }}>
+                                  <span>Bileşen</span><span>Sonuç</span>
+                                  <span style={{ textAlign: "center" }}>Birim</span>
+                                  <span style={{ textAlign: "center" }}>LOQ</span>
+                                  <span style={{ textAlign: "center" }}>Limit</span>
+                                  <span>Değerlendirme</span>
+                                </div>
+                                {bilesenler.map((bp, bi) => (
+                                  <div key={bi} style={{ display: "grid", gridTemplateColumns: "minmax(120px,1.4fr) 120px 64px 64px 80px 132px", gap: 8, alignItems: "center", padding: "3px 0" }}>
+                                    <span style={{ fontSize: "0.78rem", color: "var(--color-text-primary)", fontWeight: 500 }}>{bp.BilesenAdi || "—"}</span>
+                                    <input
+                                      value={bp.Sonuc || ""}
+                                      disabled={isDisabled}
+                                      onChange={e => setBilesen(row.X1ID, bilesenler, bi, "Sonuc", e.target.value)}
+                                      placeholder="sonuç"
+                                      style={{ width: "100%", padding: "4px 6px", border: "1px solid var(--color-border)", borderRadius: 6, fontSize: "0.78rem", fontFamily: "inherit", outline: "none", background: isDisabled ? "var(--color-surface)" : "var(--color-bg)" }}
+                                    />
+                                    <span style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", textAlign: "center" }}>{bp.Birim || "—"}</span>
+                                    <span style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", textAlign: "center" }}>{bp.LOQ || "—"}</span>
+                                    <span style={{ fontSize: "0.72rem", color: "var(--color-text-secondary)", textAlign: "center" }}>{bp.Limit || "—"}</span>
+                                    <select
+                                      value={bp.Degerlendirme || ""}
+                                      disabled={isDisabled}
+                                      onChange={e => setBilesen(row.X1ID, bilesenler, bi, "Degerlendirme", e.target.value)}
+                                      style={{
+                                        width: "100%", padding: "4px 6px", border: "1px solid var(--color-border)", borderRadius: 6,
+                                        fontSize: "0.76rem", fontFamily: "inherit", outline: "none",
+                                        cursor: isDisabled ? "default" : "pointer",
+                                        background: isDisabled ? "var(--color-surface)"
+                                          : bp.Degerlendirme === "Uygun" ? "#34c75914"
+                                          : bp.Degerlendirme === "Uygun Değil" ? "#ff2d5514" : "var(--color-bg)",
+                                        color: bp.Degerlendirme === "Uygun" ? "#248a3d"
+                                          : bp.Degerlendirme === "Uygun Değil" ? "#c1001a" : "var(--color-text-secondary)",
+                                        fontWeight: bp.Degerlendirme ? 600 : 400,
+                                      }}
+                                    >
+                                      <option value="">—</option>
+                                      <option value="Uygun">Uygun</option>
+                                      <option value="Uygun Değil">Uygun Değil</option>
+                                      <option value="D.Y.">D.Y.</option>
+                                    </select>
+                                  </div>
+                                ))}
+                              </td>
+                            </tr>
+                          )}
+                          </Fragment>
                         );
                       })}
                     </tbody>

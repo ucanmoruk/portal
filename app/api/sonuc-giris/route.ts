@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
+import { loadBilesenSonuclar } from "@/lib/altParametre";
 
 // ── GET /api/sonuc-giris — Numune bazlı gruplu liste ─────────────────────────
 export async function GET(request: Request) {
@@ -189,6 +190,7 @@ export async function GET(request: Request) {
         }
         groupMap.get(row.NkrID).hizmetler.push({
           X1ID:          row.X1ID,
+          AnalizID:      row.HizmetID,
           Kod:           row.Kod,
           HizmetAd:      row.HizmetAd,
           Akreditasyon:  row.Akreditasyon,
@@ -203,11 +205,23 @@ export async function GET(request: Request) {
           BirimEn:       row.BirimEn,
           Durum:         row.Durum,
           YetkiliAd:     row.YetkiliAd,
+          altParametreler: [],
         });
       }
 
       // Termin sıralamasını koru
       groups = nkrIds.map(id => groupMap.get(id)).filter(Boolean);
+
+      // ── Alt parametreler (bileşenler) — katalog + girilmiş sonuçlar ──
+      const pairs = (dataRes.recordset as Array<{ X1ID: number; HizmetID: number }>)
+        .map((r) => ({ x1Id: Number(r.X1ID), analizId: Number(r.HizmetID) }))
+        .filter((p) => Number.isFinite(p.x1Id) && Number.isFinite(p.analizId));
+      const bilesenMap = await loadBilesenSonuclar(pool, pairs);
+      for (const g of groups) {
+        for (const h of g.hizmetler) {
+          h.altParametreler = bilesenMap[String(h.X1ID)] || [];
+        }
+      }
     }
 
     return Response.json({

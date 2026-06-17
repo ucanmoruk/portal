@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
+import { loadAltParametreler, saveAltParametreler } from "@/lib/altParametre";
 
 // Module-level col cache — 30s TTL (ALTER TABLE sonrası sunucu restart gerektirmesin)
 let _colCache: { cols: Set<string>; ts: number } | null = null;
@@ -60,7 +61,10 @@ export async function GET(
     if (!result.recordset[0])
       return Response.json({ error: "Bulunamadı" }, { status: 404 });
 
-    return Response.json(result.recordset[0]);
+    // Alt parametreler (tablo yoksa [] döner)
+    const altParametreler = await loadAltParametreler(pool, id);
+
+    return Response.json({ ...result.recordset[0], altParametreler });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }
@@ -157,6 +161,9 @@ export async function PUT(
         LOQEn         = @LOQEn${extraSetStr}
       WHERE ID = @id
     `);
+
+    // Alt parametreleri replace et (tablo yoksa no-op)
+    await saveAltParametreler(pool, id, body.altParametreler);
 
     return Response.json({ message: "Güncellendi" });
   } catch (e: any) {

@@ -1,4 +1,22 @@
+export interface AltParametreRow {
+  AltParametreID?: number | null;
+  BilesenAdi: string;
+  BilesenAdiEn: string;
+  Birim: string;
+  BirimEn: string;
+  LOQ: string;
+  LOQEn: string;
+  Limit: string;
+  LimitEn: string;
+  /** Per-rapor girilen sonuç (NumuneX1AltParametre) — girilmemişse boş. */
+  Sonuc?: string;
+  SonucEn?: string;
+  Degerlendirme?: string;
+}
+
 export interface HizmetRow {
+  AnalizID: number;
+  X1ID?: number;
   Kod: string;
   Ad: string;
   Akreditasyon: string;
@@ -9,6 +27,8 @@ export interface HizmetRow {
   Sonuc: string | null;
   Degerlendirme: string | null;
   Termin: string | null;
+  /** Hizmete bağlı alt parametreler/bileşenler (StokAnalizAltParametre). */
+  altParametreler?: AltParametreRow[];
 }
 
 export interface RaporHeader {

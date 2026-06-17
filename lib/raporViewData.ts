@@ -2,6 +2,7 @@ import { cosmoPool } from "@/lib/db";
 import QRCode from "qrcode";
 import type { HizmetRow, RaporHeader, OnayInfo, KarekodInfo } from "@/app/rapor-onay-print/[nkrId]/reportTypes";
 import { imzaColumnExists, imzalaVeKaydet } from "@/lib/raporImzaData";
+import { loadBilesenSonuclar } from "@/lib/altParametre";
 
 // Rapor önizleme + imzalı PDF için ORTAK veri yükleyici.
 // Hem app/rapor-onay-print/[nkrId]/page.tsx (önizleme) hem
@@ -83,6 +84,8 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
     .input("format", format)
     .query(`
       SELECT
+        s.ID                       AS AnalizID,
+        x1.ID                      AS X1ID,
         ISNULL(s.Kod, '')          AS Kod,
         ISNULL(s.Ad, '')           AS Ad,
         ISNULL(s.Akreditasyon, '') AS Akreditasyon,
@@ -100,6 +103,16 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
       ORDER BY s.Kod
     `);
   const hizmetler = hizmetRes.recordset as HizmetRow[];
+
+  // ───── Alt parametreler (bileşenler) — katalog + girilen sonuçlar ─────
+  // Her hizmetin bileşenlerini (X1ID bazında girilen Sonuç/Değerlendirme ile) yükle.
+  const altMap = await loadBilesenSonuclar(
+    pool,
+    hizmetler.map((h) => ({ x1Id: Number(h.X1ID), analizId: Number(h.AnalizID) })),
+  );
+  for (const h of hizmetler) {
+    h.altParametreler = (altMap[String(h.X1ID)] || []) as HizmetRow["altParametreler"];
+  }
 
   // ───── Onay bilgisi ─────
   let onay: OnayInfo | null = null;

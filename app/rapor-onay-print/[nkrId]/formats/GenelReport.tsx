@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { JetBrains_Mono } from "next/font/google";
 import OnayToolbar from "../OnayToolbar";
 import type { ReportFormatProps } from "../reportTypes";
@@ -271,6 +272,14 @@ export default function GenelReport({
         .results tbody td.center { text-align: left; }
         .results tbody td.muted { color: var(--ink-soft); font-size: 8.5px; }
         .results tbody td.bold { font-weight: 700; }
+        /* Alt parametre (bileşen) satırları — ana analizin altında, daha hafif */
+        .results tbody tr.alt-param-row td {
+          font-size: 9px;
+          color: var(--ink-soft);
+          padding-top: 3px;
+          padding-bottom: 3px;
+          border-bottom: 1px dotted var(--rule-soft);
+        }
         .deg-gecer { color: var(--ink-strong); font-weight: 700; text-align: center; letter-spacing: 0.02em; }
         .deg-kaldi { color: var(--ink-strong); font-weight: 700; text-align: center; letter-spacing: 0.02em; }
         .deg-other { color: var(--ink-strong); font-weight: 700; text-align: center; }
@@ -453,8 +462,10 @@ export default function GenelReport({
             )}
           </div>
 
-          {/* ───── DENEY RAPORU BAŞLIK + (akredite varsa) akreditasyon kutusu ───── */}
-          <div className="title-row">
+          {/* ───── DENEY RAPORU BAŞLIK + (akredite varsa) akreditasyon kutusu ─────
+              Akreditasyon yoksa sağda TÜRKAK logosu (30mm) olmadığından header
+              alçalıp başlık logoya yapışıyor → bu durumda üstten boşluk ekle. */}
+          <div className="title-row" style={!hasAkredite ? { marginTop: "16mm" } : undefined}>
             <div className="report-title">DENEY RAPORU</div>
             {hasAkredite && (
               <table className="akredite-box">
@@ -558,19 +569,38 @@ export default function GenelReport({
                   hizmetler.map((h, i) => {
                     const isAkr = String(h.Akreditasyon || "").trim().toLowerCase() === "var";
                     const deg = degerlendirmeLabel(h.Degerlendirme);
+                    const alt = h.altParametreler || [];
                     return (
-                      <tr key={i}>
-                        <td style={{paddingRight:10 }}>
-                          {isAkr ? "*" : ""}{h.Ad}
-                        </td>
-                        <td className="center">{h.Birim || "-"}</td>
-                        <td className="center">{h.Sonuc || "-"}</td>
-                        <td className="center" style={{ paddingLeft: 5 }}>{h.LOQ || "-"}</td>
-                        <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
-                        <td className="center" style={{ paddingLeft: 5 }}>{h.Metot || "-"}</td>
-                        <td className="center">{h.LimitDeger || "-"}</td>
-                        <td className={deg.cls} style={{textAlign:"center"}}>{deg.text}</td>
-                      </tr>
+                      <Fragment key={i}>
+                        <tr>
+                          <td style={{paddingRight:10 }}>
+                            {isAkr ? "*" : ""}{h.Ad}
+                          </td>
+                          <td className="center">{h.Birim || "-"}</td>
+                          <td className="center">{h.Sonuc || "-"}</td>
+                          <td className="center" style={{ paddingLeft: 5 }}>{h.LOQ || "-"}</td>
+                          <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
+                          <td className="center" style={{ paddingLeft: 5 }}>{h.Metot || "-"}</td>
+                          <td className="center">{h.LimitDeger || "-"}</td>
+                          <td className={deg.cls} style={{textAlign:"center"}}>{deg.text}</td>
+                        </tr>
+                        {/* Alt parametreler — ana analizin altında, girintili bileşen satırları */}
+                        {alt.map((ap, j) => {
+                          const adeg = degerlendirmeLabel(ap.Degerlendirme || null);
+                          return (
+                            <tr key={`${i}-alt-${j}`} className="alt-param-row">
+                              <td style={{ paddingLeft: 18, paddingRight: 10 }}>↳ {ap.BilesenAdi || "-"}</td>
+                              <td className="center">{ap.Birim || "-"}</td>
+                              <td className="center">{ap.Sonuc || "-"}</td>
+                              <td className="center" style={{ paddingLeft: 5 }}>{ap.LOQ || "-"}</td>
+                              <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
+                              <td className="center" style={{ paddingLeft: 5 }}>-</td>
+                              <td className="center">{ap.Limit || "-"}</td>
+                              <td className={adeg.cls} style={{ textAlign: "center" }}>{ap.Degerlendirme ? adeg.text : "-"}</td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
                     );
                   })
                 )}
