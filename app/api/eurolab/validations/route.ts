@@ -35,11 +35,11 @@ async function ensureValidationSchema() {
 
         CREATE TABLE IF NOT EXISTS eurolab_validations (
             id SERIAL PRIMARY KEY,
-            code VARCHAR(40) UNIQUE,
-            title VARCHAR(255) NOT NULL,
+            code TEXT UNIQUE,
+            title TEXT NOT NULL,
             method_id INTEGER REFERENCES eurolab_methods(id) ON DELETE CASCADE,
-            study_type VARCHAR(50),
-            status VARCHAR(30) DEFAULT 'IN_PROGRESS',
+            study_type TEXT,
+            status TEXT DEFAULT 'IN_PROGRESS',
             planned_start_date DATE,
             planned_end_date DATE,
             study_date DATE DEFAULT CURRENT_DATE,
@@ -52,7 +52,7 @@ async function ensureValidationSchema() {
         DO $$
         BEGIN
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eurolab_validations' AND column_name='code') THEN
-                ALTER TABLE eurolab_validations ADD COLUMN code VARCHAR(40) UNIQUE;
+                ALTER TABLE eurolab_validations ADD COLUMN code TEXT UNIQUE;
             END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eurolab_validations' AND column_name='planned_start_date') THEN
                 ALTER TABLE eurolab_validations ADD COLUMN planned_start_date DATE;
@@ -63,6 +63,24 @@ async function ensureValidationSchema() {
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eurolab_validations' AND column_name='config') THEN
                 ALTER TABLE eurolab_validations ADD COLUMN config JSONB DEFAULT '{}'::jsonb;
             END IF;
+        END $$;
+    `);
+
+    // Mevcut VARCHAR(40) / VARCHAR(255) / VARCHAR(50) / VARCHAR(30) kolonları TEXT'e
+    // genişlet — eski şemalardan kalan 255 char sınırı uzun metot isimlerinde
+    // 'value too long' hatası veriyordu. Idempotent: zaten TEXT ise no-op.
+    await query(`
+        DO $$
+        BEGIN
+            BEGIN
+                ALTER TABLE eurolab_validations ALTER COLUMN code TYPE TEXT;
+                ALTER TABLE eurolab_validations ALTER COLUMN title TYPE TEXT;
+                ALTER TABLE eurolab_validations ALTER COLUMN study_type TYPE TEXT;
+                ALTER TABLE eurolab_validations ALTER COLUMN status TYPE TEXT;
+            EXCEPTION WHEN OTHERS THEN
+                -- Zaten TEXT veya başka bir nedenden değiştirilemiyorsa sessizce geç
+                NULL;
+            END;
         END $$;
     `);
 }
@@ -151,7 +169,9 @@ export async function POST(request: Request) {
                         THEN TRIM(c.method_code) || '-Ek.' || (SELECT next_no::text FROM next_ek)
                     ELSE 'VAL-' || EXTRACT(YEAR FROM CURRENT_DATE)::text || '-' || LPAD(nextval('eurolab_validation_code_seq')::text, 3, '0')
                 END,
-                c.name || ' Validasyonu',
+                -- Title eski şemada VARCHAR(255). Schema TEXT'e migrate edilmemişse
+                -- güvenlik için 250 karaktere kırp (uzun metot adı taşmasın).
+                LEFT(c.name || ' Validasyonu', 250),
                 c.method_id,
                 $2,
                 'NEW',
