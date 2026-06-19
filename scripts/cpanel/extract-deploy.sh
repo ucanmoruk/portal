@@ -36,12 +36,16 @@ if ! tar -xzf "$TARBALL" -C "$STAGING"; then
   exit 1
 fi
 
-rsync -a --delete \
-  --exclude='_incoming/' \
-  --exclude='.env' \
-  --exclude='.env.local' \
-  --exclude='.env.production' \
-  "$STAGING/" "$DEPLOY_ROOT/"
+# Eski deploy içeriğini sil — _incoming/ ve .env* korunur
+find "$DEPLOY_ROOT" -mindepth 1 -maxdepth 1 \
+  ! -name '_incoming' \
+  ! -name '.env' \
+  ! -name '.env.local' \
+  ! -name '.env.production' \
+  -exec rm -rf {} +
+
+# Yeni içeriği kopyala (gizli dosyalar dahil)
+cp -R "$STAGING/." "$DEPLOY_ROOT/"
 
 mkdir -p "$DEPLOY_ROOT/tmp"
 touch "$DEPLOY_ROOT/tmp/restart.txt"
