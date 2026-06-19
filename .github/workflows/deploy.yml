@@ -1,0 +1,74 @@
+name: Deploy to cPanel via FTP (lab.uniqueanalyse.com)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+
+      - name: Build (Next.js standalone)
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+
+      - name: Assemble deploy bundle
+        run: |
+          set -euo pipefail
+          rm -rf deploy
+          mkdir -p deploy
+          # Standalone server.js + minimal node_modules
+          cp -r .next/standalone/. deploy/
+          # Static assets ve public/ standalone'a dahil edilmez, ayrıca taşınır
+          mkdir -p deploy/.next/static
+          cp -r .next/static/. deploy/.next/static/
+          mkdir -p deploy/public
+          cp -r public/. deploy/public/
+          # Passenger restart marker — her build'de mtime/içerik değişsin diye timestamp yaz
+          mkdir -p deploy/tmp
+          date -u +"%Y-%m-%dT%H:%M:%SZ build:${GITHUB_SHA}" > deploy/tmp/restart.txt
+          echo "Bundle hazır: $(du -sh deploy | cut -f1), dosya sayısı: $(find deploy -type f | wc -l)"
+
+      - name: FTP Deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          local-dir: ./deploy/
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          # İlk deploy'da state file yok → tüm dosyaları yükler.
+          # Sonraki deploy'larda sadece değişenleri yükler.
+          state-name: .ftp-deploy-sync-state.json
+          # Sunucudaki bu kalıplar dokunulmadan bırakılır
+          exclude: |
+            **/.env
+            **/.env.local
+            **/.env.production
+            **/.ftp-deploy-sync-state.json
+            **/logs/**
+            **/.well-known/**
