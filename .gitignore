@@ -68,3 +68,10 @@ data/*.local.json
 **/verify-auth.js
 gen_onboarding.js
 portal/
+
+# Geçici/debug scriptler ve veri dökümleri (underscore prefix konvansiyonu)
+scripts/_*
+# Scratch export çıktıları (PDF/örnek dosyalar)
+export/
+# Kazara oluşan kopya dosyalar (" copy.tsx" vb.)
+**/*\ copy.*
