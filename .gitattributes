@@ -1,0 +1,9 @@
+* text=auto
+
+# Shell scripts cPanel/Linux sunucularında çalıştığı için her zaman LF olmalı.
+*.sh text eol=lf
+*.bash text eol=lf
+
+# YAML konfigürasyonları (GitHub Actions, vs.) — LF
+*.yml text eol=lf
+*.yaml text eol=lf
