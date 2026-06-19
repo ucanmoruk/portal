@@ -1,4 +1,4 @@
-name: Deploy to cPanel via FTP (lab.uniqueanalyse.com)
+name: Deploy to cPanel via FTP tarball (lab.uniqueanalyse.com)
 
 on:
   push:
@@ -39,36 +39,45 @@ jobs:
           set -euo pipefail
           rm -rf deploy
           mkdir -p deploy
-          # Standalone server.js + minimal node_modules
           cp -r .next/standalone/. deploy/
-          # Static assets ve public/ standalone'a dahil edilmez, ayrıca taşınır
           mkdir -p deploy/.next/static
           cp -r .next/static/. deploy/.next/static/
           mkdir -p deploy/public
           cp -r public/. deploy/public/
-          # Passenger restart marker — her build'de mtime/içerik değişsin diye timestamp yaz
           mkdir -p deploy/tmp
           date -u +"%Y-%m-%dT%H:%M:%SZ build:${GITHUB_SHA}" > deploy/tmp/restart.txt
-          echo "Bundle hazır: $(du -sh deploy | cut -f1), dosya sayısı: $(find deploy -type f | wc -l)"
 
-      - name: FTP Deploy
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          port: 21
-          local-dir: ./deploy/
-          server-dir: ${{ secrets.FTP_SERVER_DIR }}
-          # İlk deploy'da state file yok → tüm dosyaları yükler.
-          # Sonraki deploy'larda sadece değişenleri yükler.
-          state-name: .ftp-deploy-sync-state.json
-          # Sunucudaki bu kalıplar dokunulmadan bırakılır
-          exclude: |
-            **/.env
-            **/.env.local
-            **/.env.production
-            **/.ftp-deploy-sync-state.json
-            **/logs/**
-            **/.well-known/**
+      - name: Create tarball
+        run: |
+          set -euo pipefail
+          tar -czf deploy.tar.gz -C deploy .
+          ls -lh deploy.tar.gz
+          echo "Files in tarball: $(tar -tzf deploy.tar.gz | wc -l)"
+
+      - name: Install lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      - name: Upload tarball via FTP (atomic rename)
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_INCOMING_DIR: ${{ secrets.FTP_SERVER_DIR }}_incoming
+        run: |
+          set -euo pipefail
+          lftp -c "
+            set ftp:ssl-allow no;
+            set net:timeout 60;
+            set net:max-retries 3;
+            set net:reconnect-interval-base 10;
+            set ftp:passive-mode on;
+            set xfer:clobber on;
+            open ftp://$FTP_SERVER;
+            user '$FTP_USERNAME' '$FTP_PASSWORD';
+            mkdir -p '$FTP_INCOMING_DIR';
+            cd '$FTP_INCOMING_DIR';
+            put deploy.tar.gz -o deploy.tar.gz.uploading;
+            mv deploy.tar.gz.uploading deploy.tar.gz;
+            bye;
+          "
+          echo "Tarball yüklendi → sunucudaki cron 1 dk içinde extract eder."
