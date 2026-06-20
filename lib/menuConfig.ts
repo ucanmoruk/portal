@@ -89,6 +89,17 @@ export const MENU_TREE: MenuItem[] = [
     ],
   },
   { key: "laboratuvar.root-kozmetik", label: "Root Kozmetik", href: "/laboratuvar/root-kozmetik" },
+  {
+    key: "admin",
+    label: "Admin",
+    children: [
+      { key: "admin.yetki-listesi", label: "Yetki Listesi", href: "/admin/yetki-listesi" },
+      { key: "admin.kullanici-listesi", label: "Kullanıcı Listesi", href: "/admin/kullanici-listesi" },
+      { key: "admin.muhasebe", label: "Muhasebe", href: "/admin/muhasebe" },
+      { key: "admin.finans", label: "Finans", href: "/admin/finans" },
+      { key: "admin.ayarlar", label: "Ayarlar", href: "/admin/ayarlar" },
+    ],
+  },
 ];
 
 /** Tüm key'leri düz dizi olarak döner */

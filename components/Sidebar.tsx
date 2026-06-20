@@ -169,10 +169,12 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
   const [openGroups, setOpenGroups] = useState<string[]>(() => openGroupsForPath(pathname));
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpenGroups(openGroupsForPath(pathname));
     close(); // Sayfa değişince mobilde sidebar kapat
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -339,6 +341,12 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
                   >
                     <span className={styles.navSubDot} />
                     Muhasebe
+                  </Link>
+                  <Link href="/admin/finans"
+                    className={`${styles.navSubLink} ${pathname.startsWith("/admin/finans") ? styles.navSubLinkActive : ""}`}
+                  >
+                    <span className={styles.navSubDot} />
+                    Finans
                   </Link>
                   <Link href="/admin/ayarlar"
                     className={`${styles.navSubLink} ${pathname.startsWith("/admin/ayarlar") ? styles.navSubLinkActive : ""}`}
