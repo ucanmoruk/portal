@@ -571,13 +571,13 @@ export default poolPromise;
 // MySQL'e geçiş: MYSQL_HOST tanımlıysa cosmo/root havuzları MySQL'e gider
 // (cPanel'de massgrup_cosmo MySQL'e taşındı). Tanımsızsa eski MSSQL davranışı
 // korunur — lokal geliştirme veya rollback için.
-const useMysql = hasMysqlConfig();
+// LAZY: instrumentation .env'i yükledikten sonra her erişimde kontrol edilir.
 
 /** Müşteriler + Laboratuvar → MySQL (massgrup_cosmo göçü) | fallback MSSQL */
 export const cosmoPool: PromiseLike<mssql.ConnectionPool> = {
   then: (onfulfilled, onrejected) =>
     Promise.resolve(
-      (useMysql
+      (hasMysqlConfig()
         ? new MysqlCompatPool()
         : new ResilientPool(MSSQL_COSMO_DB)) as unknown as mssql.ConnectionPool,
     ).then(onfulfilled, onrejected),

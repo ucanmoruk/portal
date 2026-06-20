@@ -4,6 +4,9 @@
 // bundle'ında process.on statik analizi tetiklenmez (uyarı çıkmaz).
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  // Standalone server.js .env'i otomatik yüklemez — elle yükle (cPanel/Passenger).
+  const { loadDotenvOnce } = await import("./lib/loadDotenv");
+  loadDotenvOnce();
   const { installSocketGuard } = await import("./lib/socketGuard");
   installSocketGuard();
 }
