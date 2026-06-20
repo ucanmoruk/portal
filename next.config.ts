@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  serverExternalPackages: ["nodemailer", "mssql", "jszip", "docx", "pizzip", "docxtemplater"],
+  serverExternalPackages: ["nodemailer", "mssql", "mysql2", "jszip", "docx", "pizzip", "docxtemplater"],
   outputFileTracingIncludes: {
     "/api/urunler/rapor-sablon": ["./node_modules/@sparticuz/chromium/bin/**/*"],
     "/api/eurolab/validations/[id]/pdf": ["./node_modules/@sparticuz/chromium/bin/**/*"],
