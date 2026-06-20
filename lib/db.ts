@@ -24,11 +24,14 @@ const mssqlConfigFor = (database: string): mssql.config => ({
   // 8K+ kayıt × birden fazla join içeren agreg sorgular default 15s'i aşabiliyor.
   // 60s, dashboard sayma/listeleme için gerçekçi tavan.
   requestTimeout: 60000,
-  connectionTimeout: 30000,
+  // HIZLI-FAIL: cPanel'den MSSQL'e erişim yoksa (mssql04 ulaşılamaz) istek
+  // 90s (30s×3) yerine ~5s'de hata versin → process birikmesini önler.
+  connectionTimeout: 5000,
   pool: {
-    max: 10,
+    max: 5,
     min: 0,
-    idleTimeoutMillis: 30000,
+    idleTimeoutMillis: 10000,
+    acquireTimeoutMillis: 8000,
   },
   options: {
     encrypt: true,
