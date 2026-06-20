@@ -192,11 +192,34 @@ function convertAlterTable(raw) {
   return cleanupWhitespace(sql);
 }
 
+// Multi-INSERT batch'lerinde her INSERT'in arasına ; koy.
+// String-aware: tek tırnak ('...') içindeki karakterleri görmez.
+function addSemicolonsBetweenInserts(sql) {
+  const out = [];
+  let inString = false;
+  for (let i = 0; i < sql.length; i++) {
+    const c = sql[i];
+    out.push(c);
+    if (c === "'") {
+      if (inString && sql[i + 1] === "'") { // escaped quote ''
+        out.push(sql[i + 1]);
+        i++;
+        continue;
+      }
+      inString = !inString;
+    } else if (c === ")" && !inString) {
+      let j = i + 1;
+      while (j < sql.length && /\s/.test(sql[j])) j++;
+      if (sql.slice(j, j + 6).toUpperCase() === "INSERT") out.push(";");
+    }
+  }
+  return out.join("");
+}
+
 function convertInsert(raw) {
   let sql = raw;
   sql = unbracketTypes(sql);
   sql = transformIdentifiers(sql);
-  // INSERT `X` ile başlayan her satırı INSERT IGNORE INTO `X` yap (multi-INSERT batch'leri için)
   sql = sql.replace(/^\s*INSERT\s+(?:INTO\s+)?(`[^`]+`)/gim, "INSERT IGNORE INTO $1");
   sql = sql.replace(/\bN'/g, "'");
   // MSSQL CAST tipleri MySQL'e uyarla
@@ -207,13 +230,9 @@ function convertInsert(raw) {
   sql = sql.replace(/\bCAST\s*\(([^()]*?)\s+AS\s+(?:N?VarChar)(?:\s*\(\s*\w+\s*\))?\s*\)/gi, "CAST($1 AS CHAR)");
   sql = sql.replace(/\bCAST\s*\(([^()]*?)\s+AS\s+Bit\s*\)/gi, "CAST($1 AS UNSIGNED)");
   sql = sql.replace(/\bCAST\s*\(([^()]*?)\s+AS\s+Money\s*\)/gi, "CAST($1 AS DECIMAL(19,4))");
-  // Her satır ; ile bitsin (MSSQL multi-INSERT GO bloğunda satırlar ;'siz gelir)
-  const lines = sql.split("\n").map((l) => {
-    const t = l.trimEnd();
-    if (t.startsWith("INSERT") && !t.endsWith(";")) return t + ";";
-    return t;
-  });
-  return lines.join("\n").trim();
+  // Multi-INSERT batch'inde aradakilere ; ekle (string-aware, multi-line güvenli)
+  sql = addSemicolonsBetweenInserts(sql);
+  return sql.trim();
 }
 
 function convertCreateView(raw) {
