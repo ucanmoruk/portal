@@ -59,6 +59,12 @@ app/(dashboard)/laboratuvar/lab-crm/
 **/Untitled-*
 tmp/
 .tmp/
+
+# MSSQL/MySQL dump dosyaları — 250+ MB, repo'da yer kaplar
+migrations/massgrup_*.sql
+migrations/mysql-out/
+migrations/*-export.sql
+migrations/*-dump.sql
 dev*.log
 .next-dev*.log
 data/*.local.json
