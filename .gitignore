@@ -81,3 +81,4 @@ scripts/_*
 export/
 # Kazara oluşan kopya dosyalar (" copy.tsx" vb.)
 **/*\ copy.*
+migrations/uniqueanalyse_unipo.sql
