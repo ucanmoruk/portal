@@ -35,6 +35,8 @@ if [ ! -f "$CONF" ]; then
   echo "$STAMP HATA: $CONF dosyası yok. Kurulum talimatına bak." >> "$LOG"
   exit 1
 fi
+# CRLF temizle (Windows'tan kopyalandıysa)
+sed -i 's/\r$//' "$CONF"
 # shellcheck disable=SC1090
 source "$CONF"
 

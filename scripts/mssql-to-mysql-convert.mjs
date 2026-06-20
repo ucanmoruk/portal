@@ -91,12 +91,51 @@ function transformTypes(sql) {
   return sql;
 }
 
+// String-aware bracket→backtick dönüşümü.
+// MSSQL `[Identifier]` → MySQL `` `Identifier` ``, AMA tek tırnaklı string
+// literal'lerin ('...') içindeki [ ] karakterlerine ASLA dokunmaz.
+// Regex'le yapmak tehlikeli: bir string değeri içindeki tek bir `[` karakteri,
+// `/\[([^\]]+)\]/` ile bir sonraki `]`'ye kadar her şeyi yutar ve identifier'ları bozar.
+function bracketsToBackticks(sql) {
+  let out = "";
+  let inString = false;
+  for (let i = 0; i < sql.length; i++) {
+    const c = sql[i];
+    if (inString) {
+      out += c;
+      if (c === "'") {
+        if (sql[i + 1] === "'") { out += sql[i + 1]; i++; continue; } // '' escape
+        inString = false;
+      }
+      continue;
+    }
+    if (c === "'") { inString = true; out += c; continue; }
+    if (c === "[") {
+      // Kapanış ']' bul (string dışında, identifier içinde ] olmaz)
+      const close = sql.indexOf("]", i + 1);
+      if (close !== -1) {
+        const ident = sql.slice(i + 1, close);
+        // İçinde newline/tırnak yoksa geçerli identifier say
+        if (!/['\n]/.test(ident)) {
+          out += "`" + ident + "`";
+          i = close;
+          continue;
+        }
+      }
+      out += c; // geçersiz, olduğu gibi bırak
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
+
 function transformIdentifiers(sql) {
-  // [schema].[X] → `X`  (schema bilgisini at)
-  sql = sql.replace(/\[[A-Za-z_][\w]*\]\.\[([^\]]+)\]/g, "`$1`");
-  // [X] → `X`
-  sql = sql.replace(/\[([^\]]+)\]/g, "`$1`");
-  // schema.X (bare prefix) → X  (dbo., cosmoroot. vb.)
+  // String-aware bracket dönüşümü (regex YERINE — string içi [ ] güvenli)
+  sql = bracketsToBackticks(sql);
+  // `schema`.`X` → `X`  (schema prefix'ini at)
+  sql = sql.replace(/`(?:dbo|cosmoroot)`\.`([^`]+)`/gi, "`$1`");
+  // schema.X (backtick'siz bare prefix) → X
   sql = sql.replace(/\b(dbo|cosmoroot)\.(`?[A-Za-z_][\w]*`?)/gi, "$2");
   return sql;
 }
@@ -231,10 +270,12 @@ function convertInsert(raw) {
       return true;
     })
     .join("\n");
-  sql = unbracketTypes(sql);
+  // INSERT'lerde tip tanımı yok → unbracketTypes ÇAĞIRMA (string değer içindeki
+  // [int]/[date] gibi metinleri bozar). Sadece string-aware identifier dönüşümü.
   sql = transformIdentifiers(sql);
   sql = sql.replace(/^\s*INSERT\s+(?:INTO\s+)?(`[^`]+`)/gim, "INSERT IGNORE INTO $1");
-  sql = sql.replace(/\bN'/g, "'");
+  // N'unicode' prefix'ini at — sadece string AÇILIŞINDA (önünde ( , veya boşluk)
+  sql = sql.replace(/([(,]\s*)N'/g, "$1'");
   // MSSQL CAST tipleri MySQL'e uyarla
   sql = sql.replace(/\bCAST\s*\(([^()]*?)\s+AS\s+SmallDateTime\s*\)/gi, "CAST($1 AS DATETIME)");
   sql = sql.replace(/\bCAST\s*\(([^()]*?)\s+AS\s+DateTime2(?:\s*\(\s*\d+\s*\))?\s*\)/gi, "CAST($1 AS DATETIME(6))");
