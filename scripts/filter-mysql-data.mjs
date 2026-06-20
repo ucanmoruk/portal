@@ -41,10 +41,10 @@ function flushStatement(stmt) {
     return;
   }
   const table = m[1];
-  if (existing.has(table.toLowerCase())) {
-    skipped++;
-    return;
-  }
+  // ÖNEMLİ: Mevcut 27 tablonun INSERT'lerini ATLAMA. INSERT IGNORE zaten var olan
+  // satırları (PK çakışması) korur, YENİ satırları ekler. Atlamak, dump'taki yeni
+  // kayıtların (örn NKR 26279-26283) kaybolmasına yol açıyordu. Sadece raporla.
+  if (existing.has(table.toLowerCase())) skipped++;
   let s = trimmed;
   if (!s.endsWith(";")) s += ";";
   out.write(s + "\n");
