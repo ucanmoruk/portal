@@ -196,11 +196,16 @@ function convertInsert(raw) {
   let sql = raw;
   sql = unbracketTypes(sql);
   sql = transformIdentifiers(sql);
-  // INSERT `X` → INSERT IGNORE INTO `X`
-  sql = sql.replace(/^\s*INSERT\s+(?:INTO\s+)?(`[^`]+`)/i, "INSERT IGNORE INTO $1");
-  // N'...' → '...'
+  // INSERT `X` ile başlayan her satırı INSERT IGNORE INTO `X` yap (multi-INSERT batch'leri için)
+  sql = sql.replace(/^\s*INSERT\s+(?:INTO\s+)?(`[^`]+`)/gim, "INSERT IGNORE INTO $1");
   sql = sql.replace(/\bN'/g, "'");
-  return sql.trim();
+  // Her satır ; ile bitsin (MSSQL multi-INSERT GO bloğunda satırlar ;'siz gelir)
+  const lines = sql.split("\n").map((l) => {
+    const t = l.trimEnd();
+    if (t.startsWith("INSERT") && !t.endsWith(";")) return t + ";";
+    return t;
+  });
+  return lines.join("\n").trim();
 }
 
 function convertCreateView(raw) {
