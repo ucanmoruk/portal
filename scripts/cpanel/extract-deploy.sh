@@ -36,12 +36,14 @@ if ! tar -xzf "$TARBALL" -C "$STAGING"; then
   exit 1
 fi
 
-# Eski deploy içeriğini sil — _incoming/ ve .env* korunur
+# Eski deploy içeriğini sil — cPanel/Passenger dosyaları ve env korunur
 find "$DEPLOY_ROOT" -mindepth 1 -maxdepth 1 \
   ! -name '_incoming' \
   ! -name '.env' \
   ! -name '.env.local' \
   ! -name '.env.production' \
+  ! -name '.htaccess' \
+  ! -name '.well-known' \
   -exec rm -rf {} +
 
 # Yeni içeriği kopyala (gizli dosyalar dahil)
