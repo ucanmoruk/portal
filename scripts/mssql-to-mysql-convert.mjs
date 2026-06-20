@@ -199,6 +199,14 @@ function convertInsert(raw) {
   // INSERT `X` ile başlayan her satırı INSERT IGNORE INTO `X` yap (multi-INSERT batch'leri için)
   sql = sql.replace(/^\s*INSERT\s+(?:INTO\s+)?(`[^`]+`)/gim, "INSERT IGNORE INTO $1");
   sql = sql.replace(/\bN'/g, "'");
+  // MSSQL CAST tipleri MySQL'e uyarla
+  sql = sql.replace(/\bCAST\s*\(([^()]*?)\s+AS\s+SmallDateTime\s*\)/gi, "CAST($1 AS DATETIME)");
+  sql = sql.replace(/\bCAST\s*\(([^()]*?)\s+AS\s+DateTime2(?:\s*\(\s*\d+\s*\))?\s*\)/gi, "CAST($1 AS DATETIME(6))");
+  sql = sql.replace(/\bCAST\s*\(([^()]*?)\s+AS\s+DateTime\s*\)/gi, "CAST($1 AS DATETIME)");
+  sql = sql.replace(/\bCAST\s*\(([^()]*?)\s+AS\s+UniqueIdentifier\s*\)/gi, "CAST($1 AS CHAR(36))");
+  sql = sql.replace(/\bCAST\s*\(([^()]*?)\s+AS\s+(?:N?VarChar)(?:\s*\(\s*\w+\s*\))?\s*\)/gi, "CAST($1 AS CHAR)");
+  sql = sql.replace(/\bCAST\s*\(([^()]*?)\s+AS\s+Bit\s*\)/gi, "CAST($1 AS UNSIGNED)");
+  sql = sql.replace(/\bCAST\s*\(([^()]*?)\s+AS\s+Money\s*\)/gi, "CAST($1 AS DECIMAL(19,4))");
   // Her satır ; ile bitsin (MSSQL multi-INSERT GO bloğunda satırlar ;'siz gelir)
   const lines = sql.split("\n").map((l) => {
     const t = l.trimEnd();
