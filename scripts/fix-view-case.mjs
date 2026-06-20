@@ -32,7 +32,7 @@ const schema = readFileSync(schemaPath, "utf8");
 // VIEW body'lerini parse et — CREATE [OR REPLACE] VIEW `X` AS ... ;
 const fixedParts = [];
 let cursor = 0;
-const viewRe = /(CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+`[^`]+`\s+AS)([\s\S]*?)(?=;\s*\n)/gi;
+const viewRe = /(CREATE\s+(?:OR\s+REPLACE\s+)?(?:SQL\s+SECURITY\s+\w+\s+)?VIEW\s+`[^`]+`\s+AS)([\s\S]*?)(?=;\s*\n)/gi;
 
 let viewCount = 0;
 let replaceCount = 0;

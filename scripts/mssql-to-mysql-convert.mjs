@@ -297,6 +297,10 @@ function convertCreateView(raw) {
   sql = transformDefaults(sql);
   // MSSQL'e özgü görüş eklerini at
   sql = sql.replace(/\s+WITH\s+(SCHEMABINDING|VIEW_METADATA|ENCRYPTION)\b/gi, "");
+  // SQL SECURITY INVOKER: view, sorgulayan kullanıcının yetkisiyle çalışsın.
+  // Aksi halde DEFINER güvenliği (varsayılan) ile import eden kullanıcıya bağlanır;
+  // app farklı kullanıcıyla sorgulayınca "access denied" alır.
+  sql = sql.replace(/^CREATE\s+VIEW\b/i, "CREATE OR REPLACE SQL SECURITY INVOKER VIEW");
   // [Alias With Space] zaten `Alias With Space` oldu — MySQL kabul eder
   return cleanupWhitespace(sql);
 }
@@ -334,6 +338,18 @@ function flushStatement() {
   const { rest } = splitLeadingNoise(joined);
   const raw = rest.trim();
   if (!raw) return;
+
+  // ÖNEMLİ: Batch içinde INSERT varsa (SET IDENTITY_INSERT ON/OFF ile sarılı
+  // olabilir — IDENTITY kolonlu tablolarda SSMS böyle üretir), tüm batch'i ATMA.
+  // convertInsert SET satırlarını temizleyip INSERT'leri işler. Bu kontrol skip
+  // bloğundan ÖNCE olmalı; aksi halde "SET IDENTITY_INSERT" ile başlayan batch
+  // komple atlanıp veri kaybı oluyor (örn NumuneX3: 50 satır kayboldu).
+  if (/^\s*INSERT\s+(?:INTO\s+)?[[`]/im.test(raw)) {
+    const converted = convertInsert(raw);
+    if (converted) dataOut.write(converted + ";\n\n");
+    stats.inserts++;
+    return;
+  }
 
   // DB-yönetim, kullanıcı, schema, fulltext, statistics → skip
   if (

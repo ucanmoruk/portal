@@ -30,7 +30,7 @@ for (const m of existingSql.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?
 // ── 1) Çakışan VIEW'ları çıkar (mevcutta tablo olarak duranlar) ─────────────
 let removedViews = 0;
 content = content.replace(
-  /CREATE\s+OR\s+REPLACE\s+VIEW\s+`([^`]+)`[\s\S]*?;\n/gi,
+  /CREATE\s+(?:OR\s+REPLACE\s+)?(?:SQL\s+SECURITY\s+\w+\s+)?VIEW\s+`([^`]+)`[\s\S]*?;\n/gi,
   (full, name) => {
     if (existingNames.has(name.toLowerCase())) { removedViews++; return ""; }
     return full;
@@ -61,7 +61,7 @@ content = content.replace(
 
 // ── 4) View alias case normalize ────────────────────────────────────────────
 content = content.replace(
-  /CREATE\s+OR\s+REPLACE\s+VIEW\s+`[^`]+`[\s\S]*?;\n/gi,
+  /CREATE\s+(?:OR\s+REPLACE\s+)?(?:SQL\s+SECURITY\s+\w+\s+)?VIEW\s+`[^`]+`[\s\S]*?;\n/gi,
   (view) => {
     const aliases = new Set();
     for (const m of view.matchAll(/`[^`]+`(?:\s+AS)?\s+(\w+)\b/gi)) {
@@ -80,11 +80,11 @@ content = content.replace(
 const firstCreate = content.search(/^CREATE\b/m);
 const header = firstCreate >= 0 ? content.slice(0, firstCreate) : "";
 const body = firstCreate >= 0 ? content.slice(firstCreate) : content;
-const stmts = body.match(/CREATE\s+(?:TABLE|OR\s+REPLACE\s+VIEW|VIEW|(?:UNIQUE\s+)?INDEX)[\s\S]*?;\n/gi) || [];
+const stmts = body.match(/CREATE\s+(?:TABLE|(?:OR\s+REPLACE\s+)?(?:SQL\s+SECURITY\s+\w+\s+)?VIEW|(?:UNIQUE\s+)?INDEX)[\s\S]*?;\n/gi) || [];
 const tables = [], indexes = [], views = [];
 for (const s of stmts) {
   if (/^CREATE\s+TABLE\b/i.test(s)) tables.push(s);
-  else if (/^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\b/i.test(s)) views.push(s);
+  else if (/^CREATE\s+(?:OR\s+REPLACE\s+)?(?:SQL\s+SECURITY\s+\w+\s+)?VIEW\b/i.test(s)) views.push(s);
   else if (/^CREATE\s+(?:UNIQUE\s+)?INDEX/i.test(s)) indexes.push(s);
 }
 content = header + tables.join("") + "\n" + indexes.join("") + "\n" + views.join("") +
