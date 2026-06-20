@@ -42,12 +42,31 @@ const mssqlConfigFor = (database: string): mssql.config => ({
 // Her MSSQL veritabanı için ayrı, cache'lenen bağlantı havuzu.
 const mssqlPools = new Map<string, Promise<mssql.ConnectionPool>>();
 
+// ── Circuit breaker ──────────────────────────────────────────────────────────
+// MSSQL sunucusu erişilemezse (cPanel→mssql04 ulaşamıyor) her istek 5s timeout
+// bekleyip process meşgul ediyor; istekler birikince hesabın process limiti
+// doluyor ve TÜM site (login dahil) kilitleniyor. Breaker: ardarda fail'den
+// sonra COOLDOWN boyunca HİÇ bağlanmayı denemez, anında hata döner → process
+// birikmez. Cooldown bitince tek deneme (half-open) yapar.
+const CB_COOLDOWN_MS = 30_000;
+const cbState = new Map<string, { failedAt: number }>();
+
 const getMssqlPoolFor = (database: string) => {
   if (!process.env.DB_SERVER || !process.env.DB_USER) {
     throw new Error("MSSQL environment variables are missing. Set DB_SERVER, DB_USER and DB_PASSWORD.");
   }
   if (!database) {
     throw new Error("MSSQL database name is empty.");
+  }
+
+  // Breaker açıksa (yakın zamanda fail) — bağlanmayı DENEME, anında hata ver.
+  const cb = cbState.get(database);
+  if (cb && Date.now() - cb.failedAt < CB_COOLDOWN_MS) {
+    throw new Error(
+      `MSSQL (${database}) circuit-breaker açık — son ${Math.round(
+        (Date.now() - cb.failedAt) / 1000,
+      )}s önce erişilemedi, ${Math.round(CB_COOLDOWN_MS / 1000)}s cooldown.`,
+    );
   }
 
   let connection = mssqlPools.get(database);
@@ -83,6 +102,7 @@ function createFreshPool(database: string): Promise<mssql.ConnectionPool> {
     try {
       const pool = await new mssql.ConnectionPool(mssqlConfigFor(database)).connect();
       console.log(`MSSQL veritabanina baglanildi: ${database}`);
+      cbState.delete(database); // başarı → breaker'ı kapat
       const cachedRef = mssqlPools.get(database);
       const invalidate = (reason: string) => (err?: unknown) => {
         console.log(`MSSQL pool invalidated (${database}, ${reason}):`, err);
@@ -103,8 +123,9 @@ function createFreshPool(database: string): Promise<mssql.ConnectionPool> {
     }
   };
   const p = attempt(1).catch((err) => {
-    // Başarısız pool'u cache'te bırakma
+    // Başarısız pool'u cache'te bırakma + breaker'ı aç (cooldown başlat)
     if (mssqlPools.get(database) === p) mssqlPools.delete(database);
+    cbState.set(database, { failedAt: Date.now() });
     throw err;
   });
   return p;
