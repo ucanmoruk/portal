@@ -107,6 +107,34 @@ function fmt(n: number | null | undefined) {
   return n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function fmtLogDate(value: unknown) {
+  if (value == null || value === "") return "-";
+  const raw = String(value).trim();
+  if (/^\d{2}\.\d{2}\.\d{4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?$/.test(raw)) return raw;
+
+  const digits = raw.replace(/\D/g, "");
+  if (/^20\d{12}$/.test(digits)) {
+    return `${digits.slice(6, 8)}.${digits.slice(4, 6)}.${digits.slice(0, 4)} ${digits.slice(8, 10)}:${digits.slice(10, 12)}:${digits.slice(12, 14)}`;
+  }
+  if (/^20\d{6}$/.test(digits)) {
+    return `${digits.slice(6, 8)}.${digits.slice(4, 6)}.${digits.slice(0, 4)}`;
+  }
+
+  const date = new Date(raw);
+  if (!Number.isNaN(date.getTime())) {
+    return date.toLocaleString("tr-TR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
+
+  return raw;
+}
+
 // İç takip no (260200) — opsiyonel revizyon /NN
 function teklifLabel(no: number | null, rev: number) {
   if (!no) return "—";
@@ -508,8 +536,8 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Gönderilemedi.");
       setData(prev => prev.map(x => x.ID === t.ID ? { ...x, TeklifDurum: j.teklifDurum || "Onay Bekleniyor" } : x));
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Gonderilemedi.");
     } finally {
       setPortalSendingId(null);
     }
@@ -823,7 +851,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                                 : "var(--color-text-secondary)";
                               return (
                                 <tr key={log.ID} style={{ borderBottom: "1px solid var(--color-border-light)" }}>
-                                  <td style={{ ...tdStyle, color: "var(--color-text-tertiary)", whiteSpace: "nowrap" }}>{log.Tarih}</td>
+                                  <td style={{ ...tdStyle, color: "var(--color-text-tertiary)", whiteSpace: "nowrap" }}>{fmtLogDate(log.Tarih)}</td>
                                   <td style={{ ...tdStyle, fontWeight: 600, color: aksiyonColor }}>{log.Aksiyon}</td>
                                   <td style={tdStyle}>
                                     <div>{yapan}</div>
@@ -1244,7 +1272,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                           <tbody>
                             {onayLogs.map(log => (
                               <tr key={log.ID}>
-                                <td className={styles.tdMono}>{log.Tarih}</td>
+                                <td className={styles.tdMono}>{fmtLogDate(log.Tarih)}</td>
                                 <td>{log.Aksiyon}</td>
                                 <td>
                                   <div>{log.MusteriAd || "-"}</div>
