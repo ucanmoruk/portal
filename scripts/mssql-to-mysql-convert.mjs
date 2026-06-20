@@ -68,11 +68,11 @@ function unbracketTypes(sql) {
 }
 
 function transformTypes(sql) {
-  sql = sql.replace(/\bNVARCHAR\s*\(\s*MAX\s*\)/gi, "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+  sql = sql.replace(/\bNVARCHAR\s*\(\s*MAX\s*\)/gi, "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_turkish_ci");
   sql = sql.replace(/\bVARCHAR\s*\(\s*MAX\s*\)/gi, "LONGTEXT");
-  sql = sql.replace(/\bNVARCHAR\s*\(\s*(\d+)\s*\)/gi, "VARCHAR($1) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-  sql = sql.replace(/\bNCHAR\s*\(\s*(\d+)\s*\)/gi, "CHAR($1) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-  sql = sql.replace(/\bNTEXT\b/gi, "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+  sql = sql.replace(/\bNVARCHAR\s*\(\s*(\d+)\s*\)/gi, "VARCHAR($1) CHARACTER SET utf8mb4 COLLATE utf8mb4_turkish_ci");
+  sql = sql.replace(/\bNCHAR\s*\(\s*(\d+)\s*\)/gi, "CHAR($1) CHARACTER SET utf8mb4 COLLATE utf8mb4_turkish_ci");
+  sql = sql.replace(/\bNTEXT\b/gi, "LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_turkish_ci");
   sql = sql.replace(/\bDATETIME2\s*(?:\(\s*\d+\s*\))?/gi, "DATETIME(6)");
   sql = sql.replace(/\bSMALLDATETIME\b/gi, "DATETIME");
   sql = sql.replace(/\bDATETIMEOFFSET\s*(?:\(\s*\d+\s*\))?/gi, "DATETIME(6)");
@@ -193,7 +193,7 @@ function appendEngineClause(sql) {
   if (lastClose === -1) return sql;
   const before = sql.slice(0, lastClose);
   const after = sql.slice(lastClose + 1);
-  return `${before}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci${after}`;
+  return `${before}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci${after}`;
 }
 
 // ── Statement convertörleri ────────────────────────────────────────────────

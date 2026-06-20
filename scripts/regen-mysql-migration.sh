@@ -27,7 +27,16 @@ cat "$OUT/00-alter-existing.sql" "$OUT/01-schema.sql" > "$OUT/01-full-schema.sql
 echo "6) Data filtrele (mevcut tabloları atla, multi-line güvenli)"
 node "$ROOT/scripts/filter-mysql-data.mjs" "$OUT/02-data.sql" "$EXIST" "$OUT/02-data-new-tables.sql"
 
-echo "7) Doğrulama"
+echo "7) Collation normalize SQL (tüm tablolar → utf8mb4_turkish_ci)"
+{
+  echo "-- Tüm tabloları utf8mb4_turkish_ci'ye normalize et (schema'dan SONRA çalıştır)"
+  echo "SET FOREIGN_KEY_CHECKS=0;"
+  grep -oE "CREATE TABLE IF NOT EXISTS \`[^\`]+\`" "$OUT/01-schema.sql" \
+    | sed -E "s/CREATE TABLE IF NOT EXISTS \`([^\`]+)\`/ALTER TABLE \`\1\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_turkish_ci;/"
+  echo "SET FOREIGN_KEY_CHECKS=1;"
+} > "$OUT/03-normalize-collation.sql"
+
+echo "8) Doğrulama"
 node "$ROOT/scripts/validate-mysql-sql.mjs" "$OUT/01-full-schema.sql" "$OUT/02-data-new-tables.sql"
 
 echo ""

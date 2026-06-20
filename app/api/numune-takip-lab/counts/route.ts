@@ -32,10 +32,11 @@ export async function GET() {
        WHERE TABLE_SCHEMA IN ('dbo','cosmoroot')
          AND TABLE_NAME IN ('NKR_LabKabul', 'NKR_RaporOnay', 'NKR_RaporDurumOverride')`
     );
-    const tables = new Set<string>(tblRes.recordset.map((r: { TABLE_NAME: string }) => r.TABLE_NAME));
-    hasLabKabul  = tables.has("NKR_LabKabul");
-    hasRaporOnay = tables.has("NKR_RaporOnay");
-    hasOverride  = tables.has("NKR_RaporDurumOverride");
+    // case-insensitive: MySQL lower_case_table_names ayarına bağlı kalmadan eşleşsin
+    const tables = new Set<string>(tblRes.recordset.map((r: { TABLE_NAME: string }) => String(r.TABLE_NAME).toLowerCase()));
+    hasLabKabul  = tables.has("nkr_labkabul");
+    hasRaporOnay = tables.has("nkr_raporonay");
+    hasOverride  = tables.has("nkr_rapordurumoverride");
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Hata";
     console.error("counts: tablo varlık kontrolü hata:", e);

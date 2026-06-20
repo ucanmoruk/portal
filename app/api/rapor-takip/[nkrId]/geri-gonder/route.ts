@@ -36,10 +36,10 @@ export async function POST(
       `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
        WHERE TABLE_SCHEMA IN ('dbo', 'cosmoroot') AND TABLE_NAME IN (${tables.map(t => `'${t}'`).join(",")})`
     );
-    const present = new Set<string>(tblRes.recordset.map((r: any) => r.TABLE_NAME));
+    const present = new Set<string>(tblRes.recordset.map((r: any) => String(r.TABLE_NAME).toLowerCase()));
 
     // Onay (varsa) → sil, geri çek
-    if (present.has("NKR_RaporOnay")) {
+    if (present.has("nkr_raporonay")) {
       await pool.request()
         .input("nkrId", nkrIdNum).input("format", format)
         .query(`
@@ -53,7 +53,7 @@ export async function POST(
     // Bu sayede "Geri Gelenler" tabında görünür, lab orada düzeltip tekrar Onaya Gönderebilir.
 
     // Override → "Geri Gönderildi" set et (DELETE + INSERT) + notlar
-    if (present.has("NKR_RaporDurumOverride")) {
+    if (present.has("nkr_rapordurumoverride")) {
       // Notlar kolonu var mı? (eski override tablosunda olmayabilir)
       const colRes = await pool.request().query(
         `SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
@@ -89,7 +89,7 @@ export async function POST(
       }
     }
 
-    if (present.has("NKR_Log")) {
+    if (present.has("nkr_log")) {
       const aciklama = notlar
         ? `${format} formatı geri gönderildi: ${notlar}`
         : `${format} formatı laboratuvara geri gönderildi (Kabul Bekleyenler'e döner).`;
