@@ -218,6 +218,19 @@ function addSemicolonsBetweenInserts(sql) {
 
 function convertInsert(raw) {
   let sql = raw;
+  // Buffer içine kaçmış MSSQL-only komutlarını sil (SET IDENTITY_INSERT, USE, vb.)
+  sql = sql
+    .split("\n")
+    .filter((l) => {
+      const t = l.trim();
+      if (!t) return false;
+      if (/^SET\s+IDENTITY_INSERT\b/i.test(t)) return false;
+      if (/^SET\s+(ANSI_NULLS|QUOTED_IDENTIFIER|ANSI_PADDING|NOCOUNT|XACT_ABORT|ARITHABORT|CONCAT_NULL_YIELDS_NULL|ANSI_WARNINGS|NUMERIC_ROUNDABORT)\b/i.test(t)) return false;
+      if (/^USE\s+\[/i.test(t)) return false;
+      if (/^GO\s*$/i.test(t)) return false;
+      return true;
+    })
+    .join("\n");
   sql = unbracketTypes(sql);
   sql = transformIdentifiers(sql);
   sql = sql.replace(/^\s*INSERT\s+(?:INTO\s+)?(`[^`]+`)/gim, "INSERT IGNORE INTO $1");
