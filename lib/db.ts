@@ -1,6 +1,7 @@
 import mssql from "mssql";
 import { createPool } from "@vercel/postgres";
 import { installSocketGuard } from "./socketGuard";
+import { MysqlCompatPool, hasMysqlConfig } from "./mysqlCompat";
 
 type InputValue = string | number | boolean | Date | null | undefined | Buffer;
 
@@ -567,18 +568,31 @@ export default poolPromise;
 // Step 1: ADDITIVE — varsayılan poolPromise davranışı değişmez. Route grupları
 // Step 2'de tek tek bu havuzlara taşınacak. Hepsi `await cosmoPool` gibi kullanılır.
 
-/** Müşteriler + Laboratuvar → MSSQL massgrup_cosmo (resilient — lazy retry) */
+// MySQL'e geçiş: MYSQL_HOST tanımlıysa cosmo/root havuzları MySQL'e gider
+// (cPanel'de massgrup_cosmo MySQL'e taşındı). Tanımsızsa eski MSSQL davranışı
+// korunur — lokal geliştirme veya rollback için.
+const useMysql = hasMysqlConfig();
+
+/** Müşteriler + Laboratuvar → MySQL (massgrup_cosmo göçü) | fallback MSSQL */
 export const cosmoPool: PromiseLike<mssql.ConnectionPool> = {
   then: (onfulfilled, onrejected) =>
-    Promise.resolve(new ResilientPool(MSSQL_COSMO_DB) as unknown as mssql.ConnectionPool)
-      .then(onfulfilled, onrejected),
+    Promise.resolve(
+      (useMysql
+        ? new MysqlCompatPool()
+        : new ResilientPool(MSSQL_COSMO_DB)) as unknown as mssql.ConnectionPool,
+    ).then(onfulfilled, onrejected),
 };
 
-/** Spektrotek → MSSQL massgrup_root (resilient — lazy retry) */
+/** RootKullanici lookup (personel adı) → Postgres mirror (login ile aynı kaynak).
+ *  RootKullanici MySQL'e taşınmadı; Neon Postgres mirror'da yaşıyor. MySQL moduna
+ *  geçtiğimizde bile bu havuz Postgres'e gider — fallback MSSQL massgrup_root. */
 export const rootPool: PromiseLike<mssql.ConnectionPool> = {
   then: (onfulfilled, onrejected) =>
-    Promise.resolve(new ResilientPool(MSSQL_ROOT_DB) as unknown as mssql.ConnectionPool)
-      .then(onfulfilled, onrejected),
+    Promise.resolve(
+      (usePostgres
+        ? new PgCompatPool()
+        : new ResilientPool(MSSQL_ROOT_DB)) as unknown as mssql.ConnectionPool,
+    ).then(onfulfilled, onrejected),
 };
 
 /** Formül Kontrol + ÜGD + Root Kozmetik → Neon Postgres (compat).
