@@ -242,7 +242,7 @@ export async function POST(request: Request) {
         return `(${base}${extraVals.length > 0 ? ", " + extraVals.join(", ") : ""})`;
       }).join(", ");
 
-      const colList = `RaporID, AnalizID, Termin, x3ID, Limit, Birim, LimitEn, BirimEn, LOQ, LOQEn${extraCols.length > 0 ? ", " + extraCols.join(", ") : ""}`;
+      const colList = `RaporID, AnalizID, Termin, x3ID, [Limit], Birim, LimitEn, BirimEn, LOQ, LOQEn${extraCols.length > 0 ? ", " + extraCols.join(", ") : ""}`;
       await pool.request().query(`INSERT INTO NumuneX1 (${colList}) VALUES ${values}`);
     }
 

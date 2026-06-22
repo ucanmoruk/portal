@@ -81,7 +81,7 @@ export async function GET(
       pool.request().input("id", nkrId).query(`
         SELECT x1.ID, x1.AnalizID, x1.Termin, x1.x3ID,
                s.Kod, s.Ad, s.Method AS Metot, s.Sure,
-               ISNULL(p.Aciklama, '') AS PaketAd, x1.Limit, x1.Birim,
+               ISNULL(p.Aciklama, '') AS PaketAd, x1.[Limit] AS [Limit], x1.Birim,
                ISNULL(x1.LimitEn, '') AS LimitEn,
                ISNULL(x1.BirimEn, '') AS BirimEn,
                ISNULL(x1.LOQ, '') AS LOQ,
@@ -346,7 +346,7 @@ export async function PUT(
         return `(${base}${extraVals.length > 0 ? ", " + extraVals.join(", ") : ""})`;
       }).join(", ");
 
-      const colList = `RaporID, AnalizID, Termin, x3ID, Limit, Birim, LimitEn, BirimEn, LOQ, LOQEn${extraCols.length > 0 ? ", " + extraCols.join(", ") : ""}`;
+      const colList = `RaporID, AnalizID, Termin, x3ID, [Limit], Birim, LimitEn, BirimEn, LOQ, LOQEn${extraCols.length > 0 ? ", " + extraCols.join(", ") : ""}`;
       await pool.request().query(`INSERT INTO NumuneX1 (${colList}) VALUES ${values}`);
     }
 

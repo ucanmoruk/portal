@@ -23,7 +23,7 @@ export async function GET(
           s.Ad AS HizmetAd,
           s.Method AS Metot,
           x1.Sonuc,
-          x1.Limit,
+          x1.[Limit] AS [Limit],
           x1.Birim,
           x1.Degerlendirme,
           x1.HizmetDurum

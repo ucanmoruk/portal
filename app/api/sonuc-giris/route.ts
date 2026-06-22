@@ -154,7 +154,7 @@ export async function GET(request: Request) {
           s.Akreditasyon,
           s.Method                                        AS Metot,
           x1.Birim,
-          x1.Limit                                        AS LimitDeger,
+          x1.[Limit]                                      AS LimitDeger,
           x1.Termin,
           x1.Sonuc,
           x1.Degerlendirme,
