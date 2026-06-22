@@ -31,8 +31,8 @@ function toMMYY(s: string): string {
 function degerlendirmeLabel(d: string | null): { text: string; cls: string } {
   if (!d || !d.trim()) return { text: "—", cls: "deg-other" };
   const v = d.trim();
-  if (v === "Uygun") return { text: "GEÇER", cls: "deg-gecer" };
-  if (v === "Uygun Değil") return { text: "KALDI", cls: "deg-kaldi" };
+  if (v === "Uygun") return { text: "UYGUN", cls: "deg-gecer" };
+  if (v === "Uygun Değil") return { text: "UYGUN DEĞİL", cls: "deg-kaldi" };
   return { text: v, cls: "deg-other" };
 }
 

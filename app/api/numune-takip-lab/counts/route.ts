@@ -63,20 +63,29 @@ export async function GET() {
   try {
     const sql = hasLabKabul
       ? `SELECT COUNT(*) AS c FROM (
-           SELECT DISTINCT n.ID AS NkrID, s.RaporFormati
+           SELECT DISTINCT n.ID AS NkrID, COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') AS RaporFormati
            FROM NKR n
            INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
            INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-             AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
-           LEFT JOIN NKR_LabKabul k ON k.NkrID = n.ID AND k.RaporFormati = s.RaporFormati
-           WHERE n.Durum = 'Aktif' AND k.ID IS NULL
+           LEFT JOIN NKR_LabKabul k ON k.NkrID = n.ID AND k.RaporFormati = COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')
+           WHERE n.Durum = 'Aktif'
+             AND (
+               k.ID IS NULL
+               OR EXISTS (
+                 SELECT 1
+                 FROM NumuneX1 nx
+                 INNER JOIN StokAnalizListesi ns ON ns.ID = nx.AnalizID
+                 WHERE nx.RaporID = n.ID
+                   AND COALESCE(NULLIF(ns.RaporFormati, ''), N'Genel') = COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')
+                   AND nx.HizmetDurum IN (N'Yeni', N'YeniAnaliz', N'Yeni Analiz')
+               )
+             )
          ) t`
       : `SELECT COUNT(*) AS c FROM (
-           SELECT DISTINCT n.ID AS NkrID, s.RaporFormati
+           SELECT DISTINCT n.ID AS NkrID, COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') AS RaporFormati
            FROM NKR n
            INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
            INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-             AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
            WHERE n.Durum = 'Aktif'
          ) t`;
     const req = pool.request();

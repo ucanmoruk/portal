@@ -48,7 +48,7 @@ const EMPTY_ALT: AltParametre = {
   LOQ: "", LOQEn: "", Limit: "", LimitEn: "",
 };
 
-interface Birim { ID: number; Birim: string; }
+interface Birim { ID: number | null; Birim: string; }
 
 const RAPOR_FORMATLARI = ["Genel", "Stabilite", "Challenge", "Claim", "ÜGDR", "Diğer"] as const;
 
@@ -630,7 +630,11 @@ export default function HizmetTable() {
                       onChange={e => setEditRow(p => ({ ...p!, BolumID: e.target.value ? Number(e.target.value) : null }))}
                     >
                       <option value="">— Seçilmedi —</option>
-                      {filtered.map(b => <option key={b.ID} value={b.ID}>{b.Birim}</option>)}
+                      {filtered.map(b => (
+                        <option key={b.ID ?? b.Birim} value={b.ID ?? ""} disabled={b.ID == null}>
+                          {b.Birim}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 );

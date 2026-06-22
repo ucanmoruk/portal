@@ -57,7 +57,7 @@ export async function GET(
         INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
         ${bolumJoin}
         WHERE x1.RaporID = @nkrId
-          AND s.RaporFormati = @raporFormati
+          AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @raporFormati
         ORDER BY s.Kod
       `);
 

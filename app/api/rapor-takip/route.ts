@@ -97,10 +97,12 @@ export async function GET(request: Request) {
       ? `AND MaxTermin IS NOT NULL AND YEAR(CONVERT(date, MaxTermin)) = @year`
       : "";
 
+    const raporTuruExpr = "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')";
+
     const raporTuruFilter = ["ÜGDR", "UGDR", "ÜGD", "UGD"].includes(raporTuru.toLocaleUpperCase("tr-TR"))
-      ? `AND UPPER(REPLACE(s.RaporFormati, N'Ü', N'U')) IN (N'UGDR', N'UGD')`
+      ? `AND UPPER(REPLACE(${raporTuruExpr}, N'Ü', N'U')) IN (N'UGDR', N'UGD')`
       : raporTuru
-      ? `AND s.RaporFormati = @raporTuru`
+      ? `AND ${raporTuruExpr} = @raporTuru`
       : "";
 
     const raporDurumuFilter = raporDurumu === "Bekliyor"
@@ -177,8 +179,8 @@ export async function GET(request: Request) {
         n.Numune_Adi,
         f.Ad                                    AS FirmaAd,
         p.Ad                                    AS ProjeAd,
-        s.RaporFormati,
-        UPPER(REPLACE(s.RaporFormati, N'Ü', N'U')) AS NormFmt,
+        ${raporTuruExpr} AS RaporFormati,
+        UPPER(REPLACE(${raporTuruExpr}, N'Ü', N'U')) AS NormFmt,
         CONVERT(varchar(10), n.Tarih, 23) AS KabulTarihi
       INTO #Rap
       FROM NKR n
@@ -187,21 +189,19 @@ export async function GET(request: Request) {
       LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) p  ON p.ID = nd.ProjeID
       INNER JOIN NumuneX1         x1 ON x1.RaporID  = n.ID
       INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
-        AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
-      ${hasLabKabul ? `${acceptedOnly ? "INNER" : "LEFT"} JOIN NKR_LabKabul lk ON lk.NkrID = n.ID AND lk.RaporFormati = s.RaporFormati` : ""}
+      ${hasLabKabul ? `${acceptedOnly ? "INNER" : "LEFT"} JOIN NKR_LabKabul lk ON lk.NkrID = n.ID AND lk.RaporFormati = ${raporTuruExpr}` : ""}
       WHERE n.Durum = 'Aktif'
         ${searchFilter}
         ${raporTuruFilter};
 
-      SELECT x.RaporID AS NkrID, s.RaporFormati,
+      SELECT x.RaporID AS NkrID, ${raporTuruExpr} AS RaporFormati,
         COUNT(*) AS HizmetSayisi,
         SUM(CASE WHEN ${savedCond} THEN 1 ELSE 0 END) AS SonucluSayisi,
         MAX(CONVERT(varchar(10), x.Termin, 23)) AS MaxTermin
       INTO #HS
       FROM NumuneX1 x
       INNER JOIN StokAnalizListesi s ON s.ID = x.AnalizID
-        AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
-      GROUP BY x.RaporID, s.RaporFormati;
+      GROUP BY x.RaporID, ${raporTuruExpr};
 
       ${hasRaporOnay ? `SELECT ro.NkrID, UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U')) AS NormFmt,
         MAX(ro.Durum) AS RaporOnayDurum,

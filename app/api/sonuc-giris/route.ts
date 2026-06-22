@@ -37,10 +37,10 @@ export async function GET(request: Request) {
        WHERE TABLE_NAME = 'NKR_LabKabul' AND TABLE_SCHEMA IN ('dbo', 'cosmoroot')`
     );
     const hasLabKabul = labKabulCheck.recordset.length > 0;
-    const aktifDurumlar = "'Yeni','YeniAnaliz','Devam','Devam Ediyor'";
+    const aktifDurumlar = "'Yeni','YeniAnaliz','Yeni Analiz','Devam','Devam Ediyor'";
     const hizmetDurumPriorityExpr = hasHizmetDurum
       ? `CASE
-          WHEN x1.HizmetDurum IN ('Yeni','YeniAnaliz') THEN 0
+          WHEN x1.HizmetDurum IN ('Yeni','YeniAnaliz','Yeni Analiz') THEN 0
           WHEN x1.HizmetDurum IS NULL OR x1.HizmetDurum IN ('Devam','Devam Ediyor') THEN 1
           WHEN x1.HizmetDurum = 'Tamamlandı' THEN 2
           ELSE 1

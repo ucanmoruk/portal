@@ -41,9 +41,21 @@ export async function GET(request: NextRequest) {
     const notAcceptedJoin = hasKabulTable
       ? `LEFT JOIN NKR_LabKabul k
             ON k.NkrID = n.ID
-           AND k.RaporFormati = s.RaporFormati`
+           AND k.RaporFormati = COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')`
       : "";
-    const notAcceptedWhere = hasKabulTable ? "AND k.ID IS NULL" : "";
+    const notAcceptedWhere = hasKabulTable
+      ? `AND (
+          k.ID IS NULL
+          OR EXISTS (
+            SELECT 1
+            FROM NumuneX1 nx
+            INNER JOIN StokAnalizListesi ns ON ns.ID = nx.AnalizID
+            WHERE nx.RaporID = n.ID
+              AND COALESCE(NULLIF(ns.RaporFormati, ''), N'Genel') = COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')
+              AND nx.HizmetDurum IN (N'Yeni', N'YeniAnaliz', N'Yeni Analiz')
+          )
+        )`
+      : "";
 
     const query = `
       WITH Pending AS (
@@ -55,14 +67,13 @@ export async function GET(request: NextRequest) {
           n.Numune_Adi,
           f.Ad                              AS FirmaAd,
           p.Ad                              AS ProjeAd,
-          s.RaporFormati
+          COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') AS RaporFormati
         FROM NKR n
         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f  ON f.ID = n.Firma_ID
         LEFT JOIN NumuneDetay   nd ON nd.RaporID = n.ID
         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) p  ON p.ID = nd.ProjeID
         INNER JOIN NumuneX1         x1 ON x1.RaporID = n.ID
         INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
-          AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
         ${notAcceptedJoin}
         WHERE n.Durum = 'Aktif'
           ${notAcceptedWhere}

@@ -70,7 +70,7 @@ export async function POST(
           INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
           LEFT JOIN RootFirmaBirim b ON b.ID = s.BolumID
           WHERE x1.RaporID = @nkrId
-            AND s.RaporFormati = @raporFormati
+            AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @raporFormati
             AND s.BolumID IS NOT NULL
           ORDER BY s.Kod
         `);
@@ -116,6 +116,22 @@ export async function POST(
             AND ISNULL(Rapor_Durumu, N'') NOT IN (N'Analiz Aşamasında', N'Raporlandı')
         `);
     }
+
+    await pool.request()
+      .input("NkrID", nkrIdNum)
+      .input("RaporFormati", raporFormati)
+      .query(`
+        UPDATE NumuneX1
+        SET HizmetDurum = N'Devam'
+        WHERE RaporID = @NkrID
+          AND HizmetDurum IN (N'Yeni', N'YeniAnaliz', N'Yeni Analiz')
+          AND EXISTS (
+            SELECT 1
+            FROM StokAnalizListesi s
+            WHERE s.ID = NumuneX1.AnalizID
+              AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @RaporFormati
+          )
+      `);
 
     // ── LOQ otomatik dolum DB'ye yazmıyor ──
     // Önceden Sonuc NULL'lara LOQ yazıyordum ama bu satırı "kayıtlı" sayıyor.

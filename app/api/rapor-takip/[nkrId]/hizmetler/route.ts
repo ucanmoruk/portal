@@ -14,6 +14,23 @@ function computeDegerlendirmeEn(degerlendirme: string | null | undefined): strin
   return t;
 }
 
+function computeSonucAuto(
+  limit: string | null | undefined,
+  loq: string | null | undefined,
+): { sonuc: string | null; sonucEn: string | null } {
+  if (!limit) return { sonuc: null, sonucEn: null };
+  const t = String(limit).trim();
+  if (t.toLocaleLowerCase("tr-TR").startsWith("bulun")) {
+    return { sonuc: "Tespit Edilmedi", sonucEn: "Not Detected" };
+  }
+  if (t !== "" && !Number.isNaN(Number(t.replace(",", ".")))) {
+    const loqVal = loq ? String(loq).trim() : "";
+    const sonuc = loqVal && loqVal !== "-" ? `< ${loqVal}` : "";
+    return { sonuc, sonucEn: sonuc };
+  }
+  return { sonuc: null, sonucEn: null };
+}
+
 // GET /api/rapor-takip/[nkrId]/hizmetler?raporFormati=Genel
 // Bir numune + rapor formatına ait hizmetleri döner
 export async function GET(
@@ -67,7 +84,8 @@ export async function GET(
         s.Method                                    AS Metot,
         ${birimSel}
         ${birimEnSel}
-        x1.[Limit]                                  AS LimitDeger,
+        ISNULL(x1.[Limit], ISNULL(s.[Limit], ''))   AS LimitDeger,
+        ISNULL(x1.LOQ, ISNULL(s.LOQ, ''))           AS LOQ,
         ${limitEnSel}
         ${sonucSel}
         ${sonucEnSel}
@@ -78,12 +96,29 @@ export async function GET(
       FROM NumuneX1 x1
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
       WHERE x1.RaporID        = @nkrId
-        AND s.RaporFormati    = @raporFormati
+        AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @raporFormati
       ORDER BY s.Kod
     `);
 
     // Alt parametreler (bileşenler) — katalog + girilmiş sonuçlar
-    const hizmetler = result.recordset as Array<{ X1ID: number; AnalizID: number; altParametreler?: unknown }>;
+    const hizmetler = result.recordset as Array<{
+      X1ID: number;
+      AnalizID: number;
+      LimitDeger?: string | null;
+      LOQ?: string | null;
+      Sonuc?: string | null;
+      SonucEn?: string | null;
+      Degerlendirme?: string | null;
+      DegerlendirmeEn?: string | null;
+      altParametreler?: unknown;
+    }>;
+    for (const h of hizmetler) {
+      const auto = computeSonucAuto(h.LimitDeger, h.LOQ);
+      if (!h.Sonuc) h.Sonuc = auto.sonuc;
+      if (!h.SonucEn) h.SonucEn = auto.sonucEn;
+      if (!h.Degerlendirme) h.Degerlendirme = "Uygun";
+      if (!h.DegerlendirmeEn) h.DegerlendirmeEn = "Pass";
+    }
     const pairs = hizmetler
       .map((h) => ({ x1Id: Number(h.X1ID), analizId: Number(h.AnalizID) }))
       .filter((p) => Number.isFinite(p.x1Id) && Number.isFinite(p.analizId));
