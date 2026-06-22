@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { constants, existsSync } from "node:fs";
+import { access, chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import chromium from "@sparticuz/chromium";
+import { loadDotenvOnce } from "@/lib/loadDotenv";
 
 // ───── HTML → PDF (Chromium Page.printToPDF) ─────
 // app/api/urunler/rapor-sablon/route.ts içindeki kanıtlanmış desenden türetilmiş,
@@ -44,7 +45,28 @@ function commandExists(command: string): boolean {
   return result.status === 0;
 }
 
+async function ensureExecutable(file: string): Promise<boolean> {
+  if (!existsSync(file)) return false;
+
+  try {
+    await access(file, constants.X_OK);
+    return true;
+  } catch {
+    // cPanel gibi ortamlarda @sparticuz/chromium /tmp altına izin biti eksik çıkabiliyor.
+    // chmod başarılı olursa tekrar deneriz; /tmp noexec ise yine başarısız olur.
+    try {
+      await chmod(file, 0o755);
+      await access(file, constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
+  loadDotenvOnce();
+
   const configured = [
     process.env.CHROME_EXECUTABLE_PATH,
     process.env.CHROME_PATH,
@@ -78,7 +100,9 @@ async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
       : ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
 
   for (const candidate of [...configured, ...platformCandidates]) {
-    if (path.isAbsolute(candidate) && existsSync(candidate)) return { executablePath: candidate, args: [] };
+    if (path.isAbsolute(candidate) && (await ensureExecutable(candidate))) {
+      return { executablePath: candidate, args: [] };
+    }
     if (!path.isAbsolute(candidate) && commandExists(candidate)) return { executablePath: candidate, args: [] };
   }
 
@@ -89,8 +113,15 @@ async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
   try {
     chromium.setGraphicsMode = false;
     const executablePath = await chromium.executablePath();
-    if (executablePath) {
+    if (executablePath && (await ensureExecutable(executablePath))) {
       return { executablePath, args: chromium.args };
+    }
+    if (executablePath) {
+      throw new Error(
+        `Bundled Chromium bulundu ancak çalıştırılamıyor: ${executablePath}. ` +
+          "Sunucuda /tmp noexec olabilir veya dosya izni kapalıdır. " +
+          "Çözüm: çalıştırılabilir sistem Chrome yolunu CHROME_EXECUTABLE_PATH ile tanımlayın.",
+      );
     }
   } catch (error) {
     console.warn("[chromiumPdf] Bundled Chromium başlatılamadı:", error);

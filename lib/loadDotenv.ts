@@ -30,7 +30,11 @@ function candidatePaths(): string[] {
   // 2) HOME altındaki tipik cPanel subdomain dizini
   if (home) {
     paths.add(path.join(home, "lab.uniqueanalyse.com", ".env"));
+    paths.add(path.join(home, "lab.uniqueanalyse.com", ".env.production"));
+    paths.add(path.join(home, "lab.uniqueanalyse.com", ".env.local"));
     paths.add(path.join(home, ".env"));
+    paths.add(path.join(home, ".env.production"));
+    paths.add(path.join(home, ".env.local"));
   }
 
   return [...paths];
@@ -77,6 +81,9 @@ export function loadDotenvOnce(): void {
     `[loadDotenv] file=${usedFile ?? "BULUNAMADI"} loaded=${count} ` +
       `cwd=${process.cwd()} | MYSQL_HOST=${has("MYSQL_HOST")} ` +
       `MYSQL_USER=${has("MYSQL_USER")} MYSQL_DATABASE=${has("MYSQL_DATABASE")} ` +
-      `UGD_POSTGRESS_URL=${has("UGD_POSTGRESS_URL")} NEXTAUTH_SECRET=${has("NEXTAUTH_SECRET")}`,
+      `UGD_POSTGRESS_URL=${has("UGD_POSTGRESS_URL")} NEXTAUTH_SECRET=${has("NEXTAUTH_SECRET")} ` +
+      `RAPOR_FTP_HOST=${has("RAPOR_FTP_HOST")} RAPOR_FTP_USER=${has("RAPOR_FTP_USER")} ` +
+      `RAPOR_FTP_PASSWORD=${has("RAPOR_FTP_PASSWORD")} ` +
+      `CHROME_EXECUTABLE_PATH=${has("CHROME_EXECUTABLE_PATH")} CHROME_PATH=${has("CHROME_PATH")}`,
   );
 }

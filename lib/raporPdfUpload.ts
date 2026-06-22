@@ -1,5 +1,6 @@
 import { Client } from "basic-ftp";
 import { Readable } from "stream";
+import { loadDotenvOnce } from "@/lib/loadDotenv";
 
 /**
  * Onaylı imzalı raporun PDF'ini, public erişimli FTP klasörüne yükler.
@@ -18,6 +19,7 @@ import { Readable } from "stream";
  * - RAPOR_FTP_VERBOSE         ("1" → ftp komut log'u)
  */
 export function isRaporFtpConfigured(): boolean {
+  loadDotenvOnce();
   return Boolean(
     process.env.RAPOR_FTP_HOST?.trim() &&
       process.env.RAPOR_FTP_USER?.trim() &&
@@ -31,6 +33,8 @@ export async function uploadRaporPdfToFtp(opts: {
   pdfBuffer: Buffer;
   token: string;
 }): Promise<{ publicUrl: string; remotePath: string }> {
+  loadDotenvOnce();
+
   if (!opts.pdfBuffer?.length) {
     throw new Error("uploadRaporPdfToFtp: boş PDF buffer.");
   }

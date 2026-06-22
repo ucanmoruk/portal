@@ -2,6 +2,7 @@ import { PDFDocument } from "pdf-lib";
 import { SignPdf } from "@signpdf/signpdf";
 import { P12Signer } from "@signpdf/signer-p12";
 import { pdflibAddPlaceholder } from "@signpdf/placeholder-pdf-lib";
+import { loadDotenvOnce } from "@/lib/loadDotenv";
 
 // ───── Rapor PDF dijital imzası (PAdES) ─────
 // PDF içeriğini imzalar → Adobe Reader "imzalı" gösterir, editlenince imza geçersiz olur.
@@ -23,6 +24,7 @@ interface P12Creds {
 
 // Env'den self-signed .p12 sertifikasını okur (gen-imza-cert.mjs ile üretilir).
 function loadP12(): P12Creds | null {
+  loadDotenvOnce();
   const b64 = (process.env.RAPOR_IMZA_P12_BASE64 || "").trim();
   const pass = (process.env.RAPOR_IMZA_P12_PASS || "").trim();
   if (!b64 || !pass) return null;
