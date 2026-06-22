@@ -204,6 +204,16 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function normalizeUrlForCompare(value: string): string {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return value.replace(/#.*$/, "").replace(/\/$/, "");
+  }
+}
+
 async function closeChromeProcess(chrome: ChildProcessWithoutNullStreams | undefined): Promise<void> {
   if (!chrome || chrome.exitCode !== null || chrome.killed) return;
 
@@ -321,6 +331,57 @@ async function renderTargetToPdf(target: RenderTarget, options: PdfRenderOptions
     }
 
     await send("Page.navigate", { url: pageUrl }, sessionId);
+
+    // Page.navigate hemen döner; printToPDF'i erken çağırırsak Chromium boş about:blank
+    // sayfasını PDF'e basabiliyor. Gerçek URL ve DOM gelene kadar kısa polling yap.
+    const expectedUrl = normalizeUrlForCompare(pageUrl);
+    let navigationState: any = null;
+    let reachedExpectedPage = false;
+    for (let attempt = 0; attempt < 80; attempt++) {
+      try {
+        const result = await send(
+          "Runtime.evaluate",
+          {
+            expression: `(() => ({
+              href: location.href,
+              readyState: document.readyState,
+              bodyHtmlLength: document.body ? document.body.innerHTML.length : 0,
+              bodyTextLength: document.body ? document.body.innerText.length : 0,
+              title: document.title || ""
+            }))()`,
+            returnByValue: true,
+          },
+          sessionId,
+        );
+        navigationState = result?.result?.value ?? null;
+        const href = normalizeUrlForCompare(String(navigationState?.href || ""));
+        const ready = navigationState?.readyState === "interactive" || navigationState?.readyState === "complete";
+        const hasBody = Number(navigationState?.bodyHtmlLength || 0) > 0;
+        const isExpectedPage =
+          pageUrl.startsWith("file://")
+            ? href.startsWith("file://")
+            : href === expectedUrl || href.startsWith(`${expectedUrl}?`) || href.startsWith(`${expectedUrl}&`);
+
+        if (isExpectedPage && ready && hasBody) {
+          reachedExpectedPage = true;
+          break;
+        }
+      } catch {
+        // Navigasyon sırasında execution context değişebilir; bir sonraki denemede toparlar.
+      }
+      await delay(150);
+    }
+
+    if (!navigationState || Number(navigationState.bodyHtmlLength || 0) === 0) {
+      throw new Error(
+        `PDF sayfası yüklenmeden boş kaldı. url=${pageUrl} state=${JSON.stringify(navigationState)}`,
+      );
+    }
+    if (!reachedExpectedPage) {
+      throw new Error(
+        `PDF sayfası beklenen adrese ulaşamadı. url=${pageUrl} state=${JSON.stringify(navigationState)}`,
+      );
+    }
 
     // ───────────────────────────────────────────────────────────
     // Render edilmeden once SAYFA + GORSELLER + FONT yuklenmesini bekle.
