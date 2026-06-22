@@ -40,6 +40,8 @@ jobs:
           rm -rf deploy
           mkdir -p deploy
           cp -r .next/standalone/. deploy/
+          mkdir -p deploy/node_modules/@sparticuz/chromium/bin
+          cp -r node_modules/@sparticuz/chromium/bin/. deploy/node_modules/@sparticuz/chromium/bin/
           mkdir -p deploy/.next/static
           cp -r .next/static/. deploy/.next/static/
           mkdir -p deploy/public
@@ -53,6 +55,7 @@ jobs:
           tar -czf deploy.tar.gz -C deploy .
           ls -lh deploy.tar.gz
           echo "Files in tarball: $(tar -tzf deploy.tar.gz | wc -l)"
+          tar -tzf deploy.tar.gz | grep -E '^./node_modules/@sparticuz/chromium/bin/(chromium|fonts|swiftshader|al2023)\.tar\.br$|^./node_modules/@sparticuz/chromium/bin/chromium\.br$'
 
       - name: Install lftp
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp

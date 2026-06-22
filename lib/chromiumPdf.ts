@@ -72,6 +72,18 @@ function findBundledChromiumInputs(): string[] {
   return [...candidates].filter((candidate) => existsSync(candidate));
 }
 
+async function configureChromiumTempDir(): Promise<void> {
+  const configured = sv(process.env.CHROMIUM_TMPDIR || process.env.CHROME_TMPDIR);
+  const tmpDir = configured || path.join(process.cwd(), "tmp", "chromium");
+  await mkdir(tmpDir, { recursive: true });
+
+  // @sparticuz/chromium os.tmpdir() üstünden extraction yapar. cPanel'de /tmp noexec
+  // olabildiği için binary'yi uygulama altındaki çalıştırılabilir tmp klasörüne açtır.
+  process.env.TMPDIR = tmpDir;
+  process.env.TMP = tmpDir;
+  process.env.TEMP = tmpDir;
+}
+
 async function ensureExecutable(file: string): Promise<boolean> {
   if (!existsSync(file)) return false;
 
@@ -93,6 +105,7 @@ async function ensureExecutable(file: string): Promise<boolean> {
 
 async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
   loadDotenvOnce();
+  await configureChromiumTempDir();
 
   const configured = [
     process.env.CHROME_EXECUTABLE_PATH,
