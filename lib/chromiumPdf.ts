@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { constants, existsSync } from "node:fs";
 import { access, chmod, mkdir, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import chromium from "@sparticuz/chromium";
@@ -33,6 +34,8 @@ interface ChromeLaunchConfig {
   args: string[];
 }
 
+const requireFromHere = createRequire(import.meta.url);
+
 function sv(v: unknown): string {
   if (v === null || v === undefined) return "";
   return String(v).trim();
@@ -43,6 +46,30 @@ function commandExists(command: string): boolean {
     stdio: "ignore",
   });
   return result.status === 0;
+}
+
+function findBundledChromiumInputs(): string[] {
+  const candidates = new Set<string>();
+  const configured = sv(process.env.SPARTICUZ_CHROMIUM_PATH || process.env.CHROMIUM_BIN_DIR);
+  if (configured) candidates.add(configured);
+
+  try {
+    const packageJson = requireFromHere.resolve("@sparticuz/chromium/package.json");
+    candidates.add(path.join(path.dirname(packageJson), "bin"));
+  } catch {
+    // Standalone paket require.resolve bilgisini her ortamda taşımayabilir.
+  }
+
+  let dir = process.cwd();
+  for (let i = 0; i < 5; i++) {
+    candidates.add(path.join(dir, "node_modules", "@sparticuz", "chromium", "bin"));
+    candidates.add(path.join(dir, ".next", "standalone", "node_modules", "@sparticuz", "chromium", "bin"));
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  return [...candidates].filter((candidate) => existsSync(candidate));
 }
 
 async function ensureExecutable(file: string): Promise<boolean> {
@@ -87,10 +114,13 @@ async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
             "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
           ]
         : [
+            "/opt/google/chrome/chrome",
+            "/usr/bin/chrome",
             "/usr/bin/google-chrome",
             "/usr/bin/google-chrome-stable",
             "/usr/bin/chromium",
             "/usr/bin/chromium-browser",
+            "/usr/lib/chromium/chrome",
             "/snap/bin/chromium",
           ];
 
@@ -112,16 +142,17 @@ async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
 
   try {
     chromium.setGraphicsMode = false;
-    const executablePath = await chromium.executablePath();
-    if (executablePath && (await ensureExecutable(executablePath))) {
-      return { executablePath, args: chromium.args };
-    }
-    if (executablePath) {
-      throw new Error(
-        `Bundled Chromium bulundu ancak çalıştırılamıyor: ${executablePath}. ` +
-          "Sunucuda /tmp noexec olabilir veya dosya izni kapalıdır. " +
-          "Çözüm: çalıştırılabilir sistem Chrome yolunu CHROME_EXECUTABLE_PATH ile tanımlayın.",
-      );
+    const bundledInputs = [undefined, ...findBundledChromiumInputs()];
+    for (const input of bundledInputs) {
+      const executablePath = await chromium.executablePath(input);
+      if (executablePath && (await ensureExecutable(executablePath))) {
+        return { executablePath, args: chromium.args };
+      }
+      if (executablePath) {
+        console.warn(
+          `[chromiumPdf] Bundled Chromium bulundu ancak çalıştırılamıyor: ${executablePath}`,
+        );
+      }
     }
   } catch (error) {
     console.warn("[chromiumPdf] Bundled Chromium başlatılamadı:", error);
