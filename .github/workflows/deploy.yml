@@ -62,10 +62,18 @@ jobs:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          FTP_INCOMING_DIR: ${{ secrets.FTP_SERVER_DIR }}_incoming
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
         run: |
           set -euo pipefail
+          FTP_BASE_DIR="${FTP_SERVER_DIR%/}"
+          if [[ "$FTP_BASE_DIR" == */_incoming ]]; then
+            FTP_INCOMING_DIR="$FTP_BASE_DIR"
+          else
+            FTP_INCOMING_DIR="$FTP_BASE_DIR/_incoming"
+          fi
+
           lftp -c "
+            set cmd:fail-exit yes;
             set ftp:ssl-allow no;
             set net:timeout 60;
             set net:max-retries 3;
@@ -74,7 +82,6 @@ jobs:
             set xfer:clobber on;
             open ftp://$FTP_SERVER;
             user '$FTP_USERNAME' '$FTP_PASSWORD';
-            mkdir -p '$FTP_INCOMING_DIR';
             cd '$FTP_INCOMING_DIR';
             put deploy.tar.gz -o deploy.tar.gz.uploading;
             mv deploy.tar.gz.uploading deploy.tar.gz;
