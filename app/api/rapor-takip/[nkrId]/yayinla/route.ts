@@ -105,8 +105,11 @@ export async function POST(
       yayinUrl = uploaded.publicUrl;
     } catch (e) {
       console.error("[yayinla] PDF/FTP yüklemesi başarısız:", e);
+      const detay =
+        e instanceof Error ? e.message :
+          typeof e === "string" ? e : "Bilinmeyen hata";
       return Response.json(
-        { error: "Rapor PDF'i sunucuya yüklenemedi. Tekrar deneyin." },
+        { error: `Rapor PDF'i sunucuya yüklenemedi: ${detay.slice(0, 500)}` },
         { status: 502 },
       );
     }

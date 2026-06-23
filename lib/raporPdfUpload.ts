@@ -29,6 +29,20 @@ export function isRaporFtpConfigured(): boolean {
 
 const TOKEN_RE = /^[A-Za-z0-9_-]+$/;
 
+function normalizeFtpHost(value: string): string {
+  return value
+    .trim()
+    .replace(/^ftps?:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .trim();
+}
+
+function ftpErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "Bilinmeyen FTP hatası";
+}
+
 export async function uploadRaporPdfToFtp(opts: {
   pdfBuffer: Buffer;
   token: string;
@@ -44,9 +58,9 @@ export async function uploadRaporPdfToFtp(opts: {
     throw new Error("uploadRaporPdfToFtp: geçersiz token formatı.");
   }
 
-  const host = process.env.RAPOR_FTP_HOST!.trim();
+  const host = normalizeFtpHost(process.env.RAPOR_FTP_HOST!);
   const user = process.env.RAPOR_FTP_USER!.trim();
-  const password = process.env.RAPOR_FTP_PASSWORD!;
+  const password = process.env.RAPOR_FTP_PASSWORD!.trim();
   // RAPOR_FTP_REMOTE_DIR tanımsız → FTP login dizinine (kök) yaz. Bizim kurulumda
   // portal@ hesabı doğrudan doğrulama klasörüne chroot'lu, bu yüzden default boş.
   const remoteDir = (process.env.RAPOR_FTP_REMOTE_DIR ?? "").trim();
@@ -54,16 +68,38 @@ export async function uploadRaporPdfToFtp(opts: {
     .replace(/\/$/, "");
   const secure = process.env.RAPOR_FTP_SECURE === "1";
 
+  if (host.toLowerCase() === "uniqeuanalyse.com") {
+    throw new Error("RAPOR_FTP_HOST yazım hatalı: uniqeuanalyse.com yerine uniqueanalyse.com olmalı.");
+  }
+  if (!host || !user || !password) {
+    throw new Error("RAPOR_FTP_HOST, RAPOR_FTP_USER veya RAPOR_FTP_PASSWORD eksik.");
+  }
+
   const filename = `${opts.token}.pdf`;
 
   const client = new Client();
   client.ftp.verbose = process.env.RAPOR_FTP_VERBOSE === "1";
   try {
-    await client.access({ host, user, password, secure });
+    try {
+      await client.access({ host, user, password, secure });
+    } catch (error) {
+      throw new Error(`FTP bağlantısı/kimlik doğrulama başarısız (${host}): ${ftpErrorMessage(error)}`);
+    }
     // remoteDir boşsa login dizinine (FTP kök) yaz; doluysa o klasöre geç/oluştur.
     // ensureDir hem oluşturur hem cwd'yi oraya taşır; ekstra cd gerekmez.
-    if (remoteDir) await client.ensureDir(remoteDir);
-    await client.uploadFrom(Readable.from(opts.pdfBuffer), filename);
+    if (remoteDir) {
+      try {
+        await client.ensureDir(remoteDir);
+      } catch (error) {
+        throw new Error(`FTP klasörüne geçilemedi/oluşturulamadı (${remoteDir}): ${ftpErrorMessage(error)}`);
+      }
+    }
+
+    try {
+      await client.uploadFrom(Readable.from(opts.pdfBuffer), filename);
+    } catch (error) {
+      throw new Error(`PDF FTP'ye yüklenemedi (${remoteDir || "/"} / ${filename}): ${ftpErrorMessage(error)}`);
+    }
   } finally {
     client.close();
   }
