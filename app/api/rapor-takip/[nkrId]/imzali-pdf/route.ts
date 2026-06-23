@@ -4,6 +4,7 @@ import { type NextRequest } from "next/server";
 import { loadRaporViewData } from "@/lib/raporViewData";
 import { renderUrlToPdf } from "@/lib/chromiumPdf";
 import { signPdfBuffer, pdfImzaYapilandirildi } from "@/lib/raporPdfSign";
+import { getRaporPdfBaseUrl } from "@/lib/raporPdfBaseUrl";
 
 // GET /api/rapor-takip/[nkrId]/imzali-pdf?format=Genel
 // Onaylı raporu sunucuda PDF'e çevirir + dijital imza (PAdES) gömer →
@@ -60,7 +61,7 @@ export async function GET(
     }
 
     // Chromium'u canlı önizleme sayfasına yönlendir; oturum cookie'sini aktar.
-    const origin = request.nextUrl.origin;
+    const origin = getRaporPdfBaseUrl(request);
     const previewUrl =
       `${origin}/rapor-onay-print/${nkrIdNum}?format=${encodeURIComponent(format)}`;
     const cookieHeader = request.headers.get("cookie") || undefined;

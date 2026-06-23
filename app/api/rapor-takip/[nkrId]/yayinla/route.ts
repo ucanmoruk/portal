@@ -5,6 +5,7 @@ import { type NextRequest } from "next/server";
 import { isRaporFtpConfigured, uploadRaporPdfToFtp } from "@/lib/raporPdfUpload";
 import { renderUrlToPdf } from "@/lib/chromiumPdf";
 import { signPdfBuffer, pdfImzaYapilandirildi } from "@/lib/raporPdfSign";
+import { getRaporPdfBaseUrl } from "@/lib/raporPdfBaseUrl";
 
 // PDF üretimi (Chromium) + FTP yükleme süre alır.
 export const runtime = "nodejs";
@@ -98,7 +99,7 @@ export async function POST(
     let yayinUrl: string;
     try {
       const pdfBuffer = await buildRaporPdf(
-        request.nextUrl.origin, nkrIdNum, format, request.headers.get("cookie") || "",
+        getRaporPdfBaseUrl(request), nkrIdNum, format, request.headers.get("cookie") || "",
       );
       const uploaded = await uploadRaporPdfToFtp({ pdfBuffer, token: onay.KarekodToken });
       yayinUrl = uploaded.publicUrl;

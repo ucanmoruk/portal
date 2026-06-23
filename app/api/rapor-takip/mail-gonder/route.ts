@@ -7,6 +7,7 @@ import { cosmoPool } from "@/lib/db";
 import { loadRaporViewData } from "@/lib/raporViewData";
 import { renderUrlToPdf } from "@/lib/chromiumPdf";
 import { signPdfBuffer, pdfImzaYapilandirildi } from "@/lib/raporPdfSign";
+import { getRaporPdfBaseUrl } from "@/lib/raporPdfBaseUrl";
 import { getAllSettings } from "@/lib/settings";
 import nodemailer from "nodemailer";
 import { existsSync } from "node:fs";
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
 
     // Çoklu rapor için cookie/origin gerekli (Chromium oturum aktarımı)
     const cookieHeader = request.headers.get("cookie") || undefined;
-    const origin = new URL(request.url).origin;
+    const origin = getRaporPdfBaseUrl(request);
     const pool = await cosmoPool;
 
     // Her bir (nkrId, format) için imzalı PDF üret
