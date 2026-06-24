@@ -61,6 +61,16 @@ export async function GET() {
   // ── Kabul Bekleyenler ──
   let kabul = 0;
   try {
+    const terminalOnayWhere = hasRaporOnay
+      ? `AND NOT EXISTS (
+           SELECT 1
+           FROM NKR_RaporOnay ro
+           WHERE ro.NkrID = n.ID
+             AND UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U')) =
+                 UPPER(REPLACE(COALESCE(NULLIF(s.RaporFormati, ''), N'Genel'), N'Ü', N'U'))
+             AND ro.Durum IN (N'Onaylandı', N'Onaylandi', N'Yayınlandı', N'Yayinlandi', N'Arşiv', N'Arsiv')
+         )`
+      : "";
     const sql = hasLabKabul
       ? `SELECT COUNT(*) AS c FROM (
            SELECT DISTINCT n.ID AS NkrID, COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') AS RaporFormati
@@ -69,6 +79,7 @@ export async function GET() {
            INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
            LEFT JOIN NKR_LabKabul k ON k.NkrID = n.ID AND k.RaporFormati = COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')
            WHERE n.Durum = 'Aktif'
+             ${terminalOnayWhere}
              AND (
                k.ID IS NULL
                OR EXISTS (
@@ -87,6 +98,7 @@ export async function GET() {
            INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
            INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
            WHERE n.Durum = 'Aktif'
+             ${terminalOnayWhere}
          ) t`;
     const req = pool.request();
     (req as unknown as { timeout?: number }).timeout = 60000;

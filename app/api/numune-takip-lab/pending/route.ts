@@ -24,10 +24,12 @@ export async function GET(request: NextRequest) {
     // Schema filtresi: Postgres mirror'da public şemasında lowercase legacy
     // tablolardan kaçınmak için dbo/cosmoroot ile sınırlıyoruz.
     const tblCheck = await pool.request().query(
-      `SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
-       WHERE TABLE_NAME = 'NKR_LabKabul' AND TABLE_SCHEMA IN ('dbo', 'cosmoroot')`
+      `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+       WHERE TABLE_NAME IN ('NKR_LabKabul', 'NKR_RaporOnay') AND TABLE_SCHEMA IN ('dbo', 'cosmoroot')`
     );
-    const hasKabulTable = tblCheck.recordset.length > 0;
+    const tables = new Set<string>(tblCheck.recordset.map((r: { TABLE_NAME: string }) => String(r.TABLE_NAME).toLowerCase()));
+    const hasKabulTable = tables.has("nkr_labkabul");
+    const hasRaporOnayTable = tables.has("nkr_raporonay");
 
     const searchClause = search
       ? `AND (
@@ -56,6 +58,16 @@ export async function GET(request: NextRequest) {
           )
         )`
       : "";
+    const terminalOnayWhere = hasRaporOnayTable
+      ? `AND NOT EXISTS (
+          SELECT 1
+          FROM NKR_RaporOnay ro
+          WHERE ro.NkrID = n.ID
+            AND UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U')) =
+                UPPER(REPLACE(COALESCE(NULLIF(s.RaporFormati, ''), N'Genel'), N'Ü', N'U'))
+            AND ro.Durum IN (N'Onaylandı', N'Onaylandi', N'Yayınlandı', N'Yayinlandi', N'Arşiv', N'Arsiv')
+        )`
+      : "";
 
     const query = `
       WITH Pending AS (
@@ -76,6 +88,7 @@ export async function GET(request: NextRequest) {
         INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
         ${notAcceptedJoin}
         WHERE n.Durum = 'Aktif'
+          ${terminalOnayWhere}
           ${notAcceptedWhere}
           ${searchClause}
       )
