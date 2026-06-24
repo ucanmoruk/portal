@@ -174,10 +174,29 @@ async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
   return null;
 }
 
+function chromeStartupTimeoutMs(): number {
+  const configured = Number(process.env.CHROME_DEVTOOLS_TIMEOUT_MS || process.env.CHROME_STARTUP_TIMEOUT_MS || 0);
+  return Number.isFinite(configured) && configured >= 10000 ? configured : 45000;
+}
+
+function tail(value: string, maxLength = 1200): string {
+  return value.length > maxLength ? value.slice(-maxLength) : value;
+}
+
 function waitForDevtoolsUrl(proc: ChildProcessWithoutNullStreams): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     let stderr = "";
-    const timer = setTimeout(() => reject(new Error("Chrome DevTools bağlantısı zaman aşımına uğradı.")), 10000);
+    const timeoutMs = chromeStartupTimeoutMs();
+    const timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `Chrome DevTools bağlantısı zaman aşımına uğradı (${timeoutMs} ms).` +
+              (stderr ? ` Chrome çıktısı: ${tail(stderr)}` : ""),
+          ),
+        ),
+      timeoutMs,
+    );
 
     proc.stderr.on("data", (chunk) => {
       stderr += String(chunk);
@@ -195,7 +214,12 @@ function waitForDevtoolsUrl(proc: ChildProcessWithoutNullStreams): Promise<strin
 
     proc.once("exit", (code) => {
       clearTimeout(timer);
-      reject(new Error(`Chrome PDF işlemi erken kapandı (${code ?? "unknown"}).`));
+      reject(
+        new Error(
+          `Chrome PDF işlemi erken kapandı (${code ?? "unknown"}).` +
+            (stderr ? ` Chrome çıktısı: ${tail(stderr)}` : ""),
+        ),
+      );
     });
   });
 }
