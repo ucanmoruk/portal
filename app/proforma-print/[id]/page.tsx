@@ -2,7 +2,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { cosmoPool } from "@/lib/db";
-import TeklifPrintDocument, { type TeklifHeader, type TeklifSatir } from "../../teklif-print/[id]/TeklifPrintDocument";
+import ProformaPrintDocument, {
+  type ProformaHeader,
+  type ProformaSatir,
+  type BankaBilgi,
+} from "./ProformaPrintDocument";
 import PrintToolbar from "../../teklif-print/[id]/PrintToolbar";
 import { calculateTlEquivalent, fetchTcmbTodayRates, normalizeParaBirimi } from "@/lib/tcmbRates";
 
@@ -11,6 +15,21 @@ export const metadata = { title: "Proforma Fatura" };
 function fmtMoney(value: unknown) {
   const n = Number(value || 0);
   return n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Banka/IBAN bilgileri — env ile override edilebilir, aksi halde varsayılan.
+// Müşteri portalına kopyalandığında bu listeyi consumer kendisi verebilir.
+function loadBankaBilgileri(): BankaBilgi[] {
+  const raw = process.env.PROFORMA_BANKA_JSON;
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as BankaBilgi[];
+    } catch (e) {
+      console.warn("proforma: PROFORMA_BANKA_JSON parse hatası:", e);
+    }
+  }
+  return [];
 }
 
 export default async function ProformaPrintPage({
@@ -58,15 +77,14 @@ export default async function ProformaPrintPage({
     .input("id", idNum)
     .query(`
       SELECT HizmetAdi, Adet, BirimFiyat AS Fiyat, ParaBirimi, Iskonto,
-             CAST('' AS NVARCHAR(200)) AS Metot,
-             CAST('' AS NVARCHAR(10)) AS Akreditasyon,
              RaporNoListesi AS Notlar
       FROM ProformaKalem
       WHERE ProformaID = @id
       ORDER BY ID
     `);
-  const satirlar = satirRes.recordset as TeklifSatir[];
+  const satirlar = satirRes.recordset as ProformaSatir[];
 
+  // ── Para birimi + TL karşılığı (TCMB döviz alış) ──
   const currencies = Array.from(new Set(satirlar.map((s) => normalizeParaBirimi(s.ParaBirimi || "TRY"))));
   const paraBirimi = currencies.length > 1 ? "ÇOKLU" : (currencies[0] || "TRY");
   let tlEquivalentNote: string | null = null;
@@ -83,14 +101,10 @@ export default async function ProformaPrintPage({
     }
   }
 
-  const header: TeklifHeader = {
-    TeklifNo: null,
-    DisTeklifKodu: h.ProformaNo || null,
-    RevNo: 0,
+  const header: ProformaHeader = {
+    ProformaNo: h.ProformaNo || null,
     Tarih: h.TarihText || "",
     Notlar: h.Notlar || null,
-    TeklifKonusu: "Proforma Fatura",
-    TeklifVeren: "",
     KdvOran: h.KdvOran ?? 20,
     GenelIskonto: h.GenelIskonto ?? 0,
     MusteriAd: h.MusteriAd || "",
@@ -104,14 +118,15 @@ export default async function ProformaPrintPage({
 
   const sirketAdi = process.env.SIRKET_ADI || "UNIQUE ANALYSE";
   const sirketEmail = process.env.SIRKET_EMAIL || "info@uniqueanalyse.com";
+  const bankaBilgileri = loadBankaBilgileri();
 
   return (
-    <TeklifPrintDocument
+    <ProformaPrintDocument
       header={header}
       satirlar={satirlar}
       sirketAdi={sirketAdi}
       sirketEmail={sirketEmail}
-      documentTitle="PROFORMA FATURA"
+      bankaBilgileri={bankaBilgileri}
       tlEquivalentNote={tlEquivalentNote}
       toolbar={!pdfMode ? (
         <PrintToolbar
