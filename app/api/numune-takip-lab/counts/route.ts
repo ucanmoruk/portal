@@ -154,54 +154,50 @@ export async function GET(request: NextRequest) {
       (req as unknown as { timeout?: number }).timeout = 60000;
       if (terminDate) req.input("terminDate", terminDate);
 
-      // PERFORMANCE: SQL Server CTE'leri inline edip kötü plan üretiyordu (sayma
-      // 1-2 dk sürüyordu). Ara sonuçları #temp tablolara materialize ediyoruz
-      // (rapor-takip listesiyle AYNI desen → tutarlı + hızlı).
-      // Onay/Override eşleşmesi normalized (Ü→U) — liste route'uyla birebir aynı.
-      const r = await req.query(`
-        IF OBJECT_ID('tempdb..#Saved') IS NOT NULL DROP TABLE #Saved;
-        IF OBJECT_ID('tempdb..#Acc')   IS NOT NULL DROP TABLE #Acc;
-        IF OBJECT_ID('tempdb..#OS')    IS NOT NULL DROP TABLE #OS;
-        IF OBJECT_ID('tempdb..#OV')    IS NOT NULL DROP TABLE #OV;
-        IF OBJECT_ID('tempdb..#Eff')   IS NOT NULL DROP TABLE #Eff;
-
-        SELECT x.RaporID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati, COUNT(*) AS SavedCount
-        INTO #Saved
-        FROM NumuneX1 x
-        INNER JOIN StokAnalizListesi s ON s.ID = x.AnalizID
-        WHERE ${savedWhere}
-        GROUP BY x.RaporID, ${RAPOR_FORMAT_EXPR};
-
-        SELECT DISTINCT n.ID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati,
-          ${bucketSql(RAPOR_FORMAT_EXPR)} AS NormFmt,
-          MAX(CONVERT(varchar(10), x1.Termin, 23)) AS MaxTermin
-        INTO #Acc
-        FROM NKR n
-        INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
-        INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-        INNER JOIN NKR_LabKabul k ON k.NkrID = n.ID AND ${bucketSql("k.RaporFormati")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
-        WHERE n.Durum = 'Aktif'
-        GROUP BY n.ID, ${RAPOR_FORMAT_EXPR}, ${bucketSql(RAPOR_FORMAT_EXPR)};
-
-        ${hasRaporOnay ? `SELECT ro.NkrID, ${bucketSql("ro.RaporFormati")} AS NormFmt,
-          MAX(ro.Durum) AS RaporOnayDurum
-        INTO #OS FROM NKR_RaporOnay ro
-        GROUP BY ro.NkrID, ${bucketSql("ro.RaporFormati")};` : ``}
-
-        ${hasOverride ? `SELECT o.NkrID, ${bucketSql("o.RaporFormati")} AS NormFmt,
-          MAX(o.Durum) AS OverrideDurum
-        INTO #OV FROM NKR_RaporDurumOverride o
-        GROUP BY o.NkrID, ${bucketSql("o.RaporFormati")};` : ``}
-
-        WITH WithStatus AS (
+      // Önceki sürüm T-SQL #temp tabloları + IF OBJECT_ID kullanıyordu — MSSQL-only.
+      // Production MySQL'de çevrilemiyor → sorgu sessizce patlıyor, tab badge'leri
+      // 0 dönüyordu. Şimdi inline CTE'lerle hem MSSQL hem MySQL 8+ uyumlu.
+      // İki ayrı query: (1) EffDurum × NormFmt sayımı, (2) dailyLab.
+      const baseWith = `
+        WITH Saved AS (
+          SELECT x.RaporID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati, COUNT(*) AS SavedCount
+          FROM NumuneX1 x
+          INNER JOIN StokAnalizListesi s ON s.ID = x.AnalizID
+          WHERE ${savedWhere}
+          GROUP BY x.RaporID, ${RAPOR_FORMAT_EXPR}
+        ),
+        Acc AS (
+          SELECT n.ID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati,
+            ${bucketSql(RAPOR_FORMAT_EXPR)} AS NormFmt,
+            MAX(CONVERT(varchar(10), x1.Termin, 23)) AS MaxTermin
+          FROM NKR n
+          INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
+          INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
+          INNER JOIN NKR_LabKabul k ON k.NkrID = n.ID AND ${bucketSql("k.RaporFormati")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
+          WHERE n.Durum = 'Aktif'
+          GROUP BY n.ID, ${RAPOR_FORMAT_EXPR}, ${bucketSql(RAPOR_FORMAT_EXPR)}
+        )${hasRaporOnay ? `,
+        OS AS (
+          SELECT ro.NkrID, ${bucketSql("ro.RaporFormati")} AS NormFmt,
+            MAX(ro.Durum) AS RaporOnayDurum
+          FROM NKR_RaporOnay ro
+          GROUP BY ro.NkrID, ${bucketSql("ro.RaporFormati")}
+        )` : ``}${hasOverride ? `,
+        OV AS (
+          SELECT o.NkrID, ${bucketSql("o.RaporFormati")} AS NormFmt,
+            MAX(o.Durum) AS OverrideDurum
+          FROM NKR_RaporDurumOverride o
+          GROUP BY o.NkrID, ${bucketSql("o.RaporFormati")}
+        )` : ``},
+        WithStatus AS (
           SELECT ar.NkrID, ar.RaporFormati, ar.NormFmt, ar.MaxTermin,
             ${hasRaporOnay ? "os.RaporOnayDurum" : "NULL"} AS RaporOnayDurum,
             ${hasOverride ? "ov.OverrideDurum" : "NULL"}   AS OverrideDurum,
             COALESCE(sv.SavedCount, 0) AS SavedCount
-          FROM #Acc ar
-          ${hasRaporOnay ? `LEFT JOIN #OS os ON os.NkrID = ar.NkrID AND os.NormFmt = ar.NormFmt` : ``}
-          ${hasOverride ? `LEFT JOIN #OV ov ON ov.NkrID = ar.NkrID AND ov.NormFmt = ar.NormFmt` : ``}
-          LEFT JOIN #Saved sv ON sv.NkrID = ar.NkrID AND sv.RaporFormati = ar.RaporFormati
+          FROM Acc ar
+          ${hasRaporOnay ? `LEFT JOIN OS os ON os.NkrID = ar.NkrID AND os.NormFmt = ar.NormFmt` : ``}
+          ${hasOverride ? `LEFT JOIN OV ov ON ov.NkrID = ar.NkrID AND ov.NormFmt = ar.NormFmt` : ``}
+          LEFT JOIN Saved sv ON sv.NkrID = ar.NkrID AND sv.RaporFormati = ar.RaporFormati
         ),
         Eff AS (
           SELECT NormFmt, MaxTermin, COALESCE(
@@ -214,38 +210,32 @@ export async function GET(request: NextRequest) {
             CASE WHEN SavedCount > 0 THEN N'Analiz Devam Ediyor' ELSE N'Bekliyor' END
           ) AS EffDurum
           FROM WithStatus
-        )
-        SELECT EffDurum, NormFmt, MaxTermin INTO #Eff FROM Eff;
+        )`;
 
+      // Query 1: EffDurum × NormFmt sayımı (Sonuç + Geri + Onay + byFormatLab)
+      const effRes = await req.query(`
+        ${baseWith}
         SELECT EffDurum, NormFmt, COUNT(*) AS c
-        FROM #Eff
+        FROM Eff
         WHERE (@year = 0 OR (MaxTermin IS NOT NULL AND YEAR(CONVERT(date, MaxTermin)) = @year))
-        GROUP BY EffDurum, NormFmt;
-
-        SELECT COUNT(*) AS c
-        FROM #Eff
-        WHERE EffDurum IN (N'Bekliyor', N'Analiz Devam Ediyor')
-          ${terminDate ? "AND MaxTermin IS NOT NULL AND CONVERT(date, MaxTermin) = CONVERT(date, @terminDate)" : "AND (@year = 0 OR (MaxTermin IS NOT NULL AND YEAR(CONVERT(date, MaxTermin)) = @year))"};
-
-        DROP TABLE #Saved;
-        DROP TABLE #Acc;
-        ${hasRaporOnay ? `DROP TABLE #OS;` : ``}
-        ${hasOverride ? `DROP TABLE #OV;` : ``}
-        DROP TABLE #Eff;
+        GROUP BY EffDurum, NormFmt
       `);
 
-      // Çok-statement batch: EffDurum içeren recordset'i seç (SELECT INTO/DROP
-      // recordset döndürmez ama sürücü farkına karşı güvenli seçim).
+      // Query 2: dailyLab — bekleyen + analiz devam (year veya terminDate filtreli)
+      const dailyReq = pool.request().input("year", year);
+      (dailyReq as unknown as { timeout?: number }).timeout = 60000;
+      if (terminDate) dailyReq.input("terminDate", terminDate);
+      const dailyRes = await dailyReq.query(`
+        ${baseWith}
+        SELECT COUNT(*) AS c
+        FROM Eff
+        WHERE EffDurum IN (N'Bekliyor', N'Analiz Devam Ediyor')
+          ${terminDate ? "AND MaxTermin IS NOT NULL AND CONVERT(date, MaxTermin) = CONVERT(date, @terminDate)" : "AND (@year = 0 OR (MaxTermin IS NOT NULL AND YEAR(CONVERT(date, MaxTermin)) = @year))"}
+      `);
+
       type Row = { EffDurum: string; NormFmt: string; c: number | string };
-      const rsets = (r.recordsets as unknown as Array<Array<Row>>) || [];
-      const effRows =
-        rsets.find((rs) => rs && rs.length > 0 && "EffDurum" in rs[0]) ??
-        (r.recordset as Array<Row>) ??
-        [];
-      const dailyRows =
-        rsets.find((rs) => rs && rs.length > 0 && "c" in rs[0] && !("EffDurum" in rs[0])) ??
-        [];
-      dailyLab = Number(dailyRows[0]?.c ?? 0);
+      const effRows = (effRes.recordset || []) as Array<Row>;
+      dailyLab = Number(dailyRes.recordset[0]?.c ?? 0);
 
       const unknown: Array<{ d: string; c: number }> = [];
       for (const row of effRows) {
