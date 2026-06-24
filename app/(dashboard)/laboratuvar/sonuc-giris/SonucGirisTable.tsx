@@ -931,7 +931,7 @@ export default function SonucGirisTable() {
 
       {/* ── Revizyon Modal ── */}
       {revizyon && (
-        <div className={styles.modalOverlay} onClick={closeRevizyon}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <span>Revizyon Başlat</span>

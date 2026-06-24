@@ -1,6 +1,12 @@
 import type { ConnectionPool } from "mssql";
 import type { ImzaPayloadInput } from "./raporImza";
 import { signRapor, imzaSurum } from "./raporImza";
+import { loadRaporEdit } from "./raporDuzenleme";
+
+const DATA_FORMAT_ALIAS: Record<string, string> = {
+  DetayRapor: "Genel",
+  DetayFormat: "Genel",
+};
 
 // İmza hesabı için gerekli rapor içeriğini DB'den okur.
 // Hem onay (imza atma) hem doğrulama (imza kontrol) tarafında AYNI sorgu
@@ -10,6 +16,7 @@ export async function loadImzaInput(
   nkrId: number,
   format: string,
 ): Promise<ImzaPayloadInput | null> {
+  const dataFormat = DATA_FORMAT_ALIAS[format] ?? format;
   const hdr = await pool.request()
     .input("id", nkrId)
     .query(`
@@ -27,7 +34,7 @@ export async function loadImzaInput(
 
   const hz = await pool.request()
     .input("nkrId", nkrId)
-    .input("format", format)
+    .input("format", dataFormat)
     .query(`
       SELECT
         ISNULL(s.Kod, '') AS Kod,
@@ -38,9 +45,30 @@ export async function loadImzaInput(
       FROM NumuneX1 x1
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
       WHERE x1.RaporID = @nkrId
-        AND s.RaporFormati = @format
+        AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @format
       ORDER BY s.Kod
     `);
+  let hizmetler = hz.recordset.map((r: any) => ({
+    Kod: r.Kod,
+    Sonuc: r.Sonuc,
+    Degerlendirme: r.Degerlendirme,
+    Birim: r.Birim,
+    LimitDeger: r.LimitDeger,
+  }));
+  try {
+    const edit = await loadRaporEdit(pool, nkrId, format);
+    if (Array.isArray(edit.payload?.hizmetler)) {
+      hizmetler = edit.payload.hizmetler.map((r: any) => ({
+        Kod: r.Kod,
+        Sonuc: r.Sonuc,
+        Degerlendirme: r.Degerlendirme,
+        Birim: r.Birim,
+        LimitDeger: r.LimitDeger,
+      }));
+    }
+  } catch {
+    // Düzenleme tablosu opsiyonel; yoksa ham DB içeriği imzalanır.
+  }
 
   return {
     nkrId,
@@ -49,13 +77,7 @@ export async function loadImzaInput(
     numuneAdi: String(h.Numune_Adi ?? ""),
     firmaAd: String(h.FirmaAd ?? ""),
     raporTarihi: h.Tarih ? String(h.Tarih) : null,
-    hizmetler: hz.recordset.map((r: any) => ({
-      Kod: r.Kod,
-      Sonuc: r.Sonuc,
-      Degerlendirme: r.Degerlendirme,
-      Birim: r.Birim,
-      LimitDeger: r.LimitDeger,
-    })),
+    hizmetler,
   };
 }
 

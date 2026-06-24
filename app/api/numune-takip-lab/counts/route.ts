@@ -2,6 +2,21 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 
+const RAPOR_FORMAT_EXPR = "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')";
+const normSql = (expr: string) => `
+  UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${expr},
+    N'Ü', N'U'), N'ü', N'U'), N'İ', N'I'), N'ı', N'I'), N'Ö', N'O'), N'ö', N'O'),
+    N'Ç', N'C'), N'ç', N'C'), N'Ğ', N'G'), N'ğ', N'G'))
+`;
+const bucketSql = (expr: string) => `
+  CASE
+    WHEN ${normSql(expr)} IN (N'DERMATOLOJI', N'CLAIM') THEN N'CLAIM'
+    WHEN ${normSql(expr)} IN (N'UGDR', N'UGD') THEN N'UGDR'
+    WHEN ${normSql(expr)} = N'DIGER' THEN N'DIGER'
+    ELSE ${normSql(expr)}
+  END
+`;
+
 // GET /api/numune-takip-lab/counts
 // Numune Takip ana tabları için kayıt sayıları:
 // - kabul: NKR_LabKabul'da olmayan rapor formatları
@@ -66,18 +81,17 @@ export async function GET() {
            SELECT 1
            FROM NKR_RaporOnay ro
            WHERE ro.NkrID = n.ID
-             AND UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U')) =
-                 UPPER(REPLACE(COALESCE(NULLIF(s.RaporFormati, ''), N'Genel'), N'Ü', N'U'))
+             AND ${bucketSql("ro.RaporFormati")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
              AND ro.Durum IN (N'Onaylandı', N'Onaylandi', N'Yayınlandı', N'Yayinlandi', N'Arşiv', N'Arsiv')
          )`
       : "";
     const sql = hasLabKabul
       ? `SELECT COUNT(*) AS c FROM (
-           SELECT DISTINCT n.ID AS NkrID, COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') AS RaporFormati
+           SELECT DISTINCT n.ID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati
            FROM NKR n
            INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
            INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-           LEFT JOIN NKR_LabKabul k ON k.NkrID = n.ID AND k.RaporFormati = COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')
+           LEFT JOIN NKR_LabKabul k ON k.NkrID = n.ID AND ${bucketSql("k.RaporFormati")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
            WHERE n.Durum = 'Aktif'
              ${terminalOnayWhere}
              AND (
@@ -87,13 +101,13 @@ export async function GET() {
                  FROM NumuneX1 nx
                  INNER JOIN StokAnalizListesi ns ON ns.ID = nx.AnalizID
                  WHERE nx.RaporID = n.ID
-                   AND COALESCE(NULLIF(ns.RaporFormati, ''), N'Genel') = COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')
+                   AND ${bucketSql("COALESCE(NULLIF(ns.RaporFormati, ''), N'Genel')")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
                    AND nx.HizmetDurum IN (N'Yeni', N'YeniAnaliz', N'Yeni Analiz')
                )
              )
          ) t`
       : `SELECT COUNT(*) AS c FROM (
-           SELECT DISTINCT n.ID AS NkrID, COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') AS RaporFormati
+           SELECT DISTINCT n.ID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati
            FROM NKR n
            INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
            INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
@@ -144,33 +158,31 @@ export async function GET() {
         IF OBJECT_ID('tempdb..#OS')    IS NOT NULL DROP TABLE #OS;
         IF OBJECT_ID('tempdb..#OV')    IS NOT NULL DROP TABLE #OV;
 
-        SELECT x.RaporID AS NkrID, s.RaporFormati, COUNT(*) AS SavedCount
+        SELECT x.RaporID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati, COUNT(*) AS SavedCount
         INTO #Saved
         FROM NumuneX1 x
         INNER JOIN StokAnalizListesi s ON s.ID = x.AnalizID
-          AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
         WHERE ${savedWhere}
-        GROUP BY x.RaporID, s.RaporFormati;
+        GROUP BY x.RaporID, ${RAPOR_FORMAT_EXPR};
 
-        SELECT DISTINCT n.ID AS NkrID, s.RaporFormati,
-          UPPER(REPLACE(s.RaporFormati, N'Ü', N'U')) AS NormFmt
+        SELECT DISTINCT n.ID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati,
+          ${bucketSql(RAPOR_FORMAT_EXPR)} AS NormFmt
         INTO #Acc
         FROM NKR n
         INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
         INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-          AND s.RaporFormati IS NOT NULL AND s.RaporFormati != ''
-        INNER JOIN NKR_LabKabul k ON k.NkrID = n.ID AND k.RaporFormati = s.RaporFormati
+        INNER JOIN NKR_LabKabul k ON k.NkrID = n.ID AND ${bucketSql("k.RaporFormati")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
         WHERE n.Durum = 'Aktif';
 
-        ${hasRaporOnay ? `SELECT ro.NkrID, UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U')) AS NormFmt,
+        ${hasRaporOnay ? `SELECT ro.NkrID, ${bucketSql("ro.RaporFormati")} AS NormFmt,
           MAX(ro.Durum) AS RaporOnayDurum
         INTO #OS FROM NKR_RaporOnay ro
-        GROUP BY ro.NkrID, UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U'));` : ``}
+        GROUP BY ro.NkrID, ${bucketSql("ro.RaporFormati")};` : ``}
 
-        ${hasOverride ? `SELECT o.NkrID, UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) AS NormFmt,
+        ${hasOverride ? `SELECT o.NkrID, ${bucketSql("o.RaporFormati")} AS NormFmt,
           MAX(o.Durum) AS OverrideDurum
         INTO #OV FROM NKR_RaporDurumOverride o
-        GROUP BY o.NkrID, UPPER(REPLACE(o.RaporFormati, N'Ü', N'U'));` : ``}
+        GROUP BY o.NkrID, ${bucketSql("o.RaporFormati")};` : ``}
 
         WITH WithStatus AS (
           SELECT ar.NkrID, ar.RaporFormati, ar.NormFmt,

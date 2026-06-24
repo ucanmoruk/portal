@@ -313,7 +313,7 @@ export default function MusteriTable({ filterKimin = "Ozeco" }: { filterKimin?: 
       </div>
 
       {modalOpen && (
-        <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && setModalOpen(false)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
               <h2>{modalMode === "add" ? "Yeni Firma Ekle" : "Firmayı Düzenle"}</h2>
@@ -362,7 +362,7 @@ export default function MusteriTable({ filterKimin = "Ozeco" }: { filterKimin?: 
       )}
 
       {deleteTarget && (
-        <div className={styles.modalOverlay} onClick={() => setDeleteTarget(null)}>
+        <div className={styles.modalOverlay}>
           <div className={`${styles.modal} ${styles.modalSm}`}>
             <div className={styles.modalHeader}><h2>Pasifleştir</h2></div>
             <div className={styles.modalBody}><p>{deleteTarget.Ad} pasifleştirilsin mi?</p></div>

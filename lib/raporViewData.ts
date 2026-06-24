@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import type { HizmetRow, RaporHeader, OnayInfo, KarekodInfo } from "@/app/rapor-onay-print/[nkrId]/reportTypes";
 import { imzaColumnExists, imzalaVeKaydet } from "@/lib/raporImzaData";
 import { loadBilesenSonuclar } from "@/lib/altParametre";
+import { applyRaporEdit, loadRaporEdit } from "@/lib/raporDuzenleme";
 
 // Rapor önizleme + imzalı PDF için ORTAK veri yükleyici.
 // Hem app/rapor-onay-print/[nkrId]/page.tsx (önizleme) hem
@@ -45,7 +46,7 @@ export function fmtDate(d: Date | string | null | undefined): string {
 }
 
 // Veriyi yükler. Rapor yoksa null döner (çağıran tarafı 404 verir).
-export async function loadRaporViewData(nkrIdNum: number, format: string): Promise<RaporViewData | null> {
+export async function loadRaporViewData(nkrIdNum: number, format: string, editFormat = format): Promise<RaporViewData | null> {
   const pool = await cosmoPool;
 
   const headerRes = await pool.request()
@@ -99,7 +100,7 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
       FROM NumuneX1 x1
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
       WHERE x1.RaporID = @nkrId
-        AND s.RaporFormati = @format
+        AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @format
       ORDER BY s.Kod
     `);
   const hizmetler = hizmetRes.recordset as HizmetRow[];
@@ -129,7 +130,7 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
     const hasDisKod = disKodCol.recordset.length > 0;
     const onayRes = await pool.request()
       .input("nkrId", nkrIdNum)
-      .input("format", format)
+      .input("format", editFormat)
       .query(`
         SELECT o.KarekodToken, o.Durum, o.OnayTarihi, o.YayinTarihi, o.YayinUrl,
                ISNULL(o.OnaylayanAd, '') AS OnaylayanAd,
@@ -216,7 +217,7 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
         imzaHash = row?.ImzaHash ? String(row.ImzaHash) : null;
         // Self-heal: onaylı ama imzasız eski raporu burada imzala.
         if (!imzaHash && row?.ID) {
-          imzaHash = await imzalaVeKaydet(pool, row.ID, nkrIdNum, format);
+          imzaHash = await imzalaVeKaydet(pool, row.ID, nkrIdNum, editFormat);
         }
       }
     } catch {
@@ -262,5 +263,11 @@ export async function loadRaporViewData(nkrIdNum: number, format: string): Promi
     sirketAdi,
   };
 
-  return { header, hizmetler, testBaslangic, testBitis, onay, meta, karekod };
+  const data = { header, hizmetler, testBaslangic, testBitis, onay, meta, karekod };
+  try {
+    const edit = await loadRaporEdit(pool, nkrIdNum, editFormat);
+    return applyRaporEdit(data, edit.payload);
+  } catch {
+    return data;
+  }
 }

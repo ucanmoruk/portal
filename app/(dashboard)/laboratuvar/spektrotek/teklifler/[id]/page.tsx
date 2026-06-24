@@ -519,7 +519,7 @@ export default function TeklifDetay({ params }: { params: Promise<{ id: string }
 
       {/* Product Picker Modal */}
       {prodModalOpen && (
-        <div className={styles.overlay} onClick={e => e.target === e.currentTarget && setProdModalOpen(false)}>
+        <div className={styles.overlay}>
           <div className={styles.modal} style={{ maxWidth: 680 }}>
             <div className={styles.modalHeader}>
               <h2 className={styles.modalTitle}>Ürün Seç</h2>

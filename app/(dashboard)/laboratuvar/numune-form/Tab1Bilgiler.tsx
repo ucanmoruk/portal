@@ -206,7 +206,7 @@ function WebcamModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => v
   };
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
+    <div className={styles.modalOverlay}>
       <div className={styles.modal} style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
         <div className={styles.modalHeader}>
           <h2>Kameradan Çek</h2>

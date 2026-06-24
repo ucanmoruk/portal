@@ -183,7 +183,7 @@ export default function YetkiTable() {
 
       {/* ══ YETKİ MODAL ══ */}
       {selected && (
-        <div className={styles.modalOverlay} onClick={closeModal}>
+        <div className={styles.modalOverlay}>
           <div
             className={styles.modal}
             style={{ maxWidth: 520 }}

@@ -428,7 +428,7 @@ export default function InventoryTable() {
       </div>
 
       {modalOpen && (
-        <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && setModalOpen(false)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 700 }}>
             <div className={styles.modalHeader}>
               <h2>{modalMode === "add" ? "Yeni Envanter Kaydı" : "Envanter Kaydını Düzenle"}</h2>
@@ -500,7 +500,7 @@ export default function InventoryTable() {
       )}
 
       {deleteTarget && (
-        <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && setDeleteTarget(null)}>
+        <div className={styles.modalOverlay}>
           <div className={`${styles.modal} ${styles.modalSm}`}>
             <div className={styles.modalHeader}>
               <h2>Pasife Al</h2>
@@ -524,7 +524,7 @@ export default function InventoryTable() {
       )}
 
       {usageTarget && (
-        <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && setUsageTarget(null)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 920 }}>
             <div className={styles.modalHeader}>
               <div>

@@ -6,6 +6,11 @@ import { renderUrlToPdf } from "@/lib/chromiumPdf";
 import { signPdfBuffer, pdfImzaYapilandirildi } from "@/lib/raporPdfSign";
 import { getRaporPdfBaseUrl } from "@/lib/raporPdfBaseUrl";
 
+const DATA_FORMAT_ALIAS: Record<string, string> = {
+  DetayRapor: "Genel",
+  DetayFormat: "Genel",
+};
+
 // GET /api/rapor-takip/[nkrId]/imzali-pdf?format=Genel
 // Onaylı raporu sunucuda PDF'e çevirir + dijital imza (PAdES) gömer →
 // indirilen PDF "imzalı/korumalı" olur, editlenince imza geçersiz olur.
@@ -48,7 +53,7 @@ export async function GET(
   try {
     // Onay durumu kapısı (yalnızca onaylı raporlar imzalı PDF olarak indirilebilir).
     // ECONNRESET retry'ı artık DB pool katmanında (lib/db.ts ResilientRequest).
-    const data = await loadRaporViewData(nkrIdNum, format);
+    const data = await loadRaporViewData(nkrIdNum, DATA_FORMAT_ALIAS[format] ?? format, format);
     if (!data) return Response.json({ error: "Rapor bulunamadı." }, { status: 404 });
     // Onaylı / Yayınlanmış / Arşivlenmiş raporlar imzalı PDF olarak indirilebilir.
     // "Arşiv" = önceden onaylanmış, sonradan arşive alınmış rapor → indirilebilir olmalı.

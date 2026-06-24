@@ -325,7 +325,7 @@ export default function SpektrotekTalepler() {
 
       {/* ── Request Modal ─────────────────────────────────────────────────── */}
       {modalOpen && (
-        <div className={styles.overlay} onClick={e => e.target === e.currentTarget && setModalOpen(false)}>
+        <div className={styles.overlay}>
           <div className={styles.modal} style={{ maxWidth: 640 }}>
             <div className={styles.modalHeader}>
               <h2 className={styles.modalTitle}>{editingId ? 'Talebi Düzenle' : 'Yeni Talep'}</h2>
@@ -414,7 +414,7 @@ export default function SpektrotekTalepler() {
 
       {/* ── New Customer Modal ────────────────────────────────────────────── */}
       {customerModalOpen && (
-        <div className={styles.overlay} onClick={e => e.target === e.currentTarget && setCustomerModalOpen(false)}>
+        <div className={styles.overlay}>
           <div className={styles.modal} style={{ maxWidth: 580 }}>
             <div className={styles.modalHeader}>
               <h2 className={styles.modalTitle}>Yeni Müşteri Ekle</h2>

@@ -356,7 +356,7 @@ export default function HizmetTable() {
           DETAY POPUP
       ══════════════════════════════════════════════ */}
       {detailRow && (
-        <div className={styles.modalOverlay} onClick={() => setDetailRow(null)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>{detailRow.Kod} — {detailRow.Ad}</h2>
@@ -394,7 +394,7 @@ export default function HizmetTable() {
           DÜZENLE / YENİ EKLEME FORMU
       ══════════════════════════════════════════════ */}
       {editRow && (
-        <div className={styles.modalOverlay} onClick={closeEdit}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 680 }} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div>

@@ -229,7 +229,7 @@ export default function CosingTable() {
       </div>
 
       {detailModalOpen && (
-        <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && setDetailModalOpen(false)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 850 }}>
             <div className={styles.modalHeader}>
               <h2>İçerik Detayları</h2>

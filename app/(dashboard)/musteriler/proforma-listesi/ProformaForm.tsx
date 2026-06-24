@@ -333,7 +333,7 @@ export default function ProformaForm({ id }: { id?: string }) {
       </div>
 
       {sampleLine && (
-        <div className={styles.overlay} onClick={() => setSampleLine(null)}>
+        <div className={styles.overlay}>
           <div className={styles.miniModal} onClick={e => e.stopPropagation()}>
             <div className={styles.sectionHead}>
               <h2 className={styles.sectionTitle}>{sampleLine.hizmetAdi}</h2>

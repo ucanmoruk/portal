@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { imzalaVeKaydet } from "@/lib/raporImzaData";
 import { randomDisKodRapor } from "@/lib/disKod";
+import { lockRaporEdit } from "@/lib/raporDuzenleme";
 
 // 32 karakterlik URL-safe token
 function generateToken(): string {
@@ -103,6 +104,7 @@ export async function POST(
       }
 
       const imzaHash = await imzalaVeKaydet(pool, mevcutId, nkrIdNum, format);
+      await lockRaporEdit(pool, nkrIdNum, format);
 
       // DisRaporKodu backfill (kolon varsa ve boşsa)
       let disKodFinal: string | null = null;
@@ -193,6 +195,7 @@ export async function POST(
     // ───── Dijital imza (tamper-proof) ─────
     // Rapor içeriğini onay anında imzala → NKR_RaporOnay.ImzaHash'e yaz.
     const imzaHash = await imzalaVeKaydet(pool, insRes.recordset[0]?.ID, nkrIdNum, format);
+    await lockRaporEdit(pool, nkrIdNum, format);
 
     // Log
     const logCheck = await pool.request().query(

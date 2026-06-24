@@ -200,7 +200,7 @@ export default function TalepDetay({ params }: { params: Promise<{ id: string }>
 
       {/* Edit Modal */}
       {editOpen && (
-        <div className={styles.overlay} onClick={e => e.target === e.currentTarget && setEditOpen(false)}>
+        <div className={styles.overlay}>
           <div className={styles.modal} style={{ maxWidth: 640 }}>
             <div className={styles.modalHeader}>
               <h2 className={styles.modalTitle}>Talebi Düzenle</h2>

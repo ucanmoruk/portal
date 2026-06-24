@@ -2,6 +2,20 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 
+const normSql = (expr: string) => `
+  UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${expr},
+    N'Ü', N'U'), N'ü', N'U'), N'İ', N'I'), N'ı', N'I'), N'Ö', N'O'), N'ö', N'O'),
+    N'Ç', N'C'), N'ç', N'C'), N'Ğ', N'G'), N'ğ', N'G'))
+`;
+const bucketSql = (expr: string) => `
+  CASE
+    WHEN ${normSql(expr)} IN (N'DERMATOLOJI', N'CLAIM') THEN N'CLAIM'
+    WHEN ${normSql(expr)} IN (N'UGDR', N'UGD') THEN N'UGDR'
+    WHEN ${normSql(expr)} = N'DIGER' THEN N'DIGER'
+    ELSE ${normSql(expr)}
+  END
+`;
+
 // GET /api/rapor-takip
 // Her (NKR.ID, RaporFormati) kombinasyonu icin bir satir doner.
 // Ayni rapor numarasina ait birden fazla rapor formati varsa birden fazla satir gelir.
@@ -17,6 +31,7 @@ export async function GET(request: Request) {
     const year        = searchParams.get("year")?.trim() || "";
     const raporDurumu = searchParams.get("raporDurumu")?.trim() || "";
     const raporTuru   = searchParams.get("raporTuru")?.trim() || "";
+    const terminDate  = searchParams.get("terminDate")?.trim() || "";
     const acceptedOnly = searchParams.get("acceptedOnly") === "1";
     // phase: "lab" → sonuç giriş aşamasındaki kayıtlar (Bekliyor + Analiz Devam Ediyor),
     //        "approval" → Onaya Gönder'le gelmiş kayıtlar (Onay Bekleniyor)
@@ -93,16 +108,19 @@ export async function GET(request: Request) {
         )`
       : "";
 
-    const yearFilter = year
+    const yearFilter = year && !terminDate
       ? `AND MaxTermin IS NOT NULL AND YEAR(CONVERT(date, MaxTermin)) = @year`
+      : "";
+    const terminDateFilter = terminDate
+      ? `AND MaxTermin IS NOT NULL AND CONVERT(date, MaxTermin) = CONVERT(date, @terminDate)`
       : "";
 
     const raporTuruExpr = "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')";
+    const raporTuruNormExpr = bucketSql(raporTuruExpr);
+    const raporTuruParamNorm = bucketSql("@raporTuru");
 
-    const raporTuruFilter = ["ÜGDR", "UGDR", "ÜGD", "UGD"].includes(raporTuru.toLocaleUpperCase("tr-TR"))
-      ? `AND UPPER(REPLACE(${raporTuruExpr}, N'Ü', N'U')) IN (N'UGDR', N'UGD')`
-      : raporTuru
-      ? `AND ${raporTuruExpr} = @raporTuru`
+    const raporTuruFilter = raporTuru
+      ? `AND ${raporTuruNormExpr} = ${raporTuruParamNorm}`
       : "";
 
     const raporDurumuFilter = raporDurumu === "Bekliyor"
@@ -180,7 +198,7 @@ export async function GET(request: Request) {
         f.Ad                                    AS FirmaAd,
         p.Ad                                    AS ProjeAd,
         ${raporTuruExpr} AS RaporFormati,
-        UPPER(REPLACE(${raporTuruExpr}, N'Ü', N'U')) AS NormFmt,
+        ${raporTuruNormExpr} AS NormFmt,
         CONVERT(varchar(10), n.Tarih, 23) AS KabulTarihi
       INTO #Rap
       FROM NKR n
@@ -189,7 +207,7 @@ export async function GET(request: Request) {
       LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) p  ON p.ID = nd.ProjeID
       INNER JOIN NumuneX1         x1 ON x1.RaporID  = n.ID
       INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
-      ${hasLabKabul ? `${acceptedOnly ? "INNER" : "LEFT"} JOIN NKR_LabKabul lk ON lk.NkrID = n.ID AND lk.RaporFormati = ${raporTuruExpr}` : ""}
+      ${hasLabKabul ? `${acceptedOnly ? "INNER" : "LEFT"} JOIN NKR_LabKabul lk ON lk.NkrID = n.ID AND ${bucketSql("lk.RaporFormati")} = ${raporTuruNormExpr}` : ""}
       WHERE n.Durum = 'Aktif'
         ${searchFilter}
         ${raporTuruFilter};
@@ -203,20 +221,20 @@ export async function GET(request: Request) {
       INNER JOIN StokAnalizListesi s ON s.ID = x.AnalizID
       GROUP BY x.RaporID, ${raporTuruExpr};
 
-      ${hasRaporOnay ? `SELECT ro.NkrID, UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U')) AS NormFmt,
+      ${hasRaporOnay ? `SELECT ro.NkrID, ${bucketSql("ro.RaporFormati")} AS NormFmt,
         MAX(ro.Durum) AS RaporOnayDurum,
         MAX(ro.YayinUrl) AS YayinUrl,
         ${hasDisRaporKodu ? `MAX(ro.DisRaporKodu)` : `CAST(NULL AS NVARCHAR(40))`} AS DisRaporKodu
       INTO #OS
       FROM NKR_RaporOnay ro
-      GROUP BY ro.NkrID, UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U'));` : ``}
+      GROUP BY ro.NkrID, ${bucketSql("ro.RaporFormati")};` : ``}
 
-      ${hasOverrideTable ? `SELECT o.NkrID, UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) AS NormFmt,
+      ${hasOverrideTable ? `SELECT o.NkrID, ${bucketSql("o.RaporFormati")} AS NormFmt,
         MAX(o.Durum) AS OverrideDurum${hasOverrideNotlar ? `,
         MAX(o.Notlar) AS GeriGonderNotu` : ``}
       INTO #OV
       FROM NKR_RaporDurumOverride o
-      GROUP BY o.NkrID, UPPER(REPLACE(o.RaporFormati, N'Ü', N'U'));` : ``}
+      GROUP BY o.NkrID, ${bucketSql("o.RaporFormati")};` : ``}
 
       WITH WithStats AS (
         SELECT
@@ -258,6 +276,7 @@ export async function GET(request: Request) {
         FROM WithEffectiveDurum
         WHERE 1=1
           ${yearFilter}
+          ${terminDateFilter}
           ${raporDurumuFilter}
           ${phaseFilter}
       )
@@ -282,6 +301,7 @@ export async function GET(request: Request) {
 
     if (search) req.input("search", `%${search}%`);
     if (year) req.input("year", parseInt(year));
+    if (terminDate) req.input("terminDate", terminDate);
     if (raporTuru) req.input("raporTuru", raporTuru);
 
     const result = await req.query(query);

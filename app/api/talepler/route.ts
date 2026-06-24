@@ -35,11 +35,11 @@ export async function GET(request: NextRequest) {
       // Analiz: cosmoroot.VIEW_TALEP_LISTE (kolon adlarında boşluk var)
       const searchClause = search
         ? `AND (
-            LOWER(ISNULL(v.[Talep No], '')) LIKE LOWER(@searchLike)
-            OR LOWER(ISNULL(v.FirmaKodu, '')) LIKE LOWER(@searchLike)
-            OR LOWER(ISNULL(v.[Talep Oluşturan], '')) LIKE LOWER(@searchLike)
-            OR LOWER(ISNULL(v.[Müşteri], '')) LIKE LOWER(@searchLike)
-            OR LOWER(ISNULL(v.Durum, '')) LIKE LOWER(@searchLike)
+            ISNULL(v.[Talep No], '') COLLATE Turkish_CI_AS LIKE @searchLike
+            OR ISNULL(v.FirmaKodu, '') COLLATE Turkish_CI_AS LIKE @searchLike
+            OR ISNULL(v.[Talep Oluşturan], '') COLLATE Turkish_CI_AS LIKE @searchLike
+            OR ISNULL(v.[Müşteri], '') COLLATE Turkish_CI_AS LIKE @searchLike
+            OR ISNULL(v.Durum, '') COLLATE Turkish_CI_AS LIKE @searchLike
           )`
         : "";
       const durumClause = durum ? `AND ISNULL(v.Durum, '') = @durum` : "";
@@ -79,10 +79,10 @@ export async function GET(request: NextRequest) {
     // Destek: dbo.Talep WHERE Tur='Destek' (view yok)
     const searchClause = search
       ? `AND (
-          LOWER(ISNULL(COALESCE(t.DisTalepKodu, CAST(t.TalepNo AS NVARCHAR(50))), '')) LIKE LOWER(@searchLike)
-          OR LOWER(ISNULL(t.FirmaKodu, '')) LIKE LOWER(@searchLike)
-          OR LOWER(ISNULL(f.Firma_Adi, '')) LIKE LOWER(@searchLike)
-          OR LOWER(ISNULL(t.Durum, '')) LIKE LOWER(@searchLike)
+          ISNULL(COALESCE(t.DisTalepKodu, CAST(t.TalepNo AS NVARCHAR(50))), '') COLLATE Turkish_CI_AS LIKE @searchLike
+          OR ISNULL(t.FirmaKodu, '') COLLATE Turkish_CI_AS LIKE @searchLike
+          OR ISNULL(f.Firma_Adi, '') COLLATE Turkish_CI_AS LIKE @searchLike
+          OR ISNULL(t.Durum, '') COLLATE Turkish_CI_AS LIKE @searchLike
         )`
       : "";
     const durumClause = durum ? `AND ISNULL(t.Durum, '') = @durum` : "";

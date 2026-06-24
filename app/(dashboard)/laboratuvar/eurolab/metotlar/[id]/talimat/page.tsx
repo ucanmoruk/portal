@@ -332,7 +332,7 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
             </div>
 
             {previewOpen && (
-                <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && setPreviewOpen(false)}>
+                <div className={styles.modalOverlay}>
                     <div className={styles.modal} style={{ maxWidth: 980 }}>
                         <div className={styles.modalHeader}>
                             <div>

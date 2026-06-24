@@ -274,7 +274,7 @@ export default function UrunTable() {
       </div>
 
       {modalOpen && (
-        <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && setModalOpen(false)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 800 }}>
             <div className={styles.modalHeader}>
               <h2>{modalMode === "add" ? "Yeni Ürün Ekle" : "Ürün Güncelle"}</h2>

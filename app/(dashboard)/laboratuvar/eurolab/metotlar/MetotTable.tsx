@@ -377,7 +377,7 @@ export default function MetotTable() {
 
             {/* Modal */}
             {modalOpen && (
-                <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && setModalOpen(false)}>
+                <div className={styles.modalOverlay}>
                     <div className={styles.modal}>
                         <div className={styles.modalHeader}>
                             <h2>{modalMode === "add" ? "Yeni Metot Ekle" : "Metodu Düzenle"}</h2>
@@ -442,7 +442,7 @@ export default function MetotTable() {
 
             {/* Delete Confirmation */}
             {deleteTarget && (
-                <div className={styles.modalOverlay} onClick={() => setDeleteTarget(null)}>
+                <div className={styles.modalOverlay}>
                     <div className={`${styles.modal} ${styles.modalSm}`}>
                         <div className={styles.modalHeader}><h2>Pasifleştir</h2></div>
                         <div className={styles.modalBody}><p><b>{deleteTarget.method_code} - {deleteTarget.name}</b> metodu pasifleştirilsin mi?</p></div>
@@ -455,7 +455,7 @@ export default function MetotTable() {
             )}
 
             {previewTarget && (
-                <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && setPreviewTarget(null)}>
+                <div className={styles.modalOverlay}>
                     <div className={styles.modal} style={{ maxWidth: 980 }}>
                         <div className={styles.modalHeader}>
                             <div>

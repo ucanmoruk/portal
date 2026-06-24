@@ -53,7 +53,7 @@ export async function GET(
     const colCheck = await pool.request().query(`
       SELECT name FROM sys.columns
       WHERE object_id = OBJECT_ID('NumuneX1')
-        AND name IN ('Sonuc', 'Degerlendirme', 'DegerlendirmeEn', 'Birim', 'SonucEn', 'BirimEn', 'LimitEn', 'SonucKayitTarihi')
+        AND name IN ('Sonuc', 'Degerlendirme', 'DegerlendirmeEn', 'Birim', 'SonucEn', 'BirimEn', 'Limit', 'LimitEn', 'SonucKayitTarihi')
     `);
     const existingCols = new Set<string>(colCheck.recordset.map((r: any) => r.name));
 
@@ -146,7 +146,7 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const updates: { x1Id: number; sonuc: string; sonucEn?: string; degerlendirme: string; altParametreler?: unknown }[] = body.updates || [];
+    const updates: { x1Id: number; sonuc: string; sonucEn?: string; limit?: string; limitEn?: string; degerlendirme: string; altParametreler?: unknown }[] = body.updates || [];
 
     if (updates.length === 0) return Response.json({ ok: true });
 
@@ -156,13 +156,15 @@ export async function PATCH(
     const colCheck = await pool.request().query(`
       SELECT name FROM sys.columns
       WHERE object_id = OBJECT_ID('NumuneX1')
-        AND name IN ('Sonuc', 'Degerlendirme', 'DegerlendirmeEn', 'SonucEn', 'SonucKayitTarihi')
+        AND name IN ('Sonuc', 'Degerlendirme', 'DegerlendirmeEn', 'SonucEn', 'Limit', 'LimitEn', 'SonucKayitTarihi')
     `);
     const existingCols = new Set<string>(colCheck.recordset.map((r: any) => r.name));
     const hasSonuc            = existingCols.has("Sonuc");
     const hasDegerlendirme    = existingCols.has("Degerlendirme");
     const hasDegerlendirmeEn  = existingCols.has("DegerlendirmeEn");
     const hasSonucEn          = existingCols.has("SonucEn");
+    const hasLimit            = existingCols.has("Limit");
+    const hasLimitEn          = existingCols.has("LimitEn");
     const hasKayitTarihi      = existingCols.has("SonucKayitTarihi");
 
     if (!hasSonuc && !hasDegerlendirme) {
@@ -206,6 +208,14 @@ export async function PATCH(
       if (hasSonucEn) {
         sets.push("SonucEn = @sonucEn");
         req.input("sonucEn", upd.sonucEn ?? null);
+      }
+      if (hasLimit) {
+        sets.push("[Limit] = @limit");
+        req.input("limit", upd.limit ?? null);
+      }
+      if (hasLimitEn) {
+        sets.push("LimitEn = @limitEn");
+        req.input("limitEn", upd.limitEn ?? null);
       }
       if (hasDegerlendirme) {
         sets.push("Degerlendirme = @degerlendirme");

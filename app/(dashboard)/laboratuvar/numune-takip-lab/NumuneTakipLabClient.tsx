@@ -8,6 +8,8 @@ import RaporTakipTable from "../rapor-takip/RaporTakipTable";
 // Sonuç Girişi içinde nested format tabları
 const FORMAT_TABS = ["Genel", "Challenge", "Stabilite", "Claim", "ÜGDR", "Diğer"] as const;
 type FormatTab = (typeof FORMAT_TABS)[number];
+const RESULT_TABS = ["Tümü", ...FORMAT_TABS] as const;
+type ResultTab = (typeof RESULT_TABS)[number];
 
 // Ana tablar
 const MAIN_TABS = [
@@ -72,7 +74,7 @@ function normFmt(s: string): string {
 export default function NumuneTakipLabClient() {
   const searchParams = useSearchParams();
   const [mainTab, setMainTab] = useState<MainKey>("kabul");
-  const [formatTab, setFormatTab] = useState<FormatTab>("Genel");
+  const [formatTab, setFormatTab] = useState<ResultTab>("Tümü");
   // Kabul Et sonrası ilgili format tab'ını "kirli" işaretle
   const [refreshKey, setRefreshKey] = useState<Record<string, number>>({});
   // Tab sayıları
@@ -157,9 +159,9 @@ export default function NumuneTakipLabClient() {
         <>
           {/* Nested rapor formatı tabları */}
           <div style={subTabContainer}>
-            {FORMAT_TABS.map(f => {
+            {RESULT_TABS.map(f => {
               const active = formatTab === f;
-              const n = counts.byFormatLab?.[normFmt(f)] ?? 0;
+              const n = f === "Tümü" ? counts.sonuc : counts.byFormatLab?.[normFmt(f)] ?? 0;
               return (
                 <button
                   key={f}
@@ -184,9 +186,12 @@ export default function NumuneTakipLabClient() {
 
           <RaporTakipTable
             key={`${formatTab}-${refreshKey[formatTab] ?? 0}`}
-            fixedRaporTuru={formatTab}
+            fixedRaporTuru={formatTab === "Tümü" ? "" : formatTab}
             acceptedOnly
             phase="lab"
+            showTerminDateFilter={formatTab === "Tümü"}
+            defaultTerminDate={new Date().toISOString().slice(0, 10)}
+            enableExcelExport={formatTab === "Tümü"}
             onRefresh={fetchCounts}
           />
         </>

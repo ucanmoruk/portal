@@ -48,12 +48,15 @@ interface HizmetDetay {
 interface LocalEdit {
   sonuc: string;
   sonucEn: string;
+  limit: string;
+  limitEn: string;
   degerlendirme: string;
 }
 
 // Accordion için benzersiz anahtar
 const rowKey = (r: RaporRow) => `${r.NkrID}__${r.RaporFormati}`;
 const isUgdrFormat = (format: string) => ["ÜGDR", "UGDR", "ÜGD", "UGD"].includes(format.toLocaleUpperCase("tr-TR"));
+const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 
 // ── Küçük bileşenler ─────────────────────────────────────────────────────────
 
@@ -151,6 +154,9 @@ export default function RaporTakipTable({
   acceptedOnly = false,
   phase,
   hideRaporTuruTabs = false,
+  showTerminDateFilter = false,
+  defaultTerminDate,
+  enableExcelExport = false,
   onRefresh,
 }: {
   fixedRaporTuru?: string;
@@ -163,6 +169,12 @@ export default function RaporTakipTable({
   phase?: "lab" | "approval" | "returned" | "approved";
   /** true → üstteki rapor türü tab'larını gizle (Numune Takip alt sayfaları için) */
   hideRaporTuruTabs?: boolean;
+  /** true → termin tarihi filtresini gösterir. Günlük rapor çıkışı için kullanılır. */
+  showTerminDateFilter?: boolean;
+  /** showTerminDateFilter aktifken ilk tarih. */
+  defaultTerminDate?: string;
+  /** Görünen filtreye göre Excel uyumlu CSV dışa aktarımı. */
+  enableExcelExport?: boolean;
   /** Bir state-değiştirici aksiyon (Onaya Gönder, Geri Al, Kaydet) sonrası çağrılır.
       Dış sayfa tab sayıları gibi türevleri tazelemek için kullanır. */
   onRefresh?: () => void;
@@ -175,6 +187,7 @@ export default function RaporTakipTable({
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch]       = useState("");
   const [year, setYear]           = useState("2026");
+  const [terminDate, setTerminDate] = useState(defaultTerminDate ?? "");
   // phase=approval → default "Onay Bekleniyor" (sadece bekleyenler görünür; Onaylandı'lar filter ile)
   const [raporDurumu, setRaporDurumu] = useState(phase === "approval" ? "Onay Bekleniyor" : "");
   const [raporTuru, setRaporTuru] = useState(fixedRaporTuru ?? "");
@@ -197,6 +210,7 @@ export default function RaporTakipTable({
   const [bilesenMap, setBilesenMap] = useState<Record<string, Record<number, BilesenSonuc[]>>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<Record<string, string>>({});
+  const [exporting, setExporting] = useState(false);
 
   // Gönder modal
   const [gonderRow,    setGonderRow]    = useState<RaporRow | null>(null);
@@ -215,7 +229,7 @@ export default function RaporTakipTable({
 
   // ── Veri çekme ────────────────────────────────────────────────────────────
   const fetchData = useCallback(async (
-    p: number, s: string, l: number, y: string, d: string, t: string,
+    p: number, s: string, l: number, y: string, d: string, t: string, td: string,
     opts: { clearFirst?: boolean } = {},
   ) => {
     const reqId = ++latestReqId.current;
@@ -235,6 +249,7 @@ export default function RaporTakipTable({
         page: p.toString(), limit: l.toString(),
         search: s, year: y, raporDurumu: d, raporTuru: t,
       });
+      if (showTerminDateFilter && td) params.set("terminDate", td);
       if (acceptedOnly) params.set("acceptedOnly", "1");
       if (phase) params.set("phase", phase);
       const res = await fetch(
@@ -255,24 +270,24 @@ export default function RaporTakipTable({
         setLoading(false); setTrans(false);
       }
     }
-  }, [acceptedOnly, phase]);
+  }, [acceptedOnly, phase, showTerminDateFilter]);
 
   // İlk yükleme
   useEffect(() => {
-    fetchData(1, "", limit, year, raporDurumu, raporTuru, { clearFirst: true });
+    fetchData(1, "", limit, year, raporDurumu, raporTuru, terminDate, { clearFirst: true });
   }, []);
 
   useEffect(() => {
     if (!didMount.current) { didMount.current = true; return; }
-    fetchData(page, search, limit, year, raporDurumu, raporTuru, { clearFirst: false });
-  }, [page, limit, year, raporDurumu, raporTuru]);
+    fetchData(page, search, limit, year, raporDurumu, raporTuru, terminDate, { clearFirst: false });
+  }, [page, limit, year, raporDurumu, raporTuru, terminDate]);
 
   const handleSearch = (val: string) => {
     setSearch(val);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
       setPage(1);
-      fetchData(1, val, limit, year, raporDurumu, raporTuru, { clearFirst: true });
+      fetchData(1, val, limit, year, raporDurumu, raporTuru, terminDate, { clearFirst: true });
     }, 250);
   };
 
@@ -310,6 +325,8 @@ export default function RaporTakipTable({
           initial[h.X1ID] = {
             sonuc:         h.Sonuc         ?? "",
             sonucEn:       h.SonucEn       ?? "",
+            limit:         h.LimitDeger    ?? "",
+            limitEn:       h.LimitEn       ?? "",
             degerlendirme: h.Degerlendirme ?? "",
           };
           if (h.altParametreler && h.altParametreler.length > 0) {
@@ -364,7 +381,7 @@ export default function RaporTakipTable({
   // ── Kaydet (tek satır) ────────────────────────────────────────────────────
   const saveSingleRow = async (row: RaporRow, x1Id: number) => {
     const key = rowKey(row);
-    const edit = editMap[key]?.[x1Id] ?? { sonuc: "", sonucEn: "", degerlendirme: "" };
+    const edit = editMap[key]?.[x1Id] ?? { sonuc: "", sonucEn: "", limit: "", limitEn: "", degerlendirme: "" };
 
     setSavingRowId(x1Id);
     setSaveError(prev => ({ ...prev, [key]: "" }));
@@ -374,7 +391,7 @@ export default function RaporTakipTable({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          updates: [{ x1Id, sonuc: edit.sonuc, sonucEn: edit.sonucEn, degerlendirme: edit.degerlendirme, altParametreler: bilesenMap[key]?.[x1Id] }],
+          updates: [{ x1Id, sonuc: edit.sonuc, sonucEn: edit.sonucEn, limit: edit.limit, limitEn: edit.limitEn, degerlendirme: edit.degerlendirme, altParametreler: bilesenMap[key]?.[x1Id] }],
           raporFormati: row.RaporFormati,
         }),
       });
@@ -386,7 +403,7 @@ export default function RaporTakipTable({
         const current = prev[key] || [];
         const updated = current.map(h =>
           h.X1ID === x1Id
-            ? { ...h, Sonuc: edit.sonuc, SonucEn: edit.sonucEn, Degerlendirme: edit.degerlendirme, SonucKayitTarihi: now }
+            ? { ...h, Sonuc: edit.sonuc, SonucEn: edit.sonucEn, LimitDeger: edit.limit, LimitEn: edit.limitEn, Degerlendirme: edit.degerlendirme, SonucKayitTarihi: now }
             : h
         );
         return { ...prev, [key]: updated };
@@ -396,7 +413,7 @@ export default function RaporTakipTable({
       markSaved(x1Id);
 
       // Ana listeyi refresh — durum "Analiz Devam Ediyor" olabilir
-      fetchData(page, search, limit, year, raporDurumu, raporTuru, { clearFirst: false });
+      fetchData(page, search, limit, year, raporDurumu, raporTuru, terminDate, { clearFirst: false });
       onRefresh?.();
     } catch (e: any) {
       setSaveError(prev => ({ ...prev, [key]: e.message }));
@@ -414,6 +431,8 @@ export default function RaporTakipTable({
       x1Id: Number(x1Id),
       sonuc: vals.sonuc,
       sonucEn: vals.sonucEn,
+      limit: vals.limit,
+      limitEn: vals.limitEn,
       degerlendirme: vals.degerlendirme,
       altParametreler: bilesenMap[key]?.[Number(x1Id)],
     }));
@@ -436,6 +455,8 @@ export default function RaporTakipTable({
           ...h,
           Sonuc:         edits[h.X1ID]?.sonuc         ?? h.Sonuc,
           SonucEn:       edits[h.X1ID]?.sonucEn       ?? h.SonucEn,
+          LimitDeger:    edits[h.X1ID]?.limit         ?? h.LimitDeger,
+          LimitEn:       edits[h.X1ID]?.limitEn       ?? h.LimitEn,
           Degerlendirme: edits[h.X1ID]?.degerlendirme ?? h.Degerlendirme,
           // Bu satır kaydedildiyse SonucKayitTarihi'yi şimdi yap → isLocked true olur, kalem görünür
           SonucKayitTarihi: edits[h.X1ID] !== undefined ? now : h.SonucKayitTarihi,
@@ -456,7 +477,7 @@ export default function RaporTakipTable({
         return n;
       });
 
-      fetchData(page, search, limit, year, raporDurumu, raporTuru, { clearFirst: false });
+      fetchData(page, search, limit, year, raporDurumu, raporTuru, terminDate, { clearFirst: false });
       onRefresh?.();
     } catch (e: any) {
       setSaveError(prev => ({ ...prev, [key]: e.message }));
@@ -542,6 +563,66 @@ export default function RaporTakipTable({
     window.open(`/api/rapor-takip/yazdir?ids=${ids}`, "_blank");
   };
 
+  const exportExcel = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setError("");
+    try {
+      const pageSize = 100;
+      const allRows: RaporRow[] = [];
+      const totalPageCount = Math.max(1, Math.ceil(total / pageSize));
+      for (let p = 1; p <= totalPageCount; p++) {
+        const params = new URLSearchParams({
+          page: String(p),
+          limit: String(pageSize),
+          search,
+          year,
+          raporDurumu,
+          raporTuru,
+        });
+        if (showTerminDateFilter && terminDate) params.set("terminDate", terminDate);
+        if (acceptedOnly) params.set("acceptedOnly", "1");
+        if (phase) params.set("phase", phase);
+        const res = await fetch(`/api/rapor-takip?${params}`, { cache: "no-store" });
+        if (!res.ok) throw new Error((await res.json()).error || "Export alinamadi");
+        const json = await res.json();
+        allRows.push(...(json.data || []));
+      }
+
+      const csvCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+      const headers = ["Tarih", "Evrak No", "Rapor No", "Firma", "Proje", "Numune", "Rapor Turu", "Durum", "Termin", "Hizmet", "Sonuclu"];
+      const lines = [
+        headers.map(csvCell).join(";"),
+        ...allRows.map(r => [
+          r.Tarih,
+          r.Evrak_No,
+          r.RaporNo,
+          r.FirmaAd,
+          r.ProjeAd,
+          r.Numune_Adi,
+          displayFormat(r.RaporFormati),
+          r.RaporDurumu,
+          r.MaxTermin,
+          r.HizmetSayisi,
+          r.SonucluSayisi,
+        ].map(csvCell).join(";")),
+      ];
+      const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `sonuc-girisi-${terminDate || "tum"}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e.message || "Export alinamadi");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const toggleCompletion = async (row: RaporRow) => {
     // Onay Bekleniyor durumdayken "Geri Al" → /geri-gonder (Geri Gönderildi state)
     // Bekliyor/Analiz Devam Ediyor iken "Onaya Gönder" → /tamamla (Onay Bekleniyor)
@@ -562,7 +643,7 @@ export default function RaporTakipTable({
         });
         if (!res.ok) throw new Error((await res.json()).error || "Durum güncellenemedi");
       }
-      fetchData(page, search, limit, year, raporDurumu, raporTuru, { clearFirst: false });
+      fetchData(page, search, limit, year, raporDurumu, raporTuru, terminDate, { clearFirst: false });
       onRefresh?.();
     } catch (e: any) {
       setError(e.message || "Durum güncellenemedi");
@@ -699,15 +780,30 @@ export default function RaporTakipTable({
           <span className={styles.totalCount}>{total} rapor</span>
         </div>
         <div className={styles.toolbarRight} style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          {/* Yıl Filtresi */}
-          <select value={year} onChange={e => { setYear(e.target.value); setPage(1); }}
-            style={{
-              padding: "6px 8px", borderRadius: 6, border: "1px solid var(--color-border)",
-              background: "var(--color-bg)", fontSize: "0.75rem", cursor: "pointer",
-            }}>
-            <option value="">Tüm Yıllar</option>
-            {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+          {/* Tarih / Yıl Filtresi */}
+          {showTerminDateFilter ? (
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.75rem", color: "var(--color-text-secondary)", fontWeight: 600 }}>
+              Termin
+              <input
+                type="date"
+                value={terminDate}
+                onChange={e => { setTerminDate(e.target.value); setPage(1); }}
+                style={{
+                  padding: "5px 8px", borderRadius: 6, border: "1px solid var(--color-border)",
+                  background: "var(--color-bg)", fontSize: "0.75rem", cursor: "pointer",
+                }}
+              />
+            </label>
+          ) : (
+            <select value={year} onChange={e => { setYear(e.target.value); setPage(1); }}
+              style={{
+                padding: "6px 8px", borderRadius: 6, border: "1px solid var(--color-border)",
+                background: "var(--color-bg)", fontSize: "0.75rem", cursor: "pointer",
+              }}>
+              <option value="">Tüm Yıllar</option>
+              {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          )}
 
           {/* Rapor Durumu Filtresi — phase'e göre seçenekler değişir */}
           <select value={raporDurumu} onChange={e => { setRaporDurumu(e.target.value); setPage(1); }}
@@ -759,6 +855,25 @@ export default function RaporTakipTable({
                 <path fillRule="evenodd" d="M5 4v3H4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1v1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1V4a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1Zm2 0h6v3H7V4Zm-1 9v-2h8v2H6Zm8 2H6v-1h8v1Z" clipRule="evenodd" />
               </svg>
               Yazdır ({selectedIds.size})
+            </button>
+          )}
+
+          {enableExcelExport && (
+            <button
+              type="button"
+              onClick={exportExcel}
+              disabled={exporting || total === 0}
+              title="Mevcut filtreye göre Excel uyumlu CSV indir"
+              style={{
+                padding: "6px 10px", borderRadius: 6, border: "1px solid #34c75955",
+                background: "#34c75914", color: "#248a3d",
+                fontSize: "0.75rem", fontWeight: 700,
+                cursor: exporting || total === 0 ? "not-allowed" : "pointer",
+                opacity: exporting || total === 0 ? 0.6 : 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {exporting ? "Hazırlanıyor..." : "Excel Export"}
             </button>
           )}
 
@@ -929,8 +1044,8 @@ export default function RaporTakipTable({
                       fontWeight: 500, fontSize: "0.845rem", color: "var(--color-text-primary)",
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                     }}>
-                      {row.FirmaAd ?? "—"}
-                      {row.ProjeAd && <span style={{ color: "var(--color-text-tertiary)" }}> · {row.ProjeAd}</span>}
+                      {upperTr(row.FirmaAd) || "—"}
+                      {row.ProjeAd && <span style={{ color: "var(--color-text-tertiary)" }}> · {upperTr(row.ProjeAd)}</span>}
                     </div>
                   )}
                   <div style={{
@@ -1194,7 +1309,13 @@ export default function RaporTakipTable({
                         </thead>
                         <tbody>
                           {hizmetler.map((h, hi) => {
-                            const edit = edits[h.X1ID] ?? { sonuc: h.Sonuc ?? "", sonucEn: h.SonucEn ?? "", degerlendirme: h.Degerlendirme ?? "" };
+                            const edit = edits[h.X1ID] ?? {
+                              sonuc: h.Sonuc ?? "",
+                              sonucEn: h.SonucEn ?? "",
+                              limit: h.LimitDeger ?? "",
+                              limitEn: h.LimitEn ?? "",
+                              degerlendirme: h.Degerlendirme ?? "",
+                            };
                             const bilesenler = bilesenMap[key]?.[h.X1ID] ?? (h.altParametreler || []);
                             // "Kayıtlı" = kullanıcı Kaydet bastı.
                             // Bunun göstergesi: NumuneX1.SonucKayitTarihi NULL değil.
@@ -1300,13 +1421,42 @@ export default function RaporTakipTable({
                                   </div>
                                 </td>
                                 {/* Limit + EN */}
-                                <td style={{ padding: "8px 10px" }}>
-                                  <div style={{ color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
-                                    {h.LimitDeger ?? "—"}
+                                <td style={{ padding: "6px 8px" }}>
+                                  <input
+                                    type="text"
+                                    value={edit.limit}
+                                    onChange={e => setFieldValue(key, h.X1ID, "limit", e.target.value)}
+                                    placeholder="limit"
+                                    disabled={isLocked}
+                                    readOnly={isLocked}
+                                    style={isLocked ? { ...inputBase, ...lockedInputStyle } : inputBase}
+                                    onFocus={e => { if (!isLocked) e.currentTarget.style.borderColor = "var(--color-accent)"; }}
+                                    onBlur={e  => { if (!isLocked) e.currentTarget.style.borderColor = "var(--color-border)"; }}
+                                  />
+                                  <div style={{ position: "relative", marginTop: 3 }}>
+                                    <span style={{
+                                      position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)",
+                                      fontSize: "0.58rem", fontWeight: 700, color: isLocked ? "#888" : "#0071e3",
+                                      pointerEvents: "none", userSelect: "none",
+                                    }}>EN</span>
+                                    <input
+                                      type="text"
+                                      value={edit.limitEn}
+                                      onChange={e => setFieldValue(key, h.X1ID, "limitEn", e.target.value)}
+                                      placeholder="limit"
+                                      disabled={isLocked}
+                                      readOnly={isLocked}
+                                      style={isLocked
+                                        ? { ...inputBase, ...lockedInputStyle, fontSize: "0.74rem", paddingLeft: 24, background: "transparent" }
+                                        : {
+                                            ...inputBase, fontSize: "0.74rem", paddingLeft: 24,
+                                            color: "#005bb5", borderColor: "#0071e340",
+                                            background: "#f0f6ff",
+                                          }}
+                                      onFocus={e => { if (!isLocked) e.currentTarget.style.borderColor = "#0071e3"; }}
+                                      onBlur={e  => { if (!isLocked) e.currentTarget.style.borderColor = "#0071e340"; }}
+                                    />
                                   </div>
-                                  {h.LimitEn && (
-                                    <div style={{ fontSize: "0.72rem", color: "#0071e3", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{h.LimitEn}</div>
-                                  )}
                                 </td>
                                 {/* Değerlendirme — düzenlenebilir */}
                                 <td style={{ padding: "6px 8px" }}>
@@ -1506,7 +1656,6 @@ export default function RaporTakipTable({
             background: "rgba(0,0,0,0.45)", display: "flex",
             alignItems: "center", justifyContent: "center", padding: 20,
           }}
-          onClick={() => setGonderRow(null)}
         >
           <div
             style={{
@@ -1526,7 +1675,7 @@ export default function RaporTakipTable({
               <div>
                 <div style={{ fontWeight: 700, fontSize: "1rem" }}>Raporu Gönder</div>
                 <div style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginTop: 2 }}>
-                  {gonderRow.RaporNo} · {gonderRow.RaporFormati} · {gonderRow.FirmaAd ?? "—"}
+                  {gonderRow.RaporNo} · {gonderRow.RaporFormati} · {upperTr(gonderRow.FirmaAd) || "—"}
                 </div>
               </div>
               <button

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import styles from '@/app/styles/table.module.css';
+
+const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 // ----------------------------------------------------------------
 // Types
 // ----------------------------------------------------------------
@@ -241,7 +243,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
               ) : data.map((m, i) => (
                 <tr key={m.ID}>
                   <td className={styles.tdNum}>{(page - 1) * limit + i + 1}</td>
-                  <td className={styles.tdName}>{m.Ad || "—"}</td>
+                  <td className={styles.tdName}>{upperTr(m.Ad) || "—"}</td>
                   <td>{m.Tur2 || "Müşteri"}</td>
                   <td className={styles.tdAdres}>{m.Adres || "—"}</td>
                   <td className={styles.tdMono}>
@@ -307,7 +309,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
       </div>
 
       {modalOpen && (
-        <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && setModalOpen(false)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
               <h2>{modalMode === "add" ? "Yeni Firma Ekle" : "Firmayı Düzenle"}</h2>
@@ -356,7 +358,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
       )}
 
       {deleteTarget && (
-        <div className={styles.modalOverlay} onClick={() => setDeleteTarget(null)}>
+        <div className={styles.modalOverlay}>
           <div className={`${styles.modal} ${styles.modalSm}`}>
             <div className={styles.modalHeader}><h2>Pasifleştir</h2></div>
             <div className={styles.modalBody}><p>{deleteTarget.Ad} pasifleştirilsin mi?</p></div>

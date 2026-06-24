@@ -781,7 +781,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
 
       {/* ── Add / Edit Modal ─────────────────────────────────────────────────── */}
       {modalOpen && (
-        <div className={styles.modalOverlay} onClick={() => !saving && setModalOpen(false)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal}
             style={{ maxWidth: 960, width: "95vw" }}
             onClick={e => e.stopPropagation()}>
@@ -1140,7 +1140,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
 
       {/* Revize / Düzeltme onay diyaloğu */}
       {revPromptOpen && (
-        <div className={styles.modalOverlay} onClick={() => !saving && setRevPromptOpen(false)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>{revPromptStage === "ask" ? "Revizyon yapılsın mı?" : "Revizyon açıklaması"}</h2>
@@ -1200,7 +1200,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
 
       {/* ── Mail Modal ───────────────────────────────────────────────────────── */}
       {mailTarget && (
-        <div className={styles.modalOverlay} onClick={() => !mailSending && setMailTarget(null)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 600, width: "95vw" }} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>Mail Gönder</h2>
@@ -1358,7 +1358,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
 
       {/* ── Delete Confirm ───────────────────────────────────────────────────── */}
       {deleteTarget && (
-        <div className={styles.modalOverlay} onClick={() => !deleting && setDeleteTarget(null)}>
+        <div className={styles.modalOverlay}>
           <div className={`${styles.modal} ${styles.modalSm}`} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>Teklif Silinsin mi?</h2>

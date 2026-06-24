@@ -478,7 +478,7 @@ export default function RaporEditor({ raporId }: { raporId: string }) {
 
       {/* ── Tamamla onay modal ── */}
       {confirmTamamla && (
-        <div className={styles.modalOverlay} onClick={() => setConfirmTamamla(false)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>Raporu Tamamla</h2>

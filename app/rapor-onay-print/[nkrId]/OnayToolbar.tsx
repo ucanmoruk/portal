@@ -119,6 +119,14 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
     window.print();
   };
 
+  const handleDuzenle = () => {
+    window.open(
+      `/rapor-onay-print/${nkrId}/duzenle?format=${encodeURIComponent(format)}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  };
+
   // Sunucuda üretilip dijital imzalı (PAdES) PDF'i indirir.
   // İçeriği bu önizleme ile birebir aynıdır (ortak loadRaporViewData).
   const handleDownloadSignedPdf = async () => {
@@ -176,6 +184,19 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
         {/* Eylem butonları */}
         {!onaylandi && canApprove && (
           <>
+            <button
+              type="button"
+              onClick={handleDuzenle}
+              disabled={busy !== null}
+              style={{
+                padding: "8px 18px", borderRadius: 8,
+                background: "#0a84ff", color: "#fff",
+                border: "none",
+                fontSize: 13, fontWeight: 700, cursor: busy ? "wait" : "pointer",
+              }}
+            >
+              Düzenle
+            </button>
             <button
               type="button"
               onClick={handleOnayla}
@@ -294,7 +315,6 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
             background: "rgba(0,0,0,0.6)", display: "flex",
             alignItems: "center", justifyContent: "center", padding: 20,
           }}
-          onClick={() => setShowGeriModal(false)}
         >
           <div onClick={e => e.stopPropagation()} style={{
             background: "#fff", borderRadius: 14, padding: 24,

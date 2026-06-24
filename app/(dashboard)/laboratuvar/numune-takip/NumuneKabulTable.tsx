@@ -6,6 +6,8 @@ import styles from "@/app/styles/table.module.css";
 import { printBarcodes, type BarcodeNumune } from "../yeni-numune/printBarcode";
 import EvrakDetayModal from "./EvrakDetayModal";
 
+const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
+
 // ── Tipler ──────────────────────────────────────────────────────
 interface NumuneItem {
   ID: number;
@@ -519,7 +521,7 @@ export default function NumuneKabulTable() {
                   <div style={{
                     fontWeight: 500, fontSize: "0.845rem", color: "var(--color-text-primary)",
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                  }}>{group.firmaAd ?? "—"}</div>
+                  }}>{upperTr(group.firmaAd) || "—"}</div>
                   {group.projeAd && (
                     <div style={{
                       fontSize: "0.77rem", color: "var(--color-text-tertiary)",
@@ -801,7 +803,7 @@ export default function NumuneKabulTable() {
 
       {/* ── PASİFE AL ONAY ── */}
       {deleteId !== null && (
-        <div className={styles.modalOverlay} onClick={() => setDeleteId(null)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>Pasife Al</h2>
@@ -827,7 +829,7 @@ export default function NumuneKabulTable() {
       )}
 
       {invoiceGroup && (
-        <div className={styles.modalOverlay} onClick={() => setInvoiceGroup(null)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>Faturalandır / Proforma Oluştur</h2>

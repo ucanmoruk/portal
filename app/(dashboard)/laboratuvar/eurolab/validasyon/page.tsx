@@ -415,7 +415,7 @@ export default function ValidationDashboard() {
       </div>
 
       {qcDialogRow && (
-        <div className={styles.modalOverlay} onClick={() => setQcDialogRow(null)}>
+        <div className={styles.modalOverlay}>
           <div className={`${styles.modal} ${styles.modalSm}`} onClick={event => event.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>QC Kartı Oluştur</h2>

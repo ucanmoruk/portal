@@ -150,7 +150,7 @@ export default function SpektrotekMusteriler() {
       </div>
 
       {modalOpen && (
-        <div className={styles.overlay} onClick={e => e.target === e.currentTarget && setModalOpen(false)}>
+        <div className={styles.overlay}>
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
               <h2 className={styles.modalTitle}>{editingId ? 'Müşteriyi Düzenle' : 'Yeni Müşteri'}</h2>

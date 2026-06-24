@@ -534,7 +534,7 @@ export default function HizmetPaketleri() {
            MODAL: Hizmet Ekle (seçici)
       ══════════════════════════════════════════════════════════════ */}
       {hizmetModal && (
-        <div className={styles.overlay} onClick={() => setHizmetModal(false)}>
+        <div className={styles.overlay}>
           <div className={styles.modal} style={{ maxWidth: 700 }} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <span className={styles.modalTitle}>Hizmet Ekle — {aktifListe?.ListeAdi}</span>

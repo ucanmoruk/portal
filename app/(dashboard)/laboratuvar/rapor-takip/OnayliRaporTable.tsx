@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import styles from "@/app/styles/table.module.css";
 
+const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
+
 // ── Tipler ──────────────────────────────────────────────────────────────────
 
 interface RaporRow {
@@ -673,8 +675,8 @@ export default function OnayliRaporTable() {
                   fontWeight: 500, fontSize: "0.845rem", color: "var(--color-text-primary)",
                   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 }}>
-                  {row.FirmaAd ?? "—"}
-                  {row.ProjeAd && <span style={{ color: "var(--color-text-tertiary)" }}> · {row.ProjeAd}</span>}
+                  {upperTr(row.FirmaAd) || "—"}
+                  {row.ProjeAd && <span style={{ color: "var(--color-text-tertiary)" }}> · {upperTr(row.ProjeAd)}</span>}
                 </div>
                 <div style={{
                   fontSize: "0.77rem", color: "var(--color-text-secondary)",

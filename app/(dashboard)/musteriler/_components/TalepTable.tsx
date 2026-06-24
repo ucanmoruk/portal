@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "@/app/styles/table.module.css";
 
+const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TalepTable — Analiz & Destek talepleri için ORTAK liste bileşeni.
 // Tasarım: Müşteriler > Teklif Listesi ile birebir (toolbar + tableCard +
@@ -252,10 +254,10 @@ export default function TalepTable({ tur }: { tur: "Analiz" | "Destek" }) {
                             </td>
                             <td className={styles.tdSecondary}>{t.Tarih}</td>
                             <td className={styles.tdName}>
-                              {t.TalepOlusturan || <em style={{ color: "var(--color-text-tertiary)" }}>—</em>}
+                              {upperTr(t.TalepOlusturan) || <em style={{ color: "var(--color-text-tertiary)" }}>—</em>}
                             </td>
                             <td className={styles.tdName}>
-                              {t.Musteri || <em style={{ color: "var(--color-text-tertiary)" }}>—</em>}
+                              {upperTr(t.Musteri) || <em style={{ color: "var(--color-text-tertiary)" }}>—</em>}
                             </td>
                             <td style={{ textAlign: "center" }}>
                               <div style={{ position: "relative", display: "inline-block" }} data-talep-durum-menu>

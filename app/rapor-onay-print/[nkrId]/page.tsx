@@ -22,6 +22,7 @@ const FORMAT_COMPONENTS: Record<string, ComponentType<ReportFormatProps>> = {
 // StokAnalizListesi.RaporFormati alanı sorgulanırken bu eşleştirme kullanılır.
 const DATA_FORMAT_ALIAS: Record<string, string> = {
   DetayRapor: "Genel",
+  DetayFormat: "Genel",
 };
 
 function resolveFormatComponent(format: string): ComponentType<ReportFormatProps> {
@@ -51,7 +52,7 @@ export default async function RaporOnayPrintPage({
   // ekranda görünen ile imzalanan/doğrulanan içerik HER ZAMAN birebir aynı.
   // DetayRapor gibi türetilmiş formatlar veriyi alias üzerinden çeker.
   const dataFormat = DATA_FORMAT_ALIAS[format] ?? format;
-  const data = await loadRaporViewData(nkrIdNum, dataFormat);
+  const data = await loadRaporViewData(nkrIdNum, dataFormat, format);
   if (!data) {
     return <div style={{ padding: 40, fontFamily: "system-ui" }}>Rapor bulunamadı.</div>;
   }

@@ -250,7 +250,7 @@ export default function YonetmelikTable() {
       </div>
 
       {modalOpen && (
-        <div className={styles.modalOverlay} onClick={e => e.target === e.currentTarget && setModalOpen(false)}>
+        <div className={styles.modalOverlay}>
           <div className={styles.modal}>
             <div className={styles.modalHeader}>
               <h2>{modalMode === "add" ? "Yeni Yönetmelik" : "Yönetmelik Güncelle"}</h2>
