@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { constants, existsSync } from "node:fs";
-import { access, chmod, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -27,6 +27,9 @@ export interface PdfRenderOptions {
   footerTemplate?: string;
   /** Sayfa yüklendikten sonra render öncesi beklenecek ms (görseller/font için). */
   settleMs?: number;
+  /** URL render'da PDF basmadan önce true dönmesi beklenen tarayıcı içi JS ifadesi. */
+  readyExpression?: string;
+  readyTimeoutMs?: number;
 }
 
 interface ChromeLaunchConfig {
@@ -72,7 +75,7 @@ function findBundledChromiumInputs(): string[] {
   return [...candidates].filter((candidate) => existsSync(candidate));
 }
 
-async function configureChromiumTempDir(): Promise<void> {
+async function configureChromiumTempDir(): Promise<string> {
   const configured = sv(process.env.CHROMIUM_TMPDIR || process.env.CHROME_TMPDIR);
   const tmpDir = configured || path.join(process.cwd(), "tmp", "chromium");
   await mkdir(tmpDir, { recursive: true });
@@ -82,6 +85,7 @@ async function configureChromiumTempDir(): Promise<void> {
   process.env.TMPDIR = tmpDir;
   process.env.TMP = tmpDir;
   process.env.TEMP = tmpDir;
+  return tmpDir;
 }
 
 async function ensureExecutable(file: string): Promise<boolean> {
@@ -103,9 +107,32 @@ async function ensureExecutable(file: string): Promise<boolean> {
   }
 }
 
+async function relocateTmpExecutable(file: string, targetDir: string): Promise<string> {
+  if (process.platform === "win32") return file;
+
+  const resolvedFile = path.resolve(file);
+  const systemTmp = path.resolve(os.tmpdir());
+  const resolvedTarget = path.resolve(targetDir);
+  if (!resolvedFile.startsWith(`${systemTmp}${path.sep}`) || resolvedTarget.startsWith(`${systemTmp}${path.sep}`)) {
+    return file;
+  }
+
+  try {
+    await mkdir(resolvedTarget, { recursive: true });
+    const target = path.join(resolvedTarget, path.basename(file) || "chromium");
+    if (path.resolve(target) === resolvedFile) return file;
+    await copyFile(resolvedFile, target);
+    await chmod(target, 0o755);
+    if (await ensureExecutable(target)) return target;
+  } catch (error) {
+    console.warn("[chromiumPdf] /tmp Chromium kopyalanamadı, mevcut yol denenecek:", error);
+  }
+  return file;
+}
+
 async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
   loadDotenvOnce();
-  await configureChromiumTempDir();
+  const chromiumTmpDir = await configureChromiumTempDir();
 
   const configured = [
     process.env.CHROME_EXECUTABLE_PATH,
@@ -159,7 +186,8 @@ async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
     for (const input of bundledInputs) {
       const executablePath = await chromium.executablePath(input);
       if (executablePath && (await ensureExecutable(executablePath))) {
-        return { executablePath, args: chromium.args };
+        const runnablePath = await relocateTmpExecutable(executablePath, chromiumTmpDir);
+        return { executablePath: runnablePath, args: chromium.args };
       }
       if (executablePath) {
         console.warn(
@@ -405,6 +433,32 @@ async function renderTargetToPdf(target: RenderTarget, options: PdfRenderOptions
       throw new Error(
         `PDF sayfası beklenen adrese ulaşamadı. url=${pageUrl} state=${JSON.stringify(navigationState)}`,
       );
+    }
+
+    if (options.readyExpression) {
+      const startedAt = Date.now();
+      const timeoutMs = options.readyTimeoutMs ?? 30000;
+      let lastValue: unknown = null;
+      while (Date.now() - startedAt < timeoutMs) {
+        try {
+          const ready = await send(
+            "Runtime.evaluate",
+            {
+              expression: `Boolean((${options.readyExpression}))`,
+              returnByValue: true,
+            },
+            sessionId,
+          );
+          lastValue = ready?.result?.value;
+          if (lastValue === true) break;
+        } catch (error) {
+          lastValue = error instanceof Error ? error.message : String(error);
+        }
+        await delay(250);
+      }
+      if (lastValue !== true) {
+        throw new Error(`PDF sayfası hazır hale gelmedi. url=${pageUrl} ready=${JSON.stringify(lastValue)}`);
+      }
     }
 
     // ───────────────────────────────────────────────────────────

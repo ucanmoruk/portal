@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
+import { type NextRequest } from "next/server";
 
 const RAPOR_FORMAT_EXPR = "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')";
 const normSql = (expr: string) => `
@@ -26,9 +27,13 @@ const bucketSql = (expr: string) => `
 //
 // Her bucket bağımsız try/catch'te — biri patlasa diğerleri yine doğru sayıyı
 // döner. Hatalar response.errors içinde + console.error ile loglanır.
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz" }, { status: 401 });
+
+  const sp = request.nextUrl.searchParams;
+  const year = Math.max(0, parseInt(sp.get("year") || "2026", 10) || 0);
+  const terminDate = (sp.get("terminDate") || "").trim();
 
   const pool = await cosmoPool.then(p => p, (err) => {
     console.error("counts: cosmoPool bağlanamadı:", err);
@@ -132,7 +137,7 @@ export async function GET() {
   //   2) AcceptedReports CTE: tek DISTINCT
   //   3) WithStatus: 3 basit LEFT JOIN (her biri 1:1, UNIQUE constraint sayesinde)
   //   4) Final GROUP BY EffDurum
-  let sonuc = 0, geri = 0, onay = 0;
+  let sonuc = 0, geri = 0, onay = 0, dailyLab = 0;
   // Sonuç Girişi içindeki format sekmelerine (Genel/Challenge/...) numune sayısı.
   // Anahtar: UPPER(REPLACE(RaporFormati, 'Ü', 'U')) — UI normalize'i ile birebir aynı.
   const byFormatLab: Record<string, number> = {};
@@ -144,9 +149,10 @@ export async function GET() {
         ? "x.Sonuc IS NOT NULL AND x.Sonuc != ''"
         : "1 = 0";
 
-      const req = pool.request();
+      const req = pool.request().input("year", year);
       // mssql.Request#timeout — bu sorgu özelinde 60s'e çek
       (req as unknown as { timeout?: number }).timeout = 60000;
+      if (terminDate) req.input("terminDate", terminDate);
 
       // PERFORMANCE: SQL Server CTE'leri inline edip kötü plan üretiyordu (sayma
       // 1-2 dk sürüyordu). Ara sonuçları #temp tablolara materialize ediyoruz
@@ -157,6 +163,7 @@ export async function GET() {
         IF OBJECT_ID('tempdb..#Acc')   IS NOT NULL DROP TABLE #Acc;
         IF OBJECT_ID('tempdb..#OS')    IS NOT NULL DROP TABLE #OS;
         IF OBJECT_ID('tempdb..#OV')    IS NOT NULL DROP TABLE #OV;
+        IF OBJECT_ID('tempdb..#Eff')   IS NOT NULL DROP TABLE #Eff;
 
         SELECT x.RaporID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati, COUNT(*) AS SavedCount
         INTO #Saved
@@ -166,13 +173,15 @@ export async function GET() {
         GROUP BY x.RaporID, ${RAPOR_FORMAT_EXPR};
 
         SELECT DISTINCT n.ID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati,
-          ${bucketSql(RAPOR_FORMAT_EXPR)} AS NormFmt
+          ${bucketSql(RAPOR_FORMAT_EXPR)} AS NormFmt,
+          MAX(CONVERT(varchar(10), x1.Termin, 23)) AS MaxTermin
         INTO #Acc
         FROM NKR n
         INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
         INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
         INNER JOIN NKR_LabKabul k ON k.NkrID = n.ID AND ${bucketSql("k.RaporFormati")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
-        WHERE n.Durum = 'Aktif';
+        WHERE n.Durum = 'Aktif'
+        GROUP BY n.ID, ${RAPOR_FORMAT_EXPR}, ${bucketSql(RAPOR_FORMAT_EXPR)};
 
         ${hasRaporOnay ? `SELECT ro.NkrID, ${bucketSql("ro.RaporFormati")} AS NormFmt,
           MAX(ro.Durum) AS RaporOnayDurum
@@ -185,7 +194,7 @@ export async function GET() {
         GROUP BY o.NkrID, ${bucketSql("o.RaporFormati")};` : ``}
 
         WITH WithStatus AS (
-          SELECT ar.NkrID, ar.RaporFormati, ar.NormFmt,
+          SELECT ar.NkrID, ar.RaporFormati, ar.NormFmt, ar.MaxTermin,
             ${hasRaporOnay ? "os.RaporOnayDurum" : "NULL"} AS RaporOnayDurum,
             ${hasOverride ? "ov.OverrideDurum" : "NULL"}   AS OverrideDurum,
             COALESCE(sv.SavedCount, 0) AS SavedCount
@@ -195,7 +204,7 @@ export async function GET() {
           LEFT JOIN #Saved sv ON sv.NkrID = ar.NkrID AND sv.RaporFormati = ar.RaporFormati
         ),
         Eff AS (
-          SELECT NormFmt, COALESCE(
+          SELECT NormFmt, MaxTermin, COALESCE(
             RaporOnayDurum,
             CASE
               WHEN OverrideDurum IN (N'Tamamlandı', N'Tamamlandi') THEN N'Onay Bekleniyor'
@@ -206,12 +215,23 @@ export async function GET() {
           ) AS EffDurum
           FROM WithStatus
         )
-        SELECT EffDurum, NormFmt, COUNT(*) AS c FROM Eff GROUP BY EffDurum, NormFmt;
+        SELECT EffDurum, NormFmt, MaxTermin INTO #Eff FROM Eff;
+
+        SELECT EffDurum, NormFmt, COUNT(*) AS c
+        FROM #Eff
+        WHERE (@year = 0 OR (MaxTermin IS NOT NULL AND YEAR(CONVERT(date, MaxTermin)) = @year))
+        GROUP BY EffDurum, NormFmt;
+
+        SELECT COUNT(*) AS c
+        FROM #Eff
+        WHERE EffDurum IN (N'Bekliyor', N'Analiz Devam Ediyor')
+          ${terminDate ? "AND MaxTermin IS NOT NULL AND CONVERT(date, MaxTermin) = CONVERT(date, @terminDate)" : "AND (@year = 0 OR (MaxTermin IS NOT NULL AND YEAR(CONVERT(date, MaxTermin)) = @year))"};
 
         DROP TABLE #Saved;
         DROP TABLE #Acc;
         ${hasRaporOnay ? `DROP TABLE #OS;` : ``}
         ${hasOverride ? `DROP TABLE #OV;` : ``}
+        DROP TABLE #Eff;
       `);
 
       // Çok-statement batch: EffDurum içeren recordset'i seç (SELECT INTO/DROP
@@ -222,6 +242,10 @@ export async function GET() {
         rsets.find((rs) => rs && rs.length > 0 && "EffDurum" in rs[0]) ??
         (r.recordset as Array<Row>) ??
         [];
+      const dailyRows =
+        rsets.find((rs) => rs && rs.length > 0 && "c" in rs[0] && !("EffDurum" in rs[0])) ??
+        [];
+      dailyLab = Number(dailyRows[0]?.c ?? 0);
 
       const unknown: Array<{ d: string; c: number }> = [];
       for (const row of effRows) {
@@ -249,7 +273,7 @@ export async function GET() {
     }
   }
 
-  const payload: Record<string, unknown> = { kabul, sonuc, geri, onay, byFormatLab };
+  const payload: Record<string, unknown> = { kabul, sonuc, geri, onay, byFormatLab, dailyLab };
   if (Object.keys(errors).length > 0) payload.errors = errors;
   return Response.json(payload);
 }

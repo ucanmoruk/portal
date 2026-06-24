@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 import { randomDisKodTalep } from "@/lib/disKod";
+import { hasMysqlConfig } from "@/lib/mysqlCompat";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET  /api/talepler?tur=Analiz|Destek&search=&page=1&limit=20  — listele
@@ -12,6 +13,13 @@ import { randomDisKodTalep } from "@/lib/disKod";
 // Analiz için cosmoroot.VIEW_TALEP_LISTE (Tur='Analiz' filtreli) kullanılır.
 // Destek için dbo.Talep'ten doğrudan (Tur='Destek', Durum<>'Pasif').
 // ─────────────────────────────────────────────────────────────────────────────
+function likeClause(expr: string, mysqlMode: boolean) {
+  if (mysqlMode) {
+    return `CAST(IFNULL(${expr}, '') AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_turkish_ci LIKE CAST(@searchLike AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_turkish_ci`;
+  }
+  return `ISNULL(${expr}, '') COLLATE Turkish_CI_AS LIKE @searchLike`;
+}
+
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
@@ -30,16 +38,17 @@ export async function GET(request: NextRequest) {
 
   try {
     const pool = await cosmoPool;
+    const mysqlMode = hasMysqlConfig();
 
     if (tur === "Analiz") {
       // Analiz: cosmoroot.VIEW_TALEP_LISTE (kolon adlarında boşluk var)
       const searchClause = search
         ? `AND (
-            ISNULL(v.[Talep No], '') COLLATE Turkish_CI_AS LIKE @searchLike
-            OR ISNULL(v.FirmaKodu, '') COLLATE Turkish_CI_AS LIKE @searchLike
-            OR ISNULL(v.[Talep Oluşturan], '') COLLATE Turkish_CI_AS LIKE @searchLike
-            OR ISNULL(v.[Müşteri], '') COLLATE Turkish_CI_AS LIKE @searchLike
-            OR ISNULL(v.Durum, '') COLLATE Turkish_CI_AS LIKE @searchLike
+            ${likeClause("v.[Talep No]", mysqlMode)}
+            OR ${likeClause("v.FirmaKodu", mysqlMode)}
+            OR ${likeClause("v.[Talep Oluşturan]", mysqlMode)}
+            OR ${likeClause("v.[Müşteri]", mysqlMode)}
+            OR ${likeClause("v.Durum", mysqlMode)}
           )`
         : "";
       const durumClause = durum ? `AND ISNULL(v.Durum, '') = @durum` : "";
@@ -79,10 +88,10 @@ export async function GET(request: NextRequest) {
     // Destek: dbo.Talep WHERE Tur='Destek' (view yok)
     const searchClause = search
       ? `AND (
-          ISNULL(COALESCE(t.DisTalepKodu, CAST(t.TalepNo AS NVARCHAR(50))), '') COLLATE Turkish_CI_AS LIKE @searchLike
-          OR ISNULL(t.FirmaKodu, '') COLLATE Turkish_CI_AS LIKE @searchLike
-          OR ISNULL(f.Firma_Adi, '') COLLATE Turkish_CI_AS LIKE @searchLike
-          OR ISNULL(t.Durum, '') COLLATE Turkish_CI_AS LIKE @searchLike
+          ${likeClause("COALESCE(t.DisTalepKodu, CAST(t.TalepNo AS NVARCHAR(50)))", mysqlMode)}
+          OR ${likeClause("t.FirmaKodu", mysqlMode)}
+          OR ${likeClause("f.Firma_Adi", mysqlMode)}
+          OR ${likeClause("t.Durum", mysqlMode)}
         )`
       : "";
     const durumClause = durum ? `AND ISNULL(t.Durum, '') = @durum` : "";

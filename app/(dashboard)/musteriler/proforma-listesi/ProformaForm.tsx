@@ -77,6 +77,7 @@ export default function ProformaForm({ id }: { id?: string }) {
   const [notlar, setNotlar] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
   const [sampleLine, setSampleLine] = useState<Line | null>(null);
+  const [dovizAlis, setDovizAlis] = useState<number | null>(null);
 
   const totals = useMemo(() => {
     const ara = lines.reduce((sum, line) => sum + lineTotal(line), 0);
@@ -84,6 +85,25 @@ export default function ProformaForm({ id }: { id?: string }) {
     const kdv = (ara - iskonto) * (Number(kdvOran || 0) / 100);
     return { ara, iskonto, kdv, genel: ara - iskonto + kdv };
   }, [lines, genelIskonto, kdvOran]);
+
+  const paraBirimi = useMemo(() => {
+    const currencies = Array.from(new Set(lines.map(line => String(line.paraBirimi || "TRY").trim().toUpperCase() || "TRY")));
+    return currencies.length > 1 ? "Çoklu" : (currencies[0] || "TRY");
+  }, [lines]);
+
+  useEffect(() => {
+    let alive = true;
+    const pb = paraBirimi === "TL" || paraBirimi === "₺" ? "TRY" : paraBirimi;
+    if (!pb || pb === "TRY" || pb === "ÇOKLU" || pb === "Çoklu") {
+      setDovizAlis(null);
+      return;
+    }
+    fetch(`/api/tcmb-kur?currency=${encodeURIComponent(pb)}`, { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (alive) setDovizAlis(j?.rate ? Number(j.rate) : null); })
+      .catch(() => { if (alive) setDovizAlis(null); });
+    return () => { alive = false; };
+  }, [paraBirimi]);
 
   useEffect(() => {
     loadOffers();
@@ -328,7 +348,10 @@ export default function ProformaForm({ id }: { id?: string }) {
           <span>Ara Toplam: <b>{fmtMoney(totals.ara)}</b></span>
           <span>İskonto: <b>{fmtMoney(totals.iskonto)}</b></span>
           <span>KDV: <b>{fmtMoney(totals.kdv)}</b></span>
-          <span>Genel Toplam: <b>{fmtMoney(totals.genel)} TRY</b></span>
+          <span>Genel Toplam: <b>{fmtMoney(totals.genel)} {paraBirimi}</b></span>
+          {dovizAlis && (
+            <span>TL Karşılığı: <b>{fmtMoney(totals.genel * dovizAlis)} TL</b> <small>(TCMB alış {fmtMoney(dovizAlis)})</small></span>
+          )}
         </div>
       </div>
 

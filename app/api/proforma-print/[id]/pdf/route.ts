@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const forceDownload = req.nextUrl.searchParams.get("download") === "1";
   const origin = req.nextUrl.origin;
-  const reportUrl = `${origin}/teklif-print/${encodeURIComponent(id)}?pdfMode=1`;
+  const reportUrl = `${origin}/proforma-print/${encodeURIComponent(id)}?pdfMode=1`;
   const cookieHeader = req.headers.get("cookie") || "";
 
   try {
@@ -50,13 +50,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return new Response(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `${disposition}; filename="Teklif-${safeId}.pdf"`,
+        "Content-Disposition": `${disposition}; filename="Proforma-${safeId}.pdf"`,
         "Cache-Control": "no-store",
       },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "PDF uretilemedi.";
-    console.error("[teklif pdf]", error);
+    console.error("[proforma pdf]", error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

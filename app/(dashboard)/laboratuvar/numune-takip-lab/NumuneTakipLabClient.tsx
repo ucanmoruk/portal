@@ -54,9 +54,16 @@ const subTabContainer: React.CSSProperties = {
 
 interface Counts {
   kabul: number; sonuc: number; geri: number; onay: number;
+  dailyLab?: number;
   // Sonuç Girişi format sekmelerinin rozetleri için: anahtar
   // UPPER+normalize edilmiş RaporFormati (örn "GENEL", "UGDR", "DIGER").
   byFormatLab?: Record<string, number>;
+}
+
+function todayLocalISO() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
 }
 
 // FORMAT_TABS etiketlerini API anahtarına uydurur (Türkçe karakter + büyük harf).
@@ -77,21 +84,24 @@ export default function NumuneTakipLabClient() {
   const [formatTab, setFormatTab] = useState<ResultTab>("Tümü");
   // Kabul Et sonrası ilgili format tab'ını "kirli" işaretle
   const [refreshKey, setRefreshKey] = useState<Record<string, number>>({});
+  const [today] = useState(() => todayLocalISO());
   // Tab sayıları
   const [counts, setCounts] = useState<Counts>({ kabul: 0, sonuc: 0, geri: 0, onay: 0, byFormatLab: {} });
 
   const fetchCounts = useCallback(() => {
-    fetch("/api/numune-takip-lab/counts", { cache: "no-store" })
+    const params = new URLSearchParams({ year: "2026", terminDate: today });
+    fetch(`/api/numune-takip-lab/counts?${params}`, { cache: "no-store" })
       .then(r => r.json())
       .then((j: Counts) => setCounts({
         kabul: Number(j.kabul ?? 0),
         sonuc: Number(j.sonuc ?? 0),
         geri:  Number(j.geri  ?? 0),
         onay:  Number(j.onay  ?? 0),
+        dailyLab: Number(j.dailyLab ?? 0),
         byFormatLab: j.byFormatLab ?? {},
       }))
       .catch(() => { /* yoksay */ });
-  }, []);
+  }, [today]);
   useEffect(() => { fetchCounts(); }, [mainTab, formatTab, fetchCounts]);
 
   // URL'den initial tab (örn: ?tab=geri, ?tab=sonuc, ?tab=onaylanan)
@@ -161,7 +171,7 @@ export default function NumuneTakipLabClient() {
           <div style={subTabContainer}>
             {RESULT_TABS.map(f => {
               const active = formatTab === f;
-              const n = f === "Tümü" ? counts.sonuc : counts.byFormatLab?.[normFmt(f)] ?? 0;
+              const n = f === "Tümü" ? counts.dailyLab ?? 0 : counts.byFormatLab?.[normFmt(f)] ?? 0;
               return (
                 <button
                   key={f}
@@ -189,8 +199,9 @@ export default function NumuneTakipLabClient() {
             fixedRaporTuru={formatTab === "Tümü" ? "" : formatTab}
             acceptedOnly
             phase="lab"
+            hideRaporTuruTabs
             showTerminDateFilter={formatTab === "Tümü"}
-            defaultTerminDate={new Date().toISOString().slice(0, 10)}
+            defaultTerminDate={today}
             enableExcelExport={formatTab === "Tümü"}
             onRefresh={fetchCounts}
           />

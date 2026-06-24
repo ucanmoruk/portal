@@ -41,20 +41,37 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [previewKey, setPreviewKey] = useState(0);
 
   const apiUrl = useMemo(
     () => `/api/rapor-duzenleme/${nkrId}?format=${encodeURIComponent(format)}`,
     [nkrId, format],
   );
+  const previewUrl = useMemo(
+    () => `/rapor-onay-print/${nkrId}?format=${encodeURIComponent(format)}&preview=${previewKey}`,
+    [nkrId, format, previewKey],
+  );
+
+  async function readJson<T>(response: Response): Promise<T> {
+    const text = await response.text();
+    let data: any = {};
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(text.slice(0, 300) || "Sunucu JSON olmayan bir yanıt döndürdü.");
+      }
+    }
+    if (!response.ok) throw new Error(data.error || data.message || "İşlem tamamlanamadı.");
+    return data as T;
+  }
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     fetch(apiUrl, { cache: "no-store" })
       .then(async (r) => {
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error || "Rapor yüklenemedi");
-        return j as ApiData;
+        return readJson<ApiData>(r);
       })
       .then((j) => {
         if (!alive) return;
@@ -81,9 +98,9 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ header, hizmetler }),
       });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j.error || "Kaydedilemedi");
-      setMessage("Düzenleme kaydedildi. Önizleme penceresini yenileyerek son halini görebilirsiniz.");
+      await readJson<{ ok: boolean }>(res);
+      setPreviewKey((v) => v + 1);
+      setMessage("Düzenleme kaydedildi. Sağdaki rapor önizlemesi yenilendi.");
     } catch (e: any) {
       setError(e.message || "Kaydedilemedi");
     } finally {
@@ -97,7 +114,7 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
 
   return (
     <main style={{ minHeight: "100vh", background: "#f5f5f7", color: "#1d1d1f", fontFamily: "system-ui, sans-serif", padding: 24 }}>
-      <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1680, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 22 }}>Rapor Düzenle</h1>
@@ -119,7 +136,8 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
         {loading ? (
           <div style={panelStyle}>Yükleniyor...</div>
         ) : (
-          <>
+          <div style={editorGridStyle}>
+            <div>
             <section style={panelStyle}>
               <div style={sectionTitle}>Üst Bilgiler</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
@@ -182,7 +200,17 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
                 </table>
               </div>
             </section>
-          </>
+            </div>
+            <aside style={previewPanelStyle}>
+              <div style={{ ...sectionTitle, marginBottom: 10 }}>Canlı Rapor Önizleme</div>
+              <iframe
+                key={previewKey}
+                src={previewUrl}
+                title="Rapor önizleme"
+                style={{ width: "100%", height: "calc(100vh - 178px)", minHeight: 680, border: "1px solid #e5e5ea", borderRadius: 8, background: "#fff" }}
+              />
+            </aside>
+          </div>
         )}
       </div>
     </main>
@@ -212,6 +240,22 @@ const panelStyle: CSSProperties = {
   borderRadius: 10,
   padding: 16,
   marginBottom: 14,
+};
+
+const editorGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 560px), 1fr))",
+  gap: 16,
+  alignItems: "start",
+};
+
+const previewPanelStyle: CSSProperties = {
+  background: "#fff",
+  border: "1px solid #e5e5ea",
+  borderRadius: 10,
+  padding: 12,
+  position: "sticky",
+  top: 16,
 };
 
 const sectionTitle: CSSProperties = {

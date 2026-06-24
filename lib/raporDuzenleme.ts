@@ -1,5 +1,6 @@
 import type { RaporHeader, HizmetRow } from "@/app/rapor-onay-print/[nkrId]/reportTypes";
 import type { RaporMeta } from "@/lib/raporViewData";
+import { hasMysqlConfig } from "@/lib/mysqlCompat";
 
 export interface RaporEditPayload {
   header?: Partial<RaporHeader>;
@@ -13,6 +14,24 @@ export interface RaporEditRecord {
 }
 
 async function ensureRaporDuzenlemeTable(pool: any) {
+  if (hasMysqlConfig()) {
+    await pool.request().query(`
+      CREATE TABLE IF NOT EXISTS NKR_RaporDuzenleme (
+        ID INT AUTO_INCREMENT PRIMARY KEY,
+        NkrID INT NOT NULL,
+        RaporFormati VARCHAR(80) NOT NULL,
+        Payload LONGTEXT NULL,
+        Kilitli TINYINT(1) NOT NULL DEFAULT 0,
+        CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UpdatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CreatedBy INT NULL,
+        UpdatedBy INT NULL,
+        UNIQUE KEY UX_NKR_RaporDuzenleme_Nkr_Format (NkrID, RaporFormati)
+      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_turkish_ci
+    `);
+    return;
+  }
+
   await pool.request().query(`
     IF OBJECT_ID('dbo.NKR_RaporDuzenleme', 'U') IS NULL
     BEGIN
@@ -57,6 +76,23 @@ export async function loadRaporEdit(pool: any, nkrId: number, format: string): P
 export async function saveRaporEdit(pool: any, nkrId: number, format: string, payload: RaporEditPayload, userId: number | null) {
   await ensureRaporDuzenlemeTable(pool);
   const body = JSON.stringify(payload);
+  if (hasMysqlConfig()) {
+    await pool.request()
+      .input("nkrId", nkrId)
+      .input("format", format)
+      .input("payload", body)
+      .input("userId", userId)
+      .query(`
+        INSERT INTO NKR_RaporDuzenleme (NkrID, RaporFormati, Payload, Kilitli, CreatedBy, UpdatedBy)
+        VALUES (@nkrId, @format, @payload, 0, @userId, @userId)
+        ON DUPLICATE KEY UPDATE
+          Payload = IF(Kilitli = 0, VALUES(Payload), Payload),
+          UpdatedAt = IF(Kilitli = 0, NOW(), UpdatedAt),
+          UpdatedBy = IF(Kilitli = 0, VALUES(UpdatedBy), UpdatedBy)
+      `);
+    return;
+  }
+
   await pool.request()
     .input("nkrId", nkrId)
     .input("format", format)
@@ -76,6 +112,18 @@ export async function saveRaporEdit(pool: any, nkrId: number, format: string, pa
 
 export async function lockRaporEdit(pool: any, nkrId: number, format: string) {
   await ensureRaporDuzenlemeTable(pool);
+  if (hasMysqlConfig()) {
+    await pool.request()
+      .input("nkrId", nkrId)
+      .input("format", format)
+      .query(`
+        UPDATE NKR_RaporDuzenleme
+        SET Kilitli = 1, UpdatedAt = NOW()
+        WHERE NkrID = @nkrId AND RaporFormati = @format
+      `);
+    return;
+  }
+
   await pool.request()
     .input("nkrId", nkrId)
     .input("format", format)

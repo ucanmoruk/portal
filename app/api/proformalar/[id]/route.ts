@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
+import { calculateTlEquivalent, fetchTcmbTodayRates, normalizeParaBirimi } from "@/lib/tcmbRates";
 
 function toNumber(value: any, fallback = 0) {
   const n = Number(value);
@@ -47,7 +48,30 @@ export async function GET(
         ORDER BY ID
       `);
 
-    return Response.json({ header: header.recordset[0], satirlar: lines.recordset });
+    const headerRow = header.recordset[0];
+    const currencies = Array.from(new Set(lines.recordset.map((line: any) => normalizeParaBirimi(line.ParaBirimi || "TRY"))));
+    const paraBirimi = currencies.length > 1 ? "Çoklu" : (currencies[0] || "TRY");
+    let rates: Record<string, any> = {};
+    if (!["TRY", "TL", "₺", "Çoklu"].includes(paraBirimi)) {
+      try {
+        rates = await fetchTcmbTodayRates();
+      } catch (e) {
+        console.warn("proforma detay: TCMB kuru alınamadı:", e);
+      }
+    }
+    const normalizedCurrency = normalizeParaBirimi(paraBirimi);
+    const dovizAlisKuru = rates[normalizedCurrency]?.forexBuying ?? null;
+    const tlKarsiligi = calculateTlEquivalent(headerRow.GenelToplam, normalizedCurrency, rates);
+
+    return Response.json({
+      header: {
+        ...headerRow,
+        ParaBirimi: paraBirimi,
+        DovizAlisKuru: dovizAlisKuru,
+        TlKarsiligi: tlKarsiligi,
+      },
+      satirlar: lines.recordset,
+    });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

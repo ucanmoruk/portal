@@ -183,6 +183,10 @@ export async function GET(request: NextRequest) {
           ISNULL(t.TeklifDurum, 'Taslak') AS TeklifDurum,
           ISNULL(t.OlusturanAd, '') AS OlusturanAd,
           ISNULL(t.KisaAciklama, '') AS KisaAciklama,
+          CASE
+            WHEN COUNT(DISTINCT ISNULL(k.ParaBirimi, '')) > 1 THEN N'Çoklu'
+            ELSE ISNULL(MAX(k.ParaBirimi), 'TRY')
+          END AS ParaBirimi,
           COUNT(k.ID) AS HizmetSayisi
         FROM TeklifBaslik t
         LEFT JOIN Firma m ON m.ID = t.MusteriID

@@ -15,6 +15,7 @@ interface Teklif {
   MusteriAd: string;
   HizmetSayisi: number;
   Toplam: number | null;
+  ParaBirimi?: string | null;
   Notlar: string | null;
   Durum: string;
   TeklifDurum: string;
@@ -105,6 +106,10 @@ function netTutar(s: Satir) {
 function fmt(n: number | null | undefined) {
   if (n == null) return "—";
   return n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function upperTr(value?: string | null) {
+  return value ? value.toLocaleUpperCase("tr-TR") : "";
 }
 
 function fmtLogDate(value: unknown) {
@@ -690,7 +695,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                           </td>
                           <td className={styles.tdSecondary}>{t.Tarih}</td>
                           <td className={styles.tdName}>
-                            {t.MusteriAd || <em style={{ color: "var(--color-text-tertiary)" }}>—</em>}
+                            {upperTr(t.MusteriAd) || <em style={{ color: "var(--color-text-tertiary)" }}>—</em>}
                           </td>
                           <td className={styles.tdSecondary}>
                             {t.OlusturanAd || <em style={{ color: "var(--color-text-tertiary)" }}>—</em>}
@@ -699,7 +704,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                             <span className={`${styles.badge} ${styles.badgeGray}`}>{t.HizmetSayisi}</span>
                           </td>
                           <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                            {fmt(t.Toplam)}
+                            {fmt(t.Toplam)} <span style={{ color: "var(--color-text-tertiary)", fontSize: 11, fontWeight: 700 }}>{t.ParaBirimi || "TRY"}</span>
                           </td>
                           {/* Durum badge — tıklanabilir */}
                           <td style={{ textAlign: "center" }}>
@@ -1205,7 +1210,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
             <div className={styles.modalHeader}>
               <h2>Mail Gönder</h2>
               <span style={{ fontSize: 13, color: "var(--color-text-tertiary)", marginLeft: 10 }}>
-                {disLabel(mailTarget.DisTeklifKodu, mailTarget.RevNo)} — {mailTarget.MusteriAd}
+                {disLabel(mailTarget.DisTeklifKodu, mailTarget.RevNo)} — {upperTr(mailTarget.MusteriAd)}
               </span>
               <button className={styles.modalClose} onClick={() => !mailSending && setMailTarget(null)}>✕</button>
             </div>
@@ -1275,7 +1280,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                                 <td className={styles.tdMono}>{fmtLogDate(log.Tarih)}</td>
                                 <td>{log.Aksiyon}</td>
                                 <td>
-                                  <div>{log.MusteriAd || "-"}</div>
+                                  <div>{upperTr(log.MusteriAd) || "-"}</div>
                                   <div style={{ color: "var(--color-text-tertiary)" }}>{log.MusteriYetkili || log.MusteriEmail || ""}</div>
                                 </td>
                                 <td className={styles.tdMono}>{log.IpAdresi || "-"}</td>
@@ -1367,7 +1372,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
             <div className={styles.modalBody}>
               <p>
                 <strong>{teklifLabel(deleteTarget.TeklifNo, deleteTarget.RevNo)}</strong> numaralı teklif pasife alınacak.
-                {deleteTarget.MusteriAd && <> ({deleteTarget.MusteriAd})</>}
+                {deleteTarget.MusteriAd && <> ({upperTr(deleteTarget.MusteriAd)})</>}
               </p>
             </div>
             <div className={styles.modalFooter}>

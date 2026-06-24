@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
+import { calculateTlEquivalent, fetchTcmbTodayRates, normalizeParaBirimi } from "@/lib/tcmbRates";
 
 // Proforma — MSSQL massgrup_cosmo · YENİ tablolar ProformaBaslik / ProformaKalem
 // (cosmo'da ProformaBaslik/X2 yoktu → sıfırdan kuruluyor). Cari kaynağı: Firma.
@@ -117,6 +118,10 @@ export async function GET(request: NextRequest) {
           p.KdvOran, p.GenelIskonto, p.Notlar,
           ISNULL(f.Ad, '') AS FirmaAd,
           ISNULL(f.Email, '') AS FirmaEmail,
+          CASE
+            WHEN COUNT(DISTINCT ISNULL(x.ParaBirimi, '')) > 1 THEN N'Çoklu'
+            ELSE ISNULL(MAX(x.ParaBirimi), 'TRY')
+          END AS ParaBirimi,
           COUNT(x.ID) AS KalemSayisi
         FROM ProformaBaslik p
         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = p.FirmaID
@@ -129,8 +134,29 @@ export async function GET(request: NextRequest) {
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
 
+    let rates: Record<string, any> = {};
+    if (dataRes.recordset.some((row: any) => !["TRY", "TL", "₺", "ÇOKLU"].includes(normalizeParaBirimi(row.ParaBirimi)))) {
+      try {
+        rates = await fetchTcmbTodayRates();
+      } catch (e) {
+        console.warn("proformalar: TCMB kuru alınamadı:", e);
+      }
+    }
+
+    const data = dataRes.recordset.map((row: any) => {
+      const paraBirimi = normalizeParaBirimi(row.ParaBirimi);
+      const rate = rates[paraBirimi]?.forexBuying ?? null;
+      const tlKarsiligi = calculateTlEquivalent(row.GenelToplam, paraBirimi, rates);
+      return {
+        ...row,
+        ParaBirimi: paraBirimi === "ÇOKLU" ? "Çoklu" : paraBirimi,
+        DovizAlisKuru: rate,
+        TlKarsiligi: tlKarsiligi,
+      };
+    });
+
     const total = Number(countRes.recordset[0]?.total || 0);
-    return Response.json({ data: dataRes.recordset, total, page, limit, totalPages: Math.ceil(total / limit) });
+    return Response.json({ data, total, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

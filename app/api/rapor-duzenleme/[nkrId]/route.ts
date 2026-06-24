@@ -28,14 +28,23 @@ export async function GET(
     return Response.json({ error: "Geçersiz rapor / format." }, { status: 400 });
   }
 
-  const dataFormat = DATA_FORMAT_ALIAS[format] ?? format;
-  const data = await loadRaporViewData(nkrIdNum, dataFormat, format);
-  if (!data) return Response.json({ error: "Rapor bulunamadı." }, { status: 404 });
+  try {
+    const dataFormat = DATA_FORMAT_ALIAS[format] ?? format;
+    const data = await loadRaporViewData(nkrIdNum, dataFormat, format);
+    if (!data) return Response.json({ error: "Rapor bulunamadı." }, { status: 404 });
 
-  const pool = await cosmoPool;
-  const edit = await loadRaporEdit(pool, nkrIdNum, format);
-  const approved = isApprovedStatus(data.onay?.durum);
-  return Response.json({ data, locked: edit.kilitli || approved, approved });
+    const pool = await cosmoPool;
+    let edit: { payload: RaporEditPayload | null; kilitli: boolean } = { payload: null, kilitli: false };
+    try {
+      edit = await loadRaporEdit(pool, nkrIdNum, format);
+    } catch (e) {
+      console.error("rapor-duzenleme: edit kaydi okunamadi:", e);
+    }
+    const approved = isApprovedStatus(data.onay?.durum);
+    return Response.json({ data, locked: edit.kilitli || approved, approved });
+  } catch (e: any) {
+    return Response.json({ error: e?.message || "Rapor düzenleme verisi alınamadı." }, { status: 500 });
+  }
 }
 
 export async function PUT(
@@ -60,16 +69,20 @@ export async function PUT(
     return Response.json({ error: "Hizmetler listesi geçersiz." }, { status: 400 });
   }
 
-  const pool = await cosmoPool;
-  const edit = await loadRaporEdit(pool, nkrIdNum, format);
-  const dataFormat = DATA_FORMAT_ALIAS[format] ?? format;
-  const data = await loadRaporViewData(nkrIdNum, dataFormat, format);
-  if (!data) return Response.json({ error: "Rapor bulunamadı." }, { status: 404 });
-  if (edit.kilitli || isApprovedStatus(data.onay?.durum)) {
-    return Response.json({ error: "Bu rapor onaylandığı için düzenlenemez." }, { status: 409 });
-  }
+  try {
+    const pool = await cosmoPool;
+    const edit = await loadRaporEdit(pool, nkrIdNum, format);
+    const dataFormat = DATA_FORMAT_ALIAS[format] ?? format;
+    const data = await loadRaporViewData(nkrIdNum, dataFormat, format);
+    if (!data) return Response.json({ error: "Rapor bulunamadı." }, { status: 404 });
+    if (edit.kilitli || isApprovedStatus(data.onay?.durum)) {
+      return Response.json({ error: "Bu rapor onaylandığı için düzenlenemez." }, { status: 409 });
+    }
 
-  const userId = ((session.user as any)?.userId ?? null) as number | null;
-  await saveRaporEdit(pool, nkrIdNum, format, body, userId);
-  return Response.json({ ok: true });
+    const userId = ((session.user as any)?.userId ?? null) as number | null;
+    await saveRaporEdit(pool, nkrIdNum, format, body, userId);
+    return Response.json({ ok: true });
+  } catch (e: any) {
+    return Response.json({ error: e?.message || "Rapor düzenleme kaydedilemedi." }, { status: 500 });
+  }
 }

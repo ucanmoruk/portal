@@ -13,6 +13,9 @@ interface ProformaRow {
   Durum: string;
   FirmaAd: string;
   GenelToplam: number | string;
+  ParaBirimi?: string | null;
+  DovizAlisKuru?: number | string | null;
+  TlKarsiligi?: number | string | null;
   KalemSayisi: number | string;
 }
 
@@ -21,6 +24,27 @@ const DURUMLAR = ["Taslak", "Gönderildi", "Onaylandı", "İptal"];
 function fmtMoney(value: number | string | null | undefined) {
   const n = Number(value || 0);
   return n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function upperTr(value?: string | null) {
+  return value ? value.toLocaleUpperCase("tr-TR") : "";
+}
+
+function statusStyle(durum: string): React.CSSProperties {
+  const stylesByStatus: Record<string, React.CSSProperties> = {
+    Taslak: { background: "#f5f5f7", color: "#6e6e73", borderColor: "#d2d2d7" },
+    Gönderildi: { background: "#e8f1ff", color: "#0055a8", borderColor: "#b8d7ff" },
+    Onaylandı: { background: "#e6f6ee", color: "#1a7f4b", borderColor: "#b8e6ce" },
+    İptal: { background: "#fdecea", color: "#c0392b", borderColor: "#f5b8b0" },
+  };
+  return {
+    ...(stylesByStatus[durum] || stylesByStatus.Taslak),
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderRadius: 999,
+    fontWeight: 700,
+    minWidth: 126,
+  };
 }
 
 export default function ProformaTable() {
@@ -35,7 +59,6 @@ export default function ProformaTable() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [detail, setDetail] = useState<any | null>(null);
-  const [detailLines, setDetailLines] = useState<any[]>([]);
 
   useEffect(() => {
     const evrakNo = searchParams.get("evrakNo");
@@ -73,7 +96,6 @@ export default function ProformaTable() {
       return;
     }
     setDetail(json.header);
-    setDetailLines(json.satirlar || []);
   }
 
   async function updateStatus(row: ProformaRow, durum: string) {
@@ -142,15 +164,23 @@ export default function ProformaTable() {
               <tr key={row.ID}>
                 <td className={styles.primaryCell}>{row.ProformaNo}</td>
                 <td>{row.EvrakNo || "-"}</td>
-                <td>{row.FirmaAd || "-"}</td>
+                <td>{upperTr(row.FirmaAd) || "-"}</td>
                 <td>{row.Tarih}</td>
                 <td>
-                  <select value={row.Durum} onChange={e => updateStatus(row, e.target.value)} className={styles.pageSizeSelect}>
+                  <select value={row.Durum} onChange={e => updateStatus(row, e.target.value)} className={styles.pageSizeSelect} style={statusStyle(row.Durum)}>
                     {DURUMLAR.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </td>
                 <td>{row.KalemSayisi}</td>
-                <td>{fmtMoney(row.GenelToplam)} TRY</td>
+                <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                  <div style={{ fontWeight: 700 }}>{fmtMoney(row.GenelToplam)} {row.ParaBirimi || "TRY"}</div>
+                  {row.TlKarsiligi != null && (
+                    <div style={{ color: "var(--color-text-tertiary)", fontSize: 11 }}>
+                      {fmtMoney(row.TlKarsiligi)} TL
+                      {row.DovizAlisKuru != null ? ` · Alış ${fmtMoney(row.DovizAlisKuru)}` : ""}
+                    </div>
+                  )}
+                </td>
                 <td>
                   <div className={styles.actionBtns} style={{ justifyContent: "flex-end" }}>
                     <button className={styles.cancelBtn} onClick={() => router.push(`/musteriler/proforma-listesi/${row.ID}/duzenle`)}>Düzenle</button>
@@ -178,35 +208,21 @@ export default function ProformaTable() {
               <div>
                 <h2 style={{ margin: 0, fontSize: 20 }}>{detail.ProformaNo}</h2>
                 <p style={{ margin: "4px 0 0", color: "var(--color-text-secondary)" }}>
-                  {detail.FirmaAd} {detail.EvrakNo ? `- Evrak ${detail.EvrakNo}` : ""}
+                  {upperTr(detail.FirmaAd)} {detail.EvrakNo ? `- Evrak ${detail.EvrakNo}` : ""}
                 </p>
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                <button className={styles.cancelBtn} onClick={() => window.print()}>Yazdır</button>
+                <a className={styles.cancelBtn} href={`/api/proforma-print/${detail.ID}/pdf?download=1`} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>PDF İndir</a>
+                <a className={styles.cancelBtn} href={`/proforma-print/${detail.ID}`} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>Yeni Pencerede Aç</a>
                 <button className={styles.cancelBtn} onClick={sendMail}>Mail Gönder</button>
                 <button className={styles.saveBtn} onClick={() => setDetail(null)}>Kapat</button>
               </div>
             </div>
-            <table className={styles.table}>
-              <thead><tr><th>Hizmet</th><th>Adet</th><th>Birim</th><th>İsk.</th><th>Tutar</th></tr></thead>
-              <tbody>
-                {detailLines.map(line => (
-                  <tr key={line.ID}>
-                    <td>{line.HizmetAdi}</td>
-                    <td>{line.Adet}</td>
-                    <td>{fmtMoney(line.BirimFiyat)} {line.ParaBirimi}</td>
-                    <td>{line.Iskonto}%</td>
-                    <td>{fmtMoney(line.Tutar)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div style={summaryStyle}>
-              <span>Ara Toplam: <b>{fmtMoney(detail.AraToplam)}</b></span>
-              <span>İskonto: <b>{fmtMoney(detail.IskontoTutar)}</b></span>
-              <span>KDV: <b>{fmtMoney(detail.KdvTutar)}</b></span>
-              <span>Genel Toplam: <b>{fmtMoney(detail.GenelToplam)} TRY</b></span>
-            </div>
+            <iframe
+              title="Proforma önizleme"
+              src={`/proforma-print/${detail.ID}?pdfMode=1`}
+              style={{ width: "100%", height: "72vh", border: "1px solid var(--color-border-light)", borderRadius: 8, background: "#fff" }}
+            />
           </div>
         </div>
       )}
@@ -221,7 +237,7 @@ const overlayStyle: React.CSSProperties = {
 };
 
 const modalStyle: React.CSSProperties = {
-  width: "min(980px, 100%)", background: "var(--color-surface)", borderRadius: 8,
+  width: "min(1180px, 100%)", background: "var(--color-surface)", borderRadius: 8,
   boxShadow: "0 20px 60px rgba(0,0,0,0.22)", padding: 20,
 };
 
@@ -229,9 +245,4 @@ const modalHeaderStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
   paddingBottom: 14, borderBottom: "1px solid var(--color-border-light)", marginBottom: 14,
   flexWrap: "wrap",
-};
-
-const summaryStyle: React.CSSProperties = {
-  display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: 18,
-  marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--color-border-light)",
 };

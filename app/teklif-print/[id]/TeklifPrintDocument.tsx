@@ -81,12 +81,16 @@ export default function TeklifPrintDocument({
   sirketAdi = "UNIQUE ANALYSE",
   sirketEmail = "info@uniqueanalyse.com",
   toolbar,
+  documentTitle = "FİYAT TEKLİFİ",
+  tlEquivalentNote,
 }: {
   header: TeklifHeader;
   satirlar: TeklifSatir[];
   sirketAdi?: string;
   sirketEmail?: string;
   toolbar?: ReactNode;
+  documentTitle?: string;
+  tlEquivalentNote?: string | null;
 }) {
   const noLabel = h.DisTeklifKodu ? disLabel(h.DisTeklifKodu, h.RevNo) : teklifLabel(h.TeklifNo, h.RevNo);
 
@@ -330,7 +334,7 @@ export default function TeklifPrintDocument({
             <div className="logo-wrap">
               <img src="/unique-logo.png" alt={sirketAdi} className="logo-img" />
             </div>
-            <div className="title">FİYAT TEKLİFİ</div>
+            <div className="title">{documentTitle}</div>
           </div>
 
           {/* ───── Meta info ───── */}
@@ -425,6 +429,12 @@ export default function TeklifPrintDocument({
               <span className="totals-label">Genel Toplam:</span>
               <span className="totals-value">{fmt(genelToplam)} {fmtPb(pb)}</span>
             </div>
+            {tlEquivalentNote && (
+              <div className="totals-row" style={{ borderTop: "1px solid #d6dee8", marginTop: 4, paddingTop: 7, fontSize: "10px", color: "#4b5563" }}>
+                <span className="totals-label">TL Karşılığı:</span>
+                <span className="totals-value">{tlEquivalentNote}</span>
+              </div>
+            )}
           </div>
 
           {/* ───── Notlar ───── */}

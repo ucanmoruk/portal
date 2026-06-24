@@ -3,6 +3,7 @@ import { UGD_REPORT_TEXT_FIELDS } from "@/lib/ugdReportFields";
 
 const ensuredTextTable = new Set<string>();
 const ensuredFormulTable = new Set<string>();
+const knownMissingTextTable = new Set<string>();
 
 // Dialect, global env yerine POOL'a göre belirlenir: gerçek mssql ConnectionPool'da
 // `.config` vardır, lib/db.ts PgCompatPool'unda yoktur. Böylece aynı helper hem
@@ -52,6 +53,35 @@ export async function ensureLabUgdrTextTable(pool: ConnectionPool) {
   }
 
   ensuredTextTable.add(key);
+  knownMissingTextTable.delete(key);
+}
+
+async function labUgdrTextTableExists(pool: ConnectionPool): Promise<boolean> {
+  const key = isPgPool(pool) ? "pg" : "mssql";
+  if (ensuredTextTable.has(key)) return true;
+  if (knownMissingTextTable.has(key)) return false;
+
+  try {
+    const result = isPgPool(pool)
+      ? await pool.request().query(`
+          SELECT 1 AS x
+          FROM information_schema.tables
+          WHERE table_name = 'nkr_ugdrapormetinleri'
+          LIMIT 1
+        `)
+      : await pool.request().query(`
+          SELECT 1 AS x
+          FROM INFORMATION_SCHEMA.TABLES
+          WHERE TABLE_NAME = N'NKR_UGDRaporMetinleri'
+        `);
+    const exists = result.recordset.length > 0;
+    if (exists) ensuredTextTable.add(key);
+    else knownMissingTextTable.add(key);
+    return exists;
+  } catch {
+    knownMissingTextTable.add(key);
+    return false;
+  }
 }
 
 export async function ensureLabUgdrFormulTable(pool: ConnectionPool) {
@@ -122,7 +152,8 @@ export async function saveLabUgdrTexts(pool: ConnectionPool, nkrId: number, body
 }
 
 export async function loadLabUgdrTexts(pool: ConnectionPool, nkrId: number) {
-  await ensureLabUgdrTextTable(pool);
+  const exists = await labUgdrTextTableExists(pool);
+  if (!exists) return [];
 
   const result = await pool.request()
     .input("NKRID", nkrId)
