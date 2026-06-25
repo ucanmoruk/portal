@@ -17,6 +17,7 @@ interface ProformaRow {
   DovizAlisKuru?: number | string | null;
   TlKarsiligi?: number | string | null;
   KalemSayisi: number | string;
+  OdemeDurumu?: string | null;
 }
 
 const DURUMLAR = ["Taslak", "Gönderildi", "Onaylandı", "İptal"];
@@ -36,6 +37,8 @@ function statusStyle(durum: string): React.CSSProperties {
     Gönderildi: { background: "#e8f1ff", color: "#0055a8", borderColor: "#b8d7ff" },
     Onaylandı: { background: "#e6f6ee", color: "#1a7f4b", borderColor: "#b8e6ce" },
     Faturalaştı: { background: "#f3eaff", color: "#6b21a8", borderColor: "#d8bcf5" },
+    "Ödeme Bekliyor": { background: "#fff4e5", color: "#b35309", borderColor: "#fbd9a8" },
+    Ödendi: { background: "#e6f6ee", color: "#1a7f4b", borderColor: "#b8e6ce" },
     İptal: { background: "#fdecea", color: "#c0392b", borderColor: "#f5b8b0" },
   };
   return {
@@ -204,16 +207,24 @@ export default function ProformaTable() {
               <tr><td colSpan={8} className={styles.empty}>Yükleniyor...</td></tr>
             ) : rows.length === 0 ? (
               <tr><td colSpan={8} className={styles.empty}>Henüz proforma oluşturulmamış.</td></tr>
-            ) : rows.map(row => (
+            ) : rows.map(row => {
+              // Fatura kesilmiş proforma → ödeme yaşam döngüsünü göster (Ödeme Bekliyor / Ödendi),
+              // düzenleme ve tekrar faturalaştırma kapalı. Durum='Faturalaştı' VEYA Odeme tablosunda
+              // ödeme kaydı varsa faturalaşmış kabul edilir (eski kayıtlara da dayanıklı).
+              const odemeRaw = (row.OdemeDurumu || "").trim();
+              const hasPayment = odemeRaw === "Ödeme Bekliyor" || odemeRaw === "Ödendi";
+              const isInvoiced = row.Durum === "Faturalaştı" || hasPayment;
+              const odemeLabel = odemeRaw === "Ödendi" ? "Ödendi" : "Ödeme Bekliyor";
+              return (
               <tr key={row.ID}>
                 <td className={styles.primaryCell}>{row.ProformaNo}</td>
                 <td>{row.EvrakNo || "-"}</td>
                 <td>{upperTr(row.FirmaAd) || "-"}</td>
                 <td>{row.Tarih}</td>
                 <td>
-                  {row.Durum === "Faturalaştı" ? (
-                    <span className={styles.pageSizeSelect} style={{ ...statusStyle(row.Durum), display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "default" }}>
-                      Faturalaştı
+                  {isInvoiced ? (
+                    <span className={styles.pageSizeSelect} style={{ ...statusStyle(odemeLabel), display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "default" }}>
+                      {odemeLabel}
                     </span>
                   ) : (
                     <select value={row.Durum} onChange={e => updateStatus(row, e.target.value)} className={styles.pageSizeSelect} style={statusStyle(row.Durum)}>
@@ -236,20 +247,21 @@ export default function ProformaTable() {
                     <button
                       className={styles.editBtn}
                       onClick={() => router.push(`/musteriler/proforma-listesi/${row.ID}/duzenle`)}
-                      disabled={row.Durum === "Faturalaştı"}
-                      title={row.Durum === "Faturalaştı" ? "Faturalaşmış proforma düzenlenemez" : "Düzenle"}
+                      disabled={isInvoiced}
+                      title={isInvoiced ? "Faturalaşmış proforma düzenlenemez" : "Düzenle"}
                     >✏️</button>
                     <button className={styles.editBtn} onClick={() => openDetail(row.ID)} title="Önizleme">👁️</button>
                     <button
                       className={styles.editBtn}
                       onClick={() => openFatura(row)}
-                      disabled={row.Durum === "Faturalaştı"}
-                      title={row.Durum === "Faturalaştı" ? "Zaten faturalaştırıldı" : "Faturaya çevir"}
+                      disabled={isInvoiced}
+                      title={isInvoiced ? "Zaten faturalaştırıldı" : "Faturaya çevir"}
                     >🧾</button>
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

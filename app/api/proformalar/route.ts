@@ -122,7 +122,8 @@ export async function GET(request: NextRequest) {
             WHEN COUNT(DISTINCT ISNULL(x.ParaBirimi, '')) > 1 THEN N'Çoklu'
             ELSE ISNULL(MAX(x.ParaBirimi), 'TRY')
           END AS ParaBirimi,
-          COUNT(x.ID) AS KalemSayisi
+          COUNT(x.ID) AS KalemSayisi,
+          (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No = p.EvrakNo ORDER BY o.ID DESC) AS OdemeDurumu
         FROM ProformaBaslik p
         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = p.FirmaID
         LEFT JOIN ProformaKalem x ON x.ProformaID = p.ID
