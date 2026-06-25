@@ -41,15 +41,10 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [previewKey, setPreviewKey] = useState(0);
 
   const apiUrl = useMemo(
     () => `/api/rapor-duzenleme/${nkrId}?format=${encodeURIComponent(format)}`,
     [nkrId, format],
-  );
-  const previewUrl = useMemo(
-    () => `/rapor-onay-print/${nkrId}?format=${encodeURIComponent(format)}&preview=${previewKey}`,
-    [nkrId, format, previewKey],
   );
 
   async function readJson<T>(response: Response): Promise<T> {
@@ -99,8 +94,7 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
         body: JSON.stringify({ header, hizmetler }),
       });
       await readJson<{ ok: boolean }>(res);
-      setPreviewKey((v) => v + 1);
-      setMessage("Düzenleme kaydedildi. Sağdaki rapor önizlemesi yenilendi.");
+      setMessage("Düzenleme kaydedildi.");
     } catch (e: any) {
       setError(e.message || "Kaydedilemedi");
     } finally {
@@ -136,8 +130,7 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
         {loading ? (
           <div style={panelStyle}>Yükleniyor...</div>
         ) : (
-          <div style={editorGridStyle}>
-            <div>
+          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
             <section style={panelStyle}>
               <div style={sectionTitle}>Üst Bilgiler</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
@@ -200,16 +193,22 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
                 </table>
               </div>
             </section>
-            </div>
-            <aside style={previewPanelStyle}>
-              <div style={{ ...sectionTitle, marginBottom: 10 }}>Canlı Rapor Önizleme</div>
-              <iframe
-                key={previewKey}
-                src={previewUrl}
-                title="Rapor önizleme"
-                style={{ width: "100%", height: "calc(100vh - 178px)", minHeight: 680, border: "1px solid #e5e5ea", borderRadius: 8, background: "#fff" }}
+
+            <section style={panelStyle}>
+              <div style={{ ...sectionTitle, marginBottom: 10 }}>Açıklamalar</div>
+              <textarea
+                value={header.Aciklamalar ?? ""}
+                disabled={locked}
+                onChange={e => setHeader(h => ({ ...h, Aciklamalar: e.target.value }))}
+                placeholder="Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir."
+                rows={5}
+                style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5, fontFamily: "inherit" }}
               />
-            </aside>
+              <div style={{ fontSize: 12, color: "#6e6e73", marginTop: 6 }}>
+                Raporda &ldquo;AÇIKLAMALAR&rdquo; başlığı altında görünür. Boş bırakılırsa varsayılan cümle kullanılır.
+                Analiz Periyodu satırı otomatik eklenir.
+              </div>
+            </section>
           </div>
         )}
       </div>
@@ -240,22 +239,6 @@ const panelStyle: CSSProperties = {
   borderRadius: 10,
   padding: 16,
   marginBottom: 14,
-};
-
-const editorGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 560px), 1fr))",
-  gap: 16,
-  alignItems: "start",
-};
-
-const previewPanelStyle: CSSProperties = {
-  background: "#fff",
-  border: "1px solid #e5e5ea",
-  borderRadius: 10,
-  padding: 12,
-  position: "sticky",
-  top: 16,
 };
 
 const sectionTitle: CSSProperties = {

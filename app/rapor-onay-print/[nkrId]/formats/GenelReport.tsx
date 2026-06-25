@@ -78,6 +78,13 @@ export default function GenelReport({
   const akrKodFontSize =
     _kodLen <= 10 ? 10.5 : _kodLen <= 14 ? 8.5 : _kodLen <= 18 ? 7 : 6;
 
+  // AÇIKLAMALAR serbest metni — düzenleme ekranından girilir (header.Aciklamalar).
+  // Girilmemişse varsayılan cümleye düşer. Satır sonları korunur.
+  const aciklamaText =
+    (header.Aciklamalar ?? "").trim() ||
+    "Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir.";
+  const aciklamaSatirlar = aciklamaText.split(/\r?\n/);
+
   return (
     <>
       <style>{`
@@ -617,8 +624,11 @@ export default function GenelReport({
                   <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
                 </>
               ) : null}
-            <br></br>Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir. 
-   
+            {aciklamaSatirlar.map((satir, i) => (
+              <Fragment key={i}>
+                <br />{satir}
+              </Fragment>
+            ))}
           </div>
 
           {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ─────  */}

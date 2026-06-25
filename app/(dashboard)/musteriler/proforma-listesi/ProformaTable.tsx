@@ -35,6 +35,7 @@ function statusStyle(durum: string): React.CSSProperties {
     Taslak: { background: "#f5f5f7", color: "#6e6e73", borderColor: "#d2d2d7" },
     Gönderildi: { background: "#e8f1ff", color: "#0055a8", borderColor: "#b8d7ff" },
     Onaylandı: { background: "#e6f6ee", color: "#1a7f4b", borderColor: "#b8e6ce" },
+    Faturalaştı: { background: "#f3eaff", color: "#6b21a8", borderColor: "#d8bcf5" },
     İptal: { background: "#fdecea", color: "#c0392b", borderColor: "#f5b8b0" },
   };
   return {
@@ -59,6 +60,10 @@ export default function ProformaTable() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [detail, setDetail] = useState<any | null>(null);
+  const [faturaTarget, setFaturaTarget] = useState<ProformaRow | null>(null);
+  const [faturaForm, setFaturaForm] = useState({ faturaNo: "", faturaTarihi: "", tutar: "" });
+  const [faturaSaving, setFaturaSaving] = useState(false);
+  const [faturaError, setFaturaError] = useState("");
 
   useEffect(() => {
     const evrakNo = searchParams.get("evrakNo");
@@ -105,6 +110,45 @@ export default function ProformaTable() {
       body: JSON.stringify({ durum }),
     });
     fetchRows();
+  }
+
+  function openFatura(row: ProformaRow) {
+    setFaturaError("");
+    const bugun = new Date().toISOString().slice(0, 10);
+    setFaturaForm({
+      faturaNo: "",
+      faturaTarihi: bugun,
+      tutar: String(Number(row.GenelToplam || 0).toFixed(2)),
+    });
+    setFaturaTarget(row);
+  }
+
+  async function submitFatura() {
+    if (!faturaTarget) return;
+    if (!faturaForm.faturaNo.trim()) { setFaturaError("Fatura no zorunludur."); return; }
+    if (!faturaForm.faturaTarihi) { setFaturaError("Fatura tarihi zorunludur."); return; }
+    setFaturaSaving(true);
+    setFaturaError("");
+    try {
+      const res = await fetch(`/api/faturalar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proformaId: faturaTarget.ID,
+          faturaNo: faturaForm.faturaNo.trim(),
+          faturaTarihi: faturaForm.faturaTarihi,
+          tutar: faturaForm.tutar,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Fatura oluşturulamadı.");
+      setFaturaTarget(null);
+      fetchRows();
+    } catch (e: any) {
+      setFaturaError(e.message);
+    } finally {
+      setFaturaSaving(false);
+    }
   }
 
   async function sendMail() {
@@ -167,9 +211,15 @@ export default function ProformaTable() {
                 <td>{upperTr(row.FirmaAd) || "-"}</td>
                 <td>{row.Tarih}</td>
                 <td>
-                  <select value={row.Durum} onChange={e => updateStatus(row, e.target.value)} className={styles.pageSizeSelect} style={statusStyle(row.Durum)}>
-                    {DURUMLAR.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
+                  {row.Durum === "Faturalaştı" ? (
+                    <span className={styles.pageSizeSelect} style={{ ...statusStyle(row.Durum), display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "default" }}>
+                      Faturalaştı
+                    </span>
+                  ) : (
+                    <select value={row.Durum} onChange={e => updateStatus(row, e.target.value)} className={styles.pageSizeSelect} style={statusStyle(row.Durum)}>
+                      {DURUMLAR.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  )}
                 </td>
                 <td>{row.KalemSayisi}</td>
                 <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
@@ -183,8 +233,19 @@ export default function ProformaTable() {
                 </td>
                 <td>
                   <div className={styles.actionBtns} style={{ justifyContent: "flex-end" }}>
-                    <button className={styles.cancelBtn} onClick={() => router.push(`/musteriler/proforma-listesi/${row.ID}/duzenle`)}>Düzenle</button>
-                    <button className={styles.saveBtn} onClick={() => openDetail(row.ID)}>Önizleme</button>
+                    <button
+                      className={styles.editBtn}
+                      onClick={() => router.push(`/musteriler/proforma-listesi/${row.ID}/duzenle`)}
+                      disabled={row.Durum === "Faturalaştı"}
+                      title={row.Durum === "Faturalaştı" ? "Faturalaşmış proforma düzenlenemez" : "Düzenle"}
+                    >✏️</button>
+                    <button className={styles.editBtn} onClick={() => openDetail(row.ID)} title="Önizleme">👁️</button>
+                    <button
+                      className={styles.editBtn}
+                      onClick={() => openFatura(row)}
+                      disabled={row.Durum === "Faturalaştı"}
+                      title={row.Durum === "Faturalaştı" ? "Zaten faturalaştırıldı" : "Faturaya çevir"}
+                    >🧾</button>
                   </div>
                 </td>
               </tr>
@@ -226,9 +287,81 @@ export default function ProformaTable() {
           </div>
         </div>
       )}
+
+      {faturaTarget && (
+        <div style={overlayStyle}>
+          <div style={{ ...modalStyle, width: "min(460px, 100%)" }}>
+            <div style={modalHeaderStyle}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18 }}>Faturaya Çevir</h2>
+                <p style={{ margin: "4px 0 0", color: "var(--color-text-secondary)", fontSize: 13 }}>
+                  {faturaTarget.ProformaNo} · {upperTr(faturaTarget.FirmaAd)}
+                </p>
+              </div>
+            </div>
+            {faturaError && <div className={styles.errorBar} style={{ marginBottom: 12 }}>{faturaError}</div>}
+            <div style={{ display: "grid", gap: 12 }}>
+              <label style={faturaLabelStyle}>
+                Fatura No
+                <input
+                  className={styles.searchInput}
+                  style={faturaInputStyle}
+                  value={faturaForm.faturaNo}
+                  onChange={e => setFaturaForm(f => ({ ...f, faturaNo: e.target.value }))}
+                  placeholder="Örn. GIB2026000000123"
+                  autoFocus
+                />
+              </label>
+              <label style={faturaLabelStyle}>
+                Fatura Tarihi
+                <input
+                  type="date"
+                  className={styles.searchInput}
+                  style={faturaInputStyle}
+                  value={faturaForm.faturaTarihi}
+                  onChange={e => setFaturaForm(f => ({ ...f, faturaTarihi: e.target.value }))}
+                />
+              </label>
+              <label style={faturaLabelStyle}>
+                Tutar (KDV Dahil)
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className={styles.searchInput}
+                    style={faturaInputStyle}
+                    value={faturaForm.tutar}
+                    onChange={e => setFaturaForm(f => ({ ...f, tutar: e.target.value }))}
+                  />
+                  <span style={{ color: "var(--color-text-secondary)", fontWeight: 600 }}>{faturaTarget.ParaBirimi || "TRY"}</span>
+                </div>
+              </label>
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
+                Fatura oluşturulunca ödeme durumu otomatik <strong>“Ödeme Bekliyor”</strong> olur ve
+                numune takip ekranındaki ödeme aşaması güncellenir. Tahsilat sonrası Fatura Takip
+                ekranından <strong>“Ödendi”</strong> yapabilirsiniz.
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
+              <button className={styles.cancelBtn} onClick={() => setFaturaTarget(null)} disabled={faturaSaving}>Vazgeç</button>
+              <button className={styles.saveBtn} onClick={submitFatura} disabled={faturaSaving}>
+                {faturaSaving ? "Kaydediliyor..." : "Faturayı Oluştur"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
+
+const faturaLabelStyle: React.CSSProperties = {
+  display: "grid", gap: 6, fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)",
+};
+
+const faturaInputStyle: React.CSSProperties = {
+  width: "100%", height: 38,
+};
 
 const overlayStyle: React.CSSProperties = {
   position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.45)",

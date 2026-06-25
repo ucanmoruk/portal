@@ -37,7 +37,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       readyTimeoutMs: 30000,
       readyExpression: `
         (function() {
-          var page = document.querySelector('.quote-print-page');
+          // ProformaPrintDocument kök sınıfı .prof-root (eski .quote-print-page kaldırıldı).
+          var page = document.querySelector('.prof-root') || document.querySelector('.quote-print-page');
           if (!page) return false;
           var text = (page.innerText || '').trim();
           return Boolean(text.length > 250 && page.scrollHeight > 500);

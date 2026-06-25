@@ -46,6 +46,9 @@ export interface RaporHeader {
   FirmaEmail: string;
   FirmaTelefon: string;
   Karar: string | null;
+  /** "AÇIKLAMALAR" başlığı altındaki serbest metin. Düzenleme ekranından girilir;
+   *  boşsa rapor varsayılan açıklama cümlesine düşer (DB kolonu değildir, edit payload'da taşınır). */
+  Aciklamalar?: string | null;
   Dil: string | null;
   SeriNo: string | null;
   UretimTarihi: string | null;

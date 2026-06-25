@@ -46,8 +46,9 @@ interface TeklifOpt {
   MusteriAd: string;
 }
 
-// Fatura kesilmiş = yalnızca bu iki durum; diğerleri (null dahil) → Faturalandır aktif
-const isFaturali = (d: string | null) => d === "Ödendi" || d === "Bekliyor";
+// Fatura kesilmiş = ödeme aşamasına geçmiş durumlar; diğerleri (null dahil) → Faturalandır aktif
+const isFaturali = (d: string | null) =>
+  d === "Ödendi" || d === "Bekliyor" || d === "Ödeme Bekliyor" || d === "Kısmen Ödendi";
 
 // Sayfa ilk acildiginda tarih filtresi varsayilani: son 4 ay (bugun - 4 ay → bugun).
 function lastFourMonthsRange(): { tarihBas: string; tarihBit: string } {
@@ -67,8 +68,10 @@ function OdemeBadge({ durum }: { durum: string | null }) {
     }}>Fatura Kesilmedi</span>
   );
   const map: Record<string, { bg: string; fg: string }> = {
-    "Ödendi":   { bg: "#34c75918", fg: "#248a3d" },
-    "Bekliyor": { bg: "#ff950018", fg: "#c06800" },
+    "Ödendi":         { bg: "#34c75918", fg: "#248a3d" },
+    "Bekliyor":       { bg: "#ff950018", fg: "#c06800" },
+    "Ödeme Bekliyor": { bg: "#ff950018", fg: "#c06800" },
+    "Kısmen Ödendi":  { bg: "#007aff18", fg: "#0055a8" },
   };
   const c = map[durum] ?? { bg: "#8e8e9318", fg: "#636366" };
   return (

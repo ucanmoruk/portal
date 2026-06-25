@@ -178,7 +178,7 @@ export default function ProformaPrintDocument({
 
         /* ───── Toplam kutusu ────────────────────────────────────────── */
         .totals {
-          margin-top: 5mm; border: 2px solid #0f766e; padding: 6px 10px;
+          margin-top: 5mm; border: 2px solid #0071e3; padding: 6px 10px;
           display: flex; flex-direction: column; gap: 2px;
         }
         .totals-row { display: flex; justify-content: space-between; font-size: 11.5px; padding: 3px 4px; }
@@ -197,7 +197,7 @@ export default function ProformaPrintDocument({
           gap: 4mm; font-size: 9.5px;
         }
         .banka-card { border: 1px solid #d6dee8; border-radius: 4px; padding: 6px 9px; }
-        .banka-card .pb { font-weight: 800; color: #0f766e; font-size: 10.5px; margin-bottom: 1mm; }
+        .banka-card .pb { font-weight: 800; color: #0071e3; font-size: 10.5px; margin-bottom: 1mm; }
         .banka-card .line { line-height: 1.5; }
         .banka-card .iban { font-weight: 700; font-size: 10px; margin-top: 1mm; letter-spacing: 0.3px; }
 
@@ -212,7 +212,7 @@ export default function ProformaPrintDocument({
         .prep-title { font-weight: 700; font-size: 11px; margin-bottom: 3mm; }
         .e-imza {
           display: inline-flex; align-items: center; gap: 4px;
-          background: #ecfeff; color: #0f766e; border: 1px solid #99f6e4;
+          background: #ecfeff; color: #0071e3; border: 1px solid #99f6e4;
           padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; margin-bottom: 2mm;
         }
 
@@ -300,7 +300,6 @@ export default function ProformaPrintDocument({
                     <td className="center no">{i + 1}.</td>
                     <td>
                       <div>{s.HizmetAdi || "—"}</div>
-                      {sub && <div className="item-sub">{sub}</div>}
                     </td>
                     <td className="center">{adet}</td>
                     <td className="right">
@@ -352,7 +351,21 @@ export default function ProformaPrintDocument({
             )}
           </div>
 
-          {/* ───── Banka bilgileri ───── */}
+ 
+
+          {/* ───── Notlar (proforma-spesifik) ───── */}
+          <div className="notlar">
+            <div className="notlar-title">Notlar:</div>
+            <p>Bu proforma fatura yalnızca bilgilendirme amaçlıdır; resmi fatura ödeme sonrası düzenlenir.</p>
+            <p>Geçerlilik süresi <strong>7 gün</strong>dür; bu süre içinde ödeme yapılmaması halinde proforma yenilenmelidir.</p>
+            <p>Yabancı para cinsinden proformalarda ödeme günü TCMB döviz alış kuru üzerinden TL karşılığı dikkate alınır.</p>
+            <p>Analiz hizmetleri ödeme onayından sonra başlatılır; rapor, ödemenin tamamlanmasının ardından müşteriye iletilir.</p>
+            {h.Notlar && (
+              <p style={{ marginTop: "3mm", fontWeight: 600 }}>{h.Notlar}</p>
+            )}
+          </div>
+
+                   {/* ───── Banka bilgileri ───── */}
           {bankaBilgileri.length > 0 && (
             <div className="banka-block">
               <div className="banka-title">Ödeme Bilgileri</div>
@@ -361,7 +374,7 @@ export default function ProformaPrintDocument({
                   <div key={i} className="banka-card">
                     <div className="pb">{b.paraBirimi}</div>
                     <div className="line"><strong>Banka:</strong> {b.banka}</div>
-                    <div className="line"><strong>Hesap Sahibi:</strong> {b.hesapSahibi}</div>
+                   {/*  <div className="line"><strong>Hesap Sahibi:</strong> {b.hesapSahibi}</div> */}
                     <div className="iban">{b.iban}</div>
                   </div>
                 ))}
@@ -369,26 +382,11 @@ export default function ProformaPrintDocument({
             </div>
           )}
 
-          {/* ───── Notlar (proforma-spesifik) ───── */}
-          <div className="notlar">
-            <div className="notlar-title">Notlar:</div>
-            <p>Bu proforma fatura yalnızca bilgilendirme amaçlıdır; resmi fatura ödeme sonrası düzenlenir.</p>
-            <p>Geçerlilik süresi <strong>7 gün</strong>dür; bu süre içinde ödeme yapılmaması halinde proforma yenilenmelidir.</p>
-            <p>Ödeme banka havalesi/EFT ile yapılır. Açıklama alanına lütfen proforma numarasını ({proformaNo}) yazınız.</p>
-            <p>Yabancı para cinsinden proformalarda ödeme günü TCMB döviz alış kuru üzerinden TL karşılığı dikkate alınır.</p>
-            <p>Numune gönderimi kargo ile yapıldığında, kargo ücreti göndericiye aittir.</p>
-            <p>Analiz hizmetleri ödeme onayından sonra başlatılır; rapor, ödemenin tamamlanmasının ardından müşteriye iletilir.</p>
-            {h.Notlar && (
-              <p style={{ marginTop: "3mm", fontWeight: 600 }}>{h.Notlar}</p>
-            )}
-          </div>
-
           {/* ───── Hazırlayan + corner logo ───── */}
           <div className="bottom">
             <div className="prep">
-              <div className="prep-title">Hazırlayan</div>
-              <div className="e-imza">✓ E-İmzalıdır</div>
-              <div style={{ fontWeight: 600, fontSize: 11, marginTop: 2 }}>{sirketAdi}</div>
+              <div style={{ fontWeight: 600, fontSize: 11, marginTop: 2, textAlign: "left" }}>UNIQUE ANALİZ BELGELENDİRME ve DANIŞMANLIK HİZMETLERİ LTD. ŞTİ.</div>
+            <p>Atatürk Mah. Hadımköy Yolu Cad. No:10 İç Kapı No:7 Esenyurt / İstanbul</p>
             </div>
             <div className="prep" style={{ marginLeft: "auto", textAlign: "right", marginBottom: "4px" }}>
               <div><img src="/unique-seal.png" alt={sirketAdi} style={{ height: "90px" }} /></div>
@@ -398,7 +396,6 @@ export default function ProformaPrintDocument({
           {/* ───── Footer ───── */}
           <div className="footer" style={{ marginTop: "20px" }}>
             <span>{sirketEmail}</span>
-            <span>F.02.PR.03 – Proforma Fatura</span>
             <span className="page-number">Sayfa: 1 / 1</span>
           </div>
         </div>

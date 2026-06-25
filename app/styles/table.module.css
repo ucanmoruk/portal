@@ -281,10 +281,15 @@
   color: var(--color-text-tertiary);
 }
 
-.editBtn:hover {
+.editBtn:hover:not(:disabled) {
   background: var(--color-accent-light);
   color: var(--color-accent);
   border-color: var(--color-accent-border);
+}
+
+.editBtn:disabled, .deleteBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .deleteBtn:hover {
