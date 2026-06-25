@@ -92,11 +92,14 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { Ad, Adres, VergiDairesi, VergiNo, Telefon, Email, Tur2, Yetkili } = body;
+    const { Ad, Adres, VergiDairesi, VergiNo, Telefon, Email, Tur2, Yetkili, Parola } = body;
 
     if (!Ad?.trim()) {
       return Response.json({ error: "Firma adı zorunludur." }, { status: 400 });
     }
+
+    // Parola kolonu VARCHAR(15) → taşmayı önlemek için kırp; boşsa null.
+    const parola = typeof Parola === "string" && Parola.trim() ? Parola.trim().slice(0, 15) : null;
 
     const pool = await cosmoPool;
     const result = await pool.request()
@@ -108,12 +111,13 @@ export async function POST(request: Request) {
       .input("Email", Email || null)
       .input("Tur2", Tur2 || "Müşteri")
       .input("Yetkili", Yetkili || null)
+      .input("Parola", parola)
       .query(`
         INSERT INTO Firma
-          (Firma_Adi, Adres, Vergi_Dairesi, Vergi_No, Telefon, Mail, Yetkili, Tur, Durum)
+          (Firma_Adi, Adres, Vergi_Dairesi, Vergi_No, Telefon, Mail, Yetkili, Tur, Parola, Durum)
         OUTPUT INSERTED.ID
         VALUES
-          (@Ad, @Adres, @VergiDairesi, @VergiNo, @Telefon, @Email, @Yetkili, @Tur2, 'Aktif')
+          (@Ad, @Adres, @VergiDairesi, @VergiNo, @Telefon, @Email, @Yetkili, @Tur2, @Parola, 'Aktif')
       `);
 
     return Response.json({ id: result.recordset[0].ID }, { status: 201 });

@@ -54,15 +54,23 @@ async function ensureRaporDuzenlemeTable(pool: any) {
 
 export async function loadRaporEdit(pool: any, nkrId: number, format: string): Promise<RaporEditRecord> {
   await ensureRaporDuzenlemeTable(pool);
-  const result = await pool.request()
-    .input("nkrId", nkrId)
-    .input("format", format)
-    .query(`
-      SELECT TOP 1 Payload, Kilitli
-      FROM dbo.NKR_RaporDuzenleme
-      WHERE NkrID = @nkrId AND RaporFormati = @format
-    `);
-  const row = result.recordset[0];
+  let row: any;
+  try {
+    const result = await pool.request()
+      .input("nkrId", nkrId)
+      .input("format", format)
+      .query(`
+        SELECT TOP 1 Payload, Kilitli
+        FROM dbo.NKR_RaporDuzenleme
+        WHERE NkrID = @nkrId AND RaporFormati = @format
+      `);
+    row = result.recordset[0];
+  } catch {
+    // Tablo yoksa (MySQL'de CREATE TABLE compat katmanında no-op'lanır → tablo
+    // migration ile gelir) düzenleme verisi yok kabul edilir; ham rapor içeriği
+    // kullanılır. Onay/önizleme akışı bu yüzden patlamamalı.
+    return { payload: null, kilitli: false };
+  }
   if (!row) return { payload: null, kilitli: false };
   let payload: RaporEditPayload | null = null;
   try {
@@ -112,26 +120,33 @@ export async function saveRaporEdit(pool: any, nkrId: number, format: string, pa
 
 export async function lockRaporEdit(pool: any, nkrId: number, format: string) {
   await ensureRaporDuzenlemeTable(pool);
-  if (hasMysqlConfig()) {
+  // Kilitleme "best-effort": düzenleme tablosu yoksa kilitlenecek bir kayıt da
+  // yoktur. Onay akışını (rapor onayla) bu yüzden BLOKLAMAMALI — tablo migration
+  // ile gelene kadar sessiz geçilir.
+  try {
+    if (hasMysqlConfig()) {
+      await pool.request()
+        .input("nkrId", nkrId)
+        .input("format", format)
+        .query(`
+          UPDATE NKR_RaporDuzenleme
+          SET Kilitli = 1, UpdatedAt = NOW()
+          WHERE NkrID = @nkrId AND RaporFormati = @format
+        `);
+      return;
+    }
+
     await pool.request()
       .input("nkrId", nkrId)
       .input("format", format)
       .query(`
-        UPDATE NKR_RaporDuzenleme
-        SET Kilitli = 1, UpdatedAt = NOW()
+        UPDATE dbo.NKR_RaporDuzenleme
+        SET Kilitli = 1, UpdatedAt = SYSUTCDATETIME()
         WHERE NkrID = @nkrId AND RaporFormati = @format
       `);
-    return;
+  } catch {
+    // Tablo yok / kilitlenemedi → onay yine de geçerli.
   }
-
-  await pool.request()
-    .input("nkrId", nkrId)
-    .input("format", format)
-    .query(`
-      UPDATE dbo.NKR_RaporDuzenleme
-      SET Kilitli = 1, UpdatedAt = SYSUTCDATETIME()
-      WHERE NkrID = @nkrId AND RaporFormati = @format
-    `);
 }
 
 export function applyRaporEdit<T extends { header: RaporHeader; hizmetler: HizmetRow[]; meta: RaporMeta }>(

@@ -174,7 +174,7 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
                             <option value="">-</option>
                             <option value="Uygun">Uygun</option>
                             <option value="Uygun Değil">Uygun Değil</option>
-                            <option value="Değerlendirilemez">Değerlendirilemez</option>
+                            <option value="D.Y.">D.Y.</option>
                           </select>
                         </td>
                         <td style={{ ...tdStyle, width: 70, textAlign: "center" }}>

@@ -1481,7 +1481,7 @@ export default function RaporTakipTable({
                                     <option value="">—</option>
                                     <option value="Uygun">Uygun</option>
                                     <option value="Uygun Değil">Uygun Değil</option>
-                                    <option value="Değerlendirilemez">Değerlendirilemez</option>
+                                    <option value="D.Y.">D.Y.</option>
                                   </select>
                                 </td>
                                 {/* Termin */}

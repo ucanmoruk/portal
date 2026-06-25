@@ -29,9 +29,12 @@ interface ApiResponse {
   totalPages: number;
 }
 
-const emptyForm: Omit<Musteri, "ID" | "Kimin"> = {
+// Form, listede dönmeyen Parola alanını da taşır (yalnızca kayıt/güncelleme için).
+type FirmaForm = Omit<Musteri, "ID" | "Kimin"> & { Parola: string };
+
+const emptyForm: FirmaForm = {
   Ad: "", Adres: "", VergiDairesi: "", VergiNo: "",
-  Telefon: "", Email: "", Web: "", Tur2: "Müşteri", Yetkili: "",
+  Telefon: "", Email: "", Web: "", Tur2: "Müşteri", Yetkili: "", Parola: "",
 };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
@@ -52,7 +55,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
-  const [form, setForm] = useState<Omit<Musteri, "ID" | "Kimin">>(emptyForm);
+  const [form, setForm] = useState<FirmaForm>(emptyForm);
   const [editId, setEditId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -104,7 +107,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     setForm({
       Ad: m.Ad || "", Adres: m.Adres || "", VergiDairesi: m.VergiDairesi || "",
       VergiNo: m.VergiNo || "", Telefon: m.Telefon || "", Email: m.Email || "",
-      Web: m.Web || "", Tur2: m.Tur2 || "Müşteri", Yetkili: m.Yetkili || "",
+      Web: m.Web || "", Tur2: m.Tur2 || "Müşteri", Yetkili: m.Yetkili || "", Parola: "",
     });
     setEditId(m.ID);
     setFormError("");
@@ -332,6 +335,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                     <option value="Müşteri">Müşteri</option>
                     <option value="Tedarikçi">Tedarikçi</option>
                     <option value="Her ikisi">Her ikisi</option>
+                    <option value="Proje">Proje</option>
                   </select>
                 </div>
                 <div className={styles.formGroup}>
@@ -347,6 +351,17 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                 <div className={styles.formGroup}><label>Telefon</label><input value={form.Telefon || ""} onChange={e => handleFormChange("Telefon", e.target.value)} /></div>
                 <div className={styles.formGroup}><label>E-posta</label><input value={form.Email || ""} onChange={e => handleFormChange("Email", e.target.value)} /></div>
                 <div className={`${styles.formGroup} ${styles.colSpan2}`}><label>Web</label><input value={form.Web || ""} onChange={e => handleFormChange("Web", e.target.value)} /></div>
+                <div className={`${styles.formGroup} ${styles.colSpan2}`}>
+                  <label>Şifre (firma giriş)</label>
+                  <input
+                    type="text"
+                    value={form.Parola || ""}
+                    maxLength={15}
+                    autoComplete="off"
+                    onChange={e => handleFormChange("Parola", e.target.value)}
+                    placeholder={modalMode === "edit" ? "Boş bırakılırsa değişmez" : "En fazla 15 karakter"}
+                  />
+                </div>
               </div>
             </div>
             <div className={styles.modalFooter}>

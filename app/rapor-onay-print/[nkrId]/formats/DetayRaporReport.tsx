@@ -32,6 +32,7 @@ function degerlendirmeLabel(d: string | null): { text: string; cls: string } {
   const v = d.trim();
   if (v === "Uygun") return { text: "UYGUN", cls: "deg-gecer" };
   if (v === "Uygun Değil") return { text: "UYGUN DEĞİL", cls: "deg-kaldi" };
+  if (v === "Değerlendirilemez" || v === "D.Y.") return { text: "D.Y.", cls: "deg-other" };
   return { text: v, cls: "deg-other" };
 }
 

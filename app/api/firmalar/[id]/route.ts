@@ -21,11 +21,14 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { Ad, Adres, VergiDairesi, VergiNo, Telefon, Email, Tur2, Yetkili } = body;
+    const { Ad, Adres, VergiDairesi, VergiNo, Telefon, Email, Tur2, Yetkili, Parola } = body;
 
     if (!Ad?.trim()) {
       return Response.json({ error: "Firma adı zorunludur." }, { status: 400 });
     }
+
+    // Parola yalnızca doluysa güncellenir (boş bırakılırsa mevcut şifre korunur).
+    const parola = typeof Parola === "string" && Parola.trim() ? Parola.trim().slice(0, 15) : null;
 
     const pool = await cosmoPool;
     await pool.request()
@@ -38,11 +41,13 @@ export async function PUT(
       .input("Email", Email || null)
       .input("Tur2", Tur2 || null)
       .input("Yetkili", Yetkili || null)
+      .input("Parola", parola)
       .query(`
         UPDATE Firma
         SET Firma_Adi = @Ad, Adres = @Adres, Vergi_Dairesi = @VergiDairesi,
             Vergi_No = @VergiNo, Telefon = @Telefon, Mail = @Email,
-            Yetkili = @Yetkili, Tur = @Tur2
+            Yetkili = @Yetkili, Tur = @Tur2,
+            Parola = CASE WHEN @Parola IS NULL THEN Parola ELSE @Parola END
         WHERE ID = @ID
       `);
 
