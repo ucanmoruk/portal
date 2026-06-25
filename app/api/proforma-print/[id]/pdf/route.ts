@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { renderUrlToPdf } from "@/lib/chromiumPdf";
+import { getRaporPdfBaseUrl } from "@/lib/raporPdfBaseUrl";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { id } = await params;
   const forceDownload = req.nextUrl.searchParams.get("download") === "1";
-  const origin = req.nextUrl.origin;
+  const origin = getRaporPdfBaseUrl(req);
   const reportUrl = `${origin}/proforma-print/${encodeURIComponent(id)}?pdfMode=1`;
   const cookieHeader = req.headers.get("cookie") || "";
 
