@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { calculateTlEquivalent, fetchTcmbTodayRates, normalizeParaBirimi } from "@/lib/tcmbRates";
+import { hasProformaFaturaFirmaCol } from "@/lib/proformaSchema";
 
 function toNumber(value: any, fallback = 0) {
   const n = Number(value);
@@ -27,14 +28,22 @@ export async function GET(
 
   try {
     const pool = await cosmoPool;
+    // Fatura firması (opsiyonel kolon) → adını da getir ki düzenlemede ön-dolsun.
+    const hasFaturaFirmaCol = await hasProformaFaturaFirmaCol(pool);
+    const faturaFirmaSelect = hasFaturaFirmaCol ? ", ISNULL(ff.Ad, '') AS FaturaFirmaAd" : "";
+    const faturaFirmaJoin = hasFaturaFirmaCol
+      ? "LEFT JOIN (SELECT ID, Firma_Adi AS Ad FROM Firma) ff ON ff.ID = p.FaturaFirmaID"
+      : "";
     const header = await pool.request()
       .input("id", Number(id))
       .query(`
         SELECT p.*, ISNULL(f.Ad, '') AS FirmaAd, ISNULL(f.Email, '') AS FirmaEmail,
                ISNULL(f.Telefon, '') AS FirmaTelefon, ISNULL(f.Adres, '') AS FirmaAdres,
                ISNULL(f.VergiDairesi, '') AS VergiDairesi, ISNULL(f.VergiNo, '') AS VergiNo
+               ${faturaFirmaSelect}
         FROM ProformaBaslik p
         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = p.FirmaID
+        ${faturaFirmaJoin}
         WHERE p.ID = @id AND p.SilindiMi = 0
       `);
     if (!header.recordset.length) return Response.json({ error: "Proforma bulunamadı" }, { status: 404 });
@@ -131,7 +140,11 @@ export async function PUT(
     const genelToplam = kdvMatrah + kdvTutar;
 
     const pool = await cosmoPool;
-    await pool.request()
+    const hasFaturaFirmaCol = await hasProformaFaturaFirmaCol(pool);
+    const faturaFirmaId = body.faturaFirmaId ? Number(body.faturaFirmaId) : null;
+    const ffSet = hasFaturaFirmaCol ? ", FaturaFirmaID = @FaturaFirmaID" : "";
+
+    const updReq = pool.request()
       .input("id", Number(id))
       .input("EvrakNo", body.evrakNo || null)
       .input("TeklifID", body.teklifId ? Number(body.teklifId) : null)
@@ -142,8 +155,9 @@ export async function PUT(
       .input("IskontoTutar", Number(iskontoTutar.toFixed(2)))
       .input("KdvTutar", Number(kdvTutar.toFixed(2)))
       .input("GenelToplam", Number(genelToplam.toFixed(2)))
-      .input("Notlar", body.notlar || null)
-      .query(`
+      .input("Notlar", body.notlar || null);
+    if (hasFaturaFirmaCol) updReq.input("FaturaFirmaID", faturaFirmaId);
+    await updReq.query(`
         UPDATE ProformaBaslik SET
           EvrakNo = @EvrakNo,
           TeklifID = @TeklifID,
@@ -154,7 +168,7 @@ export async function PUT(
           IskontoTutar = @IskontoTutar,
           KdvTutar = @KdvTutar,
           GenelToplam = @GenelToplam,
-          Notlar = @Notlar
+          Notlar = @Notlar${ffSet}
         WHERE ID = @id AND SilindiMi = 0
       `);
 

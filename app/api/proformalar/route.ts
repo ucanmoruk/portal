@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 import { calculateTlEquivalent, fetchTcmbTodayRates, normalizeParaBirimi } from "@/lib/tcmbRates";
+import { hasProformaFaturaFirmaCol } from "@/lib/proformaSchema";
 
 // Proforma — MSSQL massgrup_cosmo · YENİ tablolar ProformaBaslik / ProformaKalem
 // (cosmo'da ProformaBaslik/X2 yoktu → sıfırdan kuruluyor). Cari kaynağı: Firma.
@@ -26,6 +27,7 @@ async function ensureProformaTables() {
       GenelToplam  DECIMAL(18,2) NOT NULL DEFAULT 0,
       Notlar       NVARCHAR(MAX) NULL,
       KID          INT           NULL,
+      FaturaFirmaID INT          NULL,
       SilindiMi    BIT           NOT NULL DEFAULT 0
     )
   `);
@@ -187,7 +189,13 @@ export async function POST(request: Request) {
     const proformaNo = await nextProformaNo(pool);
     const userId = (session.user as any)?.userId ?? null;
 
-    await pool.request()
+    // Fatura firması rapor firmasından farklı olabilir (opsiyonel kolon).
+    const hasFaturaFirmaCol = await hasProformaFaturaFirmaCol(pool);
+    const faturaFirmaId = body.faturaFirmaId ? Number(body.faturaFirmaId) : null;
+    const ffCol = hasFaturaFirmaCol ? ", FaturaFirmaID" : "";
+    const ffVal = hasFaturaFirmaCol ? ", @FaturaFirmaID" : "";
+
+    const insReq = pool.request()
       .input("ProformaNo", proformaNo)
       .input("EvrakNo", body.evrakNo || null)
       .input("TeklifID", body.teklifId ? Number(body.teklifId) : null)
@@ -200,14 +208,15 @@ export async function POST(request: Request) {
       .input("KdvTutar", Number(kdvTutar.toFixed(2)))
       .input("GenelToplam", Number(genelToplam.toFixed(2)))
       .input("Notlar", body.notlar || null)
-      .input("KID", userId ? Number(userId) : null)
-      .query(`
+      .input("KID", userId ? Number(userId) : null);
+    if (hasFaturaFirmaCol) insReq.input("FaturaFirmaID", faturaFirmaId);
+    await insReq.query(`
         INSERT INTO ProformaBaslik
           (ProformaNo, EvrakNo, TeklifID, FirmaID, Tarih, Durum, KdvOran, GenelIskonto,
-           AraToplam, IskontoTutar, KdvTutar, GenelToplam, Notlar, KID, SilindiMi)
+           AraToplam, IskontoTutar, KdvTutar, GenelToplam, Notlar, KID${ffCol}, SilindiMi)
         VALUES
           (@ProformaNo, @EvrakNo, @TeklifID, @FirmaID, GETDATE(), @Durum, @KdvOran, @GenelIskonto,
-           @AraToplam, @IskontoTutar, @KdvTutar, @GenelToplam, @Notlar, @KID, 0)
+           @AraToplam, @IskontoTutar, @KdvTutar, @GenelToplam, @Notlar, @KID${ffVal}, 0)
       `);
 
     const idRes = await pool.request()

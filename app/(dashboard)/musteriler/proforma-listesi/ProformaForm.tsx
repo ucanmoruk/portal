@@ -72,6 +72,11 @@ export default function ProformaForm({ id }: { id?: string }) {
   const [firmaQ, setFirmaQ] = useState("");
   const [firmaOpts, setFirmaOpts] = useState<CustomerOpt[]>([]);
   const [firmaOpen, setFirmaOpen] = useState(false);
+  // Fatura firması — rapor/proforma firmasından farklı olabilir (opsiyonel).
+  const [faturaFirma, setFaturaFirma] = useState<CustomerOpt | null>(null);
+  const [faturaFirmaQ, setFaturaFirmaQ] = useState("");
+  const [faturaFirmaOpts, setFaturaFirmaOpts] = useState<CustomerOpt[]>([]);
+  const [faturaFirmaOpen, setFaturaFirmaOpen] = useState(false);
   const [kdvOran, setKdvOran] = useState("20");
   const [genelIskonto, setGenelIskonto] = useState("0");
   const [notlar, setNotlar] = useState("");
@@ -134,6 +139,13 @@ export default function ProformaForm({ id }: { id?: string }) {
       setTeklifId(h.TeklifID ? String(h.TeklifID) : "");
       setFirma({ ID: Number(h.FirmaID), Ad: h.FirmaAd || "", Email: h.FirmaEmail || "" });
       setFirmaQ(h.FirmaAd || "");
+      if (h.FaturaFirmaID) {
+        setFaturaFirma({ ID: Number(h.FaturaFirmaID), Ad: h.FaturaFirmaAd || "" });
+        setFaturaFirmaQ(h.FaturaFirmaAd || "");
+      } else {
+        setFaturaFirma(null);
+        setFaturaFirmaQ("");
+      }
       setKdvOran(String(h.KdvOran ?? 20));
       setGenelIskonto(String(h.GenelIskonto ?? 0));
       setNotlar(h.Notlar || "");
@@ -189,6 +201,15 @@ export default function ProformaForm({ id }: { id?: string }) {
     setFirmaOpts(json.data || []);
   }
 
+  async function searchFaturaFirma(q: string) {
+    setFaturaFirmaQ(q);
+    setFaturaFirma(null);
+    setFaturaFirmaOpen(true);
+    const res = await fetch(`/api/teklifler/lookup?type=musteriler&q=${encodeURIComponent(q)}`);
+    const json = await res.json();
+    setFaturaFirmaOpts(json.data || []);
+  }
+
   function updateLine(index: number, field: keyof Line, value: string) {
     setLines(prev => prev.map((line, i) => i === index ? { ...line, [field]: value } : line));
   }
@@ -223,6 +244,7 @@ export default function ProformaForm({ id }: { id?: string }) {
           evrakNo: evrakNo || null,
           teklifId: teklifId || null,
           firmaId: firma.ID,
+          faturaFirmaId: faturaFirma?.ID ?? null,
           kdvOran,
           genelIskonto,
           notlar,
@@ -281,6 +303,34 @@ export default function ProformaForm({ id }: { id?: string }) {
                 <div className={styles.dropdown}>
                   {firmaOpts.map(f => (
                     <button key={f.ID} type="button" className={styles.dropdownItem} onClick={() => { setFirma(f); setFirmaQ(f.Ad); setFirmaOpen(false); }}>
+                      {f.Ad}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </label>
+          <label className={styles.field}>Fatura Firması <small style={{ fontWeight: 400, color: "var(--color-text-tertiary)" }}>(farklıysa)</small>
+            <div className={styles.lookup}>
+              <input
+                className={styles.input}
+                value={faturaFirmaQ}
+                onChange={e => searchFaturaFirma(e.target.value)}
+                onFocus={() => setFaturaFirmaOpen(true)}
+                placeholder="Boş = rapor firması"
+              />
+              {faturaFirma && (
+                <button
+                  type="button"
+                  className={styles.button}
+                  style={{ marginTop: 6 }}
+                  onClick={() => { setFaturaFirma(null); setFaturaFirmaQ(""); setFaturaFirmaOpen(false); }}
+                >Temizle (rapor firmasına kes)</button>
+              )}
+              {faturaFirmaOpen && faturaFirmaOpts.length > 0 && (
+                <div className={styles.dropdown}>
+                  {faturaFirmaOpts.map(f => (
+                    <button key={f.ID} type="button" className={styles.dropdownItem} onClick={() => { setFaturaFirma(f); setFaturaFirmaQ(f.Ad); setFaturaFirmaOpen(false); }}>
                       {f.Ad}
                     </button>
                   ))}

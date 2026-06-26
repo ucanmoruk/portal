@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
+import { hasProformaFaturaFirmaCol } from "@/lib/proformaSchema";
 
 // Fatura Takip — cosmo `Fatura` (başlık) + `Odeme` (ödeme durumu aşamaları) tabloları.
 // Proforma "Faturaya çevir" akışı: Fatura kaydı oluşturur, Odeme'ye 'Ödeme Bekliyor'
@@ -118,14 +119,21 @@ export async function POST(request: NextRequest) {
     if (!faturaTarihi) return Response.json({ error: "Fatura tarihi zorunludur." }, { status: 400 });
 
     const pool = await cosmoPool;
+    // Fatura firması rapor firmasından farklı olabilir (opsiyonel kolon).
+    const hasFaturaFirmaCol = await hasProformaFaturaFirmaCol(pool);
+    const ffSelect = hasFaturaFirmaCol ? ", FaturaFirmaID" : "";
     const profRes = await pool.request()
       .input("id", proformaId)
-      .query(`SELECT ID, EvrakNo, FirmaID, GenelToplam, KdvOran, Durum FROM ProformaBaslik WHERE ID = @id AND SilindiMi = 0`);
+      .query(`SELECT ID, EvrakNo, FirmaID, GenelToplam, KdvOran, Durum${ffSelect} FROM ProformaBaslik WHERE ID = @id AND SilindiMi = 0`);
     const proforma = profRes.recordset[0];
     if (!proforma) return Response.json({ error: "Proforma bulunamadı." }, { status: 404 });
     if (String(proforma.Durum) === "Faturalaştı") {
       return Response.json({ error: "Bu proforma zaten faturalaştırılmış." }, { status: 409 });
     }
+    // Fatura firması: proformada ayrı seçildiyse o, yoksa rapor firması.
+    const faturaFirmaId = (hasFaturaFirmaCol && proforma.FaturaFirmaID)
+      ? Number(proforma.FaturaFirmaID)
+      : (proforma.FirmaID ? Number(proforma.FirmaID) : null);
 
     const evrakNo = proforma.EvrakNo ? String(proforma.EvrakNo) : null;
     // Toplam = KDV dahil (proforma GenelToplam ya da popup'ta düzeltilmiş tutar).
@@ -143,7 +151,7 @@ export async function POST(request: NextRequest) {
       .input("Tutar", Number(net.toFixed(2)))
       .input("KDV", Number(kdv.toFixed(2)))
       .input("OdenenTutar", 0)
-      .input("FaturaFirmaID", proforma.FirmaID ? Number(proforma.FirmaID) : null)
+      .input("FaturaFirmaID", faturaFirmaId)
       .input("Tarih", faturaTarihi)
       .input("Aciklama", aciklama)
       .query(`
