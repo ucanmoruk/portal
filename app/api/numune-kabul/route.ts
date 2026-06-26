@@ -63,7 +63,9 @@ export async function GET(request: NextRequest) {
       (tarihBas    ? " AND CONVERT(date, n.Tarih) >= @tarihBas" : "") +
       (tarihBit    ? " AND CONVERT(date, n.Tarih) <= @tarihBit" : "") +
       (raporDurumu ? " AND ISNULL(n.Rapor_Durumu, '') = @raporDurumu" : "") +
-      (odeme       ? " AND (SELECT TOP 1 Odeme_Durumu FROM Odeme WHERE Evrak_No = n.Evrak_No ORDER BY ID DESC) = @odeme" : "");
+      // NULL (hiç Odeme kaydı yok) = "Fatura Kesilmedi" — OdemeBadge ile aynı mantık.
+      // Aksi halde Odeme satırı olmayan (yeni) evraklar "Fatura Kesilmedi" filtresinde kaybolurdu.
+      (odeme       ? " AND ISNULL((SELECT TOP 1 Odeme_Durumu FROM Odeme WHERE Evrak_No = n.Evrak_No ORDER BY ID DESC), N'Fatura Kesilmedi') = @odeme" : "");
 
     // Filtre input'larını bir request'e ekler (yalnızca kullanılanlar)
     const addFilters = <T extends { input: (n: string, v: unknown) => T }>(req: T): T => {
