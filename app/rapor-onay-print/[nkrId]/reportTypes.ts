@@ -92,6 +92,17 @@ export interface KarekodInfo {
   raporNoForVerify: string;
 }
 
+// Rapor düzenleme (WYSIWYG) modunda formata geçirilen handler'lar. `edit`
+// verilmişse format bileşeni metin yerine inline input/select render eder ve
+// satır ekle/sil kontrolleri gösterir. Önizleme/PDF tarafında `edit` verilmez →
+// görünüm birebir aynı kalır.
+export interface ReportEditHandlers {
+  onHeaderChange: (patch: Partial<RaporHeader>) => void;
+  onRowChange: (index: number, patch: Partial<HizmetRow>) => void;
+  onAddRow: () => void;
+  onRemoveRow: (index: number) => void;
+}
+
 export interface ReportFormatProps {
   nkrId: number;
   format: string;
@@ -102,4 +113,8 @@ export interface ReportFormatProps {
   onay: OnayInfo | null;
   meta: ReportMeta;
   karekod: KarekodInfo | null;
+  /** Düzenleme modu — verilirse rapor inline düzenlenebilir hale gelir. */
+  edit?: ReportEditHandlers;
+  /** Düzenleme ekranında onay toolbar'ı gizlenir (kendi toolbar'ı vardır). */
+  hideToolbar?: boolean;
 }

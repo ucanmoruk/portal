@@ -47,7 +47,10 @@ export default function GenelReport({
   onay,
   meta,
   karekod,
+  edit,
+  hideToolbar,
 }: ReportFormatProps) {
+  const editing = Boolean(edit);
   const {
     revNo,
     kabulTarihi,
@@ -85,6 +88,21 @@ export default function GenelReport({
     (header.Aciklamalar ?? "").trim() ||
     "Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir.";
   const aciklamaSatirlar = aciklamaText.split(/\r?\n/);
+
+  // Düzenleme modu yardımcıları — `edit` yoksa hepsi no-op, metin olduğu gibi basılır.
+  const editText = (
+    value: string,
+    onChange: (v: string) => void,
+    opts?: { center?: boolean; placeholder?: string },
+  ) => (
+    <input
+      className="rd-edit"
+      value={value}
+      placeholder={opts?.placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      style={opts?.center ? { textAlign: "center" } : undefined}
+    />
+  );
 
   return (
     <>
@@ -430,6 +448,45 @@ export default function GenelReport({
           font-weight: 700;
         }
 
+        /* ───── DÜZENLEME MODU (WYSIWYG) — sadece düzenleme ekranında ───── */
+        .rd-edit, .rd-edit-area {
+          font: inherit;
+          color: inherit;
+          letter-spacing: inherit;
+          width: 100%;
+          border: 1px solid #c7c9f5;
+          border-radius: 4px;
+          background: #f6f7ff;
+          padding: 1px 4px;
+        }
+        .rd-edit-area { resize: vertical; line-height: inherit; min-height: 60px; }
+        .rd-edit:focus, .rd-edit-area:focus {
+          outline: 2px solid #4A46E5;
+          outline-offset: 0;
+          background: #fff;
+        }
+        .rd-row-act {
+          border: 1px solid #ff3b3033;
+          background: #ff3b3014;
+          color: #c00;
+          border-radius: 6px;
+          padding: 2px 7px;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .rd-add-btn {
+          margin-top: 8px;
+          border: 1px solid #0071e3;
+          background: #0071e3;
+          color: #fff;
+          border-radius: 7px;
+          padding: 6px 12px;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
         @media print {
           body { background: #fff; }
           .onay-toolbar { display: none !important; }
@@ -450,12 +507,14 @@ export default function GenelReport({
       `}</style>
 
       <div className={`root ${jetbrains.variable}`}>
-        <OnayToolbar
-          nkrId={nkrId}
-          format={format}
-          initialOnay={onay}
-          raporNo={header.RaporNo}
-        />
+        {!hideToolbar && (
+          <OnayToolbar
+            nkrId={nkrId}
+            format={format}
+            initialOnay={onay}
+            raporNo={header.RaporNo}
+          />
+        )}
 
         <div className="page">
           {/* ───── HEADER: Sol logo + (akredite varsa) Sağ Türkak/ilac-MRA ───── */}
@@ -524,7 +583,9 @@ export default function GenelReport({
                 </td>
                 <td>
                   <div className="firma-ad">
-                    {header.Numune_Adi}
+                    {edit
+                      ? editText(header.Numune_Adi || "", (v) => edit.onHeaderChange({ Numune_Adi: v }), { placeholder: "Numune adı" })
+                      : header.Numune_Adi}
                   </div>
                   {(header.TesteMiktar || header.TesteMiktarBirim) && (
                     <div className="info-line">
@@ -564,13 +625,14 @@ export default function GenelReport({
                   <th style={{ width: 110 ,paddingLeft: 5}}>Metot</th>
                   <th style={{ width: 70 }}>Limit</th>
                   <th style={{ width: 100, textAlign: "center" }}>Değerlendirme</th>
+                  {editing && <th style={{ width: 40 }}></th>}
                 </tr>
               </thead>
               <tbody>
                 {hizmetler.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: "center", color: "#6e6e73", padding: "30px" }}>
-                      Bu rapor formatına ait hizmet bulunamadı.
+                    <td colSpan={editing ? 9 : 8} style={{ textAlign: "center", color: "#6e6e73", padding: "30px" }}>
+                      {editing ? "Henüz satır yok — aşağıdan “Satır Ekle” ile ekleyin." : "Bu rapor formatına ait hizmet bulunamadı."}
                     </td>
                   </tr>
                 ) : (
@@ -582,15 +644,38 @@ export default function GenelReport({
                       <Fragment key={i}>
                         <tr>
                           <td style={{paddingRight:10 }}>
-                            {isAkr ? "*" : ""}{h.Ad}
+                            {edit
+                              ? editText(h.Ad || "", (v) => edit.onRowChange(i, { Ad: v }), { placeholder: "Analiz adı" })
+                              : <>{isAkr ? "*" : ""}{h.Ad}</>}
                           </td>
-                          <td className="center">{h.Birim || "-"}</td>
-                          <td className="center">{h.Sonuc || "-"}</td>
-                          <td className="center" style={{ paddingLeft: 5 }}>{h.LOQ || "-"}</td>
+                          <td className="center">{edit ? editText(h.Birim || "", (v) => edit.onRowChange(i, { Birim: v }), { center: true }) : (h.Birim || "-")}</td>
+                          <td className="center">{edit ? editText(h.Sonuc || "", (v) => edit.onRowChange(i, { Sonuc: v }), { center: true }) : (h.Sonuc || "-")}</td>
+                          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.LOQ || "", (v) => edit.onRowChange(i, { LOQ: v }), { center: true }) : (h.LOQ || "-")}</td>
                           <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
-                          <td className="center" style={{ paddingLeft: 5 }}>{h.Metot || "-"}</td>
-                          <td className="center">{h.LimitDeger || "-"}</td>
-                          <td className={deg.cls} style={{textAlign:"center"}}>{deg.text}</td>
+                          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.Metot || "", (v) => edit.onRowChange(i, { Metot: v }), { center: true }) : (h.Metot || "-")}</td>
+                          <td className="center">{edit ? editText(h.LimitDeger || "", (v) => edit.onRowChange(i, { LimitDeger: v }), { center: true }) : (h.LimitDeger || "-")}</td>
+                          {edit ? (
+                            <td style={{ textAlign: "center" }}>
+                              <select
+                                className="rd-edit"
+                                value={h.Degerlendirme || ""}
+                                onChange={(e) => edit.onRowChange(i, { Degerlendirme: e.target.value })}
+                                style={{ textAlign: "center" }}
+                              >
+                                <option value="">-</option>
+                                <option value="Uygun">Uygun</option>
+                                <option value="Uygun Değil">Uygun Değil</option>
+                                <option value="D.Y.">D.Y.</option>
+                              </select>
+                            </td>
+                          ) : (
+                            <td className={deg.cls} style={{textAlign:"center"}}>{deg.text}</td>
+                          )}
+                          {editing && (
+                            <td style={{ textAlign: "center" }}>
+                              <button type="button" className="rd-row-act" title="Satırı sil" onClick={() => edit?.onRemoveRow(i)}>✕</button>
+                            </td>
+                          )}
                         </tr>
                         {/* Alt parametreler — ana analizin altında, girintili bileşen satırları */}
                         {alt.map((ap, j) => {
@@ -605,6 +690,7 @@ export default function GenelReport({
                               <td className="center" style={{ paddingLeft: 5 }}>-</td>
                               <td className="center">{ap.Limit || "-"}</td>
                               <td className={adeg.cls} style={{ textAlign: "center" }}>{ap.Degerlendirme ? adeg.text : "-"}</td>
+                              {editing && <td />}
                             </tr>
                           );
                         })}
@@ -614,6 +700,9 @@ export default function GenelReport({
                 )}
               </tbody>
             </table>
+            {edit && (
+              <button type="button" className="rd-add-btn" onClick={() => edit.onAddRow()}>+ Satır Ekle</button>
+            )}
           </div>
 
           {/* ───── NOTLAR ───── */}
@@ -625,11 +714,21 @@ export default function GenelReport({
                   <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
                 </>
               ) : null}
-            {aciklamaSatirlar.map((satir, i) => (
-              <Fragment key={i}>
-                <br />{satir}
-              </Fragment>
-            ))}
+            {edit ? (
+              <textarea
+                className="rd-edit-area"
+                style={{ marginTop: 6 }}
+                value={header.Aciklamalar ?? ""}
+                placeholder="Açıklama metni — boş bırakılırsa varsayılan cümle kullanılır."
+                onChange={(e) => edit.onHeaderChange({ Aciklamalar: e.target.value })}
+              />
+            ) : (
+              aciklamaSatirlar.map((satir, i) => (
+                <Fragment key={i}>
+                  <br />{satir}
+                </Fragment>
+              ))
+            )}
           </div>
 
           {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ─────  */}
