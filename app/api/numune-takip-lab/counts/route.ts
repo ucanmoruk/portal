@@ -18,6 +18,22 @@ const bucketSql = (expr: string) => `
   END
 `;
 
+// DB NormFmt anahtarını UI normFmt'i ile BİREBİR aynı ASCII forma getir.
+// KRİTİK: MySQL bağlantısı utf8mb4_turkish_ci collation kullandığından SQL UPPER('i')
+// = 'İ' (noktalı) döner → "Stabilite" DB'de "STABİLİTE" olur. UI ise JS toUpperCase
+// ile "STABILITE" (düz I) üretir. Aynı JS normalizasyonunu burada da uygulayarak
+// byFormatLab anahtarının UI'nin aradığı anahtarla eşleşmesini garanti ederiz.
+function normKey(s: string): string {
+  return s
+    .replace(/Ü/g, "U").replace(/ü/g, "U")
+    .replace(/İ/g, "I").replace(/ı/g, "I")
+    .replace(/Ö/g, "O").replace(/ö/g, "O")
+    .replace(/Ç/g, "C").replace(/ç/g, "C")
+    .replace(/Ş/g, "S").replace(/ş/g, "S")
+    .replace(/Ğ/g, "G").replace(/ğ/g, "G")
+    .toUpperCase();
+}
+
 // GET /api/numune-takip-lab/counts
 // Numune Takip ana tabları için kayıt sayıları:
 // - kabul: NKR_LabKabul'da olmayan rapor formatları
@@ -240,7 +256,8 @@ export async function GET(request: NextRequest) {
       const unknown: Array<{ d: string; c: number }> = [];
       for (const row of effRows) {
         const d = String(row.EffDurum || "");
-        const fmt = String(row.NormFmt || "");
+        // UI normFmt ile aynı ASCII anahtar (Türkçe UPPER collation farkını giderir).
+        const fmt = normKey(String(row.NormFmt || ""));
         const c = Number(row.c || 0);
         if (d === "Bekliyor" || d === "Analiz Devam Ediyor") {
           sonuc += c;
