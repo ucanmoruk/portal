@@ -12,6 +12,8 @@ interface ProformaRow {
   Tarih: string;
   Durum: string;
   FirmaAd: string;
+  FaturaFirmaAd?: string | null;
+  Notlar?: string | null;
   GenelToplam: number | string;
   ParaBirimi?: string | null;
   DovizAlisKuru?: number | string | null;
@@ -21,6 +23,8 @@ interface ProformaRow {
 }
 
 const DURUMLAR = ["Taslak", "Gönderildi", "Onaylandı", "İptal"];
+// Filtre için tüm durumlar (Faturalaştı dahil — sadece okuma/filtreleme).
+const FILTRE_DURUMLAR = [...DURUMLAR, "Faturalaştı"];
 
 function fmtMoney(value: number | string | null | undefined) {
   const n = Number(value || 0);
@@ -58,10 +62,12 @@ export default function ProformaTable() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [durumFilter, setDurumFilter] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<{ paraBirimi: string; toplam: number; adet: number }[]>([]);
   const [detail, setDetail] = useState<any | null>(null);
   const [faturaTarget, setFaturaTarget] = useState<ProformaRow | null>(null);
   const [faturaForm, setFaturaForm] = useState({ faturaNo: "", faturaTarihi: "", tutar: "" });
@@ -81,18 +87,19 @@ export default function ProformaTable() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/proformalar?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`);
+      const res = await fetch(`/api/proformalar?search=${encodeURIComponent(search)}&durum=${encodeURIComponent(durumFilter)}&page=${page}&limit=${limit}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Proforma listesi alınamadı.");
       setRows(json.data || []);
       setTotal(json.total || 0);
       setTotalPages(json.totalPages || 1);
+      setSummary(json.summary || []);
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [search, page, limit]);
+  }, [search, durumFilter, page, limit]);
 
   useEffect(() => { fetchRows(); }, [fetchRows]);
 
@@ -177,6 +184,15 @@ export default function ProformaTable() {
               onChange={e => { setSearch(e.target.value); setPage(1); }}
             />
           </div>
+          <select
+            className={styles.pageSizeSelect}
+            value={durumFilter}
+            onChange={e => { setDurumFilter(e.target.value); setPage(1); }}
+            title="Duruma göre filtrele"
+          >
+            <option value="">Tüm Durumlar</option>
+            {FILTRE_DURUMLAR.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
           <span className={styles.totalCount}>{total} kayıt</span>
         </div>
         <div className={styles.toolbarRight}>
@@ -194,7 +210,7 @@ export default function ProformaTable() {
             <tr>
               <th>Proforma</th>
               <th>Evrak No</th>
-              <th>Firma</th>
+              <th>Fatura Firması</th>
               <th>Tarih</th>
               <th>Durum</th>
               <th>Kalem</th>
@@ -217,9 +233,20 @@ export default function ProformaTable() {
               const odemeLabel = odemeRaw === "Ödendi" ? "Ödendi" : "Ödeme Bekliyor";
               return (
               <tr key={row.ID}>
-                <td className={styles.primaryCell}>{row.ProformaNo}</td>
+                <td className={styles.primaryCell}>
+                  {row.ProformaNo}
+                  {row.Notlar && row.Notlar.trim() && (
+                    <div
+                      title={row.Notlar}
+                      style={{ fontSize: 11, fontWeight: 400, color: "var(--color-text-tertiary)", marginTop: 2, maxWidth: 240, whiteSpace: "normal", lineHeight: 1.3 }}
+                    >
+                      📝 {row.Notlar.length > 80 ? row.Notlar.slice(0, 80) + "…" : row.Notlar}
+                    </div>
+                  )}
+                </td>
                 <td>{row.EvrakNo || "-"}</td>
-                <td>{upperTr(row.FirmaAd) || "-"}</td>
+                {/* Fatura firması seçiliyse o; değilse fatura rapor firmasına kesilir → onu göster */}
+                <td>{upperTr(row.FaturaFirmaAd || row.FirmaAd) || "-"}</td>
                 <td>{row.Tarih}</td>
                 <td>
                   {isInvoiced ? (
@@ -263,6 +290,21 @@ export default function ProformaTable() {
               );
             })}
           </tbody>
+          {summary.length > 0 && (
+            <tfoot>
+              <tr style={{ borderTop: "2px solid var(--color-border)", background: "var(--color-surface-2, #fafafa)" }}>
+                <td colSpan={6} style={{ textAlign: "right", fontWeight: 700, padding: "10px 12px" }}>
+                  Genel Toplam ({total} kayıt)
+                </td>
+                <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", padding: "10px 12px" }}>
+                  {summary.map((s, i) => (
+                    <div key={i} style={{ fontWeight: 700 }}>{fmtMoney(s.toplam)} {s.paraBirimi}</div>
+                  ))}
+                </td>
+                <td />
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 

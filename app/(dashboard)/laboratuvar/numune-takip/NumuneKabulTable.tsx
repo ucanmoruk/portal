@@ -318,7 +318,9 @@ export default function NumuneKabulTable() {
     if (!invoiceGroup) return;
     const qs = new URLSearchParams({ evrakNo: invoiceGroup.evrakNo });
     if (invoiceTeklifId) qs.set("teklifId", invoiceTeklifId);
-    router.push(`/musteriler/proforma-listesi/yeni?${qs.toString()}`);
+    // Yeni sekmede aç — numune takip listesi açık kalsın.
+    window.open(`/musteriler/proforma-listesi/yeni?${qs.toString()}`, "_blank", "noopener,noreferrer");
+    setInvoiceGroup(null);
   };
 
   const teklifLabel = (t: TeklifOpt) =>
@@ -357,7 +359,7 @@ export default function NumuneKabulTable() {
             </svg>
             <input
               className={styles.searchInput}
-              placeholder="Evrak no, rapor no, firma, numune adı…"
+              placeholder="Evrak no, rapor no, firma, numune adı, proje…"
               value={search}
               onChange={e => handleSearch(e.target.value)}
             />

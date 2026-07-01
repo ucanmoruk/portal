@@ -47,13 +47,25 @@ export async function GET(request: NextRequest) {
            )`
       : "";
 
-    // Arama: Evrak_No, RaporNo, FirmaAd, NumuneAdi (+ DisRaporKodu) üzerinde
+    // Proje adı: NumuneDetay.ProjeID → Firma. EXISTS ile arar (evrak içindeki
+    // herhangi bir numunenin proje firması eşleşirse evrak listede çıkar).
+    const projeSearchClause = search
+      ? `OR EXISTS (
+             SELECT 1 FROM NumuneDetay nd3
+             INNER JOIN Firma pf ON pf.ID = nd3.ProjeID
+             WHERE nd3.RaporID = n.ID
+               AND LOWER(ISNULL(pf.Firma_Adi, '')) LIKE LOWER(@searchLike)
+           )`
+      : "";
+
+    // Arama: Evrak_No, RaporNo, FirmaAd, NumuneAdi, ProjeAd (+ DisRaporKodu) üzerinde
     const searchClause = search
       ? `AND (
           LOWER(ISNULL(CAST(n.Evrak_No AS NVARCHAR), '')) LIKE LOWER(@searchLike)
           OR LOWER(ISNULL(CAST(n.RaporNo AS NVARCHAR), '')) LIKE LOWER(@searchLike)
           OR LOWER(ISNULL(f.Ad, '')) LIKE LOWER(@searchLike)
           OR LOWER(ISNULL(n.Numune_Adi, '')) LIKE LOWER(@searchLike)
+          ${projeSearchClause}
           ${disKodSearchClause}
         )`
       : "";

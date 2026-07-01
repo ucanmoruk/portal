@@ -34,8 +34,34 @@ interface Line {
 }
 
 function fmtMoney(value: number | string | null | undefined) {
-  const n = Number(value || 0);
-  return n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const n = typeof value === "number" ? value : parseTrNumber(value);
+  return (Number.isFinite(n) ? n : 0).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// TR biçimli sayıyı ayrıştır: "10.000,15" → 10000.15. Düz "10000.15" de çalışır.
+//  - virgül varsa: nokta = binlik, virgül = ondalık (TR)
+//  - virgül yoksa ama "10.000" / "1.234.567" gibi binlik gruplama varsa: noktaları sil
+//  - aksi halde noktayı ondalık say (düz format)
+function parseTrNumber(value: number | string | null | undefined): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  let s = String(value ?? "").trim();
+  if (!s) return 0;
+  s = s.replace(/\s/g, "");
+  if (s.includes(",")) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) {
+    s = s.replace(/\./g, "");
+  }
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Para birimi seçenekleri (manuel fiyat girişinde döviz seçimi).
+const PARA_BIRIMLERI = ["TRY", "USD", "EUR", "GBP"];
+function normParaBirimi(v: string | null | undefined): string {
+  const up = String(v ?? "TRY").trim().toUpperCase();
+  if (up === "TL" || up === "₺" || up === "") return "TRY";
+  return PARA_BIRIMLERI.includes(up) ? up : "TRY";
 }
 
 function offerLabel(t: OfferOpt) {
@@ -44,9 +70,9 @@ function offerLabel(t: OfferOpt) {
 }
 
 function lineTotal(line: Line) {
-  const adet = Number(line.adet || 1);
-  const fiyat = Number(line.birimFiyat || 0);
-  const iskonto = Number(line.iskonto || 0);
+  const adet = parseTrNumber(line.adet || 1);
+  const fiyat = parseTrNumber(line.birimFiyat || 0);
+  const iskonto = parseTrNumber(line.iskonto || 0);
   return adet * fiyat * (1 - iskonto / 100);
 }
 
@@ -86,13 +112,13 @@ export default function ProformaForm({ id }: { id?: string }) {
 
   const totals = useMemo(() => {
     const ara = lines.reduce((sum, line) => sum + lineTotal(line), 0);
-    const iskonto = ara * (Number(genelIskonto || 0) / 100);
-    const kdv = (ara - iskonto) * (Number(kdvOran || 0) / 100);
+    const iskonto = ara * (parseTrNumber(genelIskonto || 0) / 100);
+    const kdv = (ara - iskonto) * (parseTrNumber(kdvOran || 0) / 100);
     return { ara, iskonto, kdv, genel: ara - iskonto + kdv };
   }, [lines, genelIskonto, kdvOran]);
 
   const paraBirimi = useMemo(() => {
-    const currencies = Array.from(new Set(lines.map(line => String(line.paraBirimi || "TRY").trim().toUpperCase() || "TRY")));
+    const currencies = Array.from(new Set(lines.map(line => normParaBirimi(line.paraBirimi))));
     return currencies.length > 1 ? "Çoklu" : (currencies[0] || "TRY");
   }, [lines]);
 
@@ -157,8 +183,8 @@ export default function ProformaForm({ id }: { id?: string }) {
         raporNoListesi: line.RaporNoListesi || "",
         numuneListesi: line.NumuneListesi || "",
         adet: line.Adet ?? 1,
-        birimFiyat: line.BirimFiyat ?? "",
-        paraBirimi: line.ParaBirimi || "TRY",
+        birimFiyat: line.BirimFiyat != null ? fmtMoney(line.BirimFiyat) : "",
+        paraBirimi: normParaBirimi(line.ParaBirimi),
         iskonto: line.Iskonto ?? 0,
         kaynak: line.Kaynak || "",
       })));
@@ -182,7 +208,11 @@ export default function ProformaForm({ id }: { id?: string }) {
         setFirma(json.firma);
         setFirmaQ(json.firma.Ad || "");
       }
-      setLines(json.satirlar || []);
+      setLines((json.satirlar || []).map((l: any) => ({
+        ...l,
+        birimFiyat: l.birimFiyat !== "" && l.birimFiyat != null ? fmtMoney(l.birimFiyat) : "",
+        paraBirimi: normParaBirimi(l.paraBirimi),
+      })));
       setKdvOran(String(json.kdvOran ?? 20));
       setGenelIskonto(String(json.genelIskonto ?? 0));
     } catch (e: any) {
@@ -245,10 +275,17 @@ export default function ProformaForm({ id }: { id?: string }) {
           teklifId: teklifId || null,
           firmaId: firma.ID,
           faturaFirmaId: faturaFirma?.ID ?? null,
-          kdvOran,
-          genelIskonto,
+          kdvOran: parseTrNumber(kdvOran),
+          genelIskonto: parseTrNumber(genelIskonto),
           notlar,
-          satirlar: lines,
+          // TR biçimli ("10.000,15") tutarları temiz sayıya çevir + para birimini normalize et.
+          satirlar: lines.map(l => ({
+            ...l,
+            adet: parseTrNumber(l.adet || 1),
+            birimFiyat: parseTrNumber(l.birimFiyat || 0),
+            iskonto: parseTrNumber(l.iskonto || 0),
+            paraBirimi: normParaBirimi(l.paraBirimi),
+          })),
         }),
       });
       const json = await res.json();
@@ -296,53 +333,66 @@ export default function ProformaForm({ id }: { id?: string }) {
               {teklifler.map(t => <option key={t.ID} value={t.ID}>{offerLabel(t)}</option>)}
             </select>
           </label>
-          <label className={styles.field}>Firma
-            <div className={styles.lookup}>
-              <input className={styles.input} value={firmaQ} onChange={e => searchFirma(e.target.value)} onFocus={() => setFirmaOpen(true)} placeholder="Firma seç" />
-              {firmaOpen && firmaOpts.length > 0 && (
-                <div className={styles.dropdown}>
-                  {firmaOpts.map(f => (
-                    <button key={f.ID} type="button" className={styles.dropdownItem} onClick={() => { setFirma(f); setFirmaQ(f.Ad); setFirmaOpen(false); }}>
-                      {f.Ad}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </label>
-          <label className={styles.field}>Fatura Firması <small style={{ fontWeight: 400, color: "var(--color-text-tertiary)" }}>(farklıysa)</small>
-            <div className={styles.lookup}>
-              <input
-                className={styles.input}
-                value={faturaFirmaQ}
-                onChange={e => searchFaturaFirma(e.target.value)}
-                onFocus={() => setFaturaFirmaOpen(true)}
-                placeholder="Boş = rapor firması"
-              />
-              {faturaFirma && (
-                <button
-                  type="button"
-                  className={styles.button}
-                  style={{ marginTop: 6 }}
-                  onClick={() => { setFaturaFirma(null); setFaturaFirmaQ(""); setFaturaFirmaOpen(false); }}
-                >Temizle (rapor firmasına kes)</button>
-              )}
-              {faturaFirmaOpen && faturaFirmaOpts.length > 0 && (
-                <div className={styles.dropdown}>
-                  {faturaFirmaOpts.map(f => (
-                    <button key={f.ID} type="button" className={styles.dropdownItem} onClick={() => { setFaturaFirma(f); setFaturaFirmaQ(f.Ad); setFaturaFirmaOpen(false); }}>
-                      {f.Ad}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </label>
           <label className={styles.field}>KDV %
             <input className={styles.input} value={kdvOran} onChange={e => setKdvOran(e.target.value)} />
           </label>
           <label className={styles.field}>Genel İskonto %
             <input className={styles.input} value={genelIskonto} onChange={e => setGenelIskonto(e.target.value)} />
+          </label>
+          {/* 2. satır: Rapor Firması + Fatura Firması yan yana (tam genişlik) */}
+          <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <label className={styles.field}>Rapor Firması
+              <div className={styles.lookup}>
+                <input className={styles.input} value={firmaQ} onChange={e => searchFirma(e.target.value)} onFocus={() => setFirmaOpen(true)} placeholder="Rapor firması seç" />
+                {firmaOpen && firmaOpts.length > 0 && (
+                  <div className={styles.dropdown}>
+                    {firmaOpts.map(f => (
+                      <button key={f.ID} type="button" className={styles.dropdownItem} onClick={() => { setFirma(f); setFirmaQ(f.Ad); setFirmaOpen(false); setFirmaOpts([]); }}>
+                        {f.Ad}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </label>
+            <label className={styles.field}>Fatura Firması <small style={{ fontWeight: 400, color: "var(--color-text-tertiary)" }}>(farklıysa — boş = rapor firması)</small>
+              <div className={styles.lookup}>
+                <input
+                  className={styles.input}
+                  value={faturaFirmaQ}
+                  onChange={e => searchFaturaFirma(e.target.value)}
+                  onFocus={() => setFaturaFirmaOpen(true)}
+                  placeholder="Boş = rapor firması"
+                />
+                {faturaFirma && (
+                  <button
+                    type="button"
+                    className={styles.button}
+                    style={{ marginTop: 6 }}
+                    onClick={() => { setFaturaFirma(null); setFaturaFirmaQ(""); setFaturaFirmaOpen(false); setFaturaFirmaOpts([]); }}
+                  >Temizle (rapor firmasına kes)</button>
+                )}
+                {faturaFirmaOpen && faturaFirmaOpts.length > 0 && (
+                  <div className={styles.dropdown}>
+                    {faturaFirmaOpts.map(f => (
+                      <button key={f.ID} type="button" className={styles.dropdownItem} onClick={() => { setFaturaFirma(f); setFaturaFirmaQ(f.Ad); setFaturaFirmaOpen(false); setFaturaFirmaOpts([]); }}>
+                        {f.Ad}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </label>
+          </div>
+          {/* Açıklama — proforma notu; listede küçük punto not olarak da görünür. */}
+          <label className={styles.field} style={{ gridColumn: "1 / -1" }}>Açıklama
+            <textarea
+              className={styles.textarea}
+              value={notlar}
+              onChange={e => setNotlar(e.target.value)}
+              placeholder="Proforma açıklaması / notu (listede de görünür)"
+              rows={2}
+            />
           </label>
         </div>
       </div>
@@ -379,8 +429,23 @@ export default function ProformaForm({ id }: { id?: string }) {
                     <input className={styles.lineInput} value={line.hizmetAdi} onChange={e => updateLine(i, "hizmetAdi", e.target.value)} style={{ marginTop: 6 }} />
                   </td>
                   <td><input className={styles.lineInput} value={line.adet} onChange={e => updateLine(i, "adet", e.target.value)} style={{ width: 82 }} /></td>
-                  <td><input className={styles.lineInput} value={line.birimFiyat} onChange={e => updateLine(i, "birimFiyat", e.target.value)} style={{ width: 124 }} /></td>
-                  <td><input className={styles.lineInput} value={line.paraBirimi} onChange={e => updateLine(i, "paraBirimi", e.target.value)} style={{ width: 82 }} /></td>
+                  <td><input
+                    className={styles.lineInput}
+                    value={line.birimFiyat}
+                    onChange={e => updateLine(i, "birimFiyat", e.target.value)}
+                    onBlur={e => updateLine(i, "birimFiyat", e.target.value.trim() ? fmtMoney(parseTrNumber(e.target.value)) : "")}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    style={{ width: 124, textAlign: "right" }}
+                  /></td>
+                  <td><select
+                    className={styles.lineInput}
+                    value={normParaBirimi(line.paraBirimi)}
+                    onChange={e => updateLine(i, "paraBirimi", e.target.value)}
+                    style={{ width: 82 }}
+                  >
+                    {PARA_BIRIMLERI.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select></td>
                   <td><input className={styles.lineInput} value={line.iskonto} onChange={e => updateLine(i, "iskonto", e.target.value)} style={{ width: 82 }} /></td>
                   <td>{fmtMoney(lineTotal(line))}</td>
                   <td><button className={styles.dangerButton} onClick={() => setLines(prev => prev.filter((_, idx) => idx !== i))}>Sil</button></td>
@@ -389,10 +454,6 @@ export default function ProformaForm({ id }: { id?: string }) {
             </tbody>
           </table>
         </div>
-
-        <label className={styles.field} style={{ marginTop: 14 }}>Notlar
-          <textarea className={styles.textarea} value={notlar} onChange={e => setNotlar(e.target.value)} />
-        </label>
 
         <div className={styles.summary}>
           <span>Ara Toplam: <b>{fmtMoney(totals.ara)}</b></span>

@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
 
   const sp = request.nextUrl.searchParams;
   const search = sp.get("search")?.trim() || "";
+  const durum = sp.get("durum")?.trim() || "";   // "" = tümü
   const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
   const limit = Math.min(100, Math.max(5, parseInt(sp.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
@@ -90,6 +91,11 @@ export async function GET(request: NextRequest) {
   try {
     await ensureProformaTables();
     const pool = await cosmoPool;
+    // FaturaFirmaID kolonu (opsiyonel) varsa fatura firması adını da getir.
+    const hasFF = await hasProformaFaturaFirmaCol(pool);
+    const ffJoin = hasFF ? `LEFT JOIN (SELECT ID, Firma_Adi AS Ad FROM Firma) ff ON ff.ID = p.FaturaFirmaID` : "";
+    const ffSelect = hasFF ? `ISNULL(ff.Ad, '') AS FaturaFirmaAd,` : `'' AS FaturaFirmaAd,`;
+    const ffGroupBy = hasFF ? `, ff.Ad` : "";
     const where = search
       ? `AND (
           ISNULL(p.ProformaNo, '') COLLATE Turkish_CI_AS LIKE @search
@@ -98,18 +104,43 @@ export async function GET(request: NextRequest) {
           OR ISNULL(p.Durum, '') COLLATE Turkish_CI_AS LIKE @search
         )`
       : "";
+    // Durum filtresi (Taslak/Gönderildi/Onaylandı/İptal/Faturalaştı)
+    const durumClause = durum ? `AND ISNULL(p.Durum, '') = @durum` : "";
 
     const countRes = await pool.request()
       .input("search", `%${search}%`)
+      .input("durum", durum)
       .query(`
         SELECT COUNT(*) AS total
         FROM ProformaBaslik p
         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = p.FirmaID
-        WHERE p.SilindiMi = 0 ${where}
+        WHERE p.SilindiMi = 0 ${where} ${durumClause}
+      `);
+
+    // Footer toplamı — filtreli tüm proformaların genel toplamı, para birimine göre.
+    const sumRes = await pool.request()
+      .input("search", `%${search}%`)
+      .input("durum", durum)
+      .query(`
+        SELECT pb.ParaBirimi, ISNULL(SUM(pb.GenelToplam), 0) AS toplam, COUNT(*) AS adet
+        FROM (
+          SELECT p.ID, p.GenelToplam,
+            CASE
+              WHEN COUNT(DISTINCT ISNULL(x.ParaBirimi, '')) > 1 THEN N'Çoklu'
+              ELSE ISNULL(MAX(x.ParaBirimi), 'TRY')
+            END AS ParaBirimi
+          FROM ProformaBaslik p
+          LEFT JOIN (SELECT ID, Firma_Adi AS Ad FROM Firma) f ON f.ID = p.FirmaID
+          LEFT JOIN ProformaKalem x ON x.ProformaID = p.ID
+          WHERE p.SilindiMi = 0 ${where} ${durumClause}
+          GROUP BY p.ID, p.GenelToplam
+        ) pb
+        GROUP BY pb.ParaBirimi
       `);
 
     const dataRes = await pool.request()
       .input("search", `%${search}%`)
+      .input("durum", durum)
       .input("offset", offset)
       .input("limit", limit)
       .query(`
@@ -120,6 +151,7 @@ export async function GET(request: NextRequest) {
           p.KdvOran, p.GenelIskonto, p.Notlar,
           ISNULL(f.Ad, '') AS FirmaAd,
           ISNULL(f.Email, '') AS FirmaEmail,
+          ${ffSelect}
           CASE
             WHEN COUNT(DISTINCT ISNULL(x.ParaBirimi, '')) > 1 THEN N'Çoklu'
             ELSE ISNULL(MAX(x.ParaBirimi), 'TRY')
@@ -128,11 +160,12 @@ export async function GET(request: NextRequest) {
           (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No = p.EvrakNo ORDER BY o.ID DESC) AS OdemeDurumu
         FROM ProformaBaslik p
         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = p.FirmaID
+        ${ffJoin}
         LEFT JOIN ProformaKalem x ON x.ProformaID = p.ID
-        WHERE p.SilindiMi = 0 ${where}
+        WHERE p.SilindiMi = 0 ${where} ${durumClause}
         GROUP BY p.ID, p.ProformaNo, p.EvrakNo, p.TeklifID, p.FirmaID, p.Tarih, p.Durum,
           p.AraToplam, p.IskontoTutar, p.KdvTutar, p.GenelToplam, p.KdvOran, p.GenelIskonto,
-          p.Notlar, f.Ad, f.Email
+          p.Notlar, f.Ad, f.Email${ffGroupBy}
         ORDER BY p.ID DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
@@ -159,7 +192,18 @@ export async function GET(request: NextRequest) {
     });
 
     const total = Number(countRes.recordset[0]?.total || 0);
-    return Response.json({ data, total, page, limit, totalPages: Math.ceil(total / limit) });
+
+    // Footer özeti: para birimine göre genel toplamlar (filtreli tüm kayıtlar).
+    const summaryByCurrency = (sumRes.recordset || []).map((r: any) => ({
+      paraBirimi: normalizeParaBirimi(r.ParaBirimi) === "ÇOKLU" ? "Çoklu" : normalizeParaBirimi(r.ParaBirimi),
+      toplam: Number(r.toplam || 0),
+      adet: Number(r.adet || 0),
+    }));
+
+    return Response.json({
+      data, total, page, limit, totalPages: Math.ceil(total / limit),
+      summary: summaryByCurrency,
+    });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

@@ -360,9 +360,8 @@ export default function ProformaPrintDocument({
             <p>Geçerlilik süresi <strong>7 gün</strong>dür; bu süre içinde ödeme yapılmaması halinde proforma yenilenmelidir.</p>
             <p>Yabancı para cinsinden proformalarda ödeme günü TCMB döviz alış kuru üzerinden TL karşılığı dikkate alınır.</p>
             <p>Analiz hizmetleri ödeme onayından sonra başlatılır; rapor, ödemenin tamamlanmasının ardından müşteriye iletilir.</p>
-            {h.Notlar && (
-              <p style={{ marginTop: "3mm", fontWeight: 600 }}>{h.Notlar}</p>
-            )}
+            {/* NOT: ProformaBaslik.Notlar (form'daki "Açıklama") artık İÇ nottur —
+                listede görünür ama müşteri çıktısında (PDF) GÖSTERİLMEZ. */}
           </div>
 
                    {/* ───── Banka bilgileri ───── */}
