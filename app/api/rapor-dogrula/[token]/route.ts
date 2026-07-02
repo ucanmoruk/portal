@@ -2,6 +2,7 @@ import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 import { verifyRapor } from "@/lib/raporImza";
 import { loadImzaInput, imzaColumnExists } from "@/lib/raporImzaData";
+import { disRaporLabel } from "@/lib/disKod";
 
 // GET /api/rapor-dogrula/[token]  (AUTH GEREKTİRMEZ)
 // QR kodun gösterdiği public URL bu endpoint'i çağırır.
@@ -35,10 +36,10 @@ export async function GET(
       .input("tok", tok)
       .query(`
         SELECT
-          o.NkrID, o.KarekodToken, o.RaporFormati, o.Durum,
+          o.NkrID, o.KarekodToken, o.RaporFormati, o.Durum, o.DisRaporKodu,
           o.OnayTarihi, o.YayinTarihi,
           ${imzaSelect}
-          n.RaporNo, n.Numune_Adi, n.Tarih,
+          n.RaporNo, n.Revno, n.Numune_Adi, n.Tarih,
           ISNULL(f.Ad, '') AS FirmaAd,
           ISNULL(o.OnaylayanAd, '') AS OnaylayanAd,
           '' AS OnaylayanSoyad
@@ -50,17 +51,6 @@ export async function GET(
 
     const row = r.recordset[0];
     if (!row) return Response.json({ valid: false });
-
-    // Revize edilip geçersiz kılınmış rapor → net "Geçersiz" yanıtı (PDF/geçerlilik yok).
-    if (row.Durum === "Geçersiz") {
-      return Response.json({
-        valid: false,
-        durum: "Geçersiz",
-        raporNo: row.RaporNo,
-        raporFormati: row.RaporFormati,
-        error: "Bu rapor revize edilmiştir ve geçersizdir. Lütfen raporun güncel sürümünü talep edin.",
-      });
-    }
 
     // Sadece Onaylandı / Yayınlandı / Arşiv durumdaki raporlar doğrulanır.
     // Durum NULL (placeholder satır) veya başka durum → reddet.
@@ -88,10 +78,16 @@ export async function GET(
       }
     }
 
+    // Güncel revizyon kodu: taban DisRaporKodu + /NN (disRaporLabel).
+    const revNum = parseInt(String(row.Revno ?? "0").trim(), 10) || 0;
+    const disRaporKodu = row.DisRaporKodu ? disRaporLabel(row.DisRaporKodu, revNum) : null;
+
     return Response.json({
       valid: true,
       durum: row.Durum,
       raporNo: row.RaporNo,
+      disRaporKodu,
+      revNo: revNum,
       numuneAd: row.Numune_Adi,
       firmaAd: row.FirmaAd,
       raporFormati: row.RaporFormati,

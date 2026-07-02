@@ -5,16 +5,20 @@ import { type NextRequest } from "next/server";
 
 // POST /api/rapor-takip/[nkrId]/revize
 // Body: { format, aciklama }
-// Onaylı/yayınlanmış bir raporu revize eder:
+// Onaylı/yayınlanmış bir raporu revize eder. TEK-KAYIT modeli (sistemin
+// mevcut revizyon konvansiyonu): dış takip kodu (DisRaporKodu) SABİT kalır,
+// revizyon NKR.Revno ile takip edilir; kod her yerde disRaporLabel(kod, rev)
+// ile "taban/NN" gösterilir.
 //   1) NKR.Revno +1 (metin; 0/boş → 1)
-//   2) Mevcut (aktif) NKR_RaporOnay satırını SİLMEZ → Durum='Geçersiz' yapar,
-//      açıklamayı Notlar'a yazar. Token/YayinUrl/DisRaporKodu korunur; böylece
-//      eski karekod doğrulamada "Geçersiz" olarak çözülür.
+//   2) Aynı NKR_RaporOnay satırı korunur ama placeholder'a sıfırlanır:
+//      Durum=NULL, YayinUrl/YayinTarihi=NULL, açıklama Notlar'a. KarekodToken
+//      ve DisRaporKodu (taban kod) DEĞİŞMEZ → QR/doğrulama aynı kalır, tekrar
+//      yayınlanınca güncel revizyonu gösterir.
 //   3) NKR_LabKabul (o format) silinir → numune "Kabul Bekleyenler"e döner.
 //   4) NKR_RaporDurumOverride (o format) temizlenir → durum otomatik hesaplanır.
 //   5) NKR_Log'a "Rapor Revize Edildi" girer.
-// Sonrasında normal akış: yeniden kabul → sonuç girişi → onayla (YENİ token +
-// YENİ DisRaporKodu ile yeni satır) → yayınla.
+// Sonrasında normal akış: yeniden kabul → sonuç girişi → onayla (AYNI satır,
+// AYNI kod/token) → yayınla (yeni PDF eski dosyanın üzerine yazılır).
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ nkrId: string }> },
@@ -37,8 +41,7 @@ export async function POST(
   try {
     const pool = await cosmoPool;
 
-    // Hangi opsiyonel tablolar mevcut?
-    const tables = ["NKR_RaporOnay", "NKR_LabKabul", "NKR_RaporDurumOverride", "NKR_Log"];
+    const tables = ["NKR_RaporOnay", "NKR_LabKabul", "NKR_RaporDurumOverride", "NKR_Log", "NKR_RaporDuzenleme"];
     const tblRes = await pool.request().query(
       `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
        WHERE TABLE_SCHEMA IN ('dbo', 'cosmoroot') AND TABLE_NAME IN (${tables.map(t => `'${t}'`).join(",")})`
@@ -49,14 +52,13 @@ export async function POST(
       return Response.json({ error: "NKR_RaporOnay tablosu yok." }, { status: 500 });
     }
 
-    // Aktif (geçersiz olmayan) onay satırını bul — bunu geçersiz yapacağız.
+    // Bu format için onay satırı var mı? (revize edilecek rapor)
     const onayRes = await pool.request()
       .input("nkrId", nkrIdNum).input("format", format)
       .query(`
-        SELECT TOP 1 ID, Durum FROM NKR_RaporOnay
+        SELECT TOP 1 ID, DisRaporKodu FROM NKR_RaporOnay
         WHERE NkrID = @nkrId
           AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
-          AND (Durum IS NULL OR Durum <> N'Geçersiz')
         ORDER BY ID DESC
       `);
     const onay = onayRes.recordset[0];
@@ -85,15 +87,27 @@ export async function POST(
       .input("rev", String(yeniRev))
       .query(`UPDATE NKR SET Revno = @rev WHERE ID = @nkrId`);
 
-    // 2) Eski onayı "Geçersiz" yap + açıklamayı Notlar'a yaz (kayıt korunur)
+    // 2) Onay satırını placeholder'a sıfırla (kod + token KORUNUR)
     await pool.request()
       .input("id", onay.ID)
       .input("notlar", aciklama.slice(0, 500))
       .query(`
         UPDATE NKR_RaporOnay
-        SET Durum = N'Geçersiz', Notlar = @notlar
+        SET Durum = NULL, YayinUrl = NULL, YayinTarihi = NULL, Notlar = @notlar
         WHERE ID = @id
       `);
+
+    // 2.5) Rapor düzenleme kilidini aç → lab yeni sonuçları girebilsin (payload korunur)
+    if (present.has("nkr_raporduzenleme")) {
+      await pool.request()
+        .input("nkrId", nkrIdNum).input("format", format)
+        .query(`
+          UPDATE NKR_RaporDuzenleme
+          SET Kilitli = 0
+          WHERE NkrID = @nkrId
+            AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
+        `);
+    }
 
     // 3) NKR_LabKabul sil → numune "Kabul Bekleyenler"e döner
     if (present.has("nkr_labkabul")) {
@@ -133,9 +147,9 @@ export async function POST(
     return Response.json({
       ok: true,
       raporNo,
+      disRaporKodu: onay.DisRaporKodu ?? null,
       eskiRev,
       yeniRev,
-      durum: "Geçersiz",
     });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });

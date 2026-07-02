@@ -228,7 +228,6 @@ export async function GET(request: Request) {
         ${hasDisRaporKodu ? `MAX(ro.DisRaporKodu)` : `CAST(NULL AS NVARCHAR(40))`} AS DisRaporKodu
       INTO #OS
       FROM NKR_RaporOnay ro
-      WHERE (ro.Durum IS NULL OR ro.Durum <> N'Geçersiz')
       GROUP BY ro.NkrID, ${bucketSql("ro.RaporFormati")};` : ``}
 
       ${hasOverrideTable ? `SELECT o.NkrID, ${bucketSql("o.RaporFormati")} AS NormFmt,

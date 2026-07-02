@@ -104,12 +104,13 @@ const parseRev = (v?: string | null): number => {
 };
 
 // Revize açıklama cümlesi — dış takip kodu (ÜGAM/…) kullanılır, iç RaporNo değil.
-// [DışKod]/[EskiRev] ... sebebi ile revize edilmiştir. ...
+// Kod SABİT kalır, revizyon /NN suffix'iyle gösterilir (disRaporLabel biçimi):
+// [DışKod]/[EskiRev] ... revize edilmiştir. … Geçerli rapor numarası [DışKod]/[YeniRev].
+const revLabel = (kod: string, rev: number): string => `${kod}/${String(rev).padStart(2, "0")}`;
 const buildRevizeCumle = (kod: string, eskiRev: number, sebep: string): string => {
   const s = sebep.trim() || "……";
-  const yeniRev = eskiRev + 1;
-  return `${kod}/${eskiRev} numaralı rapor ${s} sebebi ile revize edilmiştir. ` +
-    `${kod}/${eskiRev} numaralı rapor geçersizdir. Geçerli rapor numarası ${kod}/${yeniRev}.`;
+  return `${revLabel(kod, eskiRev)} numaralı rapor ${s} sebebi ile revize edilmiştir. ` +
+    `${revLabel(kod, eskiRev)} numaralı rapor geçersizdir. Geçerli rapor numarası ${revLabel(kod, eskiRev + 1)}.`;
 };
 
 // Revize cümlesinde kullanılacak takip kodu: dış kod (ÜGAM/…) varsa o, yoksa RaporNo.
@@ -834,7 +835,7 @@ export default function OnayliRaporTable() {
               <div style={{ display: "flex", justifyContent: "center" }}>
                 <button
                   type="button"
-                  title="Raporu revize et (Rev. No artar, rapor geçersiz olur, numune Kabul Bekleyenler'e döner)"
+                  title="Raporu revize et (Rev. No artar, dış kod sabit, numune Kabul Bekleyenler'e döner)"
                   onClick={() => openRevize(row)}
                   style={{
                     width: 30, height: 30,
@@ -1008,7 +1009,8 @@ export default function OnayliRaporTable() {
               {revizeRow.DisRaporKodu?.trim() && <span style={{ color: "var(--color-text-tertiary)" }}> (No {revizeRow.RaporNo})</span>}
               {" "}· {displayFormat(revizeRow.RaporFormati)} —
               {" "}Rev.{parseRev(revizeRow.Revno)} → <strong>Rev.{parseRev(revizeRow.Revno) + 1}</strong>.
-              {" "}Mevcut rapor geçersiz olur, numune "Kabul Bekleyenler"e döner.
+              {" "}Dış kod sabit kalır; numune "Kabul Bekleyenler"e döner ve tekrar
+              {" "}yayınlanınca güncel revizyon geçerli olur.
             </p>
 
             <label style={{ fontSize: "0.8rem", fontWeight: 600, display: "block", marginBottom: 6 }}>
