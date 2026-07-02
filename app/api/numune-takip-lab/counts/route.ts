@@ -18,6 +18,33 @@ const bucketSql = (expr: string) => `
   END
 `;
 
+const formatListSql = (expr: string) => `CONCAT(N',', REPLACE(${normSql(expr)}, N' ', N''), N',')`;
+
+const formatOverlapSql = (leftExpr: string, rightExpr: string) => {
+  const left = formatListSql(leftExpr);
+  const right = formatListSql(rightExpr);
+  return `(
+    (${left} LIKE N'%,GENEL,%'     AND ${right} LIKE N'%,GENEL,%')
+    OR (${left} LIKE N'%,CLAIM,%'  AND ${right} LIKE N'%,CLAIM,%')
+    OR (${left} LIKE N'%,DERMATOLOJI,%' AND ${right} LIKE N'%,CLAIM,%')
+    OR (${left} LIKE N'%,CLAIM,%'  AND ${right} LIKE N'%,DERMATOLOJI,%')
+    OR (${left} LIKE N'%,CHALLENGE,%' AND ${right} LIKE N'%,CHALLENGE,%')
+    OR (${left} LIKE N'%,STABILITE,%' AND ${right} LIKE N'%,STABILITE,%')
+    OR (${left} LIKE N'%,UGDR,%'   AND ${right} LIKE N'%,UGDR,%')
+    OR (${left} LIKE N'%,UGD,%'    AND ${right} LIKE N'%,UGDR,%')
+    OR (${left} LIKE N'%,UGDR,%'   AND ${right} LIKE N'%,UGD,%')
+    OR (${left} LIKE N'%,DIGER,%'  AND ${right} LIKE N'%,DIGER,%')
+  )`;
+};
+
+const formatSameSql = (leftExpr: string, rightExpr: string) => `
+  UPPER(REPLACE(${leftExpr}, N'Ü', N'U')) = UPPER(REPLACE(${rightExpr}, N'Ü', N'U'))
+`;
+
+const formatMatchesSql = (leftExpr: string, rightExpr: string) => `
+  (${formatSameSql(leftExpr, rightExpr)} OR ${formatOverlapSql(leftExpr, rightExpr)})
+`;
+
 // DB NormFmt anahtarını UI normFmt'i ile BİREBİR aynı ASCII forma getir.
 // KRİTİK: MySQL bağlantısı utf8mb4_turkish_ci collation kullandığından SQL UPPER('i')
 // = 'İ' (noktalı) döner → "Stabilite" DB'de "STABİLİTE" olur. UI ise JS toUpperCase
@@ -102,7 +129,7 @@ export async function GET(request: NextRequest) {
            SELECT 1
            FROM NKR_RaporOnay ro
            WHERE ro.NkrID = n.ID
-             AND ${bucketSql("ro.RaporFormati")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
+             AND ${formatMatchesSql("ro.RaporFormati", RAPOR_FORMAT_EXPR)}
              AND ro.Durum IN (N'Onaylandı', N'Onaylandi', N'Yayınlandı', N'Yayinlandi', N'Arşiv', N'Arsiv')
          )`
       : "";
@@ -112,7 +139,7 @@ export async function GET(request: NextRequest) {
            FROM NKR n
            INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
            INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-           LEFT JOIN NKR_LabKabul k ON k.NkrID = n.ID AND ${bucketSql("k.RaporFormati")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
+           LEFT JOIN NKR_LabKabul k ON k.NkrID = n.ID AND ${formatMatchesSql("k.RaporFormati", RAPOR_FORMAT_EXPR)}
            WHERE n.Durum = 'Aktif'
              ${terminalOnayWhere}
              AND (
@@ -122,7 +149,7 @@ export async function GET(request: NextRequest) {
                  FROM NumuneX1 nx
                  INNER JOIN StokAnalizListesi ns ON ns.ID = nx.AnalizID
                  WHERE nx.RaporID = n.ID
-                   AND ${bucketSql("COALESCE(NULLIF(ns.RaporFormati, ''), N'Genel')")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
+                   AND ${formatMatchesSql("COALESCE(NULLIF(ns.RaporFormati, ''), N'Genel')", RAPOR_FORMAT_EXPR)}
                    AND nx.HizmetDurum IN (N'Yeni', N'YeniAnaliz', N'Yeni Analiz')
                )
              )

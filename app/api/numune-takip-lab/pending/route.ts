@@ -3,6 +3,39 @@ import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
+const normSql = (expr: string) => `
+  UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${expr},
+    N'Ü', N'U'), N'ü', N'U'), N'İ', N'I'), N'ı', N'I'), N'Ö', N'O'), N'ö', N'O'),
+    N'Ç', N'C'), N'ç', N'C'), N'Ğ', N'G'), N'ğ', N'G'), N'Ş', N'S'), N'ş', N'S'))
+`;
+
+const formatListSql = (expr: string) => `CONCAT(N',', REPLACE(${normSql(expr)}, N' ', N''), N',')`;
+
+const formatOverlapSql = (leftExpr: string, rightExpr: string) => {
+  const left = formatListSql(leftExpr);
+  const right = formatListSql(rightExpr);
+  return `(
+    (${left} LIKE N'%,GENEL,%'     AND ${right} LIKE N'%,GENEL,%')
+    OR (${left} LIKE N'%,CLAIM,%'  AND ${right} LIKE N'%,CLAIM,%')
+    OR (${left} LIKE N'%,DERMATOLOJI,%' AND ${right} LIKE N'%,CLAIM,%')
+    OR (${left} LIKE N'%,CLAIM,%'  AND ${right} LIKE N'%,DERMATOLOJI,%')
+    OR (${left} LIKE N'%,CHALLENGE,%' AND ${right} LIKE N'%,CHALLENGE,%')
+    OR (${left} LIKE N'%,STABILITE,%' AND ${right} LIKE N'%,STABILITE,%')
+    OR (${left} LIKE N'%,UGDR,%'   AND ${right} LIKE N'%,UGDR,%')
+    OR (${left} LIKE N'%,UGD,%'    AND ${right} LIKE N'%,UGDR,%')
+    OR (${left} LIKE N'%,UGDR,%'   AND ${right} LIKE N'%,UGD,%')
+    OR (${left} LIKE N'%,DIGER,%'  AND ${right} LIKE N'%,DIGER,%')
+  )`;
+};
+
+const formatSameSql = (leftExpr: string, rightExpr: string) => `
+  UPPER(REPLACE(${leftExpr}, N'Ü', N'U')) = UPPER(REPLACE(${rightExpr}, N'Ü', N'U'))
+`;
+
+const formatMatchesSql = (leftExpr: string, rightExpr: string) => `
+  (${formatSameSql(leftExpr, rightExpr)} OR ${formatOverlapSql(leftExpr, rightExpr)})
+`;
+
 // GET /api/numune-takip-lab/pending
 // "Kabul Bekleyenler" listesi.
 // Her (NKR.ID, RaporFormati) kombinasyonu için 1 satır döner — eğer henüz
@@ -43,7 +76,7 @@ export async function GET(request: NextRequest) {
     const notAcceptedJoin = hasKabulTable
       ? `LEFT JOIN NKR_LabKabul k
             ON k.NkrID = n.ID
-           AND k.RaporFormati = COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')`
+           AND ${formatMatchesSql("k.RaporFormati", "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')")}`
       : "";
     const notAcceptedWhere = hasKabulTable
       ? `AND (
@@ -53,7 +86,7 @@ export async function GET(request: NextRequest) {
             FROM NumuneX1 nx
             INNER JOIN StokAnalizListesi ns ON ns.ID = nx.AnalizID
             WHERE nx.RaporID = n.ID
-              AND COALESCE(NULLIF(ns.RaporFormati, ''), N'Genel') = COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')
+              AND ${formatMatchesSql("COALESCE(NULLIF(ns.RaporFormati, ''), N'Genel')", "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')")}
               AND nx.HizmetDurum IN (N'Yeni', N'YeniAnaliz', N'Yeni Analiz')
           )
         )`
@@ -63,8 +96,7 @@ export async function GET(request: NextRequest) {
           SELECT 1
           FROM NKR_RaporOnay ro
           WHERE ro.NkrID = n.ID
-            AND UPPER(REPLACE(ro.RaporFormati, N'Ü', N'U')) =
-                UPPER(REPLACE(COALESCE(NULLIF(s.RaporFormati, ''), N'Genel'), N'Ü', N'U'))
+            AND ${formatMatchesSql("ro.RaporFormati", "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')")}
             AND ro.Durum IN (N'Onaylandı', N'Onaylandi', N'Yayınlandı', N'Yayinlandi', N'Arşiv', N'Arsiv')
         )`
       : "";
