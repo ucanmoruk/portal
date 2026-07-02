@@ -103,13 +103,17 @@ const parseRev = (v?: string | null): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-// Revize açıklama cümlesi — [RaporNo]/[EskiRev] ... sebebi ile revize edilmiştir. ...
-const buildRevizeCumle = (raporNo: string, eskiRev: number, sebep: string): string => {
+// Revize açıklama cümlesi — dış takip kodu (ÜGAM/…) kullanılır, iç RaporNo değil.
+// [DışKod]/[EskiRev] ... sebebi ile revize edilmiştir. ...
+const buildRevizeCumle = (kod: string, eskiRev: number, sebep: string): string => {
   const s = sebep.trim() || "……";
   const yeniRev = eskiRev + 1;
-  return `${raporNo}/${eskiRev} numaralı rapor ${s} sebebi ile revize edilmiştir. ` +
-    `${raporNo}/${eskiRev} numaralı rapor geçersizdir. Geçerli rapor numarası ${raporNo}/${yeniRev}.`;
+  return `${kod}/${eskiRev} numaralı rapor ${s} sebebi ile revize edilmiştir. ` +
+    `${kod}/${eskiRev} numaralı rapor geçersizdir. Geçerli rapor numarası ${kod}/${yeniRev}.`;
 };
+
+// Revize cümlesinde kullanılacak takip kodu: dış kod (ÜGAM/…) varsa o, yoksa RaporNo.
+const revizeTakipKodu = (r: RaporRow): string => (r.DisRaporKodu?.trim() || r.RaporNo);
 
 // ── Ana bileşen ───────────────────────────────────────────────────────────────
 
@@ -289,7 +293,7 @@ export default function OnayliRaporTable() {
     if (!sebep) { setRevizeError("Lütfen revize sebebini yazın."); return; }
     const row = revizeRow;
     const eskiRev = parseRev(row.Revno);
-    const aciklama = buildRevizeCumle(row.RaporNo, eskiRev, sebep);
+    const aciklama = buildRevizeCumle(revizeTakipKodu(row), eskiRev, sebep);
     setRevizeBusy(true);
     setRevizeError("");
     try {
@@ -1000,7 +1004,9 @@ export default function OnayliRaporTable() {
               >×</button>
             </div>
             <p style={{ margin: "0 0 14px", fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
-              Rapor No <strong>{revizeRow.RaporNo}</strong> · {displayFormat(revizeRow.RaporFormati)} —
+              Rapor <strong>{revizeTakipKodu(revizeRow)}</strong>
+              {revizeRow.DisRaporKodu?.trim() && <span style={{ color: "var(--color-text-tertiary)" }}> (No {revizeRow.RaporNo})</span>}
+              {" "}· {displayFormat(revizeRow.RaporFormati)} —
               {" "}Rev.{parseRev(revizeRow.Revno)} → <strong>Rev.{parseRev(revizeRow.Revno) + 1}</strong>.
               {" "}Mevcut rapor geçersiz olur, numune "Kabul Bekleyenler"e döner.
             </p>
@@ -1021,7 +1027,7 @@ export default function OnayliRaporTable() {
               Açıklama (otomatik):
             </div>
             <div style={{ fontSize: "0.82rem", lineHeight: 1.5, padding: "10px 12px", background: "var(--color-surface-2)", borderRadius: 8, color: "var(--color-text-primary)" }}>
-              {buildRevizeCumle(revizeRow.RaporNo, parseRev(revizeRow.Revno), revizeSebep)}
+              {buildRevizeCumle(revizeTakipKodu(revizeRow), parseRev(revizeRow.Revno), revizeSebep)}
             </div>
 
             {revizeError && (
