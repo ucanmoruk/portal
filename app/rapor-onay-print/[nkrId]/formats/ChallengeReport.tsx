@@ -202,6 +202,7 @@ export default function DetayRaporReport({
 }: ReportFormatProps) {
   const {
     revNo,
+    revizeNot,
     kabulTarihi,
     yayinTarihi,
     hazirlayanAd,
@@ -673,6 +674,11 @@ export default function DetayRaporReport({
               </>
             ) : null}
             <br />Müşteri talebi doğrultusunda yapılan testler &apos;TİTCK Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz&apos;a göre değerlendirilmiştir.
+            {revizeNot && (
+              <div style={{ marginTop: 8, fontWeight: "bold" }}>
+                <br />Revizyon Açıklaması: {revizeNot}
+              </div>
+            )}
           </div>
 
           {/* ───── İMZA BLOĞU ───── */}

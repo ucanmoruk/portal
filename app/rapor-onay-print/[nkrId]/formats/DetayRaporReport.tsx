@@ -49,6 +49,7 @@ export default function ChallengeReport({
 }: ReportFormatProps) {
   const {
     revNo,
+    revizeNot,
     kabulTarihi,
     yayinTarihi,
     hazirlayanAd,
@@ -642,8 +643,12 @@ export default function ChallengeReport({
                   <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong> aralığındadır.{" "}
                 </>
               ) : null}
-            <br></br>Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir. 
-         
+            <br></br>Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir.
+            {revizeNot && (
+              <div style={{ marginTop: 8, fontWeight: "bold" }}>
+                <br />Revizyon Açıklaması: {revizeNot}
+              </div>
+            )}
           </div>
 
           {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ───── */}

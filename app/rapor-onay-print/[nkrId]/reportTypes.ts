@@ -34,6 +34,8 @@ export interface HizmetRow {
 export interface RaporHeader {
   NkrID: number;
   RaporNo: string;
+  /** Revizyon numarası (NKR.Revno, metin). Boş/null → 0. */
+  Revno?: string | null;
   Tarih: string | null;
   Numune_Adi: string;
   Numune_Adi_En: string | null;
@@ -65,6 +67,8 @@ export interface OnayInfo {
   onaylayanAd: string | null;
   /** ÜGAM/RR26/XXXX — onay anında üretilir, migration 018 sonrası dolar. */
   disRaporKodu: string | null;
+  /** Revize açıklaması (NKR_RaporOnay.Notlar) — revize edilmiş raporlarda dolu. */
+  notlar?: string | null;
 }
 
 export interface ReportMeta {
@@ -77,6 +81,8 @@ export interface ReportMeta {
   onaylayanUnvan: string;
   docKodu: string;
   sirketAdi: string;
+  /** Revize açıklaması — revize edilmiş raporlarda (revNo > 0) gösterilir. */
+  revizeNot?: string | null;
 }
 
 export interface KarekodInfo {

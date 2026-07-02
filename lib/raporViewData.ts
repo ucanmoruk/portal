@@ -20,6 +20,8 @@ export interface RaporMeta {
   onaylayanUnvan: string;
   docKodu: string;
   sirketAdi: string;
+  /** Revize açıklaması — revize edilmiş raporlarda (revNo > 0) gösterilir. */
+  revizeNot?: string | null;
 }
 
 export interface RaporViewData {
@@ -55,6 +57,7 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
       SELECT
         n.ID AS NkrID,
         n.RaporNo,
+        n.Revno,
         n.Tarih,
         n.Evrak_No,
         n.Numune_Adi,
@@ -135,6 +138,7 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
         SELECT o.KarekodToken, o.Durum, o.OnayTarihi, o.YayinTarihi, o.YayinUrl,
                ISNULL(o.OnaylayanAd, '') AS OnaylayanAd,
                ''                  AS OnaylayanSoyad,
+               ISNULL(o.Notlar, '') AS Notlar,
                ${hasDisKod ? "o.DisRaporKodu" : "CAST(NULL AS NVARCHAR(40)) AS DisRaporKodu"}
         FROM NKR_RaporOnay o
         WHERE o.NkrID = @nkrId
@@ -152,6 +156,7 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
         yayinUrl: r.YayinUrl,
         onaylayanAd: [ad, soyad].filter(Boolean).join(" ") || null,
         disRaporKodu: r.DisRaporKodu ?? null,
+        notlar: (r.Notlar ?? "").toString().trim() || null,
       };
     }
   }
@@ -251,8 +256,12 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
   const testBaslangic: string | null = toIsoDate(header.Tarih);
   const testBitis: string | null = toIsoDate(onay?.onayTarihi) ?? toIsoDate(new Date());
 
+  const revNoStr = header.Revno != null && String(header.Revno).trim() !== ""
+    ? String(header.Revno).trim()
+    : "0";
   const meta: RaporMeta = {
-    revNo: "0",
+    revNo: revNoStr,
+    revizeNot: (parseInt(revNoStr, 10) || 0) > 0 ? (onay?.notlar ?? null) : null,
     kabulTarihi: fmtDate(header.Tarih),
     yayinTarihi,
     hazirlayanAd: process.env.RAPOR_HAZIRLAYAN || "Büşra ALBAYRAK",

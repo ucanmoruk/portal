@@ -53,6 +53,7 @@ export default function GenelReport({
   const editing = Boolean(edit);
   const {
     revNo,
+    revizeNot,
     kabulTarihi,
     yayinTarihi,
     hazirlayanAd,
@@ -728,6 +729,11 @@ export default function GenelReport({
                   <br />{satir}
                 </Fragment>
               ))
+            )}
+            {revizeNot && (
+              <div style={{ marginTop: 8, fontWeight: "bold" }}>
+                <br />Revizyon Açıklaması: {revizeNot}
+              </div>
             )}
           </div>
 

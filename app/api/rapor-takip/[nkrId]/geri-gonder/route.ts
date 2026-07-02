@@ -38,12 +38,17 @@ export async function POST(
     );
     const present = new Set<string>(tblRes.recordset.map((r: any) => String(r.TABLE_NAME).toLowerCase()));
 
-    // Onay (varsa) → sil, geri çek
+    // Onay (varsa) → SİLME, placeholder'a sıfırla. Böylece dış takip kodu
+    // (DisRaporKodu), karekod token'ı ve revize açıklaması (Notlar) korunur →
+    // stabil kod ve revizyon notu geri-gönder döngüsünde kaybolmaz. Durum=NULL
+    // olduğu için listede override 'Geri Gönderildi' baskın gelir (eskisiyle
+    // aynı davranış), tekrar Onayla'da aynı kod+token yeniden kullanılır.
     if (present.has("nkr_raporonay")) {
       await pool.request()
         .input("nkrId", nkrIdNum).input("format", format)
         .query(`
-          DELETE FROM NKR_RaporOnay
+          UPDATE NKR_RaporOnay
+          SET Durum = NULL, YayinUrl = NULL, YayinTarihi = NULL
           WHERE NkrID = @nkrId
             AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
         `);
