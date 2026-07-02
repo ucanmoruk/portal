@@ -78,6 +78,7 @@ export async function POST(
         SELECT ID, KarekodToken, Durum, YayinUrl FROM NKR_RaporOnay
         WHERE NkrID = @nkrId
           AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
+          AND (Durum IS NULL OR Durum <> N'Geçersiz')
       `);
     const onay = exist.recordset[0];
     if (!onay) {

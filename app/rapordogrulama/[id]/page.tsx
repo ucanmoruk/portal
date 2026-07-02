@@ -112,7 +112,30 @@ export default async function RaporDogrulamaPage({ params }: PageProps) {
             <h1>Rapor Doğrulama</h1>
             <p className="sub">Karekod ile sorgulanan analiz raporu</p>
 
-            {!data.valid ? (
+            {data.durum === "Geçersiz" ? (
+              <>
+                <div className="badge invalid">✕ Geçersiz Rapor (Revize Edildi)</div>
+                <div className="row">
+                  <span className="k">Yayın Durumu</span>
+                  <span className="v" style={{ color: "#c00", fontWeight: 700 }}>Geçersiz</span>
+                  {data.raporNo && (
+                    <>
+                      <span className="k">Rapor No</span>
+                      <span className="v">{data.raporNo}</span>
+                    </>
+                  )}
+                  {data.raporFormati && (
+                    <>
+                      <span className="k">Rapor Formatı</span>
+                      <span className="v">{data.raporFormati}</span>
+                    </>
+                  )}
+                </div>
+                <p style={{ marginTop: 14, color: "#6e6e73", fontSize: "0.9rem" }}>
+                  {data.error || "Bu rapor revize edilmiştir ve geçersizdir."}
+                </p>
+              </>
+            ) : !data.valid ? (
               <>
                 <div className="badge invalid">✕ Geçersiz Rapor</div>
                 <p style={{ marginTop: 14, color: "#6e6e73", fontSize: "0.9rem" }}>

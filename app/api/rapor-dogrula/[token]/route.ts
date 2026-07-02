@@ -51,6 +51,17 @@ export async function GET(
     const row = r.recordset[0];
     if (!row) return Response.json({ valid: false });
 
+    // Revize edilip geçersiz kılınmış rapor → net "Geçersiz" yanıtı (PDF/geçerlilik yok).
+    if (row.Durum === "Geçersiz") {
+      return Response.json({
+        valid: false,
+        durum: "Geçersiz",
+        raporNo: row.RaporNo,
+        raporFormati: row.RaporFormati,
+        error: "Bu rapor revize edilmiştir ve geçersizdir. Lütfen raporun güncel sürümünü talep edin.",
+      });
+    }
+
     // Sadece Onaylandı / Yayınlandı / Arşiv durumdaki raporlar doğrulanır.
     // Durum NULL (placeholder satır) veya başka durum → reddet.
     const aktifDurum =

@@ -13,6 +13,7 @@ interface RaporRow {
   KabulTarihi: string | null;
   Evrak_No: string;
   RaporNo: string;
+  Revno?: string | null;
   DisRaporKodu?: string | null;
   Barkod?: string | null;
   Numune_Adi: string;
@@ -96,6 +97,20 @@ const formatTarih = (t: string | null) => {
   return `${d}.${m}.${y}`;
 };
 
+// Revno metin ("0","1",…) → sayı (boş/geçersiz → 0)
+const parseRev = (v?: string | null): number => {
+  const n = parseInt(String(v ?? "0").trim(), 10);
+  return Number.isFinite(n) ? n : 0;
+};
+
+// Revize açıklama cümlesi — [RaporNo]/[EskiRev] ... sebebi ile revize edilmiştir. ...
+const buildRevizeCumle = (raporNo: string, eskiRev: number, sebep: string): string => {
+  const s = sebep.trim() || "……";
+  const yeniRev = eskiRev + 1;
+  return `${raporNo}/${eskiRev} numaralı rapor ${s} sebebi ile revize edilmiştir. ` +
+    `${raporNo}/${eskiRev} numaralı rapor geçersizdir. Geçerli rapor numarası ${raporNo}/${yeniRev}.`;
+};
+
 // ── Ana bileşen ───────────────────────────────────────────────────────────────
 
 export default function OnayliRaporTable() {
@@ -120,6 +135,12 @@ export default function OnayliRaporTable() {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState<"arsivle" | "mail" | "yayinla" | null>(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+
+  // Revize modal
+  const [revizeRow, setRevizeRow] = useState<RaporRow | null>(null);
+  const [revizeSebep, setRevizeSebep] = useState("");
+  const [revizeBusy, setRevizeBusy] = useState(false);
+  const [revizeError, setRevizeError] = useState("");
 
   // Mail modal
   const [mailOpen, setMailOpen] = useState(false);
@@ -254,6 +275,42 @@ export default function OnayliRaporTable() {
     }
   };
 
+  // Revize modalını aç
+  const openRevize = (row: RaporRow) => {
+    setRevizeRow(row);
+    setRevizeSebep("");
+    setRevizeError("");
+  };
+
+  // Revize onayla — Revno +1, eski rapor Geçersiz, numune Kabul Bekleyenler'e döner.
+  const handleRevizeSubmit = async () => {
+    if (!revizeRow) return;
+    const sebep = revizeSebep.trim();
+    if (!sebep) { setRevizeError("Lütfen revize sebebini yazın."); return; }
+    const row = revizeRow;
+    const eskiRev = parseRev(row.Revno);
+    const aciklama = buildRevizeCumle(row.RaporNo, eskiRev, sebep);
+    setRevizeBusy(true);
+    setRevizeError("");
+    try {
+      const res = await fetch(`/api/rapor-takip/${row.NkrID}/revize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: row.RaporFormati, aciklama }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Revize başarısız");
+      // Rapor artık Geçersiz + Kabul Bekleyenler'e döndü → bu listeden çıkar.
+      setRows(prev => prev.filter(r => !(r.NkrID === row.NkrID && r.RaporFormati === row.RaporFormati)));
+      setTotal(t => Math.max(0, t - 1));
+      setRevizeRow(null);
+    } catch (e: any) {
+      setRevizeError(e.message || "Revize başarısız");
+    } finally {
+      setRevizeBusy(false);
+    }
+  };
+
   const goTo = (p: number) => { if (p >= 1 && p <= totalPages) setPage(p); };
   const pageNums = (): (number | "…")[] => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -272,7 +329,7 @@ export default function OnayliRaporTable() {
 
   // Grid: [✓] [Kabul] [Termin] [Evrak] [Rapor No] [Firma/Proje·Numune — geniş] [Rapor Türü] [Durum] [Fatura] [PDF ikon] [Mail ikon]
   // Sol blok sıkışık, orta blok geniş, sağ blok sıkışık ve sona ikon butonlar
-  const gridCols = "28px 86px 86px 86px 110px 1fr 90px 100px 110px 38px 38px";
+  const gridCols = "28px 86px 86px 86px 110px 1fr 90px 100px 110px 38px 38px 38px";
 
   const allSelected = visibleRows.length > 0 && visibleRows.every(r => selectedKeys.has(`${r.NkrID}__${r.RaporFormati}`));
   const someSelected = selectedKeys.size > 0;
@@ -571,7 +628,7 @@ export default function OnayliRaporTable() {
           </div>
           {[
             "Kabul Tarihi", "Termin Tarihi", "Evrak No", "Rapor No",
-            "Firma / Proje · Numune", "Rapor Türü", "Durum", "Fatura", "", "",
+            "Firma / Proje · Numune", "Rapor Türü", "Durum", "Fatura", "", "", "",
           ].map((h, i) => (
             <div key={i} style={{
               fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase",
@@ -769,6 +826,28 @@ export default function OnayliRaporTable() {
                   </button>
                 )}
               </div>
+              {/* Revize — ikon buton */}
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <button
+                  type="button"
+                  title="Raporu revize et (Rev. No artar, rapor geçersiz olur, numune Kabul Bekleyenler'e döner)"
+                  onClick={() => openRevize(row)}
+                  style={{
+                    width: 30, height: 30,
+                    border: "1px solid #ff950055",
+                    borderRadius: 7,
+                    background: "transparent",
+                    color: "#c06800",
+                    cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    padding: 0,
+                  }}
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                    <path d="M15.312 6.687a5.5 5.5 0 0 0-9.2 2.06.75.75 0 0 1-1.42-.48 7 7 0 0 1 11.68-2.64l.63-.63A.6.6 0 0 1 18 5.42V8.6a.6.6 0 0 1-.6.6h-3.18a.6.6 0 0 1-.42-1.02l.9-.9ZM4.688 13.313a5.5 5.5 0 0 0 9.2-2.06.75.75 0 0 1 1.42.48 7 7 0 0 1-11.68 2.64l-.63.63A.6.6 0 0 1 2 14.58V11.4a.6.6 0 0 1 .6-.6h3.18a.6.6 0 0 1 .42 1.02l-.9.9Z"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           );
         })}
@@ -889,6 +968,92 @@ export default function OnayliRaporTable() {
                 }}
               >
                 {bulkBusy === "mail" ? "Gönderiliyor…" : "Gönder"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revize Modal */}
+      {revizeRow && (
+        <div
+          onClick={() => !revizeBusy && setRevizeRow(null)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 1000, padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "var(--color-surface)", borderRadius: 14, padding: 22,
+              width: "100%", maxWidth: 560, boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>Raporu Revize Et</h3>
+              <button
+                type="button"
+                onClick={() => !revizeBusy && setRevizeRow(null)}
+                style={{ border: "none", background: "transparent", fontSize: "1.3rem", cursor: revizeBusy ? "wait" : "pointer", color: "var(--color-text-secondary)", lineHeight: 1 }}
+              >×</button>
+            </div>
+            <p style={{ margin: "0 0 14px", fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
+              Rapor No <strong>{revizeRow.RaporNo}</strong> · {displayFormat(revizeRow.RaporFormati)} —
+              {" "}Rev.{parseRev(revizeRow.Revno)} → <strong>Rev.{parseRev(revizeRow.Revno) + 1}</strong>.
+              {" "}Mevcut rapor geçersiz olur, numune "Kabul Bekleyenler"e döner.
+            </p>
+
+            <label style={{ fontSize: "0.8rem", fontWeight: 600, display: "block", marginBottom: 6 }}>
+              Revize Sebebi
+            </label>
+            <textarea
+              value={revizeSebep}
+              onChange={e => setRevizeSebep(e.target.value)}
+              disabled={revizeBusy}
+              rows={2}
+              placeholder="ör. numune adının hatalı girilmesi"
+              style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid var(--color-border)", fontSize: "0.85rem", background: "var(--color-surface)", resize: "vertical", fontFamily: "inherit" }}
+            />
+
+            <div style={{ marginTop: 12, fontSize: "0.72rem", fontWeight: 600, color: "var(--color-text-tertiary)", marginBottom: 4 }}>
+              Açıklama (otomatik):
+            </div>
+            <div style={{ fontSize: "0.82rem", lineHeight: 1.5, padding: "10px 12px", background: "var(--color-surface-2)", borderRadius: 8, color: "var(--color-text-primary)" }}>
+              {buildRevizeCumle(revizeRow.RaporNo, parseRev(revizeRow.Revno), revizeSebep)}
+            </div>
+
+            {revizeError && (
+              <div style={{ marginTop: 12, color: "#c00", fontSize: "0.8rem", padding: "8px 10px", background: "#ff3b3010", borderRadius: 7 }}>
+                {revizeError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18 }}>
+              <button
+                type="button"
+                onClick={() => setRevizeRow(null)}
+                disabled={revizeBusy}
+                style={{
+                  padding: "8px 14px", borderRadius: 7, border: "1px solid var(--color-border)",
+                  background: "transparent", color: "var(--color-text-secondary)",
+                  fontSize: "0.85rem", fontWeight: 600, cursor: revizeBusy ? "wait" : "pointer",
+                }}
+              >Vazgeç</button>
+              <button
+                type="button"
+                onClick={handleRevizeSubmit}
+                disabled={revizeBusy || !revizeSebep.trim()}
+                style={{
+                  padding: "8px 14px", borderRadius: 7, border: "none",
+                  background: "#c06800", color: "#fff",
+                  fontSize: "0.85rem", fontWeight: 700,
+                  cursor: revizeBusy ? "wait" : (revizeSebep.trim() ? "pointer" : "not-allowed"),
+                  opacity: revizeSebep.trim() ? 1 : 0.6,
+                }}
+              >
+                {revizeBusy ? "Revize ediliyor…" : "Revize Et"}
               </button>
             </div>
           </div>

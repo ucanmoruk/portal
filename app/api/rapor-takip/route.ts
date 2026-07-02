@@ -193,6 +193,7 @@ export async function GET(request: Request) {
         CONVERT(varchar(10), n.Tarih, 23)       AS Tarih,
         n.Evrak_No,
         n.RaporNo,
+        n.Revno,
         n.Barkod,
         n.Numune_Adi,
         f.Ad                                    AS FirmaAd,
@@ -227,6 +228,7 @@ export async function GET(request: Request) {
         ${hasDisRaporKodu ? `MAX(ro.DisRaporKodu)` : `CAST(NULL AS NVARCHAR(40))`} AS DisRaporKodu
       INTO #OS
       FROM NKR_RaporOnay ro
+      WHERE (ro.Durum IS NULL OR ro.Durum <> N'Geçersiz')
       GROUP BY ro.NkrID, ${bucketSql("ro.RaporFormati")};` : ``}
 
       ${hasOverrideTable ? `SELECT o.NkrID, ${bucketSql("o.RaporFormati")} AS NormFmt,
