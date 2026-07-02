@@ -106,7 +106,7 @@ const parseRev = (v?: string | null): number => {
 // Revize açıklama cümlesi — dış takip kodu (ÜGAM/…) kullanılır, iç RaporNo değil.
 // Kod SABİT kalır, revizyon /NN suffix'iyle gösterilir (disRaporLabel biçimi):
 // [DışKod]/[EskiRev] ... revize edilmiştir. … Geçerli rapor numarası [DışKod]/[YeniRev].
-const revLabel = (kod: string, rev: number): string => `${kod}/${String(rev).padStart(2, "0")}`;
+const revLabel = (kod: string, rev: number): string => `${kod}-${String(rev).padStart(2, "0")}`;
 const buildRevizeCumle = (kod: string, eskiRev: number, sebep: string): string => {
   const s = sebep.trim() || "……";
   return `${revLabel(kod, eskiRev)} numaralı rapor ${s} sebebi ile revize edilmiştir. ` +
@@ -334,7 +334,7 @@ export default function OnayliRaporTable() {
 
   // Grid: [✓] [Kabul] [Termin] [Evrak] [Rapor No] [Firma/Proje·Numune — geniş] [Rapor Türü] [Durum] [Fatura] [PDF ikon] [Mail ikon]
   // Sol blok sıkışık, orta blok geniş, sağ blok sıkışık ve sona ikon butonlar
-  const gridCols = "28px 86px 86px 86px 110px 1fr 90px 100px 110px 38px 38px 38px";
+  const gridCols = "28px 86px 86px 86px 110px 1fr 90px 100px 110px 38px 38px 38px 38px";
 
   const allSelected = visibleRows.length > 0 && visibleRows.every(r => selectedKeys.has(`${r.NkrID}__${r.RaporFormati}`));
   const someSelected = selectedKeys.size > 0;
@@ -633,7 +633,7 @@ export default function OnayliRaporTable() {
           </div>
           {[
             "Kabul Tarihi", "Termin Tarihi", "Evrak No", "Rapor No",
-            "Firma / Proje · Numune", "Rapor Türü", "Durum", "Fatura", "", "", "",
+            "Firma / Proje · Numune", "Rapor Türü", "Durum", "Fatura", "", "", "", "",
           ].map((h, i) => (
             <div key={i} style={{
               fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase",
@@ -852,6 +852,28 @@ export default function OnayliRaporTable() {
                     <path d="M15.312 6.687a5.5 5.5 0 0 0-9.2 2.06.75.75 0 0 1-1.42-.48 7 7 0 0 1 11.68-2.64l.63-.63A.6.6 0 0 1 18 5.42V8.6a.6.6 0 0 1-.6.6h-3.18a.6.6 0 0 1-.42-1.02l.9-.9ZM4.688 13.313a5.5 5.5 0 0 0 9.2-2.06.75.75 0 0 1 1.42.48 7 7 0 0 1-11.68 2.64l-.63.63A.6.6 0 0 1 2 14.58V11.4a.6.6 0 0 1 .6-.6h3.18a.6.6 0 0 1 .42 1.02l-.9.9Z"/>
                   </svg>
                 </button>
+              </div>
+              {/* Önizleme — ikon buton (rapor render sayfasını yeni sekmede açar) */}
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <a
+                  href={`/rapor-onay-print/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Raporu önizle (yeni sekmede aç)"
+                  style={{
+                    width: 30, height: 30,
+                    border: "1px solid var(--color-border)",
+                    borderRadius: 7,
+                    background: "transparent",
+                    color: "var(--color-accent)",
+                    textDecoration: "none",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
+                    <path d="M10 4c-3.7 0-6.9 2.2-8.3 5.4a1 1 0 0 0 0 .8C3.1 13.4 6.3 15.6 10 15.6s6.9-2.2 8.3-5.4a1 1 0 0 0 0-.8C16.9 6.2 13.7 4 10 4Zm0 9.1a3.1 3.1 0 1 1 0-6.2 3.1 3.1 0 0 1 0 6.2Zm0-1.8a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6Z"/>
+                  </svg>
+                </a>
               </div>
             </div>
           );

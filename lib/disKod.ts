@@ -93,10 +93,10 @@ export function disTeklifLabelV2(kod: string | null | undefined, rev: number): s
   return `${kod}/${String(rev).padStart(2, "0")}`;
 }
 
-/** Rapor dış kodu + revizyon: "ÜGAM/GE26/XXXX/00". */
+/** Rapor dış kodu + revizyon: "ÜGAM/GE26/XXXX-00". */
 export function disRaporLabel(kod: string | null | undefined, rev: number): string {
   if (!kod) return "-";
-  return `${kod}/${String(rev).padStart(2, "0")}`;
+  return `${kod}-${String(rev).padStart(2, "0")}`;
 }
 
 // ── Allocation helper'ı (numune kayıt sırasında DisKod tahsis et) ─────────

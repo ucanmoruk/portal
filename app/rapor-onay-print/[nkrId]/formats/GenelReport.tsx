@@ -551,7 +551,7 @@ export default function GenelReport({
           <table className="meta-table">
             <tbody>
               <tr>
-                <td style={{ paddingBottom: "4px" , width: "20%" }}><strong>Rapor No / Rev. No:</strong></td>
+                <td style={{ paddingBottom: "4px" , width: "20%" }}><strong>Rapor No - Rev. No:</strong></td>
                 <td style={{ paddingBottom: "4px" , width: "50%" }}>{raporKodu}</td>
                 <td style={{ paddingBottom: "4px" }}><strong></strong></td>
                 <td style={{ paddingBottom: "4px"  }}></td>
