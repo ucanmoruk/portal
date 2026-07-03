@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import GenelReport from "../formats/GenelReport";
+import EkYukleBox from "./EkYukleBox";
+import { isDigerFormat } from "@/lib/formatUtil";
 import type { HizmetRow, RaporHeader, ReportFormatProps } from "../reportTypes";
 
 interface Props {
@@ -149,6 +151,11 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
         {error && <div style={alertStyle("#ff3b30")}>{error}</div>}
         {message && <div style={alertStyle("#34c759")}>{message}</div>}
       </div>
+
+      {/* "Diğer" formatı: Ek-1 PDF yükleme (yayın/imza anında birleştirilir) */}
+      {isDigerFormat(format) && (
+        <EkYukleBox nkrId={nkrId} format={format} locked={locked} />
+      )}
 
       {loading ? (
         <div style={{ padding: 40, textAlign: "center", color: "#6e6e73" }}>Yükleniyor...</div>

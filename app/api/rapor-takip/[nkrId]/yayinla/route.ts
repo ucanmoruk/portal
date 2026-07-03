@@ -6,6 +6,7 @@ import { isRaporFtpConfigured, uploadRaporPdfToFtp } from "@/lib/raporPdfUpload"
 import { renderUrlToPdf } from "@/lib/chromiumPdf";
 import { signPdfBuffer, pdfImzaYapilandirildi } from "@/lib/raporPdfSign";
 import { getRaporPdfBaseUrl } from "@/lib/raporPdfBaseUrl";
+import { maybeMergeEk } from "@/lib/raporEkMerge";
 
 // PDF üretimi (Chromium) + FTP yükleme süre alır.
 export const runtime = "nodejs";
@@ -25,14 +26,17 @@ async function buildRaporPdf(origin: string, nkrId: number, format: string, cook
     marginRight: 0,
     settleMs: 1500,
   });
+  // "Diğer" formatında: kayıtlı Ek-1 PDF'i ilk sayfanın arkasına ekle (merge).
+  // Ek indirilemezse hata fırlar → Ek'siz yayın yapılmaz (kullanıcı tekrar dener).
+  const merged = await maybeMergeEk(await cosmoPool, pdf, nkrId, format);
   if (pdfImzaYapilandirildi()) {
     try {
-      return await signPdfBuffer(pdf);
+      return await signPdfBuffer(merged);
     } catch (e) {
       console.warn("[yayinla] PDF imza atılamadı, imzasız sürüm yüklenecek:", e);
     }
   }
-  return pdf;
+  return merged;
 }
 
 // POST /api/rapor-takip/[nkrId]/yayinla

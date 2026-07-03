@@ -62,6 +62,8 @@ const navGroups: NavGroup[] = [
       { label: "Fatura Takip",     href: "/musteriler/fatura-takip",     menuKey: "musteriler.fatura-takip"     },
       { label: "Analiz Talepleri", href: "/musteriler/analiz-talepleri", menuKey: "musteriler.analiz-talepleri" },
       { label: "Destek Talepleri", href: "/musteriler/destek-talepleri", menuKey: "musteriler.destek-talepleri" },
+      { label: "Belge Yükle",      href: "/musteriler/belge-yukle",      menuKey: "musteriler.belge-yukle"      },
+      { label: "Yüklenmiş Belgeler", href: "/musteriler/yuklenmis-belgeler", menuKey: "musteriler.yuklenmis-belgeler" },
     ],
   },
   {

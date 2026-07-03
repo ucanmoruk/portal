@@ -5,8 +5,10 @@ import type { ComponentType } from "react";
 import GenelReport from "./formats/GenelReport";
 import ChallengeReport from "./formats/ChallengeReport";
 import DetayRaporReport from "./formats/DetayRaporReport";
+import DigerReport from "./formats/DigerReport";
 import type { ReportFormatProps } from "./reportTypes";
 import { loadRaporViewData } from "@/lib/raporViewData";
+import { isDigerFormat } from "@/lib/formatUtil";
 
 export const metadata = { title: "Analiz Raporu — Onay Önizleme" };
 
@@ -16,6 +18,7 @@ const FORMAT_COMPONENTS: Record<string, ComponentType<ReportFormatProps>> = {
   Genel: GenelReport,
   Challenge: ChallengeReport,
   DetayRapor: DetayRaporReport,
+  "Diğer": DigerReport,
 };
 
 // Bazı formatlar veriyi başka bir formattan yükler (örn. DetayRapor → Genel).
@@ -26,7 +29,9 @@ const DATA_FORMAT_ALIAS: Record<string, string> = {
 };
 
 function resolveFormatComponent(format: string): ComponentType<ReportFormatProps> {
-  return FORMAT_COMPONENTS[format] ?? GenelReport;
+  if (FORMAT_COMPONENTS[format]) return FORMAT_COMPONENTS[format];
+  if (isDigerFormat(format)) return DigerReport; // "Diğer"/"Diger"/"DİĞER" toleranslı
+  return GenelReport;
 }
 
 export default async function RaporOnayPrintPage({

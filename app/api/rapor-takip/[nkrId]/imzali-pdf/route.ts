@@ -5,6 +5,8 @@ import { loadRaporViewData } from "@/lib/raporViewData";
 import { renderUrlToPdf } from "@/lib/chromiumPdf";
 import { signPdfBuffer, pdfImzaYapilandirildi } from "@/lib/raporPdfSign";
 import { getRaporPdfBaseUrl } from "@/lib/raporPdfBaseUrl";
+import { cosmoPool } from "@/lib/db";
+import { maybeMergeEk } from "@/lib/raporEkMerge";
 
 const DATA_FORMAT_ALIAS: Record<string, string> = {
   DetayRapor: "Genel",
@@ -81,8 +83,12 @@ export async function GET(
       settleMs: 1500,
     });
 
-    // PAdES dijital imza göm (self-signed köprü sertifika).
-    const signed = await signPdfBuffer(pdf);
+    // "Diğer" formatında: kayıtlı Ek-1 PDF'i ilk sayfanın arkasına ekle (merge).
+    const pool = await cosmoPool;
+    const merged = await maybeMergeEk(pool, pdf, nkrIdNum, format);
+
+    // PAdES dijital imza göm (self-signed köprü sertifika) — Ek-1 dahil tüm belgeye.
+    const signed = await signPdfBuffer(merged);
 
     // Dış kod öncelikli — yoksa iç rapor no fallback. "/" karakterleri "-" yapılır.
     const baseKod = (data.onay?.disRaporKodu || data.header.RaporNo || String(nkrIdNum)).replace(/\//g, "-");
