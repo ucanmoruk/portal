@@ -82,6 +82,7 @@ const navGroups: NavGroup[] = [
       { label: "Hizmet Listesi",    href: "/laboratuvar/hizmet-listesi",   menuKey: "laboratuvar.hizmet-listesi"   },
       { label: "Hizmet Paketleri",  href: "/laboratuvar/hizmet-paketleri", menuKey: "laboratuvar.hizmet-paketleri" },
       { label: "Sonuç Girişi",      href: "/laboratuvar/sonuc-giris",      menuKey: "laboratuvar.sonuc-giris"      },
+      { label: "Analiz - Numune Listesi", href: "/laboratuvar/analiz-numune-listesi", menuKey: "laboratuvar.analiz-numune-listesi" },
     ],
   },
   {

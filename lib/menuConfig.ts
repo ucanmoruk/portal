@@ -57,6 +57,7 @@ export const MENU_TREE: MenuItem[] = [
       { key: "laboratuvar.hizmet-listesi",   label: "Hizmet Listesi",   href: "/laboratuvar/hizmet-listesi"   },
       { key: "laboratuvar.hizmet-paketleri", label: "Hizmet Paketleri", href: "/laboratuvar/hizmet-paketleri" },
       { key: "laboratuvar.sonuc-giris",      label: "Sonuç Girişi",     href: "/laboratuvar/sonuc-giris"      },
+      { key: "laboratuvar.analiz-numune-listesi", label: "Analiz - Numune Listesi", href: "/laboratuvar/analiz-numune-listesi" },
       { key: "laboratuvar.rapor-onayla",     label: "Rapor Onaylama",   href: "#",                            virtual: true },
     ],
   },
