@@ -34,6 +34,7 @@ interface EvrakGroup {
   firmaAd: string | null;
   projeAd: string | null;
   numuneSayisi: number;
+  raporDurumu: string | null;
   odemeDurumu: string | null;
   hasEslestirme: boolean;
   numuneler: NumuneItem[];
@@ -94,6 +95,15 @@ function NumuneBadge({ count }: { count: number }) {
   );
 }
 
+const RAPOR_DURUM_MANUEL_OPTS = ["Analiz Aşamasında", "Bekletiliyor", "Gönderildi"];
+
+const RAPOR_DURUM_STYLE: Record<string, { bg: string; color: string; border: string }> = {
+  "Analiz Aşamasında": { bg: "#e8f0fe", color: "#0071e3", border: "#0071e333" },
+  "Gönderildi": { bg: "#e6f6ee", color: "#1a7f4b", border: "#34c75940" },
+  "Bekletiliyor": { bg: "#fff3cd", color: "#9a6700", border: "#ffcc0044" },
+  "Mixed": { bg: "#f5f5f7", color: "#6e6e73", border: "#d1d1d6" },
+};
+
 // ── Ana bileşen ─────────────────────────────────────────────────
 export default function NumuneKabulTable() {
   const router = useRouter();
@@ -128,6 +138,7 @@ export default function NumuneKabulTable() {
   const [invoiceTeklifId, setInvoiceTeklifId] = useState("");
   const [invoiceOffers, setInvoiceOffers] = useState<TeklifOpt[]>([]);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [durumSaving, setDurumSaving] = useState<Record<string, boolean>>({});
 
   const toggleSelect = (id: number) =>
     setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -272,7 +283,31 @@ export default function NumuneKabulTable() {
   const hasActiveFilter = !!(tarihBas || tarihBit || odemeFilter || raporDurumFilter);
 
   const ODEME_OPTS = ["Ödendi", "Fatura Kesilmedi", "Ödeme Bekliyor", "Proforma Onaylandı", "Proforma Oluşturuldu", "Proforma Reddedildi", "Kısmen Ödendi", "İptal"];
-  const RAPOR_DURUM_OPTS = ["Raporlandı", "Rapor Hazır", "Rapor Beklemede", "Tanımlandı", "Mixed"];
+  const RAPOR_DURUM_OPTS = RAPOR_DURUM_MANUEL_OPTS;
+
+  const handleRaporDurumuChange = async (group: EvrakGroup, raporDurumu: string) => {
+    const prevDurum = group.raporDurumu || "Analiz Aşamasında";
+    setGroups(prev => prev.map(g => g.evrakNo === group.evrakNo ? { ...g, raporDurumu } : g));
+    setDurumSaving(prev => ({ ...prev, [group.evrakNo]: true }));
+    try {
+      const res = await fetch("/api/numune-kabul", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ evrakNo: group.evrakNo, raporDurumu }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Rapor durumu güncellenemedi");
+    } catch (e: any) {
+      setGroups(prev => prev.map(g => g.evrakNo === group.evrakNo ? { ...g, raporDurumu: prevDurum } : g));
+      setError(e.message || "Rapor durumu güncellenemedi");
+    } finally {
+      setDurumSaving(prev => {
+        const next = { ...prev };
+        delete next[group.evrakNo];
+        return next;
+      });
+    }
+  };
 
   // ── Accordion ───────────────────────────────────────────────
   const toggleGroup = (evrakNo: string) => {
@@ -347,13 +382,15 @@ export default function NumuneKabulTable() {
     return `${d}.${m}.${y}`;
   };
 
+  const raporFilterStyle = raporDurumFilter ? RAPOR_DURUM_STYLE[raporDurumFilter] : null;
+
   // ── Render ───────────────────────────────────────────────────
   return (
     <>
       {/* ── Toolbar ── */}
-      <div className={styles.toolbar}>
-        <div className={styles.toolbarLeft}>
-          <div className={styles.searchBox} style={{ width: 340 }}>
+      <div className={styles.toolbar} style={{ width: "100%" }}>
+        <div className={styles.toolbarLeft} style={{ minWidth: 0, flexWrap: "wrap" }}>
+          <div className={styles.searchBox} style={{ width: "min(340px, 100%)", minWidth: 220 }}>
             <svg className={styles.searchIcon} viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
               <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
             </svg>
@@ -373,7 +410,7 @@ export default function NumuneKabulTable() {
           </div>
           <span className={styles.totalCount}>{total} evrak</span>
         </div>
-        <div className={styles.toolbarRight}>
+        <div className={styles.toolbarRight} style={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
           <select className={styles.pageSizeSelect} value={limit}
             onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
             {[10, 20, 50].map(n => <option key={n} value={n}>{n} / sayfa</option>)}
@@ -411,7 +448,16 @@ export default function NumuneKabulTable() {
           {ODEME_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
         <select value={raporDurumFilter} onChange={e => applyFilters({ raporDurumu: e.target.value })}
-          style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 12, background: "var(--color-bg-elevated, #fff)", color: "inherit", cursor: "pointer" }}>
+          style={{
+            padding: "6px 10px",
+            borderRadius: 8,
+            border: `1px solid ${raporFilterStyle?.border || "var(--color-border)"}`,
+            fontSize: 12,
+            background: raporFilterStyle?.bg || "var(--color-bg-elevated, #fff)",
+            color: raporFilterStyle?.color || "inherit",
+            cursor: "pointer",
+            fontWeight: raporFilterStyle ? 700 : 400,
+          }}>
           <option value="">Rapor Durumu: Tümü</option>
           {RAPOR_DURUM_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
@@ -438,12 +484,13 @@ export default function NumuneKabulTable() {
           background: "var(--color-surface)",
         }}>
           <div style={{ width: 24 }} /> {/* chevron */}
-          <div style={{ width: 88,  fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)" }}>Tarih</div>
-          <div style={{ width: 130, fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)" }}>Evrak No</div>
+          <div style={{ width: 78,  fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)" }}>Tarih</div>
+          <div style={{ width: 104, fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)" }}>Evrak No</div>
           <div style={{ flex: 1,    fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)" }}>Firma / Proje</div>
-          <div style={{ width: 64,  fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)", textAlign: "center" }}>Numune</div>
-          <div style={{ width: 136,  fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)", textAlign: "center" }}>Ödeme</div>
-          <div style={{ width: 36,  fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)", textAlign: "center" }}>Fatura</div>
+          <div style={{ width: 54,  fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)", textAlign: "center" }}>Numune</div>
+          <div style={{ width: 132,  fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)", textAlign: "center" }}>Rapor Durumu</div>
+          <div style={{ width: 118,  fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)", textAlign: "center" }}>Ödeme</div>
+          <div style={{ width: 70,  fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--color-text-tertiary)", textAlign: "center" }}>İşlem</div>
         </div>
 
         {/* Skeleton */}
@@ -457,11 +504,12 @@ export default function NumuneKabulTable() {
               }}>
                 <span className={styles.skeleton} style={{ width: 14, height: 14, borderRadius: 3 }} />
                 <span className={styles.skeleton} style={{ width: 80 }} />
-                <span className={styles.skeleton} style={{ width: 110 }} />
+                <span className={styles.skeleton} style={{ width: 96 }} />
                 <span className={styles.skeleton} style={{ flex: 1 }} />
-                <span className={styles.skeleton} style={{ width: 60 }} />
-                <span className={styles.skeleton} style={{ width: 70 }} />
-                <span className={styles.skeleton} style={{ width: 28, height: 28, borderRadius: 6 }} />
+                <span className={styles.skeleton} style={{ width: 52 }} />
+                <span className={styles.skeleton} style={{ width: 124 }} />
+                <span className={styles.skeleton} style={{ width: 100 }} />
+                <span className={styles.skeleton} style={{ width: 68, height: 28, borderRadius: 6 }} />
               </div>
             ))}
           </div>
@@ -512,12 +560,12 @@ export default function NumuneKabulTable() {
                 </div>
 
                 {/* Tarih */}
-                <div style={{ width: 88, flexShrink: 0, fontSize: "0.8rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ width: 78, flexShrink: 0, fontSize: "0.78rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
                   {formatTarih(group.tarih)}
                 </div>
 
                 {/* Evrak No */}
-                <div style={{ width: 130, flexShrink: 0, fontWeight: 700, fontSize: "0.845rem", color: "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ width: 104, flexShrink: 0, fontWeight: 700, fontSize: "0.82rem", color: "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>
                   {group.evrakNo}
                 </div>
 
@@ -536,18 +584,52 @@ export default function NumuneKabulTable() {
                 </div>
 
                 {/* Numune sayısı */}
-                <div style={{ width: 64, display: "flex", justifyContent: "center" }}>
+                <div style={{ width: 54, display: "flex", justifyContent: "center" }}>
                   <NumuneBadge count={group.numuneSayisi} />
                 </div>
 
+                {/* Rapor durumu */}
+                <div style={{ width: 132, display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
+                  {(() => {
+                    const rawCurrent = group.raporDurumu || "Analiz Aşamasında";
+                    const current = rawCurrent === "Mixed" || RAPOR_DURUM_MANUEL_OPTS.includes(rawCurrent)
+                      ? rawCurrent
+                      : "Analiz Aşamasında";
+                    const st = RAPOR_DURUM_STYLE[current] ?? { bg: "#8e8e9318", color: "#636366", border: "#8e8e9340" };
+                    return (
+                      <select
+                        value={current}
+                        disabled={!!durumSaving[group.evrakNo] || current === "Mixed"}
+                        onChange={e => void handleRaporDurumuChange(group, e.target.value)}
+                        title={current === "Mixed" ? "Evraktaki numunelerde farklı rapor durumları var" : "Rapor durumunu değiştir"}
+                        style={{
+                          width: 124,
+                          padding: "5px 6px",
+                          borderRadius: 10,
+                          border: `1px solid ${st.border}`,
+                          background: st.bg,
+                          color: st.color,
+                          fontSize: "0.7rem",
+                          fontWeight: 700,
+                          cursor: durumSaving[group.evrakNo] || current === "Mixed" ? "not-allowed" : "pointer",
+                          opacity: durumSaving[group.evrakNo] ? 0.65 : 1,
+                        }}
+                      >
+                        {current === "Mixed" && <option value="Mixed">Mixed</option>}
+                        {RAPOR_DURUM_MANUEL_OPTS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    );
+                  })()}
+                </div>
+
                 {/* Ödeme */}
-                <div style={{ width: 136, display: "flex", justifyContent: "center" }}>
+                <div style={{ width: 118, display: "flex", justifyContent: "center" }}>
                   <OdemeBadge durum={group.odemeDurumu} />
                 </div>
 
                 {/* Yazdır (seçili varsa) + Faturalandır */}
                 <div
-                  style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}
+                  style={{ width: 70, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4, flexShrink: 0 }}
                   onClick={e => e.stopPropagation()}
                 >
                   {isOpen && groupSelectedIds(group.numuneler).length > 0 && (
@@ -657,13 +739,13 @@ export default function NumuneKabulTable() {
                       Numune bulunamadı.
                     </div>
                   ) : (
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", tableLayout: "fixed" }}>
+                    <table style={{ width: "100%", maxWidth: "100%", borderCollapse: "collapse", fontSize: "0.8rem", tableLayout: "fixed" }}>
                       <colgroup>
                         <col style={{ width: 40 }} />
-                        <col style={{ width: 150 }} />
+                        <col style={{ width: 128 }} />
                         <col />
-                        <col style={{ width: 130 }} />
-                        <col style={{ width: 170 }} />
+                        <col style={{ width: 112 }} />
+                        <col style={{ width: 128 }} />
                         <col style={{ width: 44 }} />
                       </colgroup>
                       <thead>
@@ -675,7 +757,7 @@ export default function NumuneKabulTable() {
                           {([
                             { h: "Rapor No",     w: undefined },
                             { h: "Numune Adı",   w: undefined },
-                            { h: "Rapor Durumu", w: 170 },   // "Analiz Aşamasında" tek satırda kalsın
+                            { h: "Rapor Durumu", w: 128 },
                             { h: "Grup / Tür",   w: undefined },
                             { h: "",             w: undefined },
                           ] as const).map((c, i) => (

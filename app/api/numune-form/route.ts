@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     const [
       hasRevno, hasKarar, hasDil, hasAciklama, hasTur,
       hasBarkod, hasTeklifNo, hasTalepNo, hasNuAdiEn,
-      hasTesteMiktar, hasTesteMiktarBirim, hasUrunTipi, hasHedefGrup,
+      hasTesteMiktar, hasTesteMiktarBirim, hasUrunTipi, hasHedefGrup, hasRaporDurumu,
       ugdCol, doFormul, doLog,
     ] = await Promise.all([
       nkrHasColumn(pool, "Revno"),
@@ -91,6 +91,7 @@ export async function POST(request: Request) {
       nkrHasColumn(pool, "TesteMiktarBirim"),
       nkrHasColumn(pool, "Urun_Tipi"),
       nkrHasColumn(pool, "Hedef_Grup"),
+      nkrHasColumn(pool, "Rapor_Durumu"),
       nkrUgdTipFkColumn(pool),
       hasNkrFormulTable(pool),
       hasNkrLogTable(pool),
@@ -125,6 +126,7 @@ export async function POST(request: Request) {
     if (hasHedefGrup)      add("Hedef_Grup",        "Hedef_Grup",       nkr.Hedef_Grup      || null);
     if (hasTesteMiktar)    add("TesteMiktar",       "TesteMiktar",      nkr.TesteMiktar      ? parseFloat(nkr.TesteMiktar)     : null);
     if (hasTesteMiktarBirim) add("TesteMiktarBirim","TesteMiktarBirim", nkr.TesteMiktarBirim || null);
+    if (hasRaporDurumu)    add("Rapor_Durumu",      "Rapor_Durumu",     "Analiz Aşamasında");
     if (ugdCol)            add(ugdCol,              "UGDTip_ID",        nkr.UGDTip_ID        ? parseInt(nkr.UGDTip_ID)         : null);
 
     const nkrResult = await ins.query(

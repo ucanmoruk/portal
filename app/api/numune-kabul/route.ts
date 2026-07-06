@@ -70,11 +70,20 @@ export async function GET(request: NextRequest) {
         )`
       : "";
 
+    const raporDurumuExpr = `
+      CASE
+        WHEN COALESCE(NULLIF(n.Rapor_Durumu, ''), N'Analiz Aşamasında')
+          IN (N'Analiz Aşamasında', N'Bekletiliyor', N'Gönderildi')
+        THEN COALESCE(NULLIF(n.Rapor_Durumu, ''), N'Analiz Aşamasında')
+        ELSE N'Analiz Aşamasında'
+      END
+    `;
+
     // Filtre cümlesi: tarih aralığı + rapor durumu (NKR satırı) + ödeme (Evrak bazında)
     const filterClause =
       (tarihBas    ? " AND CONVERT(date, n.Tarih) >= @tarihBas" : "") +
       (tarihBit    ? " AND CONVERT(date, n.Tarih) <= @tarihBit" : "") +
-      (raporDurumu ? " AND ISNULL(n.Rapor_Durumu, '') = @raporDurumu" : "") +
+      (raporDurumu ? ` AND ${raporDurumuExpr} = @raporDurumu` : "") +
       // NULL (hiç Odeme kaydı yok) = "Fatura Kesilmedi" — OdemeBadge ile aynı mantık.
       // Aksi halde Odeme satırı olmayan (yeni) evraklar "Fatura Kesilmedi" filtresinde kaybolurdu.
       (odeme       ? " AND ISNULL((SELECT TOP 1 Odeme_Durumu FROM Odeme WHERE Evrak_No = n.Evrak_No ORDER BY ID DESC), N'Fatura Kesilmedi') = @odeme" : "");
@@ -114,6 +123,11 @@ export async function GET(request: NextRequest) {
             MIN(CONVERT(varchar(10), n.Tarih, 120))  AS Tarih,
             MIN(f.Ad)                                 AS FirmaAd,
             COUNT(*)                                  AS NumuneSayisi,
+            CASE
+              WHEN COUNT(DISTINCT ${raporDurumuExpr}) = 1
+                THEN MIN(${raporDurumuExpr})
+              ELSE N'Mixed'
+            END                                       AS Rapor_Durumu,
             (
               SELECT TOP 1 Odeme_Durumu
               FROM Odeme
@@ -204,12 +218,53 @@ export async function GET(request: NextRequest) {
       firmaAd:        g.FirmaAd,
       projeAd:        g.ProjeAd,
       numuneSayisi:   g.NumuneSayisi,
+      raporDurumu:    g.Rapor_Durumu,
       odemeDurumu:    g.Odeme_Durumu,
       hasEslestirme:  Boolean(g.HasEslestirme),
       numuneler:      numunesByEvrak[g.Evrak_No] ?? [],
     }));
 
     return Response.json({ data, total, page, limit, totalPages: Math.ceil(total / limit) });
+  } catch (e: any) {
+    return Response.json({ error: e.message }, { status: 500 });
+  }
+}
+
+// ----------------------------------------------------------------
+// PATCH /api/numune-kabul
+// Body: { evrakNo, raporDurumu }
+// Evrak altındaki tüm aktif numunelerin manuel rapor durumunu günceller.
+// ----------------------------------------------------------------
+export async function PATCH(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
+
+  const allowed = new Set([
+    "Analiz Aşamasında",
+    "Gönderildi",
+    "Bekletiliyor",
+  ]);
+
+  try {
+    const body = await request.json();
+    const evrakNo = String(body?.evrakNo || "").trim();
+    const raporDurumu = String(body?.raporDurumu || "").trim();
+
+    if (!evrakNo) return Response.json({ error: "Evrak No zorunludur." }, { status: 400 });
+    if (!allowed.has(raporDurumu)) return Response.json({ error: "Geçersiz rapor durumu." }, { status: 400 });
+
+    const pool = await cosmoPool;
+    const result = await pool.request()
+      .input("Evrak_No", evrakNo)
+      .input("Rapor_Durumu", raporDurumu)
+      .query(`
+        UPDATE NKR
+        SET Rapor_Durumu = @Rapor_Durumu
+        WHERE Evrak_No = @Evrak_No
+          AND Durum = 'Aktif'
+      `);
+
+    return Response.json({ ok: true, updated: result.rowsAffected?.[0] ?? 0 });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }
@@ -238,10 +293,11 @@ export async function POST(request: Request) {
       .input("Firma_ID",   Firma_ID ? parseInt(Firma_ID) : null)
       .input("Numune_Adi", Numune_Adi.trim())
       .input("Grup",       Grup       || null)
+      .input("Rapor_Durumu", "Analiz Aşamasında")
       .query(`
-        INSERT INTO NKR (Tarih, Evrak_No, RaporNo, Firma_ID, Numune_Adi, Grup, Durum)
+        INSERT INTO NKR (Tarih, Evrak_No, RaporNo, Firma_ID, Numune_Adi, Grup, Durum, Rapor_Durumu)
         OUTPUT INSERTED.ID
-        VALUES (@Tarih, @Evrak_No, @RaporNo, @Firma_ID, @Numune_Adi, @Grup, 'Aktif')
+        VALUES (@Tarih, @Evrak_No, @RaporNo, @Firma_ID, @Numune_Adi, @Grup, 'Aktif', @Rapor_Durumu)
       `);
 
     return Response.json({ id: result.recordset[0].ID }, { status: 201 });

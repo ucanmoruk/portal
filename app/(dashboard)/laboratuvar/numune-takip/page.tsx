@@ -9,7 +9,7 @@ export default async function NumuneKabulPage() {
   await getServerSession(authOptions);
 
   return (
-    <div className={styles.page} style={{ maxWidth: "none" }}>
+    <div className={styles.page} style={{ width: "100%", maxWidth: 1180 }}>
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Numune Kabul</h1>
