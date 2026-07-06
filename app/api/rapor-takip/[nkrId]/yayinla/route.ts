@@ -163,7 +163,7 @@ export async function POST(
       .query(`
         UPDATE NKR_RaporOnay
         SET Durum = 'Yayınlandı',
-            YayinTarihi = ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "GETDATE()"},
+            YayinTarihi = ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "COALESCE(YayinTarihi, GETDATE())"},
             YayinUrl = @yayinUrl
         WHERE ID = @id
       `);

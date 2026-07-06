@@ -111,7 +111,19 @@ export async function POST(
             SET Durum = N'Onaylandı',
                 OnaylayanID = @onaylayan,
                 OnaylayanAd = @onaylayanAd,
-                OnayTarihi = ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "GETDATE()"}
+                OnayTarihi = ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "GETDATE()"},
+                YayinTarihi = ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "YayinTarihi"}
+            WHERE ID = @id
+          `);
+      } else if (raporYayinTarihi && mevcutDurum !== "Yayınlandı") {
+        // Onaylandı ama henüz yayınlanmadıysa kullanıcı tarih alanını düzeltebilsin.
+        await pool.request()
+          .input("id", mevcutId)
+          .input("raporYayinTarihi", raporYayinTarihi)
+          .query(`
+            UPDATE NKR_RaporOnay
+            SET OnayTarihi = CAST(@raporYayinTarihi AS DATE),
+                YayinTarihi = CAST(@raporYayinTarihi AS DATE)
             WHERE ID = @id
           `);
       }
@@ -196,14 +208,14 @@ export async function POST(
       .input("raporYayinTarihi", raporYayinTarihi)
       .query(hasDisKodCol
         ? `
-        INSERT INTO NKR_RaporOnay (NkrID, RaporFormati, KarekodToken, Durum, OnaylayanID, OnaylayanAd, OnayTarihi, DisRaporKodu)
+        INSERT INTO NKR_RaporOnay (NkrID, RaporFormati, KarekodToken, Durum, OnaylayanID, OnaylayanAd, OnayTarihi, YayinTarihi, DisRaporKodu)
         OUTPUT INSERTED.ID
-        VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan, @onaylayanAd, ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "GETDATE()"}, @disKod)
+        VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan, @onaylayanAd, ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "GETDATE()"}, ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "NULL"}, @disKod)
       `
         : `
-        INSERT INTO NKR_RaporOnay (NkrID, RaporFormati, KarekodToken, Durum, OnaylayanID, OnaylayanAd, OnayTarihi)
+        INSERT INTO NKR_RaporOnay (NkrID, RaporFormati, KarekodToken, Durum, OnaylayanID, OnaylayanAd, OnayTarihi, YayinTarihi)
         OUTPUT INSERTED.ID
-        VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan, @onaylayanAd, ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "GETDATE()"})
+        VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan, @onaylayanAd, ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "GETDATE()"}, ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "NULL"})
       `);
 
     // ───── Dijital imza (tamper-proof) ─────
