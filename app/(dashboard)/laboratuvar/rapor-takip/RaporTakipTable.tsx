@@ -58,6 +58,22 @@ const rowKey = (r: RaporRow) => `${r.NkrID}__${r.RaporFormati}`;
 const isUgdrFormat = (format: string) => ["ÜGDR", "UGDR", "ÜGD", "UGD"].includes(format.toLocaleUpperCase("tr-TR"));
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 
+async function readApiJson<T>(res: Response, fallback: string): Promise<T> {
+  const text = await res.text();
+  let data: any = {};
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      const htmlTitle = text.match(/<title>(.*?)<\/title>/i)?.[1]?.trim();
+      const msg = htmlTitle || (res.redirected ? "Oturum yönlendirmesi alındı" : fallback);
+      throw new Error(`${msg} (HTTP ${res.status})`);
+    }
+  }
+  if (!res.ok) throw new Error(data.error || data.message || `${fallback} (HTTP ${res.status})`);
+  return data as T;
+}
+
 // ── Küçük bileşenler ─────────────────────────────────────────────────────────
 
 function DurumBadge({
@@ -257,8 +273,7 @@ export default function RaporTakipTable({
         { signal: ctrl.signal, cache: "no-store" },
       );
       if (reqId !== latestReqId.current) return;
-      if (!res.ok) throw new Error((await res.json()).error || "Hata");
-      const json = await res.json();
+      const json = await readApiJson<{ data: RaporRow[]; total: number; totalPages: number }>(res, "Liste alınamadı");
       setRows(json.data);
       setTotal(json.total);
       setTotalPages(json.totalPages);
@@ -314,8 +329,7 @@ export default function RaporTakipTable({
         const res = await fetch(
           `/api/rapor-takip/${row.NkrID}/hizmetler?raporFormati=${encodeURIComponent(row.RaporFormati)}`,
         );
-        if (!res.ok) throw new Error((await res.json()).error || "Hizmetler yüklenemedi");
-        const data: HizmetDetay[] = await res.json();
+        const data = await readApiJson<HizmetDetay[]>(res, "Hizmetler yüklenemedi");
         setHizmetMap(prev => ({ ...prev, [key]: data }));
 
         // Başlangıç editMap'ini doldur
@@ -395,7 +409,7 @@ export default function RaporTakipTable({
           raporFormati: row.RaporFormati,
         }),
       });
-      if (!res.ok) throw new Error((await res.json()).error || "Kaydedilemedi");
+      await readApiJson<{ ok: boolean }>(res, "Kaydedilemedi");
 
       // Bu satırın hizmet listesindeki değerini güncelle (SonucKayitTarihi de set edilir)
       const now = new Date().toISOString();
@@ -446,7 +460,7 @@ export default function RaporTakipTable({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ updates, raporFormati: row.RaporFormati }),
       });
-      if (!res.ok) throw new Error((await res.json()).error || "Kaydedilemedi");
+      await readApiJson<{ ok: boolean }>(res, "Kaydedilemedi");
 
       const now = new Date().toISOString();
       setHizmetMap(prev => {
@@ -513,7 +527,7 @@ export default function RaporTakipTable({
           mesaj:  gonderMesaj,
         }),
       });
-      if (!res.ok) throw new Error((await res.json()).error || "Gönderilemedi");
+      await readApiJson<{ ok: boolean }>(res, "Gönderilemedi");
       setGonderDone(true);
     } catch (e: any) {
       setGonderError(e.message);
@@ -584,8 +598,7 @@ export default function RaporTakipTable({
         if (acceptedOnly) params.set("acceptedOnly", "1");
         if (phase) params.set("phase", phase);
         const res = await fetch(`/api/rapor-takip?${params}`, { cache: "no-store" });
-        if (!res.ok) throw new Error((await res.json()).error || "Export alinamadi");
-        const json = await res.json();
+        const json = await readApiJson<{ data: RaporRow[] }>(res, "Export alinamadi");
         allRows.push(...(json.data || []));
       }
 
@@ -633,7 +646,7 @@ export default function RaporTakipTable({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ format: row.RaporFormati }),
         });
-        if (!res.ok) throw new Error((await res.json()).error || "Geri gönderilemedi");
+        await readApiJson<{ ok: boolean }>(res, "Geri gönderilemedi");
         // Liste yenilensin — bu satır artık Geri Gönderildi durumunda, mevcut tab'tan düşer
       } else {
         const res = await fetch(`/api/rapor-takip/${row.NkrID}/tamamla`, {
@@ -641,7 +654,7 @@ export default function RaporTakipTable({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ format: row.RaporFormati, durum: "Onay Bekleniyor" }),
         });
-        if (!res.ok) throw new Error((await res.json()).error || "Durum güncellenemedi");
+        await readApiJson<{ ok: boolean }>(res, "Durum güncellenemedi");
       }
       fetchData(page, search, limit, year, raporDurumu, raporTuru, terminDate, { clearFirst: false });
       onRefresh?.();

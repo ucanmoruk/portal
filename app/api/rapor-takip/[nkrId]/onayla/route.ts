@@ -12,6 +12,14 @@ function generateToken(): string {
   return randomBytes(18).toString("base64url"); // ~24 char
 }
 
+function parseOptionalDate(value: unknown): string | null {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "__INVALID__";
+  const d = new Date(`${raw}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? "__INVALID__" : raw;
+}
+
 // Benzersiz dış rapor kodu üret: ÜGAM/RR26/XXXX (çakışırsa tekrar dener).
 // Eğer DisRaporKodu kolonu yoksa null döner (eski şemada graceful degrade).
 async function genUniqueDisRaporKodu(pool: any, raporFormati: string): Promise<string | null> {
@@ -50,6 +58,10 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const format = String(body?.format || "").trim();
   if (!format) return Response.json({ error: "format gerekli" }, { status: 400 });
+  const raporYayinTarihi = parseOptionalDate(body?.raporYayinTarihi);
+  if (raporYayinTarihi === "__INVALID__") {
+    return Response.json({ error: "Rapor yayın tarihi YYYY-MM-DD formatında olmalıdır." }, { status: 400 });
+  }
 
   const userId = ((session.user as any)?.userId ?? null) as number | null;
   const userName = ((session.user as any)?.name || (session.user as any)?.email || null) as string | null;
@@ -93,12 +105,13 @@ export async function POST(
           .input("id", mevcutId)
           .input("onaylayan", userId)
           .input("onaylayanAd", userName)
+          .input("raporYayinTarihi", raporYayinTarihi)
           .query(`
             UPDATE NKR_RaporOnay
             SET Durum = N'Onaylandı',
                 OnaylayanID = @onaylayan,
                 OnaylayanAd = @onaylayanAd,
-                OnayTarihi = GETDATE()
+                OnayTarihi = ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "GETDATE()"}
             WHERE ID = @id
           `);
       }
@@ -180,16 +193,17 @@ export async function POST(
       .input("onaylayan", userId)
       .input("onaylayanAd", userName)
       .input("disKod", disRaporKodu)
+      .input("raporYayinTarihi", raporYayinTarihi)
       .query(hasDisKodCol
         ? `
-        INSERT INTO NKR_RaporOnay (NkrID, RaporFormati, KarekodToken, Durum, OnaylayanID, OnaylayanAd, DisRaporKodu)
+        INSERT INTO NKR_RaporOnay (NkrID, RaporFormati, KarekodToken, Durum, OnaylayanID, OnaylayanAd, OnayTarihi, DisRaporKodu)
         OUTPUT INSERTED.ID
-        VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan, @onaylayanAd, @disKod)
+        VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan, @onaylayanAd, ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "GETDATE()"}, @disKod)
       `
         : `
-        INSERT INTO NKR_RaporOnay (NkrID, RaporFormati, KarekodToken, Durum, OnaylayanID, OnaylayanAd)
+        INSERT INTO NKR_RaporOnay (NkrID, RaporFormati, KarekodToken, Durum, OnaylayanID, OnaylayanAd, OnayTarihi)
         OUTPUT INSERTED.ID
-        VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan, @onaylayanAd)
+        VALUES (@nkrId, @format, @token, 'Onaylandı', @onaylayan, @onaylayanAd, ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "GETDATE()"})
       `);
 
     // ───── Dijital imza (tamper-proof) ─────

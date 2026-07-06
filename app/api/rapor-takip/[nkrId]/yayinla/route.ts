@@ -39,6 +39,14 @@ async function buildRaporPdf(origin: string, nkrId: number, format: string, cook
   return merged;
 }
 
+function parseOptionalDate(value: unknown): string | null {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "__INVALID__";
+  const d = new Date(`${raw}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? "__INVALID__" : raw;
+}
+
 // POST /api/rapor-takip/[nkrId]/yayinla
 // Body: { format }
 // Önkoşul: onaylı olmalı. "Portala Gönder" akışı:
@@ -61,6 +69,10 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const format = String(body?.format || "").trim();
   if (!format) return Response.json({ error: "format gerekli" }, { status: 400 });
+  const raporYayinTarihi = parseOptionalDate(body?.raporYayinTarihi);
+  if (raporYayinTarihi === "__INVALID__") {
+    return Response.json({ error: "Rapor yayın tarihi YYYY-MM-DD formatında olmalıdır." }, { status: 400 });
+  }
 
   const userId = ((session.user as any)?.userId ?? null) as number | null;
 
@@ -79,7 +91,7 @@ export async function POST(
     const exist = await pool.request()
       .input("nkrId", nkrIdNum).input("format", format)
       .query(`
-        SELECT ID, KarekodToken, Durum, YayinUrl FROM NKR_RaporOnay
+        SELECT ID, KarekodToken, Durum, YayinUrl, YayinTarihi FROM NKR_RaporOnay
         WHERE NkrID = @nkrId
           AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
       `);
@@ -99,6 +111,21 @@ export async function POST(
       );
     }
 
+    const eskiYayinTarihi = onay.YayinTarihi ?? null;
+
+    // PDF üretimi DB'deki yayın tarihini okur. Kullanıcı tarih seçtiyse önce
+    // geçici olarak yaz, hata olursa eski değeri geri koy.
+    if (raporYayinTarihi) {
+      await pool.request()
+        .input("id", onay.ID)
+        .input("raporYayinTarihi", raporYayinTarihi)
+        .query(`
+          UPDATE NKR_RaporOnay
+          SET YayinTarihi = CAST(@raporYayinTarihi AS DATE)
+          WHERE ID = @id
+        `);
+    }
+
     // ── İmzalı PDF üret + FTP'ye yükle ──
     let yayinUrl: string;
     try {
@@ -108,6 +135,16 @@ export async function POST(
       const uploaded = await uploadRaporPdfToFtp({ pdfBuffer, token: onay.KarekodToken });
       yayinUrl = uploaded.publicUrl;
     } catch (e) {
+      if (raporYayinTarihi) {
+        await pool.request()
+          .input("id", onay.ID)
+          .input("eskiYayinTarihi", eskiYayinTarihi)
+          .query(`
+            UPDATE NKR_RaporOnay
+            SET YayinTarihi = @eskiYayinTarihi
+            WHERE ID = @id
+          `);
+      }
       console.error("[yayinla] PDF/FTP yüklemesi başarısız:", e);
       const detay =
         e instanceof Error ? e.message :
@@ -122,10 +159,11 @@ export async function POST(
     await pool.request()
       .input("id", onay.ID)
       .input("yayinUrl", yayinUrl)
+      .input("raporYayinTarihi", raporYayinTarihi)
       .query(`
         UPDATE NKR_RaporOnay
         SET Durum = 'Yayınlandı',
-            YayinTarihi = GETDATE(),
+            YayinTarihi = ${raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "GETDATE()"},
             YayinUrl = @yayinUrl
         WHERE ID = @id
       `);

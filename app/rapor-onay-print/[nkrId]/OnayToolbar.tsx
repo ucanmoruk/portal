@@ -13,6 +13,15 @@ function closeOrGo(fallbackUrl: string) {
   }, 400);
 }
 
+function toDateInput(value: unknown) {
+  if (!value) return "";
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const raw = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+}
+
 interface OnayInfo {
   token: string;
   durum: string;
@@ -37,6 +46,9 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [showGeriModal, setShowGeriModal] = useState(false);
   const [geriNotlar, setGeriNotlar] = useState("");
+  const [raporYayinTarihi, setRaporYayinTarihi] = useState(() =>
+    toDateInput(initialOnay?.yayinTarihi || initialOnay?.onayTarihi),
+  );
 
   // Yetki kontrolü
   useEffect(() => {
@@ -65,7 +77,7 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
       const r = await fetch(`/api/rapor-takip/${nkrId}/onayla`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format }),
+        body: JSON.stringify({ format, raporYayinTarihi: raporYayinTarihi || undefined }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Onaylanamadı");
@@ -104,7 +116,7 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
       const r = await fetch(`/api/rapor-takip/${nkrId}/yayinla`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format }),
+        body: JSON.stringify({ format, raporYayinTarihi: raporYayinTarihi || undefined }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Yayınlanamadı");
@@ -180,6 +192,27 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
         </div>
 
         <div style={{ flex: 1 }} />
+
+        {canApprove && (
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "#ffffffcc", fontSize: 12, fontWeight: 700 }}>
+            Rapor Yayın Tarihi
+            <input
+              type="date"
+              value={raporYayinTarihi}
+              onChange={(e) => setRaporYayinTarihi(e.target.value)}
+              disabled={busy !== null || yayinlandi}
+              title="Boş bırakılırsa sistem tarihi kullanılır"
+              style={{
+                background: "#2c2c2e",
+                color: "#fff",
+                border: "1px solid #ffffff33",
+                borderRadius: 7,
+                padding: "7px 9px",
+                fontSize: 12,
+              }}
+            />
+          </label>
+        )}
 
         {/* Eylem butonları */}
         {!onaylandi && canApprove && (

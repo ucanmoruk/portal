@@ -94,6 +94,16 @@ export interface BilesenSonuc {
   Sonuc: string; SonucEn: string; Degerlendirme: string;
 }
 
+function defaultSonucFromLoq(loq: unknown) {
+  const value = String(loq ?? "").trim();
+  if (!value || value === "-") return "";
+  return `< ${value}`;
+}
+
+function defaultDegerlendirme() {
+  return "Uygun";
+}
+
 let _numuneAltExists: { val: boolean; ts: number } | null = null;
 export async function numuneAltTabloVar(pool: Pool): Promise<boolean> {
   if (_numuneAltExists && Date.now() - _numuneAltExists.ts < TTL_MS) return _numuneAltExists.val;
@@ -156,13 +166,17 @@ export async function loadBilesenSonuclar(
     const comps = catByAnaliz.get(p.analizId) || [];
     out[String(p.x1Id)] = comps.map((c) => {
       const s = saved.get(`${p.x1Id}|${c.ID}`);
+      const defaultSonuc = defaultSonucFromLoq(c.LOQ);
+      const defaultSonucEn = defaultSonucFromLoq(c.LOQEn) || defaultSonuc;
       return {
         AltParametreID: (c.ID as number) ?? null,
         BilesenAdi: String(c.BilesenAdi ?? ""), BilesenAdiEn: String(c.BilesenAdiEn ?? ""),
         Birim: String(c.Birim ?? ""), BirimEn: String(c.BirimEn ?? ""),
         LOQ: String(c.LOQ ?? ""), LOQEn: String(c.LOQEn ?? ""),
         Limit: String(c.Limit ?? ""), LimitEn: String(c.LimitEn ?? ""),
-        Sonuc: s?.Sonuc ?? "", SonucEn: s?.SonucEn ?? "", Degerlendirme: s?.Degerlendirme ?? "",
+        Sonuc: s?.Sonuc || defaultSonuc,
+        SonucEn: s?.SonucEn || defaultSonucEn,
+        Degerlendirme: s?.Degerlendirme || defaultDegerlendirme(),
       };
     });
   }
