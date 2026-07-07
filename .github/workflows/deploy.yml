@@ -74,17 +74,23 @@ jobs:
           else
             FTP_INCOMING_DIR="$FTP_BASE_DIR/_incoming"
           fi
+          if [[ -z "$FTP_BASE_DIR" ]]; then
+            FTP_BASE_DIR="."
+            FTP_INCOMING_DIR="_incoming"
+          fi
 
           lftp -c "
             set cmd:fail-exit yes;
             set ftp:ssl-allow no;
             set net:timeout 60;
-            set net:max-retries 3;
+            set net:max-retries 5;
             set net:reconnect-interval-base 10;
             set ftp:passive-mode on;
+            set ftp:sync-mode off;
             set xfer:clobber on;
             open ftp://$FTP_SERVER;
             user '$FTP_USERNAME' '$FTP_PASSWORD';
+            mkdir -p '$FTP_INCOMING_DIR';
             cd '$FTP_INCOMING_DIR';
             put deploy.tar.gz -o deploy.tar.gz.uploading;
             mv deploy.tar.gz.uploading deploy.tar.gz;
