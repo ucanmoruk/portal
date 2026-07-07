@@ -236,7 +236,7 @@ export default function GenelReport({
   };
 
   const renderDocumentFooter = (page: number) => (
-    <div className="rapor-altbilgi">
+    <div className={`rapor-altbilgi ${page > 1 ? "continuation-footer" : ""}`}>
       <div className="sirket-bilgisi">
         <strong>UNIQUE ANALİZ BELGELENDİRME ve GÖZETİM HİZMETLERİ LTD. ŞTİ.</strong><br />
         Atatürk Mah. Hadımköy Yolu Cad. No:10 İç Kapı No:7 Esenyurt / İstanbul | info@uniqueanalyse.com
@@ -251,6 +251,44 @@ export default function GenelReport({
         </div>
       </div>
     </div>
+  );
+
+  const renderContinuationHeader = () => (
+    <>
+      <div className="header continuation-header">
+        <div className="header-logo">
+          <img src="/unique-logo-wide.png" alt="UNIQUE ANALYSE" />
+        </div>
+        {hasAkredite && (
+          <div className="header-akredite">
+            <img src="/turkak-ilac.jpg" alt="TÜRKAK AB-2015-T · ilac-MRA" />
+          </div>
+        )}
+      </div>
+
+      <div className="title-row continuation-title" style={!hasAkredite ? { marginTop: "10mm" } : undefined}>
+        <div className="report-title">DENEY RAPORU</div>
+        {hasAkredite && (
+          <table className="akredite-box">
+            <tbody>
+              <tr><td>AB-2015-T</td></tr>
+              <tr><td style={{ fontSize: `${akrKodFontSize}px` }}>{raporKodu}</td></tr>
+              <tr><td>{toMMYY(yayinTarihi)}</td></tr>
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <table className="meta-table continuation-meta">
+        <tbody>
+          <tr>
+            <td style={{ paddingBottom: "4px", width: "20%" }}><strong>Rapor No - Rev. No:</strong></td>
+            <td style={{ paddingBottom: "4px", width: "80%" }}>{raporKodu}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div className="continuation-rule" />
+    </>
   );
 
   return (
@@ -293,9 +331,26 @@ export default function GenelReport({
           box-shadow: 0 4px 24px rgba(0,0,0,0.08);
           display: flex;
           flex-direction: column;
+          position: relative;
         }
         .page + .page {
           margin-top: 24px;
+        }
+        .continuation-header {
+          padding-bottom: 4mm;
+        }
+        .continuation-title {
+          margin-top: 0;
+        }
+        .continuation-meta {
+          margin-top: 5mm;
+        }
+        .continuation-rule {
+          margin-top: 4px;
+          border-bottom: 2px solid #000000;
+        }
+        .continuation-page {
+          padding-bottom: 49mm;
         }
 
         /* ───── HEADER ───── */
@@ -605,6 +660,17 @@ export default function GenelReport({
           font-weight: 700;
           color: var(--ink-strong);
         }
+        .continuation-seal {
+          position: absolute;
+          right: 15mm;
+          bottom: 28mm;
+          display: flex;
+          justify-content: flex-end;
+        }
+        .continuation-seal img {
+          width: 90px;
+          height: auto;
+        }
 
         /* ───── ALT BİLGİ (genel kapsayıcı) ───── */
         .rapor-altbilgi {
@@ -614,6 +680,13 @@ export default function GenelReport({
           padding-top: 7px;
           position: relative;
           box-sizing: border-box;
+        }
+        .continuation-footer {
+          position: absolute;
+          left: 8mm;
+          right: 8mm;
+          bottom: 8mm;
+          width: auto;
         }
         .sirket-bilgisi {
           text-align: center;
@@ -681,14 +754,18 @@ export default function GenelReport({
             margin: 0 auto; box-shadow: none;
             padding: 8mm;
             overflow: hidden;
-            page-break-after: always;
-            break-after: page;
+            page-break-after: auto;
+            break-after: auto;
             page-break-inside: avoid;
             break-inside: avoid;
           }
-          .page:last-child {
-            page-break-after: auto;
-            break-after: auto;
+          .page + .page {
+            margin-top: 0;
+            page-break-before: always;
+            break-before: page;
+          }
+          .continuation-page {
+            padding-bottom: 49mm;
           }
           html, body { min-height: 297mm; overflow: visible; }
         }
@@ -913,24 +990,16 @@ export default function GenelReport({
         </div>
         {continuationRows.length > 0 && (
           <div className="page continuation-page">
-            <div className="continuation-summary">
-              <div className="continuation-summary-title">MÜŞTERİ BİLGİLERİ</div>
-              <div className="continuation-summary-row">
-                <div className="continuation-summary-label">Firma Adı:</div>
-                <div>{header.FirmaAd || "—"}</div>
-              </div>
-              <div className="continuation-summary-row">
-                <div className="continuation-summary-label">Adres:</div>
-                <div>{header.FirmaAdres || "—"}</div>
-              </div>
-            </div>
+            {renderContinuationHeader()}
 
             <div className="results-section continued">
               <div className="results-title">TEST SONUÇLARI (DEVAM)</div>
               {renderResultsTable(continuationRows, { continued: true })}
             </div>
 
-            <div style={{ marginTop: "auto" }} />
+            <div className="continuation-seal">
+              <img src="/unique-seal.png" alt="UNIQUE ANALYSE" />
+            </div>
             {renderDocumentFooter(2)}
           </div>
         )}
