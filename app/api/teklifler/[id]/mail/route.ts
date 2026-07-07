@@ -171,7 +171,7 @@ export async function POST(
       no, tarih: h.Tarih, musteriAd: h.MusteriAd,
       musteriYetkili: h.MusteriYetkili, teklifVeren: h.TeklifVeren,
       teklifKonusu: h.TeklifKonusu,
-      mesaj, notlar: h.Notlar,
+      mesaj, notlar: cleanOfferNotes(h.Notlar),
       satirHtml, iskontoSatirHtml,
       pb, araToplam, genelIsk, kdvOran, kdvTutar, genelToplam,
       baseUrl, teklifId: id,
@@ -341,7 +341,7 @@ async function buildPreviewHtml(id: string, mesaj: string) {
     teklifVeren: h.TeklifVeren,
     teklifKonusu: h.TeklifKonusu,
     mesaj,
-    notlar: h.Notlar,
+    notlar: cleanOfferNotes(h.Notlar),
     satirHtml,
     iskontoSatirHtml,
     pb,
@@ -612,7 +612,6 @@ function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
       <p style="margin:0;">Teklifimizin geçerlilik süresi 30 gündür.</p>
       <p style="margin:0;">“*” işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025'e göre akreditasyon kapsamımızda yer almaktadır.</p>
       <p style="margin:0;">Numune gönderimi kargo ile yapıldığında, kargo ücreti göndericiye aittir.</p>
-      <p style="margin:0;">Fiyat teklifimizi ıslak imzalı olarak, mail üzerinden veya numune gönderimi sağlayarak onayladığınızı beyan edebilirsiniz.</p>
       ${notlar ? `<p style="margin:10px 0 0;font-weight:600;">${escHtml(notlar)}</p>` : ""}
     </div>
     <div style="margin-top:34px;text-align:right;">
@@ -659,6 +658,17 @@ function fmtPb(pb: string | null | undefined) {
   if (!v) return "TL";
   if (v === "₺" || v.toUpperCase() === "TRY" || v.toUpperCase() === "TL") return "TL";
   return v;
+}
+
+function cleanOfferNotes(notes: string | null | undefined): string {
+  const value = String(notes ?? "").trim();
+  if (!value) return "";
+
+  const defaultText = "Fiyat teklifimiz";
+  if (value === defaultText) return "";
+  if (value.startsWith(`${defaultText}\n\n`)) return value.slice(defaultText.length).trim();
+
+  return value;
 }
 
 function fmt(n: unknown) {

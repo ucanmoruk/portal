@@ -2,8 +2,16 @@ import { Fragment } from "react";
 import { JetBrains_Mono } from "next/font/google";
 import OnayToolbar from "../OnayToolbar";
 import type { ReportFormatProps } from "../reportTypes";
-import { TableBody } from "@/components/ui/table";
 import { disRaporLabel } from "@/lib/disKod";
+
+type ResultDisplayRow =
+  | { kind: "main"; serviceIndex: number; service: ReportFormatProps["hizmetler"][number] }
+  | {
+      kind: "alt";
+      serviceIndex: number;
+      altIndex: number;
+      alt: NonNullable<ReportFormatProps["hizmetler"][number]["altParametreler"]>[number];
+    };
 
 const jetbrains = JetBrains_Mono({
   subsets: ["latin", "latin-ext"],
@@ -89,6 +97,22 @@ export default function GenelReport({
     (header.Aciklamalar ?? "").trim() ||
     "Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir.";
   const aciklamaSatirlar = aciklamaText.split(/\r?\n/);
+  const documentCode = docKodu || "Ek-1.PR.20/Rev.02/12.06.2026";
+
+  const resultRows: ResultDisplayRow[] = hizmetler.flatMap((h, serviceIndex) => {
+    const rows: ResultDisplayRow[] = [{ kind: "main", serviceIndex, service: h }];
+    for (const [altIndex, alt] of (h.altParametreler || []).entries()) {
+      rows.push({ kind: "alt", serviceIndex, altIndex, alt });
+    }
+    return rows;
+  });
+  const shouldSplitResults = !editing && resultRows.length > 13;
+  const firstPageResultCount = shouldSplitResults
+    ? Math.min(Math.ceil(resultRows.length / 2), 10)
+    : resultRows.length;
+  const firstPageRows = resultRows.slice(0, firstPageResultCount);
+  const continuationRows = shouldSplitResults ? resultRows.slice(firstPageResultCount) : [];
+  const totalReportPages = continuationRows.length > 0 ? 2 : 1;
 
   // Düzenleme modu yardımcıları — `edit` yoksa hepsi no-op, metin olduğu gibi basılır.
   const editText = (
@@ -103,6 +127,130 @@ export default function GenelReport({
       onChange={(e) => onChange(e.target.value)}
       style={opts?.center ? { textAlign: "center" } : undefined}
     />
+  );
+
+  const renderResultRows = (rows: ResultDisplayRow[]) => {
+    if (hizmetler.length === 0) {
+      return (
+        <tr>
+          <td colSpan={editing ? 9 : 8} style={{ textAlign: "center", color: "#6e6e73", padding: "30px" }}>
+            {editing ? "Henüz satır yok — aşağıdan “Satır Ekle” ile ekleyin." : "Bu rapor formatına ait hizmet bulunamadı."}
+          </td>
+        </tr>
+      );
+    }
+
+    return rows.map((row) => {
+      if (row.kind === "alt") {
+        const adeg = degerlendirmeLabel(row.alt.Degerlendirme || null);
+        return (
+          <tr key={`${row.serviceIndex}-alt-${row.altIndex}`} className="alt-param-row">
+            <td style={{ paddingLeft: 18, paddingRight: 10 }}>↳ {row.alt.BilesenAdi || "-"}</td>
+            <td className="center">{row.alt.Birim || "-"}</td>
+            <td className="center">{row.alt.Sonuc || "-"}</td>
+            <td className="center" style={{ paddingLeft: 5 }}>{row.alt.LOQ || "-"}</td>
+            <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
+            <td className="center" style={{ paddingLeft: 5 }}>-</td>
+            <td className="center">{row.alt.Limit || "-"}</td>
+            <td className={adeg.cls} style={{ textAlign: "center" }}>{row.alt.Degerlendirme ? adeg.text : "-"}</td>
+            {editing && <td />}
+          </tr>
+        );
+      }
+
+      const h = row.service;
+      const i = row.serviceIndex;
+      const isAkr = String(h.Akreditasyon || "").trim().toLowerCase() === "var";
+      const deg = degerlendirmeLabel(h.Degerlendirme);
+      return (
+        <tr key={`${i}-main`}>
+          <td style={{ paddingRight: 10 }}>
+            {edit
+              ? editText(h.Ad || "", (v) => edit.onRowChange(i, { Ad: v }), { placeholder: "Analiz adı" })
+              : <>{isAkr ? "*" : ""}{h.Ad}</>}
+          </td>
+          <td className="center">{edit ? editText(h.Birim || "", (v) => edit.onRowChange(i, { Birim: v }), { center: true }) : (h.Birim || "-")}</td>
+          <td className="center">{edit ? editText(h.Sonuc || "", (v) => edit.onRowChange(i, { Sonuc: v }), { center: true }) : (h.Sonuc || "-")}</td>
+          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.LOQ || "", (v) => edit.onRowChange(i, { LOQ: v }), { center: true }) : (h.LOQ || "-")}</td>
+          <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
+          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.Metot || "", (v) => edit.onRowChange(i, { Metot: v }), { center: true }) : (h.Metot || "-")}</td>
+          <td className="center">{edit ? editText(h.LimitDeger || "", (v) => edit.onRowChange(i, { LimitDeger: v }), { center: true }) : (h.LimitDeger || "-")}</td>
+          {edit ? (
+            <td style={{ textAlign: "center" }}>
+              <select
+                className="rd-edit"
+                value={h.Degerlendirme || ""}
+                onChange={(e) => edit.onRowChange(i, { Degerlendirme: e.target.value })}
+                style={{ textAlign: "center" }}
+              >
+                <option value="">-</option>
+                <option value="Uygun">Uygun</option>
+                <option value="Uygun Değil">Uygun Değil</option>
+                <option value="D.Y.">D.Y.</option>
+              </select>
+            </td>
+          ) : (
+            <td className={deg.cls} style={{ textAlign: "center" }}>{deg.text}</td>
+          )}
+          {editing && (
+            <td style={{ textAlign: "center" }}>
+              <button type="button" className="rd-row-act" title="Satırı sil" onClick={() => edit?.onRemoveRow(i)}>✕</button>
+            </td>
+          )}
+        </tr>
+      );
+    });
+  };
+
+  const renderResultsTable = (rows: ResultDisplayRow[], opts?: { continued?: boolean }) => {
+    const parentContext =
+      opts?.continued && rows[0]?.kind === "alt"
+        ? hizmetler[rows[0].serviceIndex]?.Ad
+        : "";
+
+    return (
+      <table className="results">
+        <thead>
+          <tr>
+            <th style={{ width: "auto" }}>Analiz Adı</th>
+            <th style={{ width: 50 }}>Birim</th>
+            <th style={{ width: 110 }}>Sonuç</th>
+            <th style={{ width: 50, paddingLeft: 5 }}>LOQ</th>
+            <th style={{ width: 50, paddingLeft: 5 }}>Ö.B.</th>
+            <th style={{ width: 110, paddingLeft: 5 }}>Metot</th>
+            <th style={{ width: 70 }}>Limit</th>
+            <th style={{ width: 100, textAlign: "center" }}>Değerlendirme</th>
+            {editing && <th style={{ width: 40 }}></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {parentContext && (
+            <tr className="continued-parent-row">
+              <td colSpan={editing ? 9 : 8}>{parentContext} (devam)</td>
+            </tr>
+          )}
+          {renderResultRows(rows)}
+        </tbody>
+      </table>
+    );
+  };
+
+  const renderDocumentFooter = (page: number) => (
+    <div className="rapor-altbilgi">
+      <div className="sirket-bilgisi">
+        <strong>UNIQUE ANALİZ BELGELENDİRME ve GÖZETİM HİZMETLERİ LTD. ŞTİ.</strong><br />
+        Atatürk Mah. Hadımköy Yolu Cad. No:10 İç Kapı No:7 Esenyurt / İstanbul | info@uniqueanalyse.com
+      </div>
+
+      <div className="dokuman-bilgisi">
+        <div className="sol-alt">
+          {documentCode}
+        </div>
+        <div className="sag-alt">
+          Sayfa: {page} / {totalReportPages}
+        </div>
+      </div>
+    </div>
   );
 
   return (
@@ -145,6 +293,9 @@ export default function GenelReport({
           box-shadow: 0 4px 24px rgba(0,0,0,0.08);
           display: flex;
           flex-direction: column;
+        }
+        .page + .page {
+          margin-top: 24px;
         }
 
         /* ───── HEADER ───── */
@@ -251,6 +402,9 @@ export default function GenelReport({
         .results-section {
           margin-top: 5mm;
         }
+        .results-section.continued {
+          margin-top: 8mm;
+        }
         .results-title {
           color: var(--ink-strong);
           font-size: 11.5px;
@@ -306,6 +460,14 @@ export default function GenelReport({
           padding-top: 3px;
           padding-bottom: 3px;
           border-bottom: 1px dotted var(--rule-soft);
+        }
+        .results tbody tr.continued-parent-row td {
+          font-size: 9px;
+          font-weight: 700;
+          color: var(--ink-strong);
+          background: #f7f7f7;
+          padding: 5px 8px;
+          border-bottom: 1px solid var(--rule-soft);
         }
         .deg-gecer { color: var(--ink-strong); font-weight: 700; text-align: center; letter-spacing: 0.02em; }
         .deg-kaldi { color: var(--ink-strong); font-weight: 700; text-align: center; letter-spacing: 0.02em; }
@@ -421,6 +583,28 @@ export default function GenelReport({
           letter-spacing: 0.04em;
           text-align: center;
         }
+        .continuation-summary {
+          border-bottom: 2px solid var(--rule);
+          padding-bottom: 4mm;
+          font-size: 9.5px;
+          line-height: 1.55;
+          color: var(--ink);
+        }
+        .continuation-summary-title {
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--ink-strong);
+          margin-bottom: 1.5mm;
+        }
+        .continuation-summary-row {
+          display: grid;
+          grid-template-columns: 24mm 1fr;
+          gap: 4mm;
+        }
+        .continuation-summary-label {
+          font-weight: 700;
+          color: var(--ink-strong);
+        }
 
         /* ───── ALT BİLGİ (genel kapsayıcı) ───── */
         .rapor-altbilgi {
@@ -491,19 +675,22 @@ export default function GenelReport({
         @media print {
           body { background: #fff; }
           .onay-toolbar { display: none !important; }
-          /* TEK SAYFA garantisi: min-height yerine SABIT height + overflow:hidden.
-             rapor-altbilgi (firma adı/Sayfa No) doğal akışta sayfa sonuna gelir;
-             içerik 297mm'i aşarsa ikinci sayfa yerine kırpılır. */
           .page {
             width: 210mm; max-width: 210mm;
             height: 297mm; min-height: 297mm; max-height: 297mm;
             margin: 0 auto; box-shadow: none;
             padding: 8mm;
             overflow: hidden;
-            page-break-after: avoid;
+            page-break-after: always;
+            break-after: page;
             page-break-inside: avoid;
+            break-inside: avoid;
           }
-          html, body { height: 297mm; overflow: hidden; }
+          .page:last-child {
+            page-break-after: auto;
+            break-after: auto;
+          }
+          html, body { min-height: 297mm; overflow: visible; }
         }
       `}</style>
 
@@ -615,92 +802,7 @@ export default function GenelReport({
           <div className="results-section" style={{ marginTop: 30 }}>
             <div className="results-title">TEST SONUÇLARI</div>
             <div className="notlar-body"> </div>
-            <table className="results">
-              <thead>
-                <tr>
-                  <th style={{ width: "auto"}}>Analiz Adı</th>
-                  <th style={{ width: 50 }}>Birim</th>
-                  <th style={{ width: 110 }}>Sonuç</th>
-                  <th style={{ width: 50 ,paddingLeft: 5}}>LOQ</th>
-                  <th style={{ width: 50 ,paddingLeft: 5}}>Ö.B.</th>
-                  <th style={{ width: 110 ,paddingLeft: 5}}>Metot</th>
-                  <th style={{ width: 70 }}>Limit</th>
-                  <th style={{ width: 100, textAlign: "center" }}>Değerlendirme</th>
-                  {editing && <th style={{ width: 40 }}></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {hizmetler.length === 0 ? (
-                  <tr>
-                    <td colSpan={editing ? 9 : 8} style={{ textAlign: "center", color: "#6e6e73", padding: "30px" }}>
-                      {editing ? "Henüz satır yok — aşağıdan “Satır Ekle” ile ekleyin." : "Bu rapor formatına ait hizmet bulunamadı."}
-                    </td>
-                  </tr>
-                ) : (
-                  hizmetler.map((h, i) => {
-                    const isAkr = String(h.Akreditasyon || "").trim().toLowerCase() === "var";
-                    const deg = degerlendirmeLabel(h.Degerlendirme);
-                    const alt = h.altParametreler || [];
-                    return (
-                      <Fragment key={i}>
-                        <tr>
-                          <td style={{paddingRight:10 }}>
-                            {edit
-                              ? editText(h.Ad || "", (v) => edit.onRowChange(i, { Ad: v }), { placeholder: "Analiz adı" })
-                              : <>{isAkr ? "*" : ""}{h.Ad}</>}
-                          </td>
-                          <td className="center">{edit ? editText(h.Birim || "", (v) => edit.onRowChange(i, { Birim: v }), { center: true }) : (h.Birim || "-")}</td>
-                          <td className="center">{edit ? editText(h.Sonuc || "", (v) => edit.onRowChange(i, { Sonuc: v }), { center: true }) : (h.Sonuc || "-")}</td>
-                          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.LOQ || "", (v) => edit.onRowChange(i, { LOQ: v }), { center: true }) : (h.LOQ || "-")}</td>
-                          <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
-                          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.Metot || "", (v) => edit.onRowChange(i, { Metot: v }), { center: true }) : (h.Metot || "-")}</td>
-                          <td className="center">{edit ? editText(h.LimitDeger || "", (v) => edit.onRowChange(i, { LimitDeger: v }), { center: true }) : (h.LimitDeger || "-")}</td>
-                          {edit ? (
-                            <td style={{ textAlign: "center" }}>
-                              <select
-                                className="rd-edit"
-                                value={h.Degerlendirme || ""}
-                                onChange={(e) => edit.onRowChange(i, { Degerlendirme: e.target.value })}
-                                style={{ textAlign: "center" }}
-                              >
-                                <option value="">-</option>
-                                <option value="Uygun">Uygun</option>
-                                <option value="Uygun Değil">Uygun Değil</option>
-                                <option value="D.Y.">D.Y.</option>
-                              </select>
-                            </td>
-                          ) : (
-                            <td className={deg.cls} style={{textAlign:"center"}}>{deg.text}</td>
-                          )}
-                          {editing && (
-                            <td style={{ textAlign: "center" }}>
-                              <button type="button" className="rd-row-act" title="Satırı sil" onClick={() => edit?.onRemoveRow(i)}>✕</button>
-                            </td>
-                          )}
-                        </tr>
-                        {/* Alt parametreler — ana analizin altında, girintili bileşen satırları */}
-                        {alt.map((ap, j) => {
-                          const adeg = degerlendirmeLabel(ap.Degerlendirme || null);
-                          return (
-                            <tr key={`${i}-alt-${j}`} className="alt-param-row">
-                              <td style={{ paddingLeft: 18, paddingRight: 10 }}>↳ {ap.BilesenAdi || "-"}</td>
-                              <td className="center">{ap.Birim || "-"}</td>
-                              <td className="center">{ap.Sonuc || "-"}</td>
-                              <td className="center" style={{ paddingLeft: 5 }}>{ap.LOQ || "-"}</td>
-                              <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
-                              <td className="center" style={{ paddingLeft: 5 }}>-</td>
-                              <td className="center">{ap.Limit || "-"}</td>
-                              <td className={adeg.cls} style={{ textAlign: "center" }}>{ap.Degerlendirme ? adeg.text : "-"}</td>
-                              {editing && <td />}
-                            </tr>
-                          );
-                        })}
-                      </Fragment>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+            {renderResultsTable(firstPageRows)}
             {edit && (
               <button type="button" className="rd-add-btn" onClick={() => edit.onAddRow()}>+ Satır Ekle</button>
             )}
@@ -803,26 +905,35 @@ export default function GenelReport({
              <div style={{marginTop:"10px"}}></div>
        
 
-<div className="rapor-altbilgi">
-  <div className="sirket-bilgisi">
-    <strong>UNIQUE ANALİZ BELGELENDİRME ve GÖZETİM HİZMETLERİ LTD. ŞTİ.</strong><br></br>
-    Atatürk Mah. Hadımköy Yolu Cad. No:10 İç Kapı No:7 Esenyurt / İstanbul | info@uniqueanalyse.com
-  </div>
-
-  <div className="dokuman-bilgisi">
-    <div className="sol-alt">
-      Ek-1.PR.20/Rev.02/12.06.2026
-    </div>
-    <div className="sag-alt">
-      Sayfa: 1 / 1
-    </div>
-  </div>
-</div>
+          {renderDocumentFooter(1)}
 
 
 
 
         </div>
+        {continuationRows.length > 0 && (
+          <div className="page continuation-page">
+            <div className="continuation-summary">
+              <div className="continuation-summary-title">MÜŞTERİ BİLGİLERİ</div>
+              <div className="continuation-summary-row">
+                <div className="continuation-summary-label">Firma Adı:</div>
+                <div>{header.FirmaAd || "—"}</div>
+              </div>
+              <div className="continuation-summary-row">
+                <div className="continuation-summary-label">Adres:</div>
+                <div>{header.FirmaAdres || "—"}</div>
+              </div>
+            </div>
+
+            <div className="results-section continued">
+              <div className="results-title">TEST SONUÇLARI (DEVAM)</div>
+              {renderResultsTable(continuationRows, { continued: true })}
+            </div>
+
+            <div style={{ marginTop: "auto" }} />
+            {renderDocumentFooter(2)}
+          </div>
+        )}
       </div>
     </>
   );

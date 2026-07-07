@@ -58,6 +58,23 @@ function fmt(n: unknown) {
   return num.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function numOrNull(n: unknown): number | null {
+  if (n == null || String(n).trim() === "") return null;
+  const num = Number.parseFloat(String(n));
+  return Number.isFinite(num) ? num : null;
+}
+
+function cleanOfferNotes(notes: string | null | undefined): string {
+  const value = String(notes ?? "").trim();
+  if (!value) return "";
+
+  const defaultText = "Fiyat teklifimiz";
+  if (value === defaultText) return "";
+  if (value.startsWith(`${defaultText}\n\n`)) return value.slice(defaultText.length).trim();
+
+  return value;
+}
+
 // JetBrains Mono'da ₺ glyph'i yok → "₺"/"TRY" ise "TL" göster.
 function fmtPb(pb: string | null | undefined) {
   const v = String(pb ?? "").trim();
@@ -93,6 +110,7 @@ export default function TeklifPrintDocument({
   tlEquivalentNote?: string | null;
 }) {
   const noLabel = h.DisTeklifKodu ? disLabel(h.DisTeklifKodu, h.RevNo) : teklifLabel(h.TeklifNo, h.RevNo);
+  const offerNotes = cleanOfferNotes(h.Notlar);
 
   // ── Hesaplamalar ──
   const kdvOran = Number.parseInt(String(h.KdvOran ?? ""), 10) || 20;
@@ -100,7 +118,7 @@ export default function TeklifPrintDocument({
   let araToplam = 0;
   for (const s of satirlar) {
     const adet = Number.parseInt(String(s.Adet ?? ""), 10) || 1;
-    const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
+    const fiyat = numOrNull(s.Fiyat) ?? 0;
     const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
     araToplam += adet * fiyat * (1 - iskonto / 100);
   }
@@ -378,9 +396,9 @@ export default function TeklifPrintDocument({
             <tbody>
               {satirlar.map((s, i) => {
                 const adet = Number.parseInt(String(s.Adet ?? ""), 10) || 1;
-                const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
+                const fiyat = numOrNull(s.Fiyat);
                 const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
-                const net = adet * fiyat * (1 - iskonto / 100);
+                const net = fiyat == null ? null : adet * fiyat * (1 - iskonto / 100);
                 const akr = String(s.Akreditasyon || "").trim().toLowerCase() === "var" ? "*" : "";
                 const adi = `${akr}${s.HizmetAdi || ""}${s.Metot ? ` / ${s.Metot}` : ""}`;
                 return (
@@ -389,12 +407,12 @@ export default function TeklifPrintDocument({
                     <td>{adi}</td>
                     <td className="center">{adet}</td>
                     <td className="right">
-                      {fiyat > 0
+                      {fiyat != null
                         ? <>{fmt(fiyat)} {fmtPb(s.ParaBirimi || pb)}{iskonto > 0 ? ` (-%${iskonto})` : ""}</>
                         : "—"}
                     </td>
                     <td className="right">
-                      {net > 0 ? <>{fmt(net)} {fmtPb(s.ParaBirimi || pb)}</> : "—"}
+                      {net != null ? <>{fmt(net)} {fmtPb(s.ParaBirimi || pb)}</> : "—"}
                     </td>
                   </tr>
                 );
@@ -443,11 +461,10 @@ export default function TeklifPrintDocument({
             <p>Teklifimizin geçerlilik süresi 30 gündür.</p>
             <p>&ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akreditasyon kapsamımızda yer almaktadır.</p>
             <p>Numune gönderimi kargo ile yapıldığında, kargo ücreti göndericiye aittir.</p>
-            <p>Fiyat teklifimizi ıslak imzalı olarak, mail üzerinden veya numune gönderimi sağlayarak onayladığınızı beyan edebilirsiniz.</p>
             <p>Yapılacak analizlere ve hizmetlere ait ücretler, müşteri tarafından peşin olarak ödenir. Rapor, ödeme yapıldıktan sonra müşteriye gönderilir. Ödemenin yapılmaması halinde, {sirketAdi} ödeme yapılıncaya kadar analiz hizmetlerine başlamama veya analiz raporunu müşteriye iletmeme hakkına sahiptir.</p>
             <p>İkinci dilde rapor ve/veya eksik bilgi sebebi ile revize rapor ücreti 10,00 $ + KDV şeklindedir.</p>
             <p>İşbu teklifi onaylayarak {sirketAdi} tarafından verilecek olan hizmetlerin, bu formun bütün sayfalarında yer alan şartlara uygun olarak gerçekleştirilmesini ve bu hizmetler karşılığında uygulanacak fiyat ve ödeme koşullarını gayri kabili rücu olarak kabul ettiğimizi beyan ve taahhüt ederiz.</p>
-            {h.Notlar && <p style={{ marginTop: "3mm", fontWeight: 600 }}>{h.Notlar}</p>}
+            {offerNotes && <p style={{ marginTop: "3mm", fontWeight: 600 }}>{offerNotes}</p>}
           </div>
           <br />
           <br />

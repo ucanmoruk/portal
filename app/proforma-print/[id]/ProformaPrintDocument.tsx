@@ -62,6 +62,12 @@ function fmt(n: unknown) {
   return num.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function numOrNull(n: unknown): number | null {
+  if (n == null || String(n).trim() === "") return null;
+  const num = Number.parseFloat(String(n));
+  return Number.isFinite(num) ? num : null;
+}
+
 // JetBrains Mono'da ₺ glyph'i yok → "₺"/"TRY" ise "TL" göster.
 function fmtPb(pb: string | null | undefined) {
   const v = String(pb ?? "").trim();
@@ -97,7 +103,7 @@ export default function ProformaPrintDocument({
   let araToplam = 0;
   for (const s of satirlar) {
     const adet = Number.parseFloat(String(s.Adet ?? "")) || 1;
-    const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
+    const fiyat = numOrNull(s.Fiyat) ?? 0;
     const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
     araToplam += adet * fiyat * (1 - iskonto / 100);
   }
@@ -291,9 +297,9 @@ export default function ProformaPrintDocument({
             <tbody>
               {satirlar.map((s, i) => {
                 const adet = Number.parseFloat(String(s.Adet ?? "")) || 1;
-                const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
+                const fiyat = numOrNull(s.Fiyat);
                 const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
-                const net = adet * fiyat * (1 - iskonto / 100);
+                const net = fiyat == null ? null : adet * fiyat * (1 - iskonto / 100);
                 const sub = (s.Notlar || "").trim();
                 return (
                   <tr key={i}>
@@ -303,12 +309,12 @@ export default function ProformaPrintDocument({
                     </td>
                     <td className="center">{adet}</td>
                     <td className="right">
-                      {fiyat > 0
+                      {fiyat != null
                         ? <>{fmt(fiyat)} {fmtPb(s.ParaBirimi || pb)}{iskonto > 0 ? ` (-%${iskonto})` : ""}</>
                         : "—"}
                     </td>
                     <td className="right">
-                      {net > 0 ? <>{fmt(net)} {fmtPb(s.ParaBirimi || pb)}</> : "—"}
+                      {net != null ? <>{fmt(net)} {fmtPb(s.ParaBirimi || pb)}</> : "—"}
                     </td>
                   </tr>
                 );

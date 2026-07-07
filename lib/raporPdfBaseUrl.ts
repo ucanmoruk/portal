@@ -15,16 +15,7 @@ function requestHeader(request: Request, name: string): string {
   return request.headers.get(name) || "";
 }
 
-export function getRaporPdfBaseUrl(request: Request): string {
-  loadDotenvOnce();
-
-  const configured = cleanBaseUrl(
-    process.env.RAPOR_PDF_BASE_URL ||
-      process.env.NEXTAUTH_URL ||
-      process.env.NEXT_PUBLIC_APP_URL,
-  );
-  if (configured) return configured;
-
+function baseUrlFromRequest(request: Request): string {
   const forwardedHost = requestHeader(request, "x-forwarded-host");
   const host = forwardedHost || requestHeader(request, "host");
   if (host) {
@@ -34,4 +25,16 @@ export function getRaporPdfBaseUrl(request: Request): string {
   }
 
   return cleanBaseUrl(request.url) || new URL(request.url).origin;
+}
+
+export function getRaporPdfBaseUrl(request: Request): string {
+  loadDotenvOnce();
+
+  const explicitPdfBase = cleanBaseUrl(process.env.RAPOR_PDF_BASE_URL);
+  if (explicitPdfBase) return explicitPdfBase;
+
+  const requestBase = baseUrlFromRequest(request);
+  if (requestBase) return requestBase;
+
+  return cleanBaseUrl(process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL);
 }
