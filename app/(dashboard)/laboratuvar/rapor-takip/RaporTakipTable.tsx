@@ -56,6 +56,12 @@ interface LocalEdit {
 // Accordion için benzersiz anahtar
 const rowKey = (r: RaporRow) => `${r.NkrID}__${r.RaporFormati}`;
 const isUgdrFormat = (format: string) => ["ÜGDR", "UGDR", "ÜGD", "UGD"].includes(format.toLocaleUpperCase("tr-TR"));
+const englishPreviewFormat = (format: string): string | null => {
+  const normalized = format.toLocaleUpperCase("tr-TR");
+  if (normalized === "GENEL") return "GenelEn";
+  if (normalized === "CHALLENGE") return "ChallengeEn";
+  return null;
+};
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 
 async function readApiJson<T>(res: Response, fallback: string): Promise<T> {
@@ -117,13 +123,17 @@ function DurumBadge({
 
 // Dermatoloji eski adı → Claim olarak göster (geri uyumluluk)
 function displayFormat(format: string): string {
+  if (format === "GenelEn") return "Genel EN";
+  if (format === "ChallengeEn") return "Challenge EN";
   return format === "Dermatoloji" ? "Claim" : format;
 }
 
 function FormatBadge({ format }: { format: string }) {
   const colors: Record<string, { bg: string; fg: string }> = {
     "Genel":     { bg: "#0071e318", fg: "#0055a8" },
+    "GenelEn":   { bg: "#0071e318", fg: "#0055a8" },
     "Challenge": { bg: "#bf5af218", fg: "#8944ab" },
+    "ChallengeEn": { bg: "#bf5af218", fg: "#8944ab" },
     "Mikrobiyoloji": { bg: "#34c75918", fg: "#248a3d" },
     "Kimya":     { bg: "#ff950018", fg: "#c06800" },
     "Stabilite": { bg: "#ff950018", fg: "#c06800" },
@@ -1198,21 +1208,35 @@ export default function RaporTakipTable({
 
                 {/* 2. Slot: PDF Önizleme (göz) — onay sayfasını yeni sekmede aç.
                     Sadece Approval'da görünür. Lab + Returned'da gizli. */}
-                <div style={{ display: "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
+                <div style={{ display: "flex", justifyContent: "center", gap: 6 }} onClick={e => e.stopPropagation()}>
                   {phase === "approval" ? (
-                    <IconBtn
-                      title="PDF Önizleme — rapor formatı (yeni sekmede)"
-                      color="#bf5af2"
-                      onClick={() => window.open(
-                        `/rapor-onay-print/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}`,
-                        "_blank", "noopener,noreferrer",
+                    <>
+                      <IconBtn
+                        title="PDF Önizleme — rapor formatı (yeni sekmede)"
+                        color="#bf5af2"
+                        onClick={() => window.open(
+                          `/rapor-onay-print/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}`,
+                          "_blank", "noopener,noreferrer",
+                        )}
+                      >
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+                          <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+                          <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" clipRule="evenodd" />
+                        </svg>
+                      </IconBtn>
+                      {englishPreviewFormat(row.RaporFormati) && (
+                        <IconBtn
+                          title="İngilizce rapor önizleme"
+                          color="#0071e3"
+                          onClick={() => window.open(
+                            `/rapor-onay-print/${row.NkrID}?format=${englishPreviewFormat(row.RaporFormati)}`,
+                            "_blank", "noopener,noreferrer",
+                          )}
+                        >
+                          EN
+                        </IconBtn>
                       )}
-                    >
-                      <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
-                        <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
-                        <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" clipRule="evenodd" />
-                      </svg>
-                    </IconBtn>
+                    </>
                   ) : (
                     !acceptedOnly && (
                       <IconBtn

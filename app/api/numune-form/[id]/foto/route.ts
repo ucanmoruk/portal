@@ -4,6 +4,7 @@ import { cosmoPool } from "@/lib/db";
 import sql from "mssql";
 import { createPool } from "@vercel/postgres";
 import { isNumuneFtpConfigured, uploadNumuneFotoToFtp } from "@/lib/numuneFotoUpload";
+import { getNkrEditLock } from "@/lib/nkrEditLock";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const usesPostgresCompat = () => Boolean(process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL);
@@ -113,6 +114,18 @@ export async function POST(
   if (!nkrId) return Response.json({ error: "Geçersiz ID" }, { status: 400 });
 
   try {
+    const pool = await cosmoPool;
+    const editLock = await getNkrEditLock(pool, nkrId);
+    if (editLock.locked) {
+      return Response.json(
+        {
+          error: `Bu numune ${editLock.raporFormati || "rapor"} formatında ${editLock.durum || "onaylı"} olduğu için fotoğraf değiştirilemez. Değişiklik için raporu revize edin.`,
+          editLock,
+        },
+        { status: 409 },
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("file");
     if (!file || !(file instanceof Blob)) {
@@ -135,7 +148,6 @@ export async function POST(
     if (usesPostgresCompat()) await ensurePgFotoTable();
     else await ensureFotografBinaryColumns();
 
-    const pool = await cosmoPool;
     const raporRes = await pool.request().input("id", nkrId).query("SELECT RaporNo FROM NKR WHERE ID = @id");
     const raporNo = String(raporRes.recordset[0]?.RaporNo ?? nkrId);
 

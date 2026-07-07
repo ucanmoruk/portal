@@ -3,6 +3,7 @@ import { JetBrains_Mono } from "next/font/google";
 import OnayToolbar from "../OnayToolbar";
 import type { ReportFormatProps } from "../reportTypes";
 import { disRaporLabel } from "@/lib/disKod";
+import { isEnglishFormat, translateReportUnit } from "./reportLocale";
 
 type ResultDisplayRow =
   | { kind: "main"; serviceIndex: number; service: ReportFormatProps["hizmetler"][number] }
@@ -36,13 +37,23 @@ function toMMYY(s: string): string {
 }
 
 // Test sonucu değerlendirme metnine göre etiket
-function degerlendirmeLabel(d: string | null): { text: string; cls: string } {
+function degerlendirmeLabel(d: string | null, english = false): { text: string; cls: string } {
   if (!d || !d.trim()) return { text: "—", cls: "deg-other" };
   const v = d.trim();
+  if (english) {
+    if (v === "Pass" || v === "Uygun") return { text: "PASS", cls: "deg-gecer" };
+    if (v === "Fail" || v === "Uygun Değil") return { text: "FAIL", cls: "deg-kaldi" };
+    if (v === "N/A" || v === "D.Y." || v === "Değerlendirilemez") return { text: "N/A", cls: "deg-other" };
+    return { text: v, cls: "deg-other" };
+  }
   if (v === "Uygun") return { text: "UYGUN", cls: "deg-gecer" };
   if (v === "Uygun Değil") return { text: "UYGUN DEĞİL", cls: "deg-kaldi" };
   if (v === "Değerlendirilemez" || v === "D.Y.") return { text: "D.Y.", cls: "deg-other" };
   return { text: v, cls: "deg-other" };
+}
+
+function nonEmpty(value: unknown): string {
+  return String(value ?? "").trim();
 }
 
 export default function GenelReport({
@@ -59,6 +70,94 @@ export default function GenelReport({
   hideToolbar,
 }: ReportFormatProps) {
   const editing = Boolean(edit);
+  const isEnglish = isEnglishFormat(nonEmpty(format));
+  const text = isEnglish
+    ? {
+        reportTitle: "TEST REPORT",
+        reportNo: "Report No - Rev. No:",
+        acceptanceDate: "Sample Acceptance Date:",
+        issueDate: "Report Issue Date:",
+        customerInfo: "CUSTOMER INFORMATION",
+        sampleInfo: "SAMPLE INFORMATION",
+        quantity: "Quantity:",
+        productionDate: "Production Date:",
+        expiryDate: "Expiry Date:",
+        lotNo: "Serial/Lot No/Product Code:",
+        testResults: "TEST RESULTS",
+        testResultsContinued: "TEST RESULTS (CONTINUED)",
+        analysisName: "Analysis Name",
+        unit: "Unit",
+        result: "Result",
+        uncertainty: "M.U.",
+        method: "Method",
+        limit: "Limit",
+        assessment: "Assessment",
+        emptyRows: "No services were found for this report format.",
+        addRow: "+ Add Row",
+        notes: "EXPLANATIONS",
+        period: "Analysis Period:",
+        revisionNote: "Revision Note:",
+        end: "* End of Report *",
+        preparedBy: "Prepared By",
+        approvedBy: "Approved By",
+        signed: "E-Signed",
+        reporter: "Reporter",
+        manager: "Laboratory Manager",
+        page: "Page",
+        continued: "continued",
+        qrAlt: "Report Verification QR Code",
+        qrTitle: "Report verification",
+        codeTitle: "Verification Code - this code is used for manual verification",
+        defaultExplanation: "Test results were evaluated according to customer specification.",
+        editPlaceholder: "Explanation text - if left blank, the default sentence is used.",
+        footerNote:
+          "\"*\" marked analyses are accredited by TURKAK according to TS EN ISO/IEC 17025. Sampling was not performed by our laboratory. Test Reports without signature and seal are invalid. This Analysis Report may not be partially copied, reproduced or used for any other purpose without the written permission of " +
+          meta.sirketAdi +
+          ". Test results are valid for the sample specified above and may not represent the lot to which the sample belongs. Descriptive information in the test report that affects the validity of the results was declared by the customer. Our laboratory is not responsible for the accuracy of this information or any losses/legal obligations arising from its use. Decision Rule: The customer requested that the conformity statement be given without including measurement uncertainty. For microbiological analyses, the decision rule for conformity assessment is applied without considering measurement uncertainty.",
+      }
+    : {
+        reportTitle: "DENEY RAPORU",
+        reportNo: "Rapor No - Rev. No:",
+        acceptanceDate: "Numune Kabul Tarihi:",
+        issueDate: "Rapor Yayın Tarihi:",
+        customerInfo: "MÜŞTERİ BİLGİLERİ",
+        sampleInfo: "NUMUNE BİLGİLERİ",
+        quantity: "Miktar:",
+        productionDate: "Üretim Tarihi:",
+        expiryDate: "Son Kullanım Tarihi:",
+        lotNo: "Seri/Lot No/Ürün Kodu:",
+        testResults: "TEST SONUÇLARI",
+        testResultsContinued: "TEST SONUÇLARI (DEVAM)",
+        analysisName: "Analiz Adı",
+        unit: "Birim",
+        result: "Sonuç",
+        uncertainty: "Ö.B.",
+        method: "Metot",
+        limit: "Limit",
+        assessment: "Değerlendirme",
+        emptyRows: "Bu rapor formatına ait hizmet bulunamadı.",
+        addRow: "+ Satır Ekle",
+        notes: "AÇIKLAMALAR",
+        period: "Analiz Periyodu:",
+        revisionNote: "Revizyon Açıklaması:",
+        end: "* Rapor Sonu *",
+        preparedBy: "Raporu Hazırlayan",
+        approvedBy: "Onaylayan",
+        signed: "E-İmzalıdır",
+        reporter: "Raportör",
+        manager: "Laboratuvar Müdürü",
+        page: "Sayfa",
+        continued: "devam",
+        qrAlt: "Rapor Doğrulama Karekodu",
+        qrTitle: "Rapor doğrulama",
+        codeTitle: "Doğrulama Kodu — manuel doğrulamada bu kod kullanılır",
+        defaultExplanation: "Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir.",
+        editPlaceholder: "Açıklama metni — boş bırakılırsa varsayılan cümle kullanılır.",
+        footerNote:
+          "“*” işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025'e göre akredite kapsamımızda yer almaktadır.Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Deney Raporları geçersizdir. " +
+          meta.sirketAdi +
+          "'nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya herhangi bir başka amaçla kullanılamaz.Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal zorunluluklardan laboratuvarımız sorumlu değildir. Karar Kuralı: Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır.",
+      };
   const {
     revNo,
     revizeNot,
@@ -95,7 +194,7 @@ export default function GenelReport({
   // Girilmemişse varsayılan cümleye düşer. Satır sonları korunur.
   const aciklamaText =
     (header.Aciklamalar ?? "").trim() ||
-    "Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir.";
+    text.defaultExplanation;
   const aciklamaSatirlar = aciklamaText.split(/\r?\n/);
   const documentCode = docKodu || "Ek-1.PR.20/Rev.02/12.06.2026";
 
@@ -134,7 +233,7 @@ export default function GenelReport({
       return (
         <tr>
           <td colSpan={editing ? 9 : 8} style={{ textAlign: "center", color: "#6e6e73", padding: "30px" }}>
-            {editing ? "Henüz satır yok — aşağıdan “Satır Ekle” ile ekleyin." : "Bu rapor formatına ait hizmet bulunamadı."}
+            {editing ? "Henüz satır yok — aşağıdan “Satır Ekle” ile ekleyin." : text.emptyRows}
           </td>
         </tr>
       );
@@ -142,16 +241,17 @@ export default function GenelReport({
 
     return rows.map((row) => {
       if (row.kind === "alt") {
-        const adeg = degerlendirmeLabel(row.alt.Degerlendirme || null);
+        const altName = isEnglish ? nonEmpty(row.alt.BilesenAdiEn) || row.alt.BilesenAdi : row.alt.BilesenAdi;
+        const adeg = degerlendirmeLabel((isEnglish ? row.alt.Degerlendirme : row.alt.Degerlendirme) || null, isEnglish);
         return (
           <tr key={`${row.serviceIndex}-alt-${row.altIndex}`} className="alt-param-row">
-            <td style={{ paddingLeft: 18, paddingRight: 10 }}>↳ {row.alt.BilesenAdi || "-"}</td>
-            <td className="center">{row.alt.Birim || "-"}</td>
-            <td className="center">{row.alt.Sonuc || "-"}</td>
-            <td className="center" style={{ paddingLeft: 5 }}>{row.alt.LOQ || "-"}</td>
+            <td style={{ paddingLeft: 18, paddingRight: 10 }}>↳ {altName || "-"}</td>
+            <td className="center">{(isEnglish ? row.alt.BirimEn || row.alt.Birim : row.alt.Birim) || "-"}</td>
+            <td className="center">{(isEnglish ? row.alt.SonucEn || row.alt.Sonuc : row.alt.Sonuc) || "-"}</td>
+            <td className="center" style={{ paddingLeft: 5 }}>{(isEnglish ? row.alt.LOQEn || row.alt.LOQ : row.alt.LOQ) || "-"}</td>
             <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
             <td className="center" style={{ paddingLeft: 5 }}>-</td>
-            <td className="center">{row.alt.Limit || "-"}</td>
+            <td className="center">{(isEnglish ? row.alt.LimitEn || row.alt.Limit : row.alt.Limit) || "-"}</td>
             <td className={adeg.cls} style={{ textAlign: "center" }}>{row.alt.Degerlendirme ? adeg.text : "-"}</td>
             {editing && <td />}
           </tr>
@@ -161,20 +261,22 @@ export default function GenelReport({
       const h = row.service;
       const i = row.serviceIndex;
       const isAkr = String(h.Akreditasyon || "").trim().toLowerCase() === "var";
-      const deg = degerlendirmeLabel(h.Degerlendirme);
+      const degValue = isEnglish ? h.DegerlendirmeEn || h.Degerlendirme : h.Degerlendirme;
+      const deg = degerlendirmeLabel(degValue || null, isEnglish);
+      const serviceName = isEnglish ? nonEmpty(h.AdEn) || h.Ad : h.Ad;
       return (
         <tr key={`${i}-main`}>
           <td style={{ paddingRight: 10 }}>
             {edit
               ? editText(h.Ad || "", (v) => edit.onRowChange(i, { Ad: v }), { placeholder: "Analiz adı" })
-              : <>{isAkr ? "*" : ""}{h.Ad}</>}
+              : <>{isAkr ? "*" : ""}{serviceName}</>}
           </td>
-          <td className="center">{edit ? editText(h.Birim || "", (v) => edit.onRowChange(i, { Birim: v }), { center: true }) : (h.Birim || "-")}</td>
-          <td className="center">{edit ? editText(h.Sonuc || "", (v) => edit.onRowChange(i, { Sonuc: v }), { center: true }) : (h.Sonuc || "-")}</td>
-          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.LOQ || "", (v) => edit.onRowChange(i, { LOQ: v }), { center: true }) : (h.LOQ || "-")}</td>
+          <td className="center">{edit ? editText(h.Birim || "", (v) => edit.onRowChange(i, { Birim: v }), { center: true }) : ((isEnglish ? h.BirimEn || h.Birim : h.Birim) || "-")}</td>
+          <td className="center">{edit ? editText(h.Sonuc || "", (v) => edit.onRowChange(i, { Sonuc: v }), { center: true }) : ((isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc) || "-")}</td>
+          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.LOQ || "", (v) => edit.onRowChange(i, { LOQ: v }), { center: true }) : ((isEnglish ? h.LOQEn || h.LOQ : h.LOQ) || "-")}</td>
           <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
-          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.Metot || "", (v) => edit.onRowChange(i, { Metot: v }), { center: true }) : (h.Metot || "-")}</td>
-          <td className="center">{edit ? editText(h.LimitDeger || "", (v) => edit.onRowChange(i, { LimitDeger: v }), { center: true }) : (h.LimitDeger || "-")}</td>
+          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.Metot || "", (v) => edit.onRowChange(i, { Metot: v }), { center: true }) : ((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "-")}</td>
+          <td className="center">{edit ? editText(h.LimitDeger || "", (v) => edit.onRowChange(i, { LimitDeger: v }), { center: true }) : ((isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger) || "-")}</td>
           {edit ? (
             <td style={{ textAlign: "center" }}>
               <select
@@ -205,28 +307,28 @@ export default function GenelReport({
   const renderResultsTable = (rows: ResultDisplayRow[], opts?: { continued?: boolean }) => {
     const parentContext =
       opts?.continued && rows[0]?.kind === "alt"
-        ? hizmetler[rows[0].serviceIndex]?.Ad
+        ? (isEnglish ? nonEmpty(hizmetler[rows[0].serviceIndex]?.AdEn) || hizmetler[rows[0].serviceIndex]?.Ad : hizmetler[rows[0].serviceIndex]?.Ad)
         : "";
 
     return (
       <table className="results">
         <thead>
           <tr>
-            <th style={{ width: "auto" }}>Analiz Adı</th>
-            <th style={{ width: 50 }}>Birim</th>
-            <th style={{ width: 110 }}>Sonuç</th>
+            <th style={{ width: "auto" }}>{text.analysisName}</th>
+            <th style={{ width: 50 }}>{text.unit}</th>
+            <th style={{ width: 110 }}>{text.result}</th>
             <th style={{ width: 50, paddingLeft: 5 }}>LOQ</th>
-            <th style={{ width: 50, paddingLeft: 5 }}>Ö.B.</th>
-            <th style={{ width: 110, paddingLeft: 5 }}>Metot</th>
-            <th style={{ width: 70 }}>Limit</th>
-            <th style={{ width: 100, textAlign: "center" }}>Değerlendirme</th>
+            <th style={{ width: 50, paddingLeft: 5 }}>{text.uncertainty}</th>
+            <th style={{ width: 110, paddingLeft: 5 }}>{text.method}</th>
+            <th style={{ width: 70 }}>{text.limit}</th>
+            <th style={{ width: 100, textAlign: "center" }}>{text.assessment}</th>
             {editing && <th style={{ width: 40 }}></th>}
           </tr>
         </thead>
         <tbody>
           {parentContext && (
             <tr className="continued-parent-row">
-              <td colSpan={editing ? 9 : 8}>{parentContext} (devam)</td>
+              <td colSpan={editing ? 9 : 8}>{parentContext} ({text.continued})</td>
             </tr>
           )}
           {renderResultRows(rows)}
@@ -247,7 +349,7 @@ export default function GenelReport({
           {documentCode}
         </div>
         <div className="sag-alt">
-          Sayfa: {page} / {totalReportPages}
+          {text.page}: {page} / {totalReportPages}
         </div>
       </div>
     </div>
@@ -267,7 +369,7 @@ export default function GenelReport({
       </div>
 
       <div className="title-row continuation-title" style={!hasAkredite ? { marginTop: "10mm" } : undefined}>
-        <div className="report-title">DENEY RAPORU</div>
+        <div className="report-title">{text.reportTitle}</div>
         {hasAkredite && (
           <table className="akredite-box">
             <tbody>
@@ -282,7 +384,7 @@ export default function GenelReport({
       <table className="meta-table continuation-meta">
         <tbody>
           <tr>
-            <td style={{ paddingBottom: "4px", width: "20%" }}><strong>Rapor No - Rev. No:</strong></td>
+            <td style={{ paddingBottom: "4px", width: "20%" }}><strong>{text.reportNo}</strong></td>
             <td style={{ paddingBottom: "4px", width: "80%" }}>{raporKodu}</td>
           </tr>
         </tbody>
@@ -798,7 +900,7 @@ export default function GenelReport({
               Akreditasyon yoksa sağda TÜRKAK logosu (30mm) olmadığından header
               alçalıp başlık logoya yapışıyor → bu durumda üstten boşluk ekle. */}
           <div className="title-row" style={!hasAkredite ? { marginTop: "16mm" } : undefined}>
-            <div className="report-title">DENEY RAPORU</div>
+            <div className="report-title">{text.reportTitle}</div>
             {hasAkredite && (
               <table className="akredite-box">
                 <tbody>
@@ -815,15 +917,15 @@ export default function GenelReport({
           <table className="meta-table">
             <tbody>
               <tr>
-                <td style={{ paddingBottom: "4px" , width: "20%" }}><strong>Rapor No - Rev. No:</strong></td>
+                <td style={{ paddingBottom: "4px" , width: "20%" }}><strong>{text.reportNo}</strong></td>
                 <td style={{ paddingBottom: "4px" , width: "50%" }}>{raporKodu}</td>
                 <td style={{ paddingBottom: "4px" }}><strong></strong></td>
                 <td style={{ paddingBottom: "4px"  }}></td>
               </tr>
               <tr>
-                <td style={{ paddingBottom: "4px" , width: "20%" }}><strong>Numune Kabul Tarihi:</strong> </td>
+                <td style={{ paddingBottom: "4px" , width: "20%" }}><strong>{text.acceptanceDate}</strong> </td>
                 <td style={{ paddingBottom: "4px"  }}>{kabulTarihi}</td>
-                <td style={{ paddingBottom: "4px"  }}><strong>Rapor Yayın Tarihi:</strong> </td>
+                <td style={{ paddingBottom: "4px"  }}><strong>{text.issueDate}</strong> </td>
                 <td style={{ paddingBottom: "4px"  }}>{yayinTarihi}</td>
               </tr>
             </tbody>
@@ -834,8 +936,8 @@ export default function GenelReport({
           <table className="info-table" style={{ marginTop: 20 }}>
             <thead>
               <tr>
-                <th>MÜŞTERİ BİLGİLERİ</th>
-                <th>NUMUNE BİLGİLERİ</th>
+                <th>{text.customerInfo}</th>
+                <th>{text.sampleInfo}</th>
               </tr>
             </thead>
             <tbody>
@@ -850,24 +952,24 @@ export default function GenelReport({
                   <div className="firma-ad">
                     {edit
                       ? editText(header.Numune_Adi || "", (v) => edit.onHeaderChange({ Numune_Adi: v }), { placeholder: "Numune adı" })
-                      : header.Numune_Adi}
+                      : (isEnglish ? header.Numune_Adi_En || header.Numune_Adi : header.Numune_Adi)}
                   </div>
                   {(header.TesteMiktar || header.TesteMiktarBirim) && (
                     <div className="info-line">
-                      <span className="info-label">Miktar: </span>
-                      {header.TesteMiktar} {header.TesteMiktarBirim}
+                      <span className="info-label">{text.quantity} </span>
+                      {header.TesteMiktar} {translateReportUnit(header.TesteMiktarBirim, isEnglish)}
                     </div>
                   )}
                   <div className="info-line">
-                    <span className="info-label">Üretim Tarihi: </span>
+                    <span className="info-label">{text.productionDate} </span>
                     {String(header.UretimTarihi || "—")}
                   </div>
                   <div className="info-line">
-                    <span className="info-label">Son Kullanım Tarihi: </span>
+                    <span className="info-label">{text.expiryDate} </span>
                     {String(header.SKT || "—")}
                   </div>
                   <div className="info-line">
-                    <span className="info-label">Seri/Lot No/Ürün Kodu: </span>
+                    <span className="info-label">{text.lotNo} </span>
                     {header.SeriNo || "—"}
                   </div>
                 </td>
@@ -877,20 +979,20 @@ export default function GenelReport({
 
           {/* ───── TEST SONUÇLARI ───── */}
           <div className="results-section" style={{ marginTop: 30 }}>
-            <div className="results-title">TEST SONUÇLARI</div>
+            <div className="results-title">{text.testResults}</div>
             <div className="notlar-body"> </div>
             {renderResultsTable(firstPageRows)}
             {edit && (
-              <button type="button" className="rd-add-btn" onClick={() => edit.onAddRow()}>+ Satır Ekle</button>
+              <button type="button" className="rd-add-btn" onClick={() => edit.onAddRow()}>{text.addRow}</button>
             )}
           </div>
 
           {/* ───── NOTLAR ───── */}
           <div className="notlar">
-          <div className="results-title" style={{marginBottom: "7px"}}>AÇIKLAMALAR</div> 
+          <div className="results-title" style={{marginBottom: "7px"}}>{text.notes}</div>
               {testBaslangic && testBitis ? (
                 <>
-                  Analiz Periyodu: {" "}
+                  {text.period}{" "}
                   <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
                 </>
               ) : null}
@@ -899,7 +1001,7 @@ export default function GenelReport({
                 className="rd-edit-area"
                 style={{ marginTop: 6 }}
                 value={header.Aciklamalar ?? ""}
-                placeholder="Açıklama metni — boş bırakılırsa varsayılan cümle kullanılır."
+                placeholder={text.editPlaceholder}
                 onChange={(e) => edit.onHeaderChange({ Aciklamalar: e.target.value })}
               />
             ) : (
@@ -911,27 +1013,27 @@ export default function GenelReport({
             )}
             {revizeNot && (
               <div style={{ marginTop: 8, fontWeight: "bold" }}>
-                <br />Revizyon Açıklaması: {revizeNot}
+                <br />{text.revisionNote} {revizeNot}
               </div>
             )}
           </div>
 
           {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ─────  */}
-          <div className="endof">* Rapor Sonu *</div>
+          <div className="endof">{text.end}</div>
           
           <div className="approval-block">
             <div className="approval-cell" style={{width:200, paddingTop:"15px"}}>
-              <div className="approval-cell-title" style={{paddingLeft:"5px"}}>Raporu Hazırlayan</div>
-              <div className="e-imza-pill" style={{marginTop:10}}>✓ E-İmzalıdır</div>
+              <div className="approval-cell-title" style={{paddingLeft:"5px"}}>{text.preparedBy}</div>
+              <div className="e-imza-pill" style={{marginTop:10}}>✓ {text.signed}</div>
               <div className="approval-cell-body">
-                <div className="approval-name">{hazirlayanAd} <span style={{fontSize:"9px" , color:"#646464"}}>Raportör</span></div>
+                <div className="approval-name">{hazirlayanAd} <span style={{fontSize:"9px" , color:"#646464"}}>{text.reporter}</span></div>
               </div>
             </div>
             <div className="approval-cell" style={{width:300, paddingTop:"15px"}}>
-              <div className="approval-cell-title" style={{paddingLeft:"5px"}}>Onaylayan</div>
-              <div className="e-imza-pill" style={{marginTop:10}}>✓ E-İmzalıdır</div>
+              <div className="approval-cell-title" style={{paddingLeft:"5px"}}>{text.approvedBy}</div>
+              <div className="e-imza-pill" style={{marginTop:10}}>✓ {text.signed}</div>
               <div className="approval-cell-body">
-                <div className="approval-name">Alaettin ÖZDEMİR <span style={{fontSize:"9px" , color:"#646464"}}>Laboratuvar Müdürü</span></div>
+                <div className="approval-name">Alaettin ÖZDEMİR <span style={{fontSize:"9px" , color:"#646464"}}>{text.manager}</span></div>
              
               </div>
             </div>
@@ -947,15 +1049,15 @@ export default function GenelReport({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={karekod?.qrDataUrl || "/karekod.png"}
-                  alt="Rapor Doğrulama Karekodu"
-                  title={karekod?.url || "Rapor doğrulama"}
+                  alt={text.qrAlt}
+                  title={karekod?.url || text.qrTitle}
                   style={{ width: 90 }}
                 />
               </div>
               <div className="approval-cell-body">
                 {karekod?.dogrulamaKod && (
                   <div
-                    title="Doğrulama Kodu — manuel doğrulamada bu kod kullanılır"
+                    title={text.codeTitle}
                     style={{
                       textAlign: "center",
                       fontSize: "9px",
@@ -976,7 +1078,7 @@ export default function GenelReport({
           {/* ───── FOOTER ───── */}
 
   <div className="FooterNot">
-                &ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Deney Raporları geçersizdir.{" "}{sirketAdi}&apos;nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya herhangi bir başka amaçla kullanılamaz.Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal zorunluluklardan laboratuvarımız sorumlu değildir. Karar Kuralı: Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır.
+                {text.footerNote}
           </div>
 
              <div style={{marginTop:"10px"}}></div>
@@ -993,7 +1095,7 @@ export default function GenelReport({
             {renderContinuationHeader()}
 
             <div className="results-section continued">
-              <div className="results-title">TEST SONUÇLARI (DEVAM)</div>
+              <div className="results-title">{text.testResultsContinued}</div>
               {renderResultsTable(continuationRows, { continued: true })}
             </div>
 

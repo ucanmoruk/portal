@@ -16,7 +16,9 @@ export const metadata = { title: "Analiz Raporu — Onay Önizleme" };
 // bir bileşen oluşturup buraya kaydetmek yeterli.
 const FORMAT_COMPONENTS: Record<string, ComponentType<ReportFormatProps>> = {
   Genel: GenelReport,
+  GenelEn: GenelReport,
   Challenge: ChallengeReport,
+  ChallengeEn: ChallengeReport,
   DetayRapor: DetayRaporReport,
   "Diğer": DigerReport,
 };
@@ -24,6 +26,8 @@ const FORMAT_COMPONENTS: Record<string, ComponentType<ReportFormatProps>> = {
 // Bazı formatlar veriyi başka bir formattan yükler (örn. DetayRapor → Genel).
 // StokAnalizListesi.RaporFormati alanı sorgulanırken bu eşleştirme kullanılır.
 const DATA_FORMAT_ALIAS: Record<string, string> = {
+  GenelEn: "Genel",
+  ChallengeEn: "Challenge",
   DetayRapor: "Genel",
   DetayFormat: "Genel",
 };

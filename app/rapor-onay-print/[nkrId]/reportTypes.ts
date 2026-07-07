@@ -19,13 +19,20 @@ export interface HizmetRow {
   X1ID?: number;
   Kod: string;
   Ad: string;
+  AdEn?: string | null;
   Akreditasyon: string;
   Metot: string;
+  MetotEn?: string | null;
   Birim: string;
+  BirimEn?: string | null;
   LimitDeger: string | null;
+  LimitEn?: string | null;
   LOQ: string | null;
+  LOQEn?: string | null;
   Sonuc: string | null;
+  SonucEn?: string | null;
   Degerlendirme: string | null;
+  DegerlendirmeEn?: string | null;
   Termin: string | null;
   /** Hizmete bağlı alt parametreler/bileşenler (StokAnalizAltParametre). */
   altParametreler?: AltParametreRow[];

@@ -4,6 +4,8 @@ import { signRapor, imzaSurum } from "./raporImza";
 import { loadRaporEdit } from "./raporDuzenleme";
 
 const DATA_FORMAT_ALIAS: Record<string, string> = {
+  GenelEn: "Genel",
+  ChallengeEn: "Challenge",
   DetayRapor: "Genel",
   DetayFormat: "Genel",
 };

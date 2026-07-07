@@ -5,6 +5,7 @@ import { nkrUgdTipFkColumn } from "@/lib/nkrUgdTipColumn";
 import { hasNkrFormulTable, hasNkrLogTable, nkrHasColumn } from "@/lib/numuneFormTables";
 import { loadLabUgdrTexts, saveLabUgdrTexts } from "@/lib/labUgdrStorage";
 import { ensureDisRaporKodlari } from "@/lib/disKod";
+import { getNkrEditLock } from "@/lib/nkrEditLock";
 
 // Limit ve LOQ değerine göre Sonuç ve SonucEn otomatik hesapla
 function computeSonucAuto(
@@ -70,7 +71,7 @@ export async function GET(
          LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
          WHERE n.ID = @id AND n.Durum = 'Aktif'`;
 
-    const [nkrRes, detayRes, hizmetlerRes, formulRes, fotoRes, textRows] = await Promise.all([
+    const [nkrRes, detayRes, hizmetlerRes, formulRes, fotoRes, textRows, editLock] = await Promise.all([
       pool.request().input("id", nkrId).query(nkrSql),
       pool.request().input("id", nkrId).query(`
         SELECT nd.*, p.Ad AS ProjeAd
@@ -101,6 +102,7 @@ export async function GET(
         "SELECT Path FROM Fotograf WHERE RaporID = @id"
       ),
       loadLabUgdrTexts(pool, nkrId),
+      getNkrEditLock(pool, nkrId),
     ]);
 
     const nkrRow = nkrRes.recordset[0];
@@ -127,6 +129,7 @@ export async function GET(
       formul:    formulRes.recordset,
       fotoPath:  fotoRes.recordset[0]?.Path || null,
       raporMetinleri,
+      editLock,
     });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
@@ -157,6 +160,16 @@ export async function PUT(
     if (!nkr?.Numune_Adi?.trim()) return Response.json({ error: "Numune Adı zorunludur." }, { status: 400 });
 
     const pool = await cosmoPool;
+    const editLock = await getNkrEditLock(pool, nkrId);
+    if (editLock.locked) {
+      return Response.json(
+        {
+          error: `Bu numune ${editLock.raporFormati || "rapor"} formatında ${editLock.durum || "onaylı"} olduğu için değiştirilemez. Değişiklik için raporu revize edin.`,
+          editLock,
+        },
+        { status: 409 },
+      );
+    }
 
     const [
       hasRevno, hasKarar, hasDil, hasAciklama, hasTur,

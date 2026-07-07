@@ -4,6 +4,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import styles from "@/app/styles/table.module.css";
 
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
+const englishPreviewFormat = (format: string): string | null => {
+  const normalized = format.toLocaleUpperCase("tr-TR");
+  if (normalized === "GENEL") return "GenelEn";
+  if (normalized === "CHALLENGE") return "ChallengeEn";
+  return null;
+};
 
 // ── Tipler ──────────────────────────────────────────────────────────────────
 
@@ -49,13 +55,17 @@ function DurumBadge({ durum }: { durum: string }) {
 
 // Rapor formatı badge — Dermatoloji → Claim
 function displayFormat(format: string): string {
+  if (format === "GenelEn") return "Genel EN";
+  if (format === "ChallengeEn") return "Challenge EN";
   return format === "Dermatoloji" ? "Claim" : format;
 }
 
 function FormatBadge({ format }: { format: string }) {
   const colors: Record<string, { bg: string; fg: string }> = {
     "Genel":         { bg: "#0071e318", fg: "#0055a8" },
+    "GenelEn":       { bg: "#0071e318", fg: "#0055a8" },
     "Challenge":     { bg: "#bf5af218", fg: "#8944ab" },
+    "ChallengeEn":   { bg: "#bf5af218", fg: "#8944ab" },
     "Mikrobiyoloji": { bg: "#34c75918", fg: "#248a3d" },
     "Kimya":         { bg: "#ff950018", fg: "#c06800" },
     "Stabilite":     { bg: "#ff950018", fg: "#c06800" },
@@ -287,14 +297,13 @@ export default function OnayliRaporTable() {
     setRevizeError("");
   };
 
-  // Revize onayla — Revno +1, eski rapor Geçersiz, numune Kabul Bekleyenler'e döner.
+  // Revize onayla. Açıklama boşsa Revno artmadan düzenlemeye açılır.
   const handleRevizeSubmit = async () => {
     if (!revizeRow) return;
     const sebep = revizeSebep.trim();
-    if (!sebep) { setRevizeError("Lütfen revize sebebini yazın."); return; }
     const row = revizeRow;
     const eskiRev = parseRev(row.Revno);
-    const aciklama = buildRevizeCumle(revizeTakipKodu(row), eskiRev, sebep);
+    const aciklama = sebep ? buildRevizeCumle(revizeTakipKodu(row), eskiRev, sebep) : "";
     setRevizeBusy(true);
     setRevizeError("");
     try {
@@ -305,7 +314,7 @@ export default function OnayliRaporTable() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Revize başarısız");
-      // Rapor artık Geçersiz + Kabul Bekleyenler'e döndü → bu listeden çıkar.
+      // Rapor artık onaylılar listesinden çıktı → bu listeden çıkar.
       setRows(prev => prev.filter(r => !(r.NkrID === row.NkrID && r.RaporFormati === row.RaporFormati)));
       setTotal(t => Math.max(0, t - 1));
       setRevizeRow(null);
@@ -854,7 +863,7 @@ export default function OnayliRaporTable() {
                 </button>
               </div>
               {/* Önizleme — ikon buton (rapor render sayfasını yeni sekmede açar) */}
-              <div style={{ display: "flex", justifyContent: "center" }}>
+              <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
                 <a
                   href={`/rapor-onay-print/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}`}
                   target="_blank"
@@ -874,6 +883,26 @@ export default function OnayliRaporTable() {
                     <path d="M10 4c-3.7 0-6.9 2.2-8.3 5.4a1 1 0 0 0 0 .8C3.1 13.4 6.3 15.6 10 15.6s6.9-2.2 8.3-5.4a1 1 0 0 0 0-.8C16.9 6.2 13.7 4 10 4Zm0 9.1a3.1 3.1 0 1 1 0-6.2 3.1 3.1 0 0 1 0 6.2Zm0-1.8a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6Z"/>
                   </svg>
                 </a>
+                {englishPreviewFormat(row.RaporFormati) && (
+                  <a
+                    href={`/rapor-onay-print/${row.NkrID}?format=${englishPreviewFormat(row.RaporFormati)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="İngilizce raporu önizle"
+                    style={{
+                      width: 30, height: 30,
+                      border: "1px solid #0071e355",
+                      borderRadius: 7,
+                      background: "transparent",
+                      color: "#0071e3",
+                      textDecoration: "none",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 10, fontWeight: 800,
+                    }}
+                  >
+                    EN
+                  </a>
+                )}
               </div>
             </div>
           );
@@ -1030,13 +1059,13 @@ export default function OnayliRaporTable() {
               Rapor <strong>{revizeTakipKodu(revizeRow)}</strong>
               {revizeRow.DisRaporKodu?.trim() && <span style={{ color: "var(--color-text-tertiary)" }}> (No {revizeRow.RaporNo})</span>}
               {" "}· {displayFormat(revizeRow.RaporFormati)} —
-              {" "}Rev.{parseRev(revizeRow.Revno)} → <strong>Rev.{parseRev(revizeRow.Revno) + 1}</strong>.
-              {" "}Dış kod sabit kalır; numune "Kabul Bekleyenler"e döner ve tekrar
-              {" "}yayınlanınca güncel revizyon geçerli olur.
+              {revizeSebep.trim()
+                ? <>{" "}Rev.{parseRev(revizeRow.Revno)} → <strong>Rev.{parseRev(revizeRow.Revno) + 1}</strong>. Dış kod sabit kalır; numune "Kabul Bekleyenler"e döner ve tekrar yayınlanınca güncel revizyon geçerli olur.</>
+                : <>{" "}Açıklama boş bırakılırsa Rev.{parseRev(revizeRow.Revno)} korunur; rapor onay alanına geri döner ve numune formu düzenlemeye açılır.</>}
             </p>
 
             <label style={{ fontSize: "0.8rem", fontWeight: 600, display: "block", marginBottom: 6 }}>
-              Revize Sebebi
+              Revize Sebebi <span style={{ color: "var(--color-text-tertiary)", fontWeight: 500 }}>(boş bırakılırsa sadece düzenlemeye açılır)</span>
             </label>
             <textarea
               value={revizeSebep}
@@ -1051,7 +1080,9 @@ export default function OnayliRaporTable() {
               Açıklama (otomatik):
             </div>
             <div style={{ fontSize: "0.82rem", lineHeight: 1.5, padding: "10px 12px", background: "var(--color-surface-2)", borderRadius: 8, color: "var(--color-text-primary)" }}>
-              {buildRevizeCumle(revizeTakipKodu(revizeRow), parseRev(revizeRow.Revno), revizeSebep)}
+              {revizeSebep.trim()
+                ? buildRevizeCumle(revizeTakipKodu(revizeRow), parseRev(revizeRow.Revno), revizeSebep)
+                : "Revizyon numarası ve revizyon açıklaması değişmeden, rapor onay alanına geri alınacak."}
             </div>
 
             {revizeError && (
@@ -1074,16 +1105,16 @@ export default function OnayliRaporTable() {
               <button
                 type="button"
                 onClick={handleRevizeSubmit}
-                disabled={revizeBusy || !revizeSebep.trim()}
+                disabled={revizeBusy}
                 style={{
                   padding: "8px 14px", borderRadius: 7, border: "none",
                   background: "#c06800", color: "#fff",
                   fontSize: "0.85rem", fontWeight: 700,
-                  cursor: revizeBusy ? "wait" : (revizeSebep.trim() ? "pointer" : "not-allowed"),
-                  opacity: revizeSebep.trim() ? 1 : 0.6,
+                  cursor: revizeBusy ? "wait" : "pointer",
+                  opacity: 1,
                 }}
               >
-                {revizeBusy ? "Revize ediliyor…" : "Revize Et"}
+                {revizeBusy ? "İşleniyor…" : (revizeSebep.trim() ? "Revize Et" : "Düzenlemeye Aç")}
               </button>
             </div>
           </div>

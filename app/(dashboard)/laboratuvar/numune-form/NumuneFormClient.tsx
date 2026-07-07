@@ -113,6 +113,11 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
   const [loadErr, setLoadErr]       = useState("");
   const [saving, setSaving]         = useState(false);
   const [saveErr, setSaveErr]       = useState("");
+  const [editLock, setEditLock] = useState<{ locked: boolean; durum: string | null; raporFormati: string | null }>({
+    locked: false,
+    durum: null,
+    raporFormati: null,
+  });
   const savingRef = useRef(false);
   // Yeni kayıtta ilk kaydet sonrası tab kilidi kalkar
   const [tab1Saved, setTab1Saved]   = useState(false);
@@ -145,6 +150,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
         }
         setForm(mapApiToForm(data.nkr, data.detay, data.fotoPath ?? null, data.raporMetinleri ?? null));
         setHizmetler(mapHizmetler(data.hizmetler || []));
+        setEditLock(data.editLock || { locked: false, durum: null, raporFormati: null });
       })
       .catch(() => { if (!cancelled) setLoadErr("Yüklenemedi"); });
     return () => { cancelled = true; };
@@ -216,6 +222,10 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
   const handleSave = async () => {
     if (savingRef.current) return;
     setSaveErr("");
+    if (editLock.locked) {
+      setSaveErr("Bu numune onaylı/yayınlanmış rapora bağlı olduğu için pasif. Değişiklik için Rapor Takip ekranından Revize Et ile açın.");
+      return;
+    }
     if (!form.Evrak_No.trim() || !form.RaporNo.trim() || !form.Numune_Adi.trim()) {
       setSaveErr("Evrak No, Rapor No ve Numune Adı zorunludur.");
       setTab(0);
@@ -320,6 +330,12 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
       </div>
 
       {saveErr && <div className={nf.err}>{saveErr}</div>}
+      {editLock.locked && (
+        <div className={nf.lockedNotice}>
+          Bu numune {editLock.raporFormati ? <strong>{editLock.raporFormati}</strong> : "rapor"} formatında <strong>{editLock.durum || "Onaylandı"}</strong> olduğu için pasif.
+          Düzenleme için Rapor Takip ekranında <strong>Revize Et</strong> ile kaydı tekrar açın.
+        </div>
+      )}
 
       <div className={nf.tabs}>
         {TABS.map((label, i) => {
@@ -347,6 +363,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
         })}
       </div>
 
+      <fieldset className={nf.readOnlyFieldset} disabled={editLock.locked}>
       <div className={nf.panel}>
         {tab === 0 && (
           <Tab1Bilgiler
@@ -361,6 +378,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
         )}
         {tab === 2 && <Tab4Gecmis recordId={recordId ?? null} />}
       </div>
+      </fieldset>
 
       <footer className={nf.saveBar}>
         {isEdit && effectiveId != null && (
@@ -385,7 +403,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
             🏷  Barkod Yazdır
           </button>
         )}
-        <button type="button" className={styles.saveBtn} onClick={() => void handleSave()} disabled={saving}>
+        <button type="button" className={styles.saveBtn} onClick={() => void handleSave()} disabled={saving || editLock.locked}>
           {saving ? "Kaydediliyor…" : isEdit ? "Güncelle" : "Kaydet"}
         </button>
       </footer>

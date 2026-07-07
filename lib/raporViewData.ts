@@ -92,13 +92,20 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
         x1.ID                      AS X1ID,
         ISNULL(s.Kod, '')          AS Kod,
         ISNULL(s.Ad, '')           AS Ad,
+        ISNULL(s.AdEn, '')         AS AdEn,
         ISNULL(s.Akreditasyon, '') AS Akreditasyon,
         ISNULL(s.Method, '')       AS Metot,
+        ISNULL(s.MethodEn, '')     AS MetotEn,
         ISNULL(x1.Birim, ISNULL(s.BirimText, '')) AS Birim,
+        ISNULL(x1.BirimEn, ISNULL(s.BirimEn, '')) AS BirimEn,
         x1.[Limit]                  AS LimitDeger,
+        ISNULL(x1.LimitEn, ISNULL(s.LimitEn, '')) AS LimitEn,
         ISNULL(s.LOQ, '')          AS LOQ,
+        ISNULL(x1.LOQEn, ISNULL(s.LOQEn, '')) AS LOQEn,
         x1.Sonuc                    AS Sonuc,
+        x1.SonucEn                  AS SonucEn,
         x1.Degerlendirme            AS Degerlendirme,
+        x1.DegerlendirmeEn          AS DegerlendirmeEn,
         CONVERT(varchar(10), x1.Termin, 23) AS Termin
       FROM NumuneX1 x1
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID

@@ -2,6 +2,7 @@ import { JetBrains_Mono } from "next/font/google";
 import OnayToolbar from "../OnayToolbar";
 import type { ReportFormatProps, KarekodInfo } from "../reportTypes";
 import { disRaporLabel } from "@/lib/disKod";
+import { isEnglishFormat, translateReportUnit } from "./reportLocale";
 
 const jetbrains = JetBrains_Mono({
   subsets: ["latin", "latin-ext"],
@@ -24,13 +25,67 @@ function toMMYY(s: string): string {
   return `${m[2]}-${m[3].slice(2)}`;
 }
 
-function degerlendirmeLabel(d: string | null): { text: string; cls: string } {
+function degerlendirmeLabel(d: string | null, english = false): { text: string; cls: string } {
   if (!d || !d.trim()) return { text: "—", cls: "deg-other" };
   const v = d.trim();
-  if (v === "Uygun") return { text: "UYGUN", cls: "deg-gecer" };
-  if (v === "Uygun Değil") return { text: "UYGUN DEĞİL", cls: "deg-kaldi" };
-  if (v === "Değerlendirilemez" || v === "D.Y.") return { text: "D.Y.", cls: "deg-other" };
+  const normalized = v.toLocaleUpperCase("tr-TR");
+  if (v === "Uygun" || normalized === "PASS") return { text: english ? "PASS" : "UYGUN", cls: "deg-gecer" };
+  if (v === "Uygun Değil" || normalized === "FAIL") return { text: english ? "FAIL" : "UYGUN DEĞİL", cls: "deg-kaldi" };
+  if (v === "Değerlendirilemez" || v === "D.Y." || normalized === "N/A") return { text: english ? "N/A" : "D.Y.", cls: "deg-other" };
   return { text: v, cls: "deg-other" };
+}
+
+interface ChallengeText {
+  reportTitle: string;
+  annexTitle: string;
+  reportNo: string;
+  acceptanceDate: string;
+  issueDate: string;
+  customerInfo: string;
+  sampleInfo: string;
+  quantity: string;
+  productionDate: string;
+  expiryDate: string;
+  lotNo: string;
+  testResults: string;
+  analysisName: string;
+  method: string;
+  result: string;
+  assessment: string;
+  preservativeTest: string;
+  seeAnnex: string;
+  explanations: string;
+  period: string;
+  explanation: string;
+  revisionNote: string;
+  preparedBy: string;
+  approvedBy: string;
+  signed: string;
+  reporter: string;
+  manager: string;
+  qrAlt: string;
+  qrTitle: string;
+  codeTitle: string;
+  footerNote: string;
+  page: string;
+  challengeResults: string;
+  protocolLabel: string;
+  protocol: string;
+  parameter: string;
+  inoculation: string;
+  sampleCount: string;
+  reduction: string;
+  limits: string;
+  microorganism: string;
+  samplingTime: string;
+  criterionA: string;
+  criterionB: string;
+  criteriaNoteA: string;
+  criteriaNoteB: string;
+  criteriaNoteC: string;
+  evaluation: string;
+  finalEvaluation: string;
+  end: string;
 }
 
 // Sağdaki 3 satırlık akreditasyon kutusu (AB-2015-T / Rapor Kodu / MM-YY)
@@ -57,7 +112,7 @@ function AkrediteBox({ kod, yayinTarihi, fontSize }: {
 // akrediteInHeader: kutuyu başlık satırı yerine logo satırında (logonun karşısında)
 //                   göster — logo, kutuyla aynı satırda dikey ortalanarak biraz aşağı iner
 function HeaderBlock({
-  title = "DENEY RAPORU",
+  title,
   showAkredite = true,
   showAkrediteLogo = showAkredite,
   akrediteInHeader = false,
@@ -66,8 +121,9 @@ function HeaderBlock({
   kabulTarihi,
   yayinTarihi,
   akrKodFontSize,
+  text,
 }: {
-  title?: string;
+  title: string;
   showAkredite?: boolean;
   showAkrediteLogo?: boolean;
   akrediteInHeader?: boolean;
@@ -76,6 +132,7 @@ function HeaderBlock({
   kabulTarihi: string;
   yayinTarihi: string;
   akrKodFontSize: number;
+  text: Pick<ChallengeText, "reportNo" | "acceptanceDate" | "issueDate">;
 }) {
   return (
     <>
@@ -103,7 +160,7 @@ function HeaderBlock({
       <table className="meta-table">
         <tbody>
           <tr>
-            <td style={{ paddingBottom: "4px", width: "20%" }}><strong>Rapor No - Rev. No:</strong></td>
+            <td style={{ paddingBottom: "4px", width: "20%" }}><strong>{text.reportNo}</strong></td>
             <td style={{ paddingBottom: "4px", width: "50%" }}>{raporKodu}</td>
             {showKabulTarihi ? (
               <>
@@ -112,16 +169,16 @@ function HeaderBlock({
               </>
             ) : (
               <>
-                <td style={{ paddingBottom: "4px" }}><strong>Rapor Yayın Tarihi:</strong> </td>
+                <td style={{ paddingBottom: "4px" }}><strong>{text.issueDate}</strong> </td>
                 <td style={{ paddingBottom: "4px" }}>{yayinTarihi}</td>
               </>
             )}
           </tr>
           {showKabulTarihi && (
             <tr>
-              <td style={{ paddingBottom: "4px", width: "20%" }}><strong>Numune Kabul Tarihi:</strong> </td>
+              <td style={{ paddingBottom: "4px", width: "20%" }}><strong>{text.acceptanceDate}</strong> </td>
               <td style={{ paddingBottom: "4px" }}>{kabulTarihi}</td>
-              <td style={{ paddingBottom: "4px" }}><strong>Rapor Yayın Tarihi:</strong> </td>
+              <td style={{ paddingBottom: "4px" }}><strong>{text.issueDate}</strong> </td>
               <td style={{ paddingBottom: "4px" }}>{yayinTarihi}</td>
             </tr>
           )}
@@ -133,21 +190,21 @@ function HeaderBlock({
 }
 
 // İmza bloğu — son sayfada (2. sayfa)
-function ApprovalBlock({ hazirlayanAd, karekod }: { hazirlayanAd: string; karekod: KarekodInfo | null }) {
+function ApprovalBlock({ hazirlayanAd, karekod, text }: { hazirlayanAd: string; karekod: KarekodInfo | null; text: ChallengeText }) {
   return (
     <div className="approval-block">
       <div className="approval-cell" style={{ width: 200, paddingTop: "15px" }}>
-        <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>Raporu Hazırlayan</div>
-        <div className="e-imza-pill" style={{ marginTop: 10 }}>✓ E-İmzalıdır</div>
+        <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>{text.preparedBy}</div>
+        <div className="e-imza-pill" style={{ marginTop: 10 }}>✓ {text.signed}</div>
         <div className="approval-cell-body">
-          <div className="approval-name">{hazirlayanAd} <span style={{ fontSize: "9px", color: "#646464" }}>Raportör</span></div>
+          <div className="approval-name">{hazirlayanAd} <span style={{ fontSize: "9px", color: "#646464" }}>{text.reporter}</span></div>
         </div>
       </div>
       <div className="approval-cell" style={{ width: 300, paddingTop: "15px" }}>
-        <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>Onaylayan</div>
-        <div className="e-imza-pill" style={{ marginTop: 10 }}>✓ E-İmzalıdır</div>
+        <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>{text.approvedBy}</div>
+        <div className="e-imza-pill" style={{ marginTop: 10 }}>✓ {text.signed}</div>
         <div className="approval-cell-body">
-          <div className="approval-name">Alaettin ÖZDEMİR <span style={{ fontSize: "9px", color: "#646464" }}>Laboratuvar Müdürü</span></div>
+          <div className="approval-name">Alaettin ÖZDEMİR <span style={{ fontSize: "9px", color: "#646464" }}>{text.manager}</span></div>
         </div>
       </div>
       <div className="approval-cell">
@@ -161,15 +218,15 @@ function ApprovalBlock({ hazirlayanAd, karekod }: { hazirlayanAd: string; kareko
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={karekod?.qrDataUrl || "/karekod.png"}
-            alt="Rapor Doğrulama Karekodu"
-            title={karekod?.url || "Rapor doğrulama"}
+            alt={text.qrAlt}
+            title={karekod?.url || text.qrTitle}
             style={{ width: 90 }}
           />
         </div>
         <div className="approval-cell-body">
           {karekod?.dogrulamaKod && (
             <div
-              title="Doğrulama Kodu — manuel doğrulamada bu kod kullanılır"
+              title={text.codeTitle}
               style={{
                 textAlign: "center",
                 fontSize: "9px",
@@ -209,6 +266,124 @@ export default function DetayRaporReport({
     onaylayanAd,
     sirketAdi,
   } = meta;
+  const isEnglish = isEnglishFormat(format);
+  const text: ChallengeText = isEnglish
+    ? {
+        reportTitle: "TEST REPORT",
+        annexTitle: "TEST REPORT - ANNEX 1",
+        reportNo: "Report No - Rev. No:",
+        acceptanceDate: "Sample Acceptance Date:",
+        issueDate: "Report Issue Date:",
+        customerInfo: "CUSTOMER INFORMATION",
+        sampleInfo: "SAMPLE INFORMATION",
+        quantity: "Quantity:",
+        productionDate: "Production Date:",
+        expiryDate: "Expiry Date:",
+        lotNo: "Serial/Lot No/Product Code:",
+        testResults: "TEST RESULTS",
+        analysisName: "Analysis Name",
+        method: "Method",
+        result: "Result",
+        assessment: "Assessment",
+        preservativeTest: "*Preservative Efficacy Test",
+        seeAnnex: "See Annex-1",
+        explanations: "EXPLANATIONS",
+        period: "Analysis Period:",
+        explanation:
+          "Tests requested by the customer were evaluated according to the Turkish Medicines and Medical Devices Agency Guideline on Microbiological Control of Cosmetic Products.",
+        revisionNote: "Revision Note:",
+        preparedBy: "Prepared By",
+        approvedBy: "Approved By",
+        signed: "E-Signed",
+        reporter: "Reporter",
+        manager: "Laboratory Manager",
+        qrAlt: "Report Verification QR Code",
+        qrTitle: "Report verification",
+        codeTitle: "Verification Code - this code is used for manual verification",
+        footerNote:
+          "\"*\" marked analyses are accredited by TURKAK according to TS EN ISO/IEC 17025. Sampling was not performed by our laboratory. Test Reports without signature and seal are invalid. This Analysis Report may not be partially copied, reproduced or used for any other purpose without the written permission of " +
+          sirketAdi +
+          ". Test results are valid for the sample specified above and may not represent the lot to which the sample belongs. Descriptive information in the test report that affects the validity of the results was declared by the customer. Our laboratory is not responsible for the accuracy of this information or any losses/legal obligations arising from its use. Decision Rule: The customer requested that the conformity statement be given without including measurement uncertainty. For microbiological analyses, the decision rule for conformity assessment is applied without considering measurement uncertainty.",
+        page: "Page",
+        challengeResults: "*PRESERVATIVE EFFICACY TEST RESULTS",
+        protocolLabel: "Protocol:",
+        protocol:
+          "The test includes preparing the appropriate microorganisms at specified inoculum levels and counting them after inoculation into the sample at defined time intervals. Under the test conditions, the adequacy of the product's preservative efficacy is determined by observing whether there is a significant decrease or increase in the number of microorganisms inoculated into the sample on days 7, 14 and 28.",
+        parameter: "Parameter",
+        inoculation: "Inoculation (Cfu) N",
+        sampleCount: "Sample Count cfu/g",
+        reduction: "Reduction (Log)",
+        limits: "LIMITS",
+        microorganism: "Microorganism",
+        samplingTime: "Sampling Time",
+        criterionA: "Criterion A",
+        criterionB: "Criterion B",
+        criteriaNoteA: "a. The acceptable deviation in this test is considered 0.5 log.",
+        criteriaNoteB: "b. NI: No increase in count from the previous inoculation period.",
+        criteriaNoteC: "c. When lgNₒ = lgNₓ, Rₓ = 0 (no increase after the initial count).",
+        evaluation: "EVALUATION",
+        finalEvaluation:
+          "The tested sample meets the preservative efficacy requirements according to the limits specified in ISO 11930:2019/Amd 1:2022. Test result:",
+        end: "* End of Report *",
+      }
+    : {
+        reportTitle: "DENEY RAPORU",
+        annexTitle: "DENEY RAPORU - EK.1",
+        reportNo: "Rapor No - Rev. No:",
+        acceptanceDate: "Numune Kabul Tarihi:",
+        issueDate: "Rapor Yayın Tarihi:",
+        customerInfo: "MÜŞTERİ BİLGİLERİ",
+        sampleInfo: "NUMUNE BİLGİLERİ",
+        quantity: "Miktar:",
+        productionDate: "Üretim Tarihi:",
+        expiryDate: "Son Kullanım Tarihi:",
+        lotNo: "Seri/Lot No/Ürün Kodu:",
+        testResults: "TEST SONUÇLARI",
+        analysisName: "Analiz Adı",
+        method: "Metot",
+        result: "Sonuç",
+        assessment: "Değerlendirme",
+        preservativeTest: "*Koruyucu Etkinlik Testi",
+        seeAnnex: "Bkz. Ek-1",
+        explanations: "AÇIKLAMALAR",
+        period: "Analiz Periyodu:",
+        explanation:
+          "Müşteri talebi doğrultusunda yapılan testler 'TİTCK Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz'a göre değerlendirilmiştir.",
+        revisionNote: "Revizyon Açıklaması:",
+        preparedBy: "Raporu Hazırlayan",
+        approvedBy: "Onaylayan",
+        signed: "E-İmzalıdır",
+        reporter: "Raportör",
+        manager: "Laboratuvar Müdürü",
+        qrAlt: "Rapor Doğrulama Karekodu",
+        qrTitle: "Rapor doğrulama",
+        codeTitle: "Doğrulama Kodu — manuel doğrulamada bu kod kullanılır",
+        footerNote:
+          "“*” işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025'e göre akredite kapsamımızda yer almaktadır.Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Deney Raporları geçersizdir. " +
+          sirketAdi +
+          "'nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya herhangi bir başka amaçla kullanılamaz.Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal zorunluluklardan laboratuvarımız sorumlu değildir. Karar Kuralı: Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır.",
+        page: "Sayfa",
+        challengeResults: "*KORUYUCU ETKİNLİK TESTİ SONUÇLARI",
+        protocolLabel: "Protokol:",
+        protocol:
+          "Test, uygun mikroorganizmaların belirli inokulum seviyelerinde hazırlanması ve belirli zaman aralıklarında numuneye bu mikroorganizmalardan ekim yapılarak sayılmasını kapsar. Test koşulları içinde 7. , 14. ve 28. günlerde numuneye ekim yapılan mikroorganizma sayısında belirgin bir düşüş veya artışın gözlenip gözlenmediğine bakılarak ürünün koruyucu özelliğinin yeterliliğine karar verilir.",
+        parameter: "Parametre",
+        inoculation: "İnokülasyon (Cfu) N",
+        sampleCount: "Numune Sayımı kob/g",
+        reduction: "Düşüş (Log)",
+        limits: "LİMİTLER",
+        microorganism: "Mikroorganizma",
+        samplingTime: "Örnekleme Süresi",
+        criterionA: "Kriter A",
+        criterionB: "Kriter B",
+        criteriaNoteA: "a. Bu testte kabul edilebilir sapma 0,5 log kabul edilir.",
+        criteriaNoteB: "b. NI : Önceki ekim süresinden itibaren sayımda artış yok.",
+        criteriaNoteC: "c. lgNₒ = lgNₓ   olduğunda  Rₓ =0  (başlangıç sayımından sonra artış yok).",
+        evaluation: "DEĞERLENDİRME",
+        finalEvaluation:
+          "Test edilen numune, ISO 11930:2019/Amd 1:2022 standardında belirtilen limitlere göre koruyucu etkinlik gerekliliklerini sağlamaktadır. Test sonucu:",
+        end: "* Rapor Sonu *",
+      };
 
   // Test raporunda DAİMA dış kod gösterilir (ÜGAM/RR26/XXXX/NN — Challenge için RR=CH).
   // DisKod yoksa (eski kayıt / migration 018 koşulmamış) iç koda düş.
@@ -605,14 +780,14 @@ export default function DetayRaporReport({
             SAYFA 1 — GENEL FORMAT TASARIMI
             ═══════════════════════════════════════════════════════════ */}
         <div className="page break">
-          <HeaderBlock showAkredite={hasAkredite} raporKodu={raporKodu} kabulTarihi={kabulTarihi} yayinTarihi={yayinTarihi} akrKodFontSize={akrKodFontSize} />
+          <HeaderBlock title={text.reportTitle} text={text} showAkredite={hasAkredite} raporKodu={raporKodu} kabulTarihi={kabulTarihi} yayinTarihi={yayinTarihi} akrKodFontSize={akrKodFontSize} />
 
           {/* ───── MÜŞTERİ / NUMUNE BİLGİLERİ (2 sütun) ───── */}
           <table className="info-table" style={{ marginTop: 20 }}>
             <thead>
               <tr>
-                <th>MÜŞTERİ BİLGİLERİ</th>
-                <th>NUMUNE BİLGİLERİ</th>
+                <th>{text.customerInfo}</th>
+                <th>{text.sampleInfo}</th>
               </tr>
             </thead>
             <tbody>
@@ -624,16 +799,16 @@ export default function DetayRaporReport({
                   <div className="info-line">{header.FirmaEmail}</div>
                 </td>
                 <td>
-                  <div className="firma-ad">{header.Numune_Adi}</div>
+                  <div className="firma-ad">{isEnglish ? header.Numune_Adi_En || header.Numune_Adi : header.Numune_Adi}</div>
                   {(header.TesteMiktar || header.TesteMiktarBirim) && (
                     <div className="info-line">
-                      <span className="info-label">Miktar: </span>
-                      {header.TesteMiktar} {header.TesteMiktarBirim}
+                      <span className="info-label">{text.quantity} </span>
+                      {header.TesteMiktar} {translateReportUnit(header.TesteMiktarBirim, isEnglish)}
                     </div>
                   )}
-                  <div className="info-line"><span className="info-label">Üretim Tarihi: </span>{String(header.UretimTarihi || "—")}</div>
-                  <div className="info-line"><span className="info-label">Son Kullanım Tarihi: </span>{String(header.SKT || "—")}</div>
-                  <div className="info-line"><span className="info-label">Seri/Lot No/Ürün Kodu: </span>{header.SeriNo || "—"}</div>
+                  <div className="info-line"><span className="info-label">{text.productionDate} </span>{String(header.UretimTarihi || "—")}</div>
+                  <div className="info-line"><span className="info-label">{text.expiryDate} </span>{String(header.SKT || "—")}</div>
+                  <div className="info-line"><span className="info-label">{text.lotNo} </span>{header.SeriNo || "—"}</div>
                 </td>
               </tr>
             </tbody>
@@ -641,23 +816,23 @@ export default function DetayRaporReport({
 
           {/* ───── TEST SONUÇLARI ───── */}
           <div className="results-section" style={{ marginTop: 30 }}>
-            <div className="results-title">TEST SONUÇLARI</div>
+            <div className="results-title">{text.testResults}</div>
             <div className="notlar-body"> </div>
             <table className="results">
               <thead>
                 <tr>
-                  <th style={{ width: 120 }}>Analiz Adı</th> 
-                  <th style={{ width: 150, paddingLeft: 5 }}>Metot</th>
-                  <th style={{ width: 70 }}>Sonuç</th>
-                  <th style={{ width: 100, textAlign: "center" }}>Değerlendirme</th>
+                  <th style={{ width: 120 }}>{text.analysisName}</th>
+                  <th style={{ width: 150, paddingLeft: 5 }}>{text.method}</th>
+                  <th style={{ width: 70 }}>{text.result}</th>
+                  <th style={{ width: 100, textAlign: "center" }}>{text.assessment}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td style={{ paddingRight: 10 }}>*Koruyucu Etkinlik Testi</td>
+                  <td style={{ paddingRight: 10 }}>{text.preservativeTest}</td>
                   <td className="center" style={{ paddingLeft: 5 }}>ISO 11930:2019/Amd 1:2022</td>
-                  <td className="center">Bkz. Ek-1</td>
-                  <td className="deg-gecer" style={{ textAlign: "center" }}>{degerlendirmeLabel("Uygun").text}</td>
+                  <td className="center">{text.seeAnnex}</td>
+                  <td className="deg-gecer" style={{ textAlign: "center" }}>{degerlendirmeLabel("Uygun", isEnglish).text}</td>
                 </tr>
    
               </tbody>
@@ -666,27 +841,27 @@ export default function DetayRaporReport({
 
           {/* ───── NOTLAR ───── */}
           <div className="notlar">
-            <div className="results-title" style={{ marginBottom: "7px" }}>AÇIKLAMALAR</div>
+            <div className="results-title" style={{ marginBottom: "7px" }}>{text.explanations}</div>
             {testBaslangic && testBitis ? (
               <>
-                Analiz Periyodu: {" "}
+                {text.period}{" "}
                 <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
               </>
             ) : null}
-            <br />Müşteri talebi doğrultusunda yapılan testler &apos;TİTCK Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz&apos;a göre değerlendirilmiştir.
+            <br />{text.explanation}
             {revizeNot && (
               <div style={{ marginTop: 8, fontWeight: "bold" }}>
-                <br />Revizyon Açıklaması: {revizeNot}
+                <br />{text.revisionNote} {revizeNot}
               </div>
             )}
           </div>
 
           {/* ───── İMZA BLOĞU ───── */}
-          <ApprovalBlock hazirlayanAd={hazirlayanAd} karekod={karekod} />
+          <ApprovalBlock hazirlayanAd={hazirlayanAd} karekod={karekod} text={text} />
 
           {/* ───── FOOTER NOTU ───── */}
           <div className="FooterNot">
-            &ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Deney Raporları geçersizdir.{" "}{sirketAdi}&apos;nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya herhangi bir başka amaçla kullanılamaz.Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal zorunluluklardan laboratuvarımız sorumlu değildir. Karar Kuralı: Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır.
+            {text.footerNote}
           </div>
 
           <div style={{ marginTop: "10px" }}></div>
@@ -703,7 +878,7 @@ export default function DetayRaporReport({
                 Ek-1.PR.20/Rev.02/12.06.2026
               </div>
               <div className="sag-alt">
-                Sayfa: 1 / 2
+                {text.page}: 1 / 2
               </div>
             </div>
           </div>
@@ -713,21 +888,21 @@ export default function DetayRaporReport({
             SAYFA 2 — CHALLENGE TABLOLARI (EK.1)
             ═══════════════════════════════════════════════════════════ */}
         <div className="page">
-          <HeaderBlock title="DENEY RAPORU - EK.1" showAkredite={hasAkredite} showAkrediteLogo={false} akrediteInHeader showKabulTarihi={false} raporKodu={raporKodu} kabulTarihi={kabulTarihi} yayinTarihi={yayinTarihi} akrKodFontSize={akrKodFontSize} />
+          <HeaderBlock title={text.annexTitle} text={text} showAkredite={hasAkredite} showAkrediteLogo={false} akrediteInHeader showKabulTarihi={false} raporKodu={raporKodu} kabulTarihi={kabulTarihi} yayinTarihi={yayinTarihi} akrKodFontSize={akrKodFontSize} />
 
           <div className="results-section">
-            <div className="results-title" >*KORUYUCU ETKİNLİK TESTİ SONUÇLARI</div> ISO 11930
+            <div className="results-title" >{text.challengeResults}</div> ISO 11930
             <div className="notlar-body" style={{paddingTop: 10, textAlign:"justify"}}> 
-            <strong>Protokol:</strong> Test, uygun mikroorganizmaların belirli inokulum seviyelerinde hazırlanması ve belirli zaman aralıklarında numuneye bu mikroorganizmalardan ekim yapılarak sayılmasını kapsar. Test koşulları içinde 7. , 14. ve 28. günlerde numuneye ekim yapılan mikroorganizma sayısında belirgin bir düşüş veya artışın gözlenip gözlenmediğine bakılarak ürünün koruyucu özelliğinin yeterliliğine karar verilir.
+            <strong>{text.protocolLabel}</strong> {text.protocol}
             </div>
             {/* Sonuç tablosu (sıkıştırılmış satır yüksekliği) */}
             <table className="limit-table" style={{ width: "100%", marginTop: 10, borderCollapse: "collapse", tableLayout: "fixed", fontSize: "9.5px", lineHeight: 1.1 }}>
               <thead>
                 <tr>
-                  <th rowSpan={2} style={{ width: "21%", textAlign: "left", verticalAlign: "middle", borderBottom: "1px solid #000000", padding: "2px 5px" }}>Parametre</th>
-                  <th rowSpan={2} style={{ width: "11%", textAlign: "left", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px 5px" }}>İnokülasyon (Cfu) N</th>
-                  <th colSpan={4} style={{ textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #ccc", padding: "7px 5px" }}>Numune Sayımı kob/g</th>
-                  <th colSpan={3} style={{ textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #ccc", padding: "7px 5px", borderRight : "none", }}>Düşüş (Log)</th>
+                  <th rowSpan={2} style={{ width: "21%", textAlign: "left", verticalAlign: "middle", borderBottom: "1px solid #000000", padding: "2px 5px" }}>{text.parameter}</th>
+                  <th rowSpan={2} style={{ width: "11%", textAlign: "left", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px 5px" }}>{text.inoculation}</th>
+                  <th colSpan={4} style={{ textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #ccc", padding: "7px 5px" }}>{text.sampleCount}</th>
+                  <th colSpan={3} style={{ textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #ccc", padding: "7px 5px", borderRight : "none", }}>{text.reduction}</th>
                 </tr>
                 <tr>
                   <th style={{ width: "11%", textAlign: "center", verticalAlign: "middle", padding: "2px" }}>0. Gün<br />N0</th>
@@ -800,17 +975,17 @@ export default function DetayRaporReport({
           </div>
 
           {/* Limit tablosu */}
-          <div className="results-title" style={{ marginTop: "25px"}}>LİMİTLER</div> 
+          <div className="results-title" style={{ marginTop: "25px"}}>{text.limits}</div>
           <table className="limit-table" style={{ width: "100%", marginTop: "10px", tableLayout: "fixed", borderCollapse: "collapse", textAlign: "center", verticalAlign: "middle", fontSize: "9.5px", lineHeight: 1.1 }}>
             <thead>
               <tr>
-                <th style={{ width: "20%", borderBottom: "1px solid #000000", padding: "5px 5px", verticalAlign: "left" }}>Mikroorganizma</th>
+                <th style={{ width: "20%", borderBottom: "1px solid #000000", padding: "5px 5px", verticalAlign: "left" }}>{text.microorganism}</th>
                 <th colSpan={3} style={{ borderBottom: "1px solid #000000",  padding: "2px 5px", verticalAlign: "middle" }}>Bacteria</th>
                 <th colSpan={3} style={{ borderBottom: "1px solid #000000",  padding: "2px 5px", verticalAlign: "middle" }}>C.Albicans</th>
                 <th colSpan={2} style={{ borderBottom: "1px solid #000000",  padding: "2px 5px", verticalAlign: "middle" }}>A.brasiliensis</th>
               </tr>
               <tr>
-                <th style={{ borderRight: "1px solid #ccc", textAlign:"left", padding: "5px 5px", verticalAlign: "middle" }}>Örnekleme Süresi</th>
+                <th style={{ borderRight: "1px solid #ccc", textAlign:"left", padding: "5px 5px", verticalAlign: "middle" }}>{text.samplingTime}</th>
                 <th style={{ width: "7%", borderBottom: "1px solid #ccc", padding: "2px" }}>T7</th>
                 <th style={{ width: "7%", borderBottom: "1px solid #ccc", padding: "2px" }}>T14</th>
                 <th style={{ width: "7%", borderBottom: "1px solid #ccc", padding: "2px" }}>T28</th>
@@ -823,7 +998,7 @@ export default function DetayRaporReport({
             </thead>
             <tbody>
               <tr>
-                <td style={{ borderTop: "1px solid #ccc", borderRight: "1px solid #ccc", textAlign:"left",  padding: "5px 5px", fontWeight: "bold" }}>Kriter A</td>
+                <td style={{ borderTop: "1px solid #ccc", borderRight: "1px solid #ccc", textAlign:"left",  padding: "5px 5px", fontWeight: "bold" }}>{text.criterionA}</td>
                 <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥3</td>
                 <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥3 ve NIᵇ</td>
                 <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥3 ve NI</td>
@@ -834,7 +1009,7 @@ export default function DetayRaporReport({
                 <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥1 ve NI</td>
               </tr>
               <tr>
-                <td style={{ borderTop: "1px solid #ccc", borderRight: "1px solid #ccc", borderBottom: "1px solid #ccc",textAlign:"left", padding: "5px 5px", fontWeight: "bold" }}>Kriter B</td>
+                <td style={{ borderTop: "1px solid #ccc", borderRight: "1px solid #ccc", borderBottom: "1px solid #ccc",textAlign:"left", padding: "5px 5px", fontWeight: "bold" }}>{text.criterionB}</td>
                 <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>-</td>
                 <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥3</td>
                 <td style={{ borderBottom: "1px solid #ccc", padding: "2px" }}>≥3 ve NI</td>
@@ -849,17 +1024,16 @@ export default function DetayRaporReport({
 
 
           <div className="notlar">
-            a. Bu testte kabul edilebilir sapma 0,5 log kabul edilir.
-            <br></br>b. NI : Önceki ekim süresinden itibaren sayımda artış yok.
-            <br></br>c. lgNₒ = lgNₓ   olduğunda  Rₓ =0  (başlangıç sayımından sonra artış yok).
+            {text.criteriaNoteA}
+            <br></br>{text.criteriaNoteB}
+            <br></br>{text.criteriaNoteC}
           </div>
 
-               <div className="results-title" style={{ marginTop: "25px"}}>DEĞERLENDİRME</div> 
-            <p>Test edilen numune, ISO 11930:2019/Amd 1:2022 standardında belirtilen limitlere göre koruyucu etkinlik gerekliliklerini sağlamaktadır. 
-            Test sonucu: <b>UYGUN</b> </p>
+               <div className="results-title" style={{ marginTop: "25px"}}>{text.evaluation}</div>
+            <p>{text.finalEvaluation} <b>{degerlendirmeLabel("Uygun", isEnglish).text}</b> </p>
 
           {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ─────  */}
-          <div className="endof">* Rapor Sonu *</div>
+          <div className="endof">{text.end}</div>
  
 
 <div className="approval-cell-title" style={{marginTop: "auto", display: "flex", justifyContent: "flex-end" }}>
@@ -879,7 +1053,7 @@ export default function DetayRaporReport({
                 Ek-1.PR.20/Rev.02/12.06.2026
               </div>
               <div className="sag-alt">
-                Sayfa: 2 / 2
+                {text.page}: 2 / 2
               </div>
             </div>
           </div>
