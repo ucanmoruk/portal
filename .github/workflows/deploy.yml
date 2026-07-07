@@ -90,7 +90,9 @@ jobs:
             set xfer:clobber on;
             open ftp://$FTP_SERVER;
             user '$FTP_USERNAME' '$FTP_PASSWORD';
+            set cmd:fail-exit no;
             mkdir -p '$FTP_INCOMING_DIR';
+            set cmd:fail-exit yes;
             cd '$FTP_INCOMING_DIR';
             put deploy.tar.gz -o deploy.tar.gz.uploading;
             mv deploy.tar.gz.uploading deploy.tar.gz;
