@@ -36,9 +36,24 @@ interface Props {
   format: string;
   initialOnay: OnayInfo | null;
   raporNo: string;
+  sampleName?: string | null;
+  sampleNameEn?: string | null;
 }
 
-export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Props) {
+function isEnglishReport(format: string) {
+  return String(format || "").trim().toLocaleLowerCase("tr-TR").endsWith("en");
+}
+
+function sanitizeFileNamePart(value: unknown) {
+  const cleaned = String(value ?? "")
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/g, "");
+  return cleaned.slice(0, 120);
+}
+
+export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampleName, sampleNameEn }: Props) {
   const [onay] = useState<OnayInfo | null>(initialOnay);
   const [canApprove, setCanApprove] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<"onayla" | "geri" | "yayinla" | "imzali" | null>(null);
@@ -49,6 +64,18 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
   const [raporYayinTarihi, setRaporYayinTarihi] = useState(() =>
     toDateInput(initialOnay?.yayinTarihi || initialOnay?.onayTarihi),
   );
+  const isEnglish = isEnglishReport(format);
+  const printFileBase = isEnglish
+    ? `Eng_${sanitizeFileNamePart(sampleNameEn || sampleName || raporNo || nkrId) || nkrId}`
+    : `Rapor-${sanitizeFileNamePart(raporNo || nkrId) || nkrId}`;
+
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = printFileBase;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, [printFileBase]);
 
   // Yetki kontrolü
   useEffect(() => {
@@ -128,6 +155,7 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
 
   const handleDownloadPdf = () => {
     // Bu sayfayı print dialog'una aç (toolbar print'te @media print ile gizli)
+    document.title = printFileBase;
     window.print();
   };
 
@@ -157,7 +185,7 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo }: Pro
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Rapor-${raporNo || nkrId}-imzali.pdf`;
+      a.download = `${printFileBase}-imzali.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();

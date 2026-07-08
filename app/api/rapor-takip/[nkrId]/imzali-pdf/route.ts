@@ -15,6 +15,28 @@ const DATA_FORMAT_ALIAS: Record<string, string> = {
   DetayFormat: "Genel",
 };
 
+function isEnglishReport(format: string) {
+  return String(format || "").trim().toLocaleLowerCase("tr-TR").endsWith("en");
+}
+
+function sanitizeFileNamePart(value: unknown) {
+  const cleaned = String(value ?? "")
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/g, "");
+  return cleaned.slice(0, 120);
+}
+
+function contentDispositionFileName(fileName: string) {
+  const asciiFallback = fileName
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/["\\]/g, "")
+    || "rapor.pdf";
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+}
+
 // GET /api/rapor-takip/[nkrId]/imzali-pdf?format=Genel
 // Onaylı raporu sunucuda PDF'e çevirir + dijital imza (PAdES) gömer →
 // indirilen PDF "imzalı/korumalı" olur, editlenince imza geçersiz olur.
@@ -94,12 +116,15 @@ export async function GET(
 
     // Dış kod öncelikli — yoksa iç rapor no fallback. "/" karakterleri "-" yapılır.
     const baseKod = (data.onay?.disRaporKodu || data.header.RaporNo || String(nkrIdNum)).replace(/\//g, "-");
-    const fileName = `${baseKod}-imzali.pdf`;
+    const englishName = sanitizeFileNamePart(data.header.Numune_Adi_En || data.header.Numune_Adi || baseKod);
+    const fileName = isEnglishReport(format)
+      ? `Eng_${englishName || nkrIdNum}-imzali.pdf`
+      : `${baseKod}-imzali.pdf`;
     return new Response(new Uint8Array(signed), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
+        "Content-Disposition": contentDispositionFileName(fileName),
         "Cache-Control": "no-store",
       },
     });

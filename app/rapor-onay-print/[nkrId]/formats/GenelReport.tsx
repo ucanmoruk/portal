@@ -894,6 +894,8 @@ export default function GenelReport({
             format={format}
             initialOnay={onay}
             raporNo={header.RaporNo}
+            sampleName={header.Numune_Adi}
+            sampleNameEn={header.Numune_Adi_En}
           />
         )}
 
