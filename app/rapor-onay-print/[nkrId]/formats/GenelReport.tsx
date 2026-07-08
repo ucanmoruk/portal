@@ -268,27 +268,41 @@ export default function GenelReport({
         <tr key={`${i}-main`}>
           <td style={{ paddingRight: 10 }}>
             {edit
-              ? editText(h.Ad || "", (v) => edit.onRowChange(i, { Ad: v }), { placeholder: "Analiz adı" })
+              ? editText(
+                  (isEnglish ? h.AdEn || h.Ad : h.Ad) || "",
+                  (v) => edit.onRowChange(i, isEnglish ? { AdEn: v } : { Ad: v }),
+                  { placeholder: text.analysisName },
+                )
               : <>{isAkr ? "*" : ""}{serviceName}</>}
           </td>
-          <td className="center">{edit ? editText(h.Birim || "", (v) => edit.onRowChange(i, { Birim: v }), { center: true }) : ((isEnglish ? h.BirimEn || h.Birim : h.Birim) || "-")}</td>
-          <td className="center">{edit ? editText(h.Sonuc || "", (v) => edit.onRowChange(i, { Sonuc: v }), { center: true }) : ((isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc) || "-")}</td>
-          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.LOQ || "", (v) => edit.onRowChange(i, { LOQ: v }), { center: true }) : ((isEnglish ? h.LOQEn || h.LOQ : h.LOQ) || "-")}</td>
+          <td className="center">{edit ? editText((isEnglish ? h.BirimEn || h.Birim : h.Birim) || "", (v) => edit.onRowChange(i, isEnglish ? { BirimEn: v } : { Birim: v }), { center: true }) : ((isEnglish ? h.BirimEn || h.Birim : h.Birim) || "-")}</td>
+          <td className="center">{edit ? editText((isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc) || "", (v) => edit.onRowChange(i, isEnglish ? { SonucEn: v } : { Sonuc: v }), { center: true }) : ((isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc) || "-")}</td>
+          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText((isEnglish ? h.LOQEn || h.LOQ : h.LOQ) || "", (v) => edit.onRowChange(i, isEnglish ? { LOQEn: v } : { LOQ: v }), { center: true }) : ((isEnglish ? h.LOQEn || h.LOQ : h.LOQ) || "-")}</td>
           <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
-          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.Metot || "", (v) => edit.onRowChange(i, { Metot: v }), { center: true }) : ((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "-")}</td>
-          <td className="center">{edit ? editText(h.LimitDeger || "", (v) => edit.onRowChange(i, { LimitDeger: v }), { center: true }) : ((isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger) || "-")}</td>
+          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "", (v) => edit.onRowChange(i, isEnglish ? { MetotEn: v } : { Metot: v }), { center: true }) : ((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "-")}</td>
+          <td className="center">{edit ? editText((isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger) || "", (v) => edit.onRowChange(i, isEnglish ? { LimitEn: v } : { LimitDeger: v }), { center: true }) : ((isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger) || "-")}</td>
           {edit ? (
             <td style={{ textAlign: "center" }}>
               <select
                 className="rd-edit"
-                value={h.Degerlendirme || ""}
-                onChange={(e) => edit.onRowChange(i, { Degerlendirme: e.target.value })}
+                value={(isEnglish ? h.DegerlendirmeEn || h.Degerlendirme : h.Degerlendirme) || ""}
+                onChange={(e) => edit.onRowChange(i, isEnglish ? { DegerlendirmeEn: e.target.value } : { Degerlendirme: e.target.value })}
                 style={{ textAlign: "center" }}
               >
                 <option value="">-</option>
-                <option value="Uygun">Uygun</option>
-                <option value="Uygun Değil">Uygun Değil</option>
-                <option value="D.Y.">D.Y.</option>
+                {isEnglish ? (
+                  <>
+                    <option value="Pass">Pass</option>
+                    <option value="Fail">Fail</option>
+                    <option value="N/A">N/A</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="Uygun">Uygun</option>
+                    <option value="Uygun Değil">Uygun Değil</option>
+                    <option value="D.Y.">D.Y.</option>
+                  </>
+                )}
               </select>
             </td>
           ) : (
@@ -951,7 +965,11 @@ export default function GenelReport({
                 <td>
                   <div className="firma-ad">
                     {edit
-                      ? editText(header.Numune_Adi || "", (v) => edit.onHeaderChange({ Numune_Adi: v }), { placeholder: "Numune adı" })
+                      ? editText(
+                          (isEnglish ? header.Numune_Adi_En || header.Numune_Adi : header.Numune_Adi) || "",
+                          (v) => edit.onHeaderChange(isEnglish ? { Numune_Adi_En: v } : { Numune_Adi: v }),
+                          { placeholder: isEnglish ? "Sample name" : "Numune adı" },
+                        )
                       : (isEnglish ? header.Numune_Adi_En || header.Numune_Adi : header.Numune_Adi)}
                   </div>
                   {(header.TesteMiktar || header.TesteMiktarBirim) && (

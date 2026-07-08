@@ -22,7 +22,7 @@ interface ApiData {
 }
 
 // Inline WYSIWYG düzenlemeyi destekleyen formatlar. Diğerleri klasik forma düşer.
-const WYSIWYG_FORMATS = new Set(["Genel"]);
+const WYSIWYG_FORMATS = new Set(["Genel", "GenelEn"]);
 
 const emptyRow = (): HizmetRow => ({
   AnalizID: 0,
@@ -162,6 +162,8 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
       ) : wysiwyg && view && header ? (
         <GenelReport
           {...view}
+          nkrId={nkrId}
+          format={format}
           header={header}
           hizmetler={hizmetler}
           edit={locked ? undefined : editHandlers}
