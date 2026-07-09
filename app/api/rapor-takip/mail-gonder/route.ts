@@ -9,6 +9,7 @@ import { renderUrlToPdf } from "@/lib/chromiumPdf";
 import { signPdfBuffer, pdfImzaYapilandirildi } from "@/lib/raporPdfSign";
 import { getRaporPdfBaseUrl } from "@/lib/raporPdfBaseUrl";
 import { getAllSettings } from "@/lib/settings";
+import { baseReportFormat, isEnglishReportFormat } from "@/lib/raporFormatLanguage";
 import nodemailer from "nodemailer";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
     for (const it of items) {
       const nkrId = Number(it.nkrId);
       const fmt = String(it.raporFormati || "").trim();
-      const data = await loadRaporViewData(nkrId, fmt);
+      const data = await loadRaporViewData(nkrId, baseReportFormat(fmt), fmt);
       if (!data) continue;
       // Onaylı / Yayınlanmış / Arşivlenmiş (önceden onaylı) raporlar maillenebilir.
       if (!data.onay || (data.onay.durum !== "Onaylandı" && data.onay.durum !== "Yayınlandı" && data.onay.durum !== "Arşiv")) continue;
@@ -94,8 +95,11 @@ export async function POST(request: Request) {
       const signed = await signPdfBuffer(pdf);
 
       const raporNo = data.onay.disRaporKodu || data.header.RaporNo || `rapor-${nkrId}`;
-      const numune = data.header.Numune_Adi || "";
-      const fileBase = sanitize(`${raporNo} - ${numune}`) || `Rapor-${nkrId}`;
+      const numune = isEnglishReportFormat(fmt)
+        ? (data.header.Numune_Adi_En || data.header.Numune_Adi || "")
+        : (data.header.Numune_Adi || "");
+      const prefix = isEnglishReportFormat(fmt) ? "Eng_" : "";
+      const fileBase = sanitize(`${prefix}${raporNo} - ${numune}`) || `${prefix}Rapor-${nkrId}`;
       attachments.push({
         filename: `${fileBase}.pdf`,
         content: signed,

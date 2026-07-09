@@ -1,7 +1,113 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
+import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { type NextRequest } from "next/server";
+
+async function ensureProformaNkrTable(pool: any) {
+  if (hasMysqlConfig()) {
+    await pool.request().query(`
+      CREATE TABLE IF NOT EXISTS ProformaNkr (
+        ID INT AUTO_INCREMENT PRIMARY KEY,
+        ProformaID INT NOT NULL,
+        NkrID INT NOT NULL,
+        EvrakNo VARCHAR(40) NULL,
+        RaporNo VARCHAR(60) NULL,
+        CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY UX_ProformaNkr_Proforma_Nkr (ProformaID, NkrID),
+        KEY IX_ProformaNkr_EvrakNo (EvrakNo)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci
+    `);
+    return;
+  }
+
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='ProformaNkr' AND xtype='U')
+    CREATE TABLE ProformaNkr (
+      ID          INT IDENTITY(1,1) PRIMARY KEY,
+      ProformaID  INT          NOT NULL,
+      NkrID       INT          NOT NULL,
+      EvrakNo     NVARCHAR(40) NULL,
+      RaporNo     NVARCHAR(60) NULL,
+      CreatedAt   DATETIME     NOT NULL DEFAULT GETDATE()
+    )
+  `);
+}
+
+function splitCsv(value: unknown): string[] {
+  return Array.from(new Set(
+    String(value || "")
+      .split(",")
+      .map(x => x.trim())
+      .filter(Boolean)
+  ));
+}
+
+async function backfillRecentProformaLinks(pool: any) {
+  const missingRes = await pool.request().query(`
+    SELECT TOP 50 p.ID, p.ProformaNo, pk.RaporNoListesi
+    FROM ProformaBaslik p
+    INNER JOIN ProformaKalem pk ON pk.ProformaID = p.ID
+    WHERE p.SilindiMi = 0
+      AND pk.RaporNoListesi IS NOT NULL
+      AND pk.RaporNoListesi <> ''
+      AND NOT EXISTS (SELECT 1 FROM ProformaNkr pn WHERE pn.ProformaID = p.ID)
+    ORDER BY p.ID DESC
+  `);
+
+  const byProforma = new Map<number, Set<string>>();
+  for (const row of missingRes.recordset || []) {
+    const id = Number(row.ID);
+    if (!Number.isFinite(id)) continue;
+    if (!byProforma.has(id)) byProforma.set(id, new Set());
+    for (const raporNo of splitCsv(row.RaporNoListesi)) byProforma.get(id)!.add(raporNo);
+  }
+
+  for (const [proformaId, raporNoSet] of byProforma) {
+    const raporNos = Array.from(raporNoSet).slice(0, 500);
+    if (raporNos.length === 0) continue;
+
+    const req = pool.request();
+    const inParams = raporNos.map((raporNo, i) => {
+      req.input(`r${i}`, raporNo);
+      return `@r${i}`;
+    }).join(", ");
+
+    const nkrRes = await req.query(`
+      SELECT ID, Evrak_No, RaporNo
+      FROM NKR
+      WHERE Durum = 'Aktif' AND RaporNo IN (${inParams})
+    `);
+
+    const evrakNos = new Set<number>();
+    for (const nkr of nkrRes.recordset || []) {
+      await pool.request()
+        .input("ProformaID", proformaId)
+        .input("NkrID", Number(nkr.ID))
+        .input("EvrakNo", String(nkr.Evrak_No || ""))
+        .input("RaporNo", String(nkr.RaporNo || ""))
+        .query(`
+          INSERT INTO ProformaNkr (ProformaID, NkrID, EvrakNo, RaporNo)
+          SELECT @ProformaID, @NkrID, @EvrakNo, @RaporNo
+          WHERE NOT EXISTS (
+            SELECT 1 FROM ProformaNkr WHERE ProformaID = @ProformaID AND NkrID = @NkrID
+          )
+        `);
+
+      const evrakNo = Number(nkr.Evrak_No);
+      if (Number.isFinite(evrakNo) && evrakNo > 0) evrakNos.add(evrakNo);
+    }
+
+    for (const evrakNo of evrakNos) {
+      await pool.request()
+        .input("Evrak_No", evrakNo)
+        .query(`
+          INSERT INTO Odeme (Evrak_No, Odeme_Durumu, Tarih)
+          VALUES (@Evrak_No, N'Proforma', GETDATE())
+        `);
+    }
+  }
+}
 
 // ----------------------------------------------------------------
 // GET  /api/numune-kabul?search=&page=1&limit=20
@@ -29,6 +135,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const pool = await cosmoPool;
+    await ensureProformaNkrTable(pool);
+    await backfillRecentProformaLinks(pool);
 
     // Migration 018: NKR_RaporOnay.DisRaporKodu — kolon yoksa arama/gösterim
     // dışı kalır (graceful degrade).
@@ -135,6 +243,38 @@ export async function GET(request: NextRequest) {
               ORDER BY ID DESC
             )                                         AS Odeme_Durumu,
             (
+              SELECT TOP 1 p.ID
+              FROM ProformaBaslik p
+              WHERE p.SilindiMi = 0 AND (
+                p.EvrakNo = CAST(n.Evrak_No AS NVARCHAR(40))
+                OR EXISTS (
+                  SELECT 1
+                  FROM ProformaNkr pn
+                  INNER JOIN NKR nx ON nx.ID = pn.NkrID
+                  WHERE pn.ProformaID = p.ID
+                    AND nx.Evrak_No = n.Evrak_No
+                    AND nx.Durum = 'Aktif'
+                )
+              )
+              ORDER BY p.ID DESC
+            )                                         AS ProformaID,
+            (
+              SELECT TOP 1 p.ProformaNo
+              FROM ProformaBaslik p
+              WHERE p.SilindiMi = 0 AND (
+                p.EvrakNo = CAST(n.Evrak_No AS NVARCHAR(40))
+                OR EXISTS (
+                  SELECT 1
+                  FROM ProformaNkr pn
+                  INNER JOIN NKR nx ON nx.ID = pn.NkrID
+                  WHERE pn.ProformaID = p.ID
+                    AND nx.Evrak_No = n.Evrak_No
+                    AND nx.Durum = 'Aktif'
+                )
+              )
+              ORDER BY p.ID DESC
+            )                                         AS ProformaNo,
+            (
               SELECT TOP 1 rt.Ad
               FROM   NKR n2
               LEFT JOIN NumuneDetay nd ON nd.RaporID = n2.ID
@@ -212,17 +352,22 @@ export async function GET(request: NextRequest) {
     }
 
     // ── Merge ──
-    const data = groups.map(g => ({
-      evrakNo:        g.Evrak_No,
-      tarih:          g.Tarih,
-      firmaAd:        g.FirmaAd,
-      projeAd:        g.ProjeAd,
-      numuneSayisi:   g.NumuneSayisi,
-      raporDurumu:    g.Rapor_Durumu,
-      odemeDurumu:    g.Odeme_Durumu,
-      hasEslestirme:  Boolean(g.HasEslestirme),
-      numuneler:      numunesByEvrak[g.Evrak_No] ?? [],
-    }));
+    const data = groups.map(g => {
+      const normalizedOdeme = g.Odeme_Durumu || (g.ProformaID ? "Proforma" : null);
+      return {
+        evrakNo:        g.Evrak_No,
+        tarih:          g.Tarih,
+        firmaAd:        g.FirmaAd,
+        projeAd:        g.ProjeAd,
+        numuneSayisi:   g.NumuneSayisi,
+        raporDurumu:    g.Rapor_Durumu,
+        odemeDurumu:    normalizedOdeme,
+        proformaId:     g.ProformaID ? Number(g.ProformaID) : null,
+        proformaNo:     g.ProformaNo || null,
+        hasEslestirme:  Boolean(g.HasEslestirme),
+        numuneler:      numunesByEvrak[g.Evrak_No] ?? [],
+      };
+    });
 
     return Response.json({ data, total, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (e: any) {

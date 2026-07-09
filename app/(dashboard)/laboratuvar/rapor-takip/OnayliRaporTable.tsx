@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import styles from "@/app/styles/table.module.css";
+import { expandReportFormats, type ReportLanguageChoice } from "@/lib/raporFormatLanguage";
 
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 const englishPreviewFormat = (format: string): string | null => {
@@ -148,8 +149,9 @@ export default function OnayliRaporTable() {
 
   // Çoklu seçim — key = `${NkrID}__${RaporFormati}`
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [bulkBusy, setBulkBusy] = useState<"arsivle" | "mail" | "yayinla" | null>(null);
+  const [bulkBusy, setBulkBusy] = useState<"arsivle" | "mail" | "yayinla" | "indir" | null>(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [reportLanguage, setReportLanguage] = useState<ReportLanguageChoice>("tr");
 
   // Revize modal
   const [revizeRow, setRevizeRow] = useState<RaporRow | null>(null);
@@ -270,19 +272,24 @@ export default function OnayliRaporTable() {
     setPublishingKey(key);
     setError("");
     try {
-      const res = await fetch(`/api/rapor-takip/${row.NkrID}/yayinla`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format: row.RaporFormati }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error || "Portala gönderilemedi");
-      // Satırı yerinde güncelle: Gönderildi + URL
-      setRows(prev => prev.map(r =>
-        r.NkrID === row.NkrID && r.RaporFormati === row.RaporFormati
-          ? { ...r, RaporDurumu: "Yayınlandı", YayinUrl: json.yayinUrl ?? r.YayinUrl }
-          : r
-      ));
+      let baseYayinUrl: string | null = null;
+      for (const raporFormati of expandReportFormats(row.RaporFormati, reportLanguage)) {
+        const res = await fetch(`/api/rapor-takip/${row.NkrID}/yayinla`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ format: raporFormati }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error || "Portala gönderilemedi");
+        if (raporFormati === row.RaporFormati) baseYayinUrl = json.yayinUrl ?? null;
+      }
+      if (reportLanguage !== "en") {
+        setRows(prev => prev.map(r =>
+          r.NkrID === row.NkrID && r.RaporFormati === row.RaporFormati
+            ? { ...r, RaporDurumu: "Yayınlandı", YayinUrl: baseYayinUrl ?? r.YayinUrl }
+            : r
+        ));
+      }
     } catch (e: any) {
       setError(e.message || "Portala gönderilemedi");
     } finally {
@@ -369,18 +376,89 @@ export default function OnayliRaporTable() {
       return { nkrId: r.NkrID, raporFormati: r.RaporFormati, row: r };
     });
   };
+  const expandItemsByLanguage = (
+    items: Array<{ nkrId: number; raporFormati: string; row?: RaporRow }>,
+    language = reportLanguage,
+  ): Array<{ nkrId: number; raporFormati: string; row?: RaporRow }> => {
+    const seen = new Set<string>();
+    const expanded: Array<{ nkrId: number; raporFormati: string; row?: RaporRow }> = [];
+    for (const item of items) {
+      for (const raporFormati of expandReportFormats(item.raporFormati, language)) {
+        const key = `${item.nkrId}__${raporFormati}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        expanded.push({ ...item, raporFormati });
+      }
+    }
+    return expanded;
+  };
+
+  const downloadPdfItem = async (item: { nkrId: number; raporFormati: string; row?: RaporRow }) => {
+    const res = await fetch(
+      `/api/rapor-takip/${item.nkrId}/imzali-pdf?format=${encodeURIComponent(item.raporFormati)}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "İmzalı PDF indirilemedi");
+    }
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl;
+    const row = item.row;
+    const idSource = row?.DisRaporKodu || row?.Barkod || row?.RaporNo || String(item.nkrId);
+    const idPart = sanitizeFileName(String(idSource).replace(/\//g, "-"));
+    const namePart = sanitizeFileName(String(row?.Numune_Adi || ""));
+    const prefix = item.raporFormati.endsWith("En") ? "Eng_" : "";
+    a.download = namePart
+      ? `${prefix}${idPart} - ${namePart}.pdf`
+      : `${prefix}${idPart}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objUrl), 30_000);
+  };
+
+  const handleBulkDownload = async () => {
+    const targets = expandItemsByLanguage(selectedItems());
+    if (targets.length === 0) return;
+    setBulkBusy("indir");
+    setError("");
+    setBulkProgress({ done: 0, total: targets.length });
+    const basarisiz: string[] = [];
+    try {
+      for (let i = 0; i < targets.length; i++) {
+        const t = targets[i];
+        try {
+          await downloadPdfItem(t);
+          await new Promise(resolve => setTimeout(resolve, 250));
+        } catch (e: any) {
+          basarisiz.push(`${t.row?.RaporNo ?? t.nkrId} (${t.raporFormati}): ${e.message || "hata"}`);
+        }
+        setBulkProgress({ done: i + 1, total: targets.length });
+      }
+      if (basarisiz.length > 0) {
+        setError(`${basarisiz.length}/${targets.length} PDF indirilemedi:\n${basarisiz.slice(0, 5).join("\n")}`);
+      }
+    } finally {
+      setBulkBusy(null);
+      setBulkProgress(null);
+    }
+  };
 
   // Toplu Portala Gönder — seçili her rapor için /yayinla'yı sırayla çağırır.
   // Her biri ayrı Chromium PDF + FTP yükleme yaptığı için seri (paralel değil)
   // çalışır; ilerleme gösterilir. Zaten Yayınlanmış olanlar atlanır.
   const handleBulkPublish = async () => {
-    const sel = selectedItems();
-    const targets = sel.filter(s => s.row?.RaporDurumu !== "Yayınlandı");
+    const sel = expandItemsByLanguage(selectedItems());
+    const targets = sel.filter(s => reportLanguage !== "tr" || s.row?.RaporDurumu !== "Yayınlandı");
     if (targets.length === 0) {
       setError("Seçili raporların tümü zaten gönderilmiş.");
       return;
     }
-    if (!confirm(`${targets.length} rapor müşteri portalına gönderilecek. Onaylıyor musun?`)) return;
+    const dilLabel = reportLanguage === "both" ? "TR + EN" : reportLanguage.toUpperCase();
+    if (!confirm(`${targets.length} PDF (${dilLabel}) müşteri portalına gönderilecek. Onaylıyor musun?`)) return;
     setBulkBusy("yayinla");
     setError("");
     setBulkProgress({ done: 0, total: targets.length });
@@ -452,7 +530,7 @@ export default function OnayliRaporTable() {
   };
 
   const handleMailGonder = async () => {
-    const items = selectedItems().map(({ nkrId, raporFormati }) => ({ nkrId, raporFormati }));
+    const items = expandItemsByLanguage(selectedItems()).map(({ nkrId, raporFormati }) => ({ nkrId, raporFormati }));
     const to = mailTo.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
     const cc = mailCc.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
     if (items.length === 0) { setMailError("Rapor seçilmedi."); return; }
@@ -505,8 +583,44 @@ export default function OnayliRaporTable() {
               <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", padding: "0 6px" }}>
                 {bulkBusy === "yayinla" && bulkProgress
                   ? `Gönderiliyor ${bulkProgress.done}/${bulkProgress.total}…`
+                  : bulkBusy === "indir" && bulkProgress
+                  ? `İndiriliyor ${bulkProgress.done}/${bulkProgress.total}…`
                   : `${selectedKeys.size} seçili`}
               </span>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.74rem", color: "var(--color-text-secondary)", fontWeight: 700 }}>
+                Dil
+                <select
+                  value={reportLanguage}
+                  onChange={e => setReportLanguage(e.target.value as ReportLanguageChoice)}
+                  disabled={!!bulkBusy}
+                  style={{ padding: "5px 7px", borderRadius: 7, border: "1px solid var(--color-border)", background: "var(--color-bg)", fontSize: "0.75rem", cursor: bulkBusy ? "wait" : "pointer" }}
+                >
+                  <option value="tr">TR</option>
+                  <option value="en">EN</option>
+                  <option value="both">TR + EN</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={handleBulkDownload}
+                disabled={!!bulkBusy}
+                title="Seçili raporların imzalı PDF'lerini seçilen dilde indir"
+                style={{
+                  padding: "6px 12px", borderRadius: 7,
+                  border: "1px solid var(--color-border)",
+                  background: bulkBusy === "indir" ? "var(--color-surface-2)" : "transparent",
+                  color: "var(--color-accent)",
+                  fontSize: "0.78rem", fontWeight: 700,
+                  cursor: bulkBusy ? "wait" : "pointer",
+                  display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                }}
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
+                  <path fillRule="evenodd" d="M10 3a.75.75 0 0 1 .75.75v6.59l1.95-2.1a.75.75 0 1 1 1.1 1.02l-3.25 3.5a.75.75 0 0 1-1.1 0L6.2 9.26a.75.75 0 0 1 1.1-1.02l1.95 2.1V3.75A.75.75 0 0 1 10 3Z" clipRule="evenodd"/>
+                  <path d="M3.5 13.75a.75.75 0 0 1 1.5 0v1.75a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5v-1.75a.75.75 0 0 1 1.5 0v1.75A2 2 0 0 1 14.5 17.5h-9A2 2 0 0 1 3.5 15.5v-1.75Z"/>
+                </svg>
+                PDF İndir
+              </button>
               <button
                 type="button"
                 onClick={handleBulkPublish}
@@ -569,6 +683,17 @@ export default function OnayliRaporTable() {
           )}
         </div>
         <div className={styles.toolbarRight} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {/* Gönderim dili */}
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.74rem", color: "var(--color-text-secondary)", fontWeight: 700 }}>
+            Gönderim dili
+            <select value={reportLanguage} onChange={e => setReportLanguage(e.target.value as ReportLanguageChoice)}
+              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg)", fontSize: "0.75rem", cursor: "pointer" }}>
+              <option value="tr">TR</option>
+              <option value="en">EN</option>
+              <option value="both">TR + EN</option>
+            </select>
+          </label>
+
           {/* Yıl */}
           <select value={year} onChange={e => { setYear(e.target.value); setPage(1); }}
             style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg)", fontSize: "0.75rem", cursor: "pointer" }}>
@@ -929,7 +1054,7 @@ export default function OnayliRaporTable() {
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "var(--color-text-primary)" }}>
-                Mail Gönder · {selectedKeys.size} rapor
+                Mail Gönder · {expandItemsByLanguage(selectedItems()).length} PDF
               </h3>
               <button
                 type="button"
@@ -940,6 +1065,21 @@ export default function OnayliRaporTable() {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 4 }}>
+                  Rapor dili
+                </label>
+                <select
+                  value={reportLanguage}
+                  onChange={e => setReportLanguage(e.target.value as ReportLanguageChoice)}
+                  disabled={!!bulkBusy}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid var(--color-border)", fontSize: "0.85rem", background: "var(--color-surface)" }}
+                >
+                  <option value="tr">Sadece Türkçe</option>
+                  <option value="en">Sadece İngilizce</option>
+                  <option value="both">Türkçe + İngilizce</option>
+                </select>
+              </div>
               <div>
                 <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 4 }}>
                   Alıcı (To) · virgülle çoklu
@@ -992,7 +1132,7 @@ export default function OnayliRaporTable() {
                 />
               </div>
               <div style={{ fontSize: "0.74rem", color: "var(--color-text-tertiary)", padding: "8px 10px", background: "var(--color-surface-2)", borderRadius: 7 }}>
-                Seçili {selectedKeys.size} raporun imzalı PDF'leri mail ekinde gönderilecek. İlk PDF üretimi sunucu tarafında 5-15 saniye sürebilir.
+                Seçili raporlar için {expandItemsByLanguage(selectedItems()).length} imzalı PDF mail ekinde gönderilecek. İlk PDF üretimi sunucu tarafında 5-15 saniye sürebilir.
               </div>
               {mailError && (
                 <div style={{ color: "#c00", fontSize: "0.8rem", padding: "8px 10px", background: "#ff3b3010", borderRadius: 7 }}>

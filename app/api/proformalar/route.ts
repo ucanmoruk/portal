@@ -4,6 +4,7 @@ import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 import { calculateTlEquivalent, fetchTcmbTodayRates, normalizeParaBirimi } from "@/lib/tcmbRates";
 import { hasProformaFaturaFirmaCol } from "@/lib/proformaSchema";
+import { hasMysqlConfig } from "@/lib/mysqlCompat";
 
 // Proforma — MSSQL massgrup_cosmo · YENİ tablolar ProformaBaslik / ProformaKalem
 // (cosmo'da ProformaBaslik/X2 yoktu → sıfırdan kuruluyor). Cari kaynağı: Firma.
@@ -49,6 +50,32 @@ async function ensureProformaTables() {
       Kaynak         NVARCHAR(20)  NULL
     )
   `);
+  if (hasMysqlConfig()) {
+    await pool.request().query(`
+      CREATE TABLE IF NOT EXISTS ProformaNkr (
+        ID INT AUTO_INCREMENT PRIMARY KEY,
+        ProformaID INT NOT NULL,
+        NkrID INT NOT NULL,
+        EvrakNo VARCHAR(40) NULL,
+        RaporNo VARCHAR(60) NULL,
+        CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY UX_ProformaNkr_Proforma_Nkr (ProformaID, NkrID),
+        KEY IX_ProformaNkr_EvrakNo (EvrakNo)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci
+    `);
+  } else {
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='ProformaNkr' AND xtype='U')
+      CREATE TABLE ProformaNkr (
+        ID          INT IDENTITY(1,1) PRIMARY KEY,
+        ProformaID  INT          NOT NULL,
+        NkrID       INT          NOT NULL,
+        EvrakNo     NVARCHAR(40) NULL,
+        RaporNo     NVARCHAR(60) NULL,
+        CreatedAt   DATETIME     NOT NULL DEFAULT GETDATE()
+      )
+    `);
+  }
 }
 
 function toNumber(value: any, fallback = 0) {
@@ -61,6 +88,73 @@ function calcLine(line: any) {
   const fiyat = toNumber(line.birimFiyat ?? line.BirimFiyat, 0);
   const iskonto = toNumber(line.iskonto ?? line.Iskonto, 0);
   return adet * fiyat * (1 - iskonto / 100);
+}
+
+function parseNkrIds(value: any): number[] {
+  const raw = Array.isArray(value) ? value : String(value || "").split(",");
+  return Array.from(new Set(
+    raw
+      .map((x: any) => Number(String(x).trim()))
+      .filter((x: number) => Number.isInteger(x) && x > 0)
+  )).slice(0, 500);
+}
+
+async function getProformaNkrTargets(pool: any, nkrIds: number[], evrakNo: unknown) {
+  const evrakNoStr = String(evrakNo || "").trim();
+  if (nkrIds.length > 0) {
+    const res = await pool.request().query(`
+      SELECT ID, Evrak_No, RaporNo
+      FROM NKR
+      WHERE Durum = 'Aktif' AND ID IN (${nkrIds.join(",")})
+      ORDER BY Evrak_No, RaporNo
+    `);
+    return res.recordset || [];
+  }
+
+  const evrakNoNumber = Number(evrakNoStr);
+  if (!Number.isFinite(evrakNoNumber) || evrakNoNumber <= 0) return [];
+  const res = await pool.request()
+    .input("Evrak_No", evrakNoNumber)
+    .query(`
+      SELECT ID, Evrak_No, RaporNo
+      FROM NKR
+      WHERE Durum = 'Aktif' AND Evrak_No = @Evrak_No
+      ORDER BY RaporNo
+    `);
+  return res.recordset || [];
+}
+
+async function linkProformaToNkr(pool: any, proformaId: number, targets: any[]) {
+  for (const row of targets) {
+    await pool.request()
+      .input("ProformaID", proformaId)
+      .input("NkrID", Number(row.ID))
+      .input("EvrakNo", String(row.Evrak_No || ""))
+      .input("RaporNo", String(row.RaporNo || ""))
+      .query(`
+        INSERT INTO ProformaNkr (ProformaID, NkrID, EvrakNo, RaporNo)
+        SELECT @ProformaID, @NkrID, @EvrakNo, @RaporNo
+        WHERE NOT EXISTS (
+          SELECT 1 FROM ProformaNkr WHERE ProformaID = @ProformaID AND NkrID = @NkrID
+        )
+      `);
+  }
+}
+
+async function markProformaCreated(pool: any, targets: any[]) {
+  const evrakNos = Array.from(new Set(
+    targets
+      .map(row => Number(row.Evrak_No))
+      .filter(n => Number.isFinite(n) && n > 0)
+  ));
+  for (const evrakNo of evrakNos) {
+    await pool.request()
+      .input("Evrak_No", evrakNo)
+      .query(`
+        INSERT INTO Odeme (Evrak_No, Odeme_Durumu, Tarih)
+        VALUES (@Evrak_No, N'Proforma', GETDATE())
+      `);
+  }
 }
 
 async function nextProformaNo(pool: any) {
@@ -267,6 +361,9 @@ export async function POST(request: Request) {
       .input("ProformaNo", proformaNo)
       .query(`SELECT TOP 1 ID FROM ProformaBaslik WHERE ProformaNo = @ProformaNo ORDER BY ID DESC`);
     const proformaId = Number(idRes.recordset[0]?.ID);
+    const nkrIds = parseNkrIds(body.nkrIds);
+    const nkrTargets = await getProformaNkrTargets(pool, nkrIds, body.evrakNo);
+
     for (const line of satirlar) {
       const adet = toNumber(line.adet ?? line.Adet, 1);
       const birimFiyat = toNumber(line.birimFiyat ?? line.BirimFiyat, 0);
@@ -295,15 +392,8 @@ export async function POST(request: Request) {
         `);
     }
 
-    const evrakNoForPayment = Number(body.evrakNo);
-    if (Number.isFinite(evrakNoForPayment) && evrakNoForPayment > 0) {
-      await pool.request()
-        .input("Evrak_No", evrakNoForPayment)
-        .query(`
-          INSERT INTO Odeme (Evrak_No, Odeme_Durumu, Tarih)
-          VALUES (@Evrak_No, 'Proforma', GETDATE())
-        `);
-    }
+    await linkProformaToNkr(pool, proformaId, nkrTargets);
+    await markProformaCreated(pool, nkrTargets);
 
     return Response.json({ id: proformaId, proformaNo }, { status: 201 });
   } catch (e: any) {

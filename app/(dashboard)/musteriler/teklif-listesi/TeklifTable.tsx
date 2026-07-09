@@ -78,6 +78,7 @@ const DURUM_LABELS: Record<string, { label: string; color: string; bg: string }>
   Reddedildi:  { label: "Reddedildi",  color: "#c0392b", bg: "#fdecea" },
 };
 const DURUM_KEYS = Object.keys(DURUM_LABELS);
+const DURUM_FILTERS = ["Taslak", "Onay Bekleniyor", "Onaylandı", "Reddedildi"];
 
 let _kc = 0;
 function nextKey() { return `s-${++_kc}`; }
@@ -163,6 +164,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   const [total,      setTotal]      = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [search,     setSearch]     = useState("");
+  const [durumFilter, setDurumFilter] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── add/edit modal ──
@@ -257,10 +259,16 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   }, []);
 
   // ── fetch ──────────────────────────────────────────────────────────────────
-  const fetchData = useCallback(async (s: string, p: number, lim: number) => {
+  const fetchData = useCallback(async (s: string, p: number, lim: number, durum: string) => {
     setLoading(true);
     try {
-      const r = await fetch(`/api/teklifler?search=${encodeURIComponent(s)}&page=${p}&limit=${lim}`);
+      const qs = new URLSearchParams({
+        search: s,
+        page: String(p),
+        limit: String(lim),
+      });
+      if (durum) qs.set("durum", durum);
+      const r = await fetch(`/api/teklifler?${qs.toString()}`);
       const j = await r.json();
       setData(j.data || []);
       setTotal(j.total || 0);
@@ -270,12 +278,17 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
     }
   }, []);
 
-  useEffect(() => { fetchData(search, page, limit); }, [page, limit]);
+  useEffect(() => { fetchData(search, page, limit, durumFilter); }, [page, limit, durumFilter]);
 
   function handleSearch(val: string) {
     setSearch(val);
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => { setPage(1); fetchData(val, 1, limit); }, 350);
+    searchTimer.current = setTimeout(() => { setPage(1); fetchData(val, 1, limit, durumFilter); }, 350);
+  }
+
+  function handleDurumFilter(val: string) {
+    setDurumFilter(val);
+    setPage(1);
   }
 
   // ── müşteri ──────────────────────────────────────────────────────────────
@@ -504,7 +517,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
       if (!r.ok) { setSaveErr(j.error || "Kayıt başarısız."); return; }
       setRevPromptOpen(false);
       setModalOpen(false);
-      setPage(1); fetchData(search, 1, limit);
+      setPage(1); fetchData(search, 1, limit, durumFilter);
     } catch { setSaveErr("Sunucu hatası."); }
     finally  { setSaving(false); }
   }
@@ -608,7 +621,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
     setDeleting(true);
     try {
       await fetch(`/api/teklifler/${deleteTarget.ID}`, { method: "DELETE" });
-      setDeleteTarget(null); fetchData(search, page, limit);
+      setDeleteTarget(null); fetchData(search, page, limit, durumFilter);
     } finally { setDeleting(false); }
   }
 
@@ -644,6 +657,15 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
           <span className={styles.totalCount}>{total} kayıt</span>
         </div>
         <div className={styles.toolbarRight}>
+          <select
+            className={styles.pageSizeSelect}
+            value={durumFilter}
+            onChange={e => handleDurumFilter(e.target.value)}
+            title="Teklif durumu filtresi"
+          >
+            <option value="">Durum: Tümü</option>
+            {DURUM_FILTERS.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
           <select className={styles.pageSizeSelect} value={limit}
             onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
             {[10, 20, 50].map(n => <option key={n} value={n}>{n} / sayfa</option>)}

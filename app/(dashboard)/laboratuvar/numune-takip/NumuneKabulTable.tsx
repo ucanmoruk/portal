@@ -36,6 +36,8 @@ interface EvrakGroup {
   numuneSayisi: number;
   raporDurumu: string | null;
   odemeDurumu: string | null;
+  proformaId?: number | null;
+  proformaNo?: string | null;
   hasEslestirme: boolean;
   numuneler: NumuneItem[];
 }
@@ -70,6 +72,9 @@ function OdemeBadge({ durum }: { durum: string | null }) {
   );
   const map: Record<string, { bg: string; fg: string }> = {
     "Ödendi":         { bg: "#34c75918", fg: "#248a3d" },
+    "Proforma": { bg: "#007aff18", fg: "#0055a8" },
+    "Proforma Onaylandı": { bg: "#34c75918", fg: "#248a3d" },
+    "Proforma Reddedildi": { bg: "#ff3b3018", fg: "#c72216" },
     "Bekliyor":       { bg: "#ff950018", fg: "#c06800" },
     "Ödeme Bekliyor": { bg: "#ff950018", fg: "#c06800" },
     "Kısmen Ödendi":  { bg: "#007aff18", fg: "#0055a8" },
@@ -134,6 +139,7 @@ export default function NumuneKabulTable() {
   const [selectedIds, setSelectedIds]       = useState<Set<number>>(new Set());
   const [printMenuEvrak, setPrintMenuEvrak] = useState<string | null>(null);
   const [invoiceGroup, setInvoiceGroup] = useState<EvrakGroup | null>(null);
+  const [invoiceNkrIds, setInvoiceNkrIds] = useState<number[]>([]);
   const [detayEvrak, setDetayEvrak] = useState<string | null>(null);
   const [invoiceTeklifId, setInvoiceTeklifId] = useState("");
   const [invoiceOffers, setInvoiceOffers] = useState<TeklifOpt[]>([]);
@@ -282,7 +288,7 @@ export default function NumuneKabulTable() {
 
   const hasActiveFilter = !!(tarihBas || tarihBit || odemeFilter || raporDurumFilter);
 
-  const ODEME_OPTS = ["Ödendi", "Fatura Kesilmedi", "Ödeme Bekliyor", "Proforma Onaylandı", "Proforma Oluşturuldu", "Proforma Reddedildi", "Kısmen Ödendi", "İptal"];
+  const ODEME_OPTS = ["Ödendi", "Fatura Kesilmedi", "Ödeme Bekliyor", "Proforma Onaylandı", "Proforma Reddedildi", "Kısmen Ödendi", "İptal"];
   const RAPOR_DURUM_OPTS = RAPOR_DURUM_MANUEL_OPTS;
 
   const handleRaporDurumuChange = async (group: EvrakGroup, raporDurumu: string) => {
@@ -334,10 +340,11 @@ export default function NumuneKabulTable() {
   const openEdit = (n: NumuneItem) => {
     window.open(`/laboratuvar/numune-form/${n.ID}`, "_blank", "noopener,noreferrer");
   };
+  const openProforma = (id: number) => {
+    window.open(`/musteriler/proforma-listesi/${id}/duzenle`, "_blank", "noopener,noreferrer");
+  };
 
-  const openInvoice = async (group: EvrakGroup) => {
-    setInvoiceGroup(group);
-    setInvoiceTeklifId("");
+  const loadInvoiceOffers = async () => {
     setInvoiceOffers([]);
     setInvoiceLoading(true);
     try {
@@ -349,13 +356,52 @@ export default function NumuneKabulTable() {
     }
   };
 
+  const openInvoice = async (group: EvrakGroup, nkrIds: number[] = []) => {
+    setInvoiceGroup(group);
+    setInvoiceNkrIds(nkrIds);
+    setInvoiceTeklifId("");
+    await loadInvoiceOffers();
+  };
+
+  const openSelectedInvoice = async () => {
+    const selectedRows: { group: EvrakGroup; numune: NumuneItem }[] = [];
+    groups.forEach(group => {
+      group.numuneler.forEach(numune => {
+        if (selectedIds.has(numune.ID)) selectedRows.push({ group, numune });
+      });
+    });
+    if (selectedRows.length === 0) {
+      alert("Proforma oluşturmak için listeden en az bir numune seç.");
+      return;
+    }
+
+    const firmaNames = Array.from(new Set(
+      selectedRows.map(x => upperTr(x.group.firmaAd || "").trim()).filter(Boolean)
+    ));
+    if (firmaNames.length > 1) {
+      alert("Tek proforma için aynı firmaya ait numuneleri seçmelisin.");
+      return;
+    }
+
+    const evrakNos = Array.from(new Set(selectedRows.map(x => x.group.evrakNo).filter(Boolean)));
+    const firstGroup = selectedRows[0].group;
+    await openInvoice({
+      ...firstGroup,
+      evrakNo: evrakNos.length === 1 ? evrakNos[0] : `Çoklu (${evrakNos.length} evrak)`,
+      numuneSayisi: selectedRows.length,
+      numuneler: selectedRows.map(x => x.numune),
+    }, selectedRows.map(x => x.numune.ID));
+  };
+
   const continueInvoice = () => {
     if (!invoiceGroup) return;
     const qs = new URLSearchParams({ evrakNo: invoiceGroup.evrakNo });
+    if (invoiceNkrIds.length > 0) qs.set("nkrIds", invoiceNkrIds.join(","));
     if (invoiceTeklifId) qs.set("teklifId", invoiceTeklifId);
     // Yeni sekmede aç — numune takip listesi açık kalsın.
     window.open(`/musteriler/proforma-listesi/yeni?${qs.toString()}`, "_blank", "noopener,noreferrer");
     setInvoiceGroup(null);
+    setInvoiceNkrIds([]);
   };
 
   const teklifLabel = (t: TeklifOpt) =>
@@ -383,6 +429,10 @@ export default function NumuneKabulTable() {
   };
 
   const raporFilterStyle = raporDurumFilter ? RAPOR_DURUM_STYLE[raporDurumFilter] : null;
+  const selectedVisibleCount = groups.reduce(
+    (sum, group) => sum + group.numuneler.filter(n => selectedIds.has(n.ID)).length,
+    0
+  );
 
   // ── Render ───────────────────────────────────────────────────
   return (
@@ -409,6 +459,16 @@ export default function NumuneKabulTable() {
             )}
           </div>
           <span className={styles.totalCount}>{total} evrak</span>
+          {selectedVisibleCount > 0 && (
+            <button
+              className={styles.addBtn}
+              onClick={openSelectedInvoice}
+              style={{ padding: "7px 12px", fontSize: 12 }}
+              title="Seçili numunelerden tek proforma oluştur"
+            >
+              Seçili Proforma ({selectedVisibleCount})
+            </button>
+          )}
         </div>
         <div className={styles.toolbarRight} style={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
           <select className={styles.pageSizeSelect} value={limit}
@@ -528,6 +588,9 @@ export default function NumuneKabulTable() {
         {/* Accordion grupları */}
         {!loading && groups.map((group, gi) => {
           const isOpen = openGroups.has(group.evrakNo);
+          const invoiceButtonTitle = isFaturali(group.odemeDurumu)
+            ? "Fatura kesilmiş"
+            : (group.proformaId ? `Proformaya git${group.proformaNo ? `: ${group.proformaNo}` : ""}` : "Faturalandır");
           return (
             <div
               key={group.evrakNo}
@@ -701,13 +764,17 @@ export default function NumuneKabulTable() {
                   <button
                     className={styles.editBtn}
                     disabled={isFaturali(group.odemeDurumu)}
-                    title={isFaturali(group.odemeDurumu) ? "Fatura kesilmiş" : "Faturalandır"}
+                    aria-label={invoiceButtonTitle}
+                    title={invoiceButtonTitle}
                     onClick={() => {
-                      openInvoice(group);
+                      if (group.proformaId) openProforma(group.proformaId);
+                      else openInvoice(group);
                     }}
                     style={isFaturali(group.odemeDurumu)
                       ? { opacity: 0.25, cursor: "not-allowed" }
-                      : { color: "#248a3d", border: "1px solid #34c75940" }
+                      : group.proformaId
+                        ? { color: "#0055a8", border: "1px solid #007aff40", background: "#007aff10" }
+                        : { color: "#248a3d", border: "1px solid #34c75940" }
                     }
                   >
                     <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
@@ -920,7 +987,7 @@ export default function NumuneKabulTable() {
           <div className={styles.modal} style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h2>Faturalandır / Proforma Oluştur</h2>
-              <button className={styles.modalClose} onClick={() => setInvoiceGroup(null)}>
+              <button className={styles.modalClose} onClick={() => { setInvoiceGroup(null); setInvoiceNkrIds([]); }}>
                 <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                   <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
                 </svg>
@@ -947,7 +1014,7 @@ export default function NumuneKabulTable() {
               </label>
             </div>
             <div className={styles.modalFooter}>
-              <button className={styles.cancelBtn} onClick={() => setInvoiceGroup(null)}>Vazgeç</button>
+              <button className={styles.cancelBtn} onClick={() => { setInvoiceGroup(null); setInvoiceNkrIds([]); }}>Vazgeç</button>
               <button className={styles.addBtn} onClick={continueInvoice}>Devam Et</button>
             </div>
           </div>

@@ -7,6 +7,8 @@ import { renderUrlToPdf } from "@/lib/chromiumPdf";
 import { signPdfBuffer, pdfImzaYapilandirildi } from "@/lib/raporPdfSign";
 import { getRaporPdfBaseUrl } from "@/lib/raporPdfBaseUrl";
 import { maybeMergeEk } from "@/lib/raporEkMerge";
+import { ensureEnglishApprovalForBase } from "@/lib/raporOnaySync";
+import { isEnglishReportFormat } from "@/lib/raporFormatLanguage";
 
 // PDF üretimi (Chromium) + FTP yükleme süre alır.
 export const runtime = "nodejs";
@@ -75,6 +77,7 @@ export async function POST(
   }
 
   const userId = ((session.user as any)?.userId ?? null) as number | null;
+  const userName = ((session.user as any)?.name || (session.user as any)?.email || null) as string | null;
 
   try {
     const pool = await cosmoPool;
@@ -88,14 +91,29 @@ export async function POST(
     }
 
     // Onay var mı? Token gerekli (PDF dosya adı).
-    const exist = await pool.request()
+    let exist = await pool.request()
       .input("nkrId", nkrIdNum).input("format", format)
       .query(`
         SELECT ID, KarekodToken, Durum, YayinUrl, YayinTarihi FROM NKR_RaporOnay
         WHERE NkrID = @nkrId
           AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
       `);
-    const onay = exist.recordset[0];
+    let onay = exist.recordset[0];
+    if (!onay && isEnglishReportFormat(format)) {
+      await ensureEnglishApprovalForBase(pool, nkrIdNum, format, {
+        userId,
+        userName,
+        raporYayinTarihi,
+      });
+      exist = await pool.request()
+        .input("nkrId", nkrIdNum).input("format", format)
+        .query(`
+          SELECT ID, KarekodToken, Durum, YayinUrl, YayinTarihi FROM NKR_RaporOnay
+          WHERE NkrID = @nkrId
+            AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
+        `);
+      onay = exist.recordset[0];
+    }
     if (!onay) {
       return Response.json({ error: "Önce raporu Onayla'yın." }, { status: 400 });
     }

@@ -92,6 +92,7 @@ export default function ProformaForm({ id }: { id?: string }) {
   const [formErr, setFormErr] = useState("");
   const [proformaNo, setProformaNo] = useState("");
   const [evrakNo, setEvrakNo] = useState(searchParams.get("evrakNo") || "");
+  const [nkrIds, setNkrIds] = useState(searchParams.get("nkrIds") || "");
   const [teklifId, setTeklifId] = useState(searchParams.get("teklifId") || "");
   const [teklifler, setTeklifler] = useState<OfferOpt[]>([]);
   const [firma, setFirma] = useState<CustomerOpt | null>(null);
@@ -140,8 +141,8 @@ export default function ProformaForm({ id }: { id?: string }) {
     loadOffers();
     if (isEdit && id) {
       loadDetail(id);
-    } else if (evrakNo) {
-      prepare(evrakNo, teklifId);
+    } else if (evrakNo || nkrIds) {
+      prepare(evrakNo, teklifId, nkrIds);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -195,15 +196,21 @@ export default function ProformaForm({ id }: { id?: string }) {
     }
   }
 
-  async function prepare(nextEvrakNo: string, nextTeklifId = "") {
-    if (!nextEvrakNo.trim()) return;
+  async function prepare(nextEvrakNo: string, nextTeklifId = "", nextNkrIds = nkrIds) {
+    const cleanNkrIds = nextNkrIds.trim();
+    if (!nextEvrakNo.trim() && !cleanNkrIds) return;
     setFormErr("");
     setLoading(true);
     try {
-      const url = `/api/proformalar/prepare?evrakNo=${encodeURIComponent(nextEvrakNo.trim())}${nextTeklifId ? `&teklifId=${nextTeklifId}` : ""}`;
+      const qs = new URLSearchParams();
+      if (nextEvrakNo.trim()) qs.set("evrakNo", nextEvrakNo.trim());
+      if (cleanNkrIds) qs.set("nkrIds", cleanNkrIds);
+      if (nextTeklifId) qs.set("teklifId", nextTeklifId);
+      const url = `/api/proformalar/prepare?${qs.toString()}`;
       const res = await fetch(url);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Proforma hazırlanamadı.");
+      if (json.evrakNo) setEvrakNo(json.evrakNo);
       if (json.firma) {
         setFirma(json.firma);
         setFirmaQ(json.firma.Ad || "");
@@ -260,6 +267,7 @@ export default function ProformaForm({ id }: { id?: string }) {
   }
 
   async function save() {
+    if (saving) return;
     if (!firma) {
       setFormErr("Firma seçimi zorunludur.");
       return;
@@ -272,6 +280,9 @@ export default function ProformaForm({ id }: { id?: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           evrakNo: evrakNo || null,
+          nkrIds: nkrIds
+            ? nkrIds.split(",").map(x => Number(x.trim())).filter(x => Number.isInteger(x) && x > 0)
+            : [],
           teklifId: teklifId || null,
           firmaId: firma.ID,
           faturaFirmaId: faturaFirma?.ID ?? null,
@@ -325,10 +336,10 @@ export default function ProformaForm({ id }: { id?: string }) {
       <div className={styles.panel}>
         <div className={styles.grid}>
           <label className={styles.field}>Evrak No
-            <input className={styles.input} value={evrakNo} onChange={e => setEvrakNo(e.target.value)} onBlur={() => prepare(evrakNo, teklifId)} placeholder="Evrak no" />
+            <input className={styles.input} value={evrakNo} onChange={e => { setEvrakNo(e.target.value); setNkrIds(""); }} onBlur={() => prepare(evrakNo, teklifId, "")} placeholder="Evrak no" />
           </label>
           <label className={styles.field}>Teklif
-            <select className={styles.select} value={teklifId} onChange={e => { setTeklifId(e.target.value); prepare(evrakNo, e.target.value); }}>
+            <select className={styles.select} value={teklifId} onChange={e => { setTeklifId(e.target.value); prepare(evrakNo, e.target.value, nkrIds); }}>
               <option value="">Manuel fiyat gireceğim</option>
               {teklifler.map(t => <option key={t.ID} value={t.ID}>{offerLabel(t)}</option>)}
             </select>

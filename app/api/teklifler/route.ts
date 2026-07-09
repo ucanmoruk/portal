@@ -139,6 +139,7 @@ export async function GET(request: NextRequest) {
 
   const sp     = request.nextUrl.searchParams;
   const search = sp.get("search")?.trim() || "";
+  const durum  = sp.get("durum")?.trim() || "";
   const page   = Math.max(1, parseInt(sp.get("page")  || "1",  10));
   const limit  = Math.min(100, Math.max(5, parseInt(sp.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
@@ -154,20 +155,28 @@ export async function GET(request: NextRequest) {
         OR LOWER(ISNULL(t.Notlar,'')) LIKE LOWER(@searchLike)
         )`
       : "";
+    const validDurum = new Set(["Taslak", "Onay Bekleniyor", "Onaylandı", "Reddedildi"]);
+    const durumClause = validDurum.has(durum)
+      ? durum === "Onay Bekleniyor"
+        ? `AND ISNULL(t.TeklifDurum, 'Taslak') IN (@durum, N'Gönderildi')`
+        : `AND ISNULL(t.TeklifDurum, 'Taslak') = @durum`
+      : "";
 
     const countRes = await pool.request()
       .input("search", search)
       .input("searchLike", `%${search}%`)
+      .input("durum", durum)
       .query(`
         SELECT COUNT(*) AS total
         FROM TeklifBaslik t
         LEFT JOIN Firma m ON m.ID = t.MusteriID
-        WHERE t.Durum = 'Aktif' ${searchClause}
+        WHERE t.Durum = 'Aktif' ${searchClause} ${durumClause}
       `);
 
     const dataRes = await pool.request()
       .input("search", search)
       .input("searchLike", `%${search}%`)
+      .input("durum", durum)
       .input("offset", offset)
       .input("limit",  limit)
       .query(`
@@ -191,7 +200,7 @@ export async function GET(request: NextRequest) {
         FROM TeklifBaslik t
         LEFT JOIN Firma m ON m.ID = t.MusteriID
         LEFT JOIN TeklifKalem k ON k.TeklifID = t.ID
-        WHERE t.Durum = 'Aktif' ${searchClause}
+        WHERE t.Durum = 'Aktif' ${searchClause} ${durumClause}
         GROUP BY t.ID, t.TeklifNo, t.DisTeklifKodu, t.RevNo, t.Tarih, t.MusteriID, m.Firma_Adi, t.Toplam, t.Notlar, t.Durum, t.TeklifDurum, t.OlusturanAd, t.KisaAciklama
         ORDER BY t.ID DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY

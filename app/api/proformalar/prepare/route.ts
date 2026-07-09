@@ -9,11 +9,55 @@ export async function GET(request: NextRequest) {
 
   const evrakNo = request.nextUrl.searchParams.get("evrakNo")?.trim() || "";
   const teklifId = request.nextUrl.searchParams.get("teklifId")?.trim() || "";
+  const nkrIds = Array.from(new Set(
+    (request.nextUrl.searchParams.get("nkrIds") || "")
+      .split(",")
+      .map(x => Number(x.trim()))
+      .filter(x => Number.isInteger(x) && x > 0)
+  )).slice(0, 500);
 
-  if (!evrakNo) return Response.json({ error: "Evrak no zorunludur." }, { status: 400 });
+  if (!evrakNo && nkrIds.length === 0) {
+    return Response.json({ error: "Evrak no veya seçili numune bilgisi zorunludur." }, { status: 400 });
+  }
 
   try {
     const pool = await cosmoPool;
+    const nkrWhere = nkrIds.length > 0
+      ? `n.ID IN (${nkrIds.join(",")})`
+      : `n.Evrak_No = @evrakNo`;
+
+    const checkRes = await pool.request()
+      .input("evrakNo", evrakNo)
+      .query(`
+        SELECT
+          COUNT(*) AS KayitSayisi,
+          COUNT(DISTINCT n.Firma_ID) AS FirmaSayisi
+        FROM NKR n
+        WHERE ${nkrWhere} AND n.Durum = 'Aktif'
+      `);
+    const check = checkRes.recordset[0] || {};
+    if (Number(check.KayitSayisi || 0) === 0) {
+      return Response.json({ error: "Seçilen numune kaydı bulunamadı." }, { status: 404 });
+    }
+    if (Number(check.FirmaSayisi || 0) > 1) {
+      return Response.json({ error: "Tek proforma için aynı firmaya ait numuneleri seçmelisin." }, { status: 400 });
+    }
+
+    const evrakRes = await pool.request()
+      .input("evrakNo", evrakNo)
+      .query(`
+        SELECT n.Evrak_No
+        FROM NKR n
+        WHERE ${nkrWhere} AND n.Durum = 'Aktif'
+        GROUP BY n.Evrak_No
+        ORDER BY MIN(n.ID)
+      `);
+    const evrakNos = (evrakRes.recordset || [])
+      .map((r: { Evrak_No?: string | number | null }) => String(r.Evrak_No || "").trim())
+      .filter(Boolean);
+    const preparedEvrakNo = evrakNos.length <= 1
+      ? (evrakNos[0] || evrakNo)
+      : `Çoklu (${evrakNos.length} evrak)`;
 
     const firmaRes = await pool.request()
       .input("evrakNo", evrakNo)
@@ -24,7 +68,7 @@ export async function GET(request: NextRequest) {
           ISNULL(f.VergiDairesi, '') AS VergiDairesi, ISNULL(f.VergiNo, '') AS VergiNo
         FROM NKR n
         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
-        WHERE n.Evrak_No = @evrakNo AND n.Durum = 'Aktif'
+        WHERE ${nkrWhere} AND n.Durum = 'Aktif'
         ORDER BY n.ID
       `);
 
@@ -41,7 +85,7 @@ export async function GET(request: NextRequest) {
         FROM NKR n
         INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
         LEFT JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-        WHERE n.Evrak_No = @evrakNo AND n.Durum = 'Aktif'
+        WHERE ${nkrWhere} AND n.Durum = 'Aktif'
         GROUP BY x1.AnalizID, s.Kod, s.Ad
         ORDER BY s.Ad
       `);
@@ -89,7 +133,7 @@ export async function GET(request: NextRequest) {
     });
 
     return Response.json({
-      evrakNo,
+      evrakNo: preparedEvrakNo,
       firma: firmaRes.recordset[0] || null,
       teklif,
       kdvOran: teklif?.KdvOran ?? 20,

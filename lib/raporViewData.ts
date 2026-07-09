@@ -4,6 +4,7 @@ import type { HizmetRow, RaporHeader, OnayInfo, KarekodInfo } from "@/app/rapor-
 import { imzaColumnExists, imzalaVeKaydet } from "@/lib/raporImzaData";
 import { loadBilesenSonuclar } from "@/lib/altParametre";
 import { applyRaporEdit, loadRaporEdit } from "@/lib/raporDuzenleme";
+import { baseReportFormat } from "@/lib/raporFormatLanguage";
 
 // Rapor önizleme + imzalı PDF için ORTAK veri yükleyici.
 // Hem app/rapor-onay-print/[nkrId]/page.tsx (önizleme) hem
@@ -138,29 +139,45 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
        WHERE TABLE_NAME = 'NKR_RaporOnay' AND COLUMN_NAME = 'DisRaporKodu'`
     );
     const hasDisKod = disKodCol.recordset.length > 0;
+    const baseEditFormat = baseReportFormat(editFormat);
     const onayRes = await pool.request()
       .input("nkrId", nkrIdNum)
       .input("format", editFormat)
+      .input("baseFormat", baseEditFormat)
       .query(`
-        SELECT o.KarekodToken, o.Durum, o.OnayTarihi, o.YayinTarihi, o.YayinUrl,
+        SELECT o.RaporFormati AS OnayRaporFormati,
+               o.KarekodToken, o.Durum, o.OnayTarihi, o.YayinTarihi, o.YayinUrl,
                ISNULL(o.OnaylayanAd, '') AS OnaylayanAd,
                ''                  AS OnaylayanSoyad,
                ISNULL(o.Notlar, '') AS Notlar,
                ${hasDisKod ? "o.DisRaporKodu" : "CAST(NULL AS NVARCHAR(40)) AS DisRaporKodu"}
         FROM NKR_RaporOnay o
         WHERE o.NkrID = @nkrId
-          AND UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
+          AND (
+            UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
+            OR UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@baseFormat, N'Ü', N'U'))
+          )
+        ORDER BY
+          CASE
+            WHEN UPPER(REPLACE(o.RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U')) THEN 0
+            ELSE 1
+          END,
+          o.ID DESC
       `);
     const r = onayRes.recordset[0];
     if (r) {
       const ad = String(r.OnaylayanAd ?? "").trim();
       const soyad = String(r.OnaylayanSoyad ?? "").trim();
+      const exactOnayFormat =
+        String(r.OnayRaporFormati ?? "").trim().toLocaleUpperCase("tr-TR") ===
+        String(editFormat ?? "").trim().toLocaleUpperCase("tr-TR");
+      const usingBaseApprovalFallback = baseReportFormat(editFormat) !== editFormat && !exactOnayFormat;
       onay = {
         token: r.KarekodToken,
-        durum: r.Durum,
+        durum: usingBaseApprovalFallback && r.Durum === "Yayınlandı" ? "Onaylandı" : r.Durum,
         onayTarihi: r.OnayTarihi,
         yayinTarihi: r.YayinTarihi,
-        yayinUrl: r.YayinUrl,
+        yayinUrl: usingBaseApprovalFallback ? null : r.YayinUrl,
         onaylayanAd: [ad, soyad].filter(Boolean).join(" ") || null,
         disRaporKodu: r.DisRaporKodu ?? null,
         notlar: (r.Notlar ?? "").toString().trim() || null,
@@ -223,8 +240,23 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
       if (await imzaColumnExists(pool)) {
         const ih = await pool.request()
           .input("nkrId", nkrIdNum)
-          .input("format", format)
-          .query(`SELECT ID, ImzaHash FROM NKR_RaporOnay WHERE NkrID = @nkrId AND RaporFormati = @format`);
+          .input("format", editFormat)
+          .input("baseFormat", baseReportFormat(editFormat))
+          .query(`
+            SELECT TOP 1 ID, ImzaHash
+            FROM NKR_RaporOnay
+            WHERE NkrID = @nkrId
+              AND (
+                UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
+                OR UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@baseFormat, N'Ü', N'U'))
+              )
+            ORDER BY
+              CASE
+                WHEN UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U')) THEN 0
+                ELSE 1
+              END,
+              ID DESC
+          `);
         const row = ih.recordset[0];
         imzaHash = row?.ImzaHash ? String(row.ImzaHash) : null;
         // Self-heal: onaylı ama imzasız eski raporu burada imzala.
