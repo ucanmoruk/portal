@@ -157,7 +157,97 @@ export function applyRaporEdit<T extends { header: RaporHeader; hizmetler: Hizme
   return {
     ...data,
     header: edit.header ? { ...data.header, ...edit.header } : data.header,
-    hizmetler: Array.isArray(edit.hizmetler) ? edit.hizmetler : data.hizmetler,
+    hizmetler: Array.isArray(edit.hizmetler)
+      ? mergeEditedHizmetlerWithLiveData(edit.hizmetler, data.hizmetler)
+      : data.hizmetler,
     meta: edit.meta ? { ...data.meta, ...edit.meta } : data.meta,
   };
+}
+
+function hizmetKey(row: HizmetRow) {
+  const x1Id = Number(row.X1ID);
+  if (Number.isFinite(x1Id) && x1Id > 0) return `x1:${x1Id}`;
+
+  const analizId = Number(row.AnalizID);
+  if (Number.isFinite(analizId) && analizId > 0) return `analiz:${analizId}`;
+
+  const kod = String(row.Kod || "").trim();
+  return kod ? `kod:${kod}` : "";
+}
+
+type AltRow = NonNullable<HizmetRow["altParametreler"]>[number];
+
+function altKey(row: AltRow) {
+  const id = Number(row.AltParametreID);
+  if (Number.isFinite(id) && id > 0) return `id:${id}`;
+
+  const name = [row.BilesenAdi, row.BilesenAdiEn]
+    .map((v) => String(v || "").trim().toLocaleLowerCase("tr-TR"))
+    .filter(Boolean)
+    .join("|");
+  return name ? `name:${name}` : "";
+}
+
+function mergeAltParametreler(edited: HizmetRow, live: HizmetRow) {
+  const editedAlts = Array.isArray(edited.altParametreler) ? edited.altParametreler : [];
+  const liveAlts = Array.isArray(live.altParametreler) ? live.altParametreler : [];
+  if (!liveAlts.length) return editedAlts.length ? editedAlts : live.altParametreler;
+  if (!editedAlts.length) return liveAlts;
+
+  const liveByKey = new Map<string, AltRow>();
+  for (const alt of liveAlts) {
+    const key = altKey(alt);
+    if (key) liveByKey.set(key, alt);
+  }
+
+  const used = new Set<string>();
+  const merged = editedAlts.map((alt) => {
+    const key = altKey(alt);
+    const liveAlt = key ? liveByKey.get(key) : undefined;
+    if (key) used.add(key);
+    return liveAlt ? { ...liveAlt, ...alt } : alt;
+  });
+
+  for (const liveAlt of liveAlts) {
+    const key = altKey(liveAlt);
+    if (!key || used.has(key)) continue;
+    merged.push(liveAlt);
+  }
+
+  return merged;
+}
+
+function mergeEditedHizmetlerWithLiveData(editedRows: HizmetRow[], liveRows: HizmetRow[]) {
+  const liveByKey = new Map<string, HizmetRow>();
+  for (const row of liveRows) {
+    const key = hizmetKey(row);
+    if (key) liveByKey.set(key, row);
+  }
+  const maxEditedX1Id = editedRows.reduce((max, row) => {
+    const id = Number(row.X1ID);
+    return Number.isFinite(id) && id > max ? id : max;
+  }, 0);
+
+  const used = new Set<string>();
+  const merged = editedRows.map((edited) => {
+    const key = hizmetKey(edited);
+    const live = key ? liveByKey.get(key) : undefined;
+    if (key) used.add(key);
+    if (!live) return edited;
+    return {
+      ...live,
+      ...edited,
+      altParametreler: mergeAltParametreler(edited, live),
+    };
+  });
+
+  for (const live of liveRows) {
+    const key = hizmetKey(live);
+    if (!key || used.has(key)) continue;
+    const x1Id = Number(live.X1ID);
+    if (!Number.isFinite(x1Id) || x1Id <= maxEditedX1Id) continue;
+    merged.push(live);
+  }
+
+  return merged;
 }
