@@ -407,6 +407,101 @@ export default function GenelReport({
     </>
   );
 
+  const renderClosingBlocks = (page: number) => (
+    <>
+      <div className="notlar">
+        <div className="results-title" style={{ marginBottom: "7px" }}>{text.notes}</div>
+        {testBaslangic && testBitis ? (
+          <>
+            {text.period}{" "}
+            <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
+          </>
+        ) : null}
+        {edit ? (
+          <textarea
+            className="rd-edit-area"
+            style={{ marginTop: 6 }}
+            value={header.Aciklamalar ?? ""}
+            placeholder={text.editPlaceholder}
+            onChange={(e) => edit.onHeaderChange({ Aciklamalar: e.target.value })}
+          />
+        ) : (
+          aciklamaSatirlar.map((satir, i) => (
+            <Fragment key={i}>
+              <br />{satir}
+            </Fragment>
+          ))
+        )}
+        {revizeNot && (
+          <div style={{ marginTop: 8, fontWeight: "bold" }}>
+            <br />{text.revisionNote} {revizeNot}
+          </div>
+        )}
+      </div>
+
+      <div className="endof">{text.end}</div>
+
+      <div className="approval-block">
+        <div className="approval-cell" style={{ width: 200, paddingTop: "15px" }}>
+          <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>{text.preparedBy}</div>
+          <div className="e-imza-pill" style={{ marginTop: 10 }}>✓ {text.signed}</div>
+          <div className="approval-cell-body">
+            <div className="approval-name">{hazirlayanAd} <span style={{ fontSize: "9px", color: "#646464" }}>{text.reporter}</span></div>
+          </div>
+        </div>
+        <div className="approval-cell" style={{ width: 300, paddingTop: "15px" }}>
+          <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>{text.approvedBy}</div>
+          <div className="e-imza-pill" style={{ marginTop: 10 }}>✓ {text.signed}</div>
+          <div className="approval-cell-body">
+            <div className="approval-name">Alaettin ÖZDEMİR <span style={{ fontSize: "9px", color: "#646464" }}>{text.manager}</span></div>
+          </div>
+        </div>
+        <div className="approval-cell">
+          <div className="approval-cell-title">
+            <img src="/unique-seal.png" alt="UNIQUE ANALYSE" style={{ width: 90 }} />
+          </div>
+          <div className="approval-cell-body" />
+        </div>
+        <div className="approval-cell">
+          <div className="approval-cell-title">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={karekod?.qrDataUrl || "/karekod.png"}
+              alt={text.qrAlt}
+              title={karekod?.url || text.qrTitle}
+              style={{ width: 90 }}
+            />
+          </div>
+          <div className="approval-cell-body">
+            {karekod?.dogrulamaKod && (
+              <div
+                title={text.codeTitle}
+                style={{
+                  textAlign: "center",
+                  fontSize: "9px",
+                  fontWeight: 700,
+                  letterSpacing: "0.14em",
+                  color: "#000",
+                  fontFamily: "monospace",
+                  padding: "1px 0",
+                }}
+              >
+                {karekod.dogrulamaKod}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="FooterNot">
+        {text.footerNote}
+      </div>
+
+      <div style={{ marginTop: "10px" }} />
+      {renderDocumentFooter(page)}
+    </>
+  );
+
   return (
     <>
       <style>{`
@@ -794,6 +889,7 @@ export default function GenelReport({
           font-size: 8.5px;
           color: var(--ink-soft);
           padding-top: 7px;
+          margin-top: auto;
           position: relative;
           box-sizing: border-box;
         }
@@ -1007,108 +1103,7 @@ export default function GenelReport({
             )}
           </div>
 
-          {/* ───── NOTLAR ───── */}
-          <div className="notlar">
-          <div className="results-title" style={{marginBottom: "7px"}}>{text.notes}</div>
-              {testBaslangic && testBitis ? (
-                <>
-                  {text.period}{" "}
-                  <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
-                </>
-              ) : null}
-            {edit ? (
-              <textarea
-                className="rd-edit-area"
-                style={{ marginTop: 6 }}
-                value={header.Aciklamalar ?? ""}
-                placeholder={text.editPlaceholder}
-                onChange={(e) => edit.onHeaderChange({ Aciklamalar: e.target.value })}
-              />
-            ) : (
-              aciklamaSatirlar.map((satir, i) => (
-                <Fragment key={i}>
-                  <br />{satir}
-                </Fragment>
-              ))
-            )}
-            {revizeNot && (
-              <div style={{ marginTop: 8, fontWeight: "bold" }}>
-                <br />{text.revisionNote} {revizeNot}
-              </div>
-            )}
-          </div>
-
-          {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ─────  */}
-          <div className="endof">{text.end}</div>
-          
-          <div className="approval-block">
-            <div className="approval-cell" style={{width:200, paddingTop:"15px"}}>
-              <div className="approval-cell-title" style={{paddingLeft:"5px"}}>{text.preparedBy}</div>
-              <div className="e-imza-pill" style={{marginTop:10}}>✓ {text.signed}</div>
-              <div className="approval-cell-body">
-                <div className="approval-name">{hazirlayanAd} <span style={{fontSize:"9px" , color:"#646464"}}>{text.reporter}</span></div>
-              </div>
-            </div>
-            <div className="approval-cell" style={{width:300, paddingTop:"15px"}}>
-              <div className="approval-cell-title" style={{paddingLeft:"5px"}}>{text.approvedBy}</div>
-              <div className="e-imza-pill" style={{marginTop:10}}>✓ {text.signed}</div>
-              <div className="approval-cell-body">
-                <div className="approval-name">Alaettin ÖZDEMİR <span style={{fontSize:"9px" , color:"#646464"}}>{text.manager}</span></div>
-             
-              </div>
-            </div>
-            <div className="approval-cell">
-              <div className="approval-cell-title">
-                <img src="/unique-seal.png" alt="UNIQUE ANALYSE" style={{width: 90}}/>
-              </div>
-              <div className="approval-cell-body">
-              </div>
-            </div>
-            <div className="approval-cell">
-              <div className="approval-cell-title">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={karekod?.qrDataUrl || "/karekod.png"}
-                  alt={text.qrAlt}
-                  title={karekod?.url || text.qrTitle}
-                  style={{ width: 90 }}
-                />
-              </div>
-              <div className="approval-cell-body">
-                {karekod?.dogrulamaKod && (
-                  <div
-                    title={text.codeTitle}
-                    style={{
-                      textAlign: "center",
-                      fontSize: "9px",
-                      fontWeight: 700,
-                      letterSpacing: "0.14em",
-                      color: "#000",
-                      fontFamily: "monospace",
-                      padding: "1px 0",
-                    }}
-                  >
-                    {karekod.dogrulamaKod}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ───── FOOTER ───── */}
-
-  <div className="FooterNot">
-                {text.footerNote}
-          </div>
-
-             <div style={{marginTop:"10px"}}></div>
-       
-
-          {renderDocumentFooter(1)}
-
-
-
-
+          {continuationRows.length > 0 ? renderDocumentFooter(1) : renderClosingBlocks(1)}
         </div>
         {continuationRows.length > 0 && (
           <div className="page continuation-page">
@@ -1119,10 +1114,7 @@ export default function GenelReport({
               {renderResultsTable(continuationRows, { continued: true })}
             </div>
 
-            <div className="continuation-seal">
-              <img src="/unique-seal.png" alt="UNIQUE ANALYSE" />
-            </div>
-            {renderDocumentFooter(2)}
+            {renderClosingBlocks(2)}
           </div>
         )}
       </div>
