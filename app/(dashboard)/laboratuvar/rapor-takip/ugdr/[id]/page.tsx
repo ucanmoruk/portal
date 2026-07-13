@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
-import poolPromise from "@/lib/db";
+import { cosmoPool } from "@/lib/db";
 import LaboratuvarUgdrFormPage from "./LaboratuvarUgdrFormPage";
 
 async function resolveLabRecord(idRaw: string) {
-  const pool = await poolPromise;
+  const pool = await cosmoPool;
   const result = await pool
     .request()
     .input("idRaw", idRaw)
