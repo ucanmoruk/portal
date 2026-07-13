@@ -512,11 +512,16 @@ export default function YeniNumuneClient() {
   const [numuneler, setNumuneler] = useState<NumuneCard[]>([]);
   const [lookup, setLookup] = useState<LookupData>({ grupTurleri: [], rUGDTipler: [], paketler: [] });
   const [cameraCardId, setCameraCardId] = useState<string | null>(null);
+  const reservedRaporNos = useRef<Set<string>>(new Set());
 
   // Load lookup data
   useEffect(() => {
     fetch("/api/numune-form/lookup").then(r => r.json()).then((d: LookupData) => { if (d.grupTurleri) setLookup(d); }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    reservedRaporNos.current.clear();
+  }, [evrak.Grup]);
 
   // Auto-fill Evrak_No when Grup changes (if not yet filled)
   useEffect(() => {
@@ -544,10 +549,43 @@ export default function YeniNumuneClient() {
     } catch { return ""; }
   };
 
+  const reserveNextRaporNo = (serverNo: string, existingCards: NumuneCard[]) => {
+    const base = String(serverNo || "").trim();
+    const asNumber = (value: string) => {
+      const clean = String(value || "").trim();
+      return /^\d+$/.test(clean) ? Number(clean) : null;
+    };
+    const start = asNumber(base);
+    if (start == null) return base;
+
+    const width = base.length;
+    const used = new Set<string>([
+      ...existingCards.map(card => String(card.RaporNo || "").trim()).filter(Boolean),
+      ...reservedRaporNos.current,
+    ]);
+
+    let next = start;
+    for (const value of used) {
+      const n = asNumber(value);
+      if (n != null && n >= next) next = n + 1;
+    }
+
+    let candidate = String(next).padStart(width, "0");
+    while (used.has(candidate)) {
+      next += 1;
+      candidate = String(next).padStart(width, "0");
+    }
+    reservedRaporNos.current.add(candidate);
+    return candidate;
+  };
+
   const addNumune = async () => {
-    const raporNo = await fetchNextRaporNo();
-    const card = emptyCard({ RaporNo: raporNo, Tur: "" });
-    setNumuneler(prev => [...prev, card]);
+    const serverNo = await fetchNextRaporNo();
+    setNumuneler(prev => {
+      const raporNo = reserveNextRaporNo(serverNo, prev);
+      const card = emptyCard({ RaporNo: raporNo, Tur: "" });
+      return [...prev, card];
+    });
   };
 
   const patchCard = (cardId: string, update: Partial<NumuneCard>) => {

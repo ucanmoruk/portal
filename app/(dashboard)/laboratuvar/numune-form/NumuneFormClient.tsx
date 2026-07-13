@@ -118,6 +118,10 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
     durum: null,
     raporFormati: null,
   });
+  const [revizeOpen, setRevizeOpen] = useState(false);
+  const [revizeSebep, setRevizeSebep] = useState("");
+  const [revizeBusy, setRevizeBusy] = useState(false);
+  const [revizeError, setRevizeError] = useState("");
   const savingRef = useRef(false);
   // Yeni kayıtta ilk kaydet sonrası tab kilidi kalkar
   const [tab1Saved, setTab1Saved]   = useState(false);
@@ -308,6 +312,55 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
     }
   };
 
+  const parseRev = (value?: string | null): number => {
+    const n = parseInt(String(value ?? "0").trim(), 10);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const revLabel = (kod: string, rev: number): string => `${kod}-${String(rev).padStart(2, "0")}`;
+
+  const buildRevizeCumle = (kod: string, eskiRev: number, sebep: string): string => {
+    const s = sebep.trim() || "......";
+    return `${revLabel(kod, eskiRev)} numaralı rapor ${s} sebebi ile revize edilmiştir. ` +
+      `${revLabel(kod, eskiRev)} numaralı rapor geçersizdir. Geçerli rapor numarası ${revLabel(kod, eskiRev + 1)}.`;
+  };
+
+  const openRevizeModal = () => {
+    setRevizeSebep("");
+    setRevizeError("");
+    setRevizeOpen(true);
+  };
+
+  const handleRevizeSubmit = async () => {
+    if (!effectiveId || !editLock.raporFormati || revizeBusy) return;
+    const sebep = revizeSebep.trim();
+    const raporKodu = form.RaporNo || String(effectiveId);
+    const aciklama = sebep ? buildRevizeCumle(raporKodu, parseRev(form.Revno), sebep) : "";
+    setRevizeBusy(true);
+    setRevizeError("");
+    try {
+      const res = await fetch(`/api/rapor-takip/${effectiveId}/revize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: editLock.raporFormati, aciklama }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Rapor düzenlemeye açılamadı");
+      setEditLock({ locked: false, durum: null, raporFormati: null });
+      setRevizeOpen(false);
+      setSaveErr(
+        sebep
+          ? "Rapor revize edildi ve numune düzenlemeye açıldı. Değişikliği kaydedebilirsiniz."
+          : "Rapor onay alanına geri alındı ve numune düzenlemeye açıldı. Değişikliği kaydedebilirsiniz.",
+      );
+      router.refresh();
+    } catch (e: unknown) {
+      setRevizeError(e instanceof Error ? e.message : "Rapor düzenlemeye açılamadı");
+    } finally {
+      setRevizeBusy(false);
+    }
+  };
+
   if (loadErr) {
     return (
       <div className={styles.page}>
@@ -332,6 +385,15 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
       {saveErr && <div className={nf.err}>{saveErr}</div>}
       {editLock.locked && (
         <div className={nf.lockedNotice}>
+          {effectiveId && editLock.raporFormati && (
+            <button
+              type="button"
+              className={nf.lockedNoticeBtn}
+              onClick={openRevizeModal}
+            >
+              Düzeltmeye Aç
+            </button>
+          )}
           Bu numune {editLock.raporFormati ? <strong>{editLock.raporFormati}</strong> : "rapor"} formatında <strong>{editLock.durum || "Onaylandı"}</strong> olduğu için pasif.
           Düzenleme için Rapor Takip ekranında <strong>Revize Et</strong> ile kaydı tekrar açın.
         </div>
@@ -407,6 +469,102 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
           {saving ? "Kaydediliyor…" : isEdit ? "Güncelle" : "Kaydet"}
         </button>
       </footer>
+
+      {revizeOpen && (
+        <div
+          onClick={() => !revizeBusy && setRevizeOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "var(--color-surface)",
+              borderRadius: 14,
+              padding: 22,
+              width: "100%",
+              maxWidth: 560,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>Raporu Düzeltmeye Aç</h3>
+              <button
+                type="button"
+                onClick={() => !revizeBusy && setRevizeOpen(false)}
+                style={{ border: "none", background: "transparent", fontSize: "1.3rem", cursor: revizeBusy ? "wait" : "pointer", color: "var(--color-text-secondary)", lineHeight: 1 }}
+              >×</button>
+            </div>
+            <p style={{ margin: "0 0 14px", fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
+              Rapor <strong>{form.RaporNo || effectiveId}</strong> · {editLock.raporFormati}
+              {revizeSebep.trim()
+                ? <> — Rev.{parseRev(form.Revno)} → <strong>Rev.{parseRev(form.Revno) + 1}</strong>. TR/EN bağlı formatlar birlikte açılır.</>
+                : <> — Açıklama boş bırakılırsa Rev.{parseRev(form.Revno)} korunur; rapor onay alanına geri döner ve numune formu düzenlemeye açılır. TR/EN bağlı formatlar birlikte açılır.</>}
+            </p>
+
+            <label style={{ fontSize: "0.8rem", fontWeight: 600, display: "block", marginBottom: 6 }}>
+              Revize Sebebi <span style={{ color: "var(--color-text-tertiary)", fontWeight: 500 }}>(boş bırakılırsa sadece düzenlemeye açılır)</span>
+            </label>
+            <textarea
+              value={revizeSebep}
+              onChange={e => setRevizeSebep(e.target.value)}
+              disabled={revizeBusy}
+              rows={2}
+              placeholder="örn. firma adı / müşteri bilgisi düzeltmesi"
+              style={{ width: "100%", padding: "8px 10px", borderRadius: 7, border: "1px solid var(--color-border)", fontSize: "0.85rem", background: "var(--color-surface)", resize: "vertical", fontFamily: "inherit" }}
+            />
+
+            <div style={{ marginTop: 12, fontSize: "0.72rem", fontWeight: 600, color: "var(--color-text-tertiary)", marginBottom: 4 }}>
+              Açıklama:
+            </div>
+            <div style={{ fontSize: "0.82rem", lineHeight: 1.5, padding: "10px 12px", background: "var(--color-surface-2)", borderRadius: 8, color: "var(--color-text-primary)" }}>
+              {revizeSebep.trim()
+                ? buildRevizeCumle(form.RaporNo || String(effectiveId), parseRev(form.Revno), revizeSebep)
+                : "Revizyon numarası ve revizyon açıklaması değişmeden, rapor onay alanına geri alınacak."}
+            </div>
+
+            {revizeError && (
+              <div style={{ marginTop: 12, color: "#c00", fontSize: "0.8rem", padding: "8px 10px", background: "#ff3b3010", borderRadius: 7 }}>
+                {revizeError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18 }}>
+              <button
+                type="button"
+                onClick={() => setRevizeOpen(false)}
+                disabled={revizeBusy}
+                style={{
+                  padding: "8px 14px", borderRadius: 7, border: "1px solid var(--color-border)",
+                  background: "transparent", color: "var(--color-text-secondary)",
+                  fontSize: "0.85rem", fontWeight: 600, cursor: revizeBusy ? "wait" : "pointer",
+                }}
+              >Vazgeç</button>
+              <button
+                type="button"
+                onClick={handleRevizeSubmit}
+                disabled={revizeBusy}
+                style={{
+                  padding: "8px 14px", borderRadius: 7, border: "none",
+                  background: "#c06800", color: "#fff",
+                  fontSize: "0.85rem", fontWeight: 700,
+                  cursor: revizeBusy ? "wait" : "pointer",
+                }}
+              >
+                {revizeBusy ? "İşleniyor..." : (revizeSebep.trim() ? "Revize Et" : "Düzenlemeye Aç")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

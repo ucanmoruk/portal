@@ -192,7 +192,7 @@ export async function POST(
       auth: { user: mailUser, pass: mailPass },
     });
 
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from:    mailFrom,
       to:      to.join(", "),
       cc:      cc.length ? cc.join(", ") : undefined,
@@ -206,7 +206,12 @@ export async function POST(
       .input("ID", Number(id))
       .query(`UPDATE TeklifBaslik SET TeklifDurum = N'Onay Bekleniyor' WHERE ID = @ID AND TeklifDurum = 'Taslak'`);
 
-    return Response.json({ success: true });
+    return Response.json({
+      success: true,
+      messageId: info.messageId,
+      accepted: info.accepted || [],
+      rejected: info.rejected || [],
+    });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Mail gönderilemedi.";
     return Response.json({ error: message }, { status: 500 });
@@ -388,9 +393,9 @@ function buildHtml(p: {
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Teklif ${no}</title>
 </head>
-<body style="margin:0;padding:0;background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;">
+<body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;">
 
-  <div style="max-width:660px;margin:32px auto 48px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+  <div style="max-width:660px;margin:32px auto 48px;background:#ffffff;border-radius:14px;overflow:hidden;">
 
     <!-- ── Üst bant ─────────────────────────────────────────────── -->
     <div style="background:linear-gradient(135deg,#1a4f8a 0%,#0071e3 100%);padding:32px 36px 28px;">
@@ -444,7 +449,7 @@ function buildHtml(p: {
 
     <!-- ── Kişisel mesaj ─────────────────────────────────────────── -->
     ${mesaj ? `
-    <div style="margin:20px 36px 0;background:#f0f7ff;border-left:3px solid #0071e3;border-radius:0 8px 8px 0;padding:12px 16px;font-size:14px;color:#1d1d1f;white-space:pre-wrap;line-height:1.55;">${escHtml(mesaj)}</div>
+    <div style="margin:20px 36px 0;background:#ffffff;border-left:3px solid #0071e3;border-radius:0 8px 8px 0;padding:12px 16px;font-size:14px;color:#1d1d1f;white-space:pre-wrap;line-height:1.55;">${escHtml(mesaj)}</div>
     ` : ""}
 
     <!-- ── Hizmet tablosu ────────────────────────────────────────── -->
@@ -452,7 +457,7 @@ function buildHtml(p: {
       <div style="font-size:10px;font-weight:700;color:#8e8e93;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:10px;">HİZMETLER</div>
       <table style="width:100%;border-collapse:collapse;font-size:13px;border-radius:10px;overflow:hidden;border:1px solid #eaedf1;">
         <thead>
-          <tr style="background:#f5f7fa;">
+          <tr style="background:#ffffff;">
             <th style="padding:10px 14px;text-align:left;font-weight:600;font-size:11px;color:#6e6e73;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #e2e6ed;">Hizmet / Analiz</th>
             <th style="padding:10px 14px;text-align:center;font-weight:600;font-size:11px;color:#6e6e73;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #e2e6ed;width:48px;">Adet</th>
             <th style="padding:10px 14px;text-align:right;font-weight:600;font-size:11px;color:#6e6e73;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #e2e6ed;">Birim Fiyat</th>
@@ -507,7 +512,7 @@ function buildHtml(p: {
     </div>
 
     <!-- ── Footer ───────────────────────────────────────────────── -->
-    <div style="padding:14px 36px;background:#f5f7fa;border-top:1px solid #eaedf1;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="padding:14px 36px;background:#ffffff;border-top:1px solid #eaedf1;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
       <div style="font-size:11px;color:#8e8e93;">${escHtml(sirketAdi)}${sirketAdres ? ` · ${escHtml(sirketAdres)}` : ""}</div>
       <div style="font-size:11px;color:#aaaaaa;">Bu teklif elektronik olarak hazırlanmıştır.</div>
     </div>
@@ -552,7 +557,7 @@ function buildHtmlV4(p: Parameters<typeof buildHtml>[0]) {
     }
   </style>
 </head>
-<body style="margin:0;padding:24px;background:#f5f5f7;font-family:'JetBrains Mono','Cascadia Mono',Consolas,'Courier New',monospace;color:#1d1d1f;font-size:10.5px;line-height:1.5;">
+<body style="margin:0;padding:24px;background:#ffffff;font-family:'JetBrains Mono','Cascadia Mono',Consolas,'Courier New',monospace;color:#1d1d1f;font-size:10.5px;line-height:1.5;">
   <div style="width:720px;max-width:100%;margin:0 auto;background:#ffffff;padding:48px 42px 28px;box-sizing:border-box;">
     <table class="v4-header-table" role="presentation" style="width:100%;border-collapse:collapse;padding-bottom:34px;">
       <tr>

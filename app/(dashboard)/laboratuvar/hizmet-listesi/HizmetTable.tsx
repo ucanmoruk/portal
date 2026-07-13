@@ -51,6 +51,7 @@ const EMPTY_ALT: AltParametre = {
 interface Birim { ID: number | null; Birim: string; }
 
 const RAPOR_FORMATLARI = ["Genel", "Stabilite", "Challenge", "Claim", "ÜGDR", "Diğer"] as const;
+const HIZMET_BOLUM_ADLARI = ["Mikrobiyoloji", "Kimyasal", "Dış Lab.", "Dış Laboratuvar"];
 
 const EMPTY: Partial<Hizmet> = {
   Kod: "", Ad: "", AdEn: "", Method: "", MethodEn: "",
@@ -207,6 +208,22 @@ export default function HizmetTable() {
 
   const fiyatLabel = (row: Hizmet) =>
     row.Fiyat != null ? `${row.Fiyat.toLocaleString("tr-TR")} ${row.ParaBirimi}` : "";
+
+  const completeKodSuggestion = async () => {
+    const current = String(editRow?.Kod || "").trim();
+    if (!current || !current.endsWith(".")) return;
+    try {
+      const res = await fetch(`/api/hizmetler/next-code?prefix=${encodeURIComponent(current)}`);
+      const json = await res.json();
+      if (!res.ok || !json.kod) return;
+      setEditRow(prev => {
+        if (!prev || String(prev.Kod || "").trim() !== current) return prev;
+        return { ...prev, Kod: json.kod };
+      });
+    } catch {
+      // Kod onerisi yardimci bir ozellik; hata kaydi engellemesin.
+    }
+  };
 
   return (
     <>
@@ -477,7 +494,12 @@ export default function HizmetTable() {
               <div className={styles.formGrid3} style={{ marginBottom: 14 }}>
                 <div className={styles.formGroup}>
                   <label>Kod <span className={styles.required}>*</span></label>
-                  <input value={editRow.Kod || ""} onChange={e => setEditRow(p => ({ ...p!, Kod: e.target.value }))} />
+                  <input
+                    value={editRow.Kod || ""}
+                    onChange={e => setEditRow(p => ({ ...p!, Kod: e.target.value }))}
+                    onBlur={completeKodSuggestion}
+                    placeholder="DL.SOP. yazıp alandan çıkınca sıradaki kod gelir"
+                  />
                 </div>
                 <div className={styles.formGroup}>
                   <label>Akreditasyon</label>
@@ -620,8 +642,7 @@ export default function HizmetTable() {
 
               {/* Satır 4: Bölüm — yalnız 3 lab birimi (whitelist) */}
               {(() => {
-                const HIZMET_BOLUM_WHITELIST = ["Mikrobiyoloji", "Kimyasal", "Dış Laboratuvar"];
-                const filtered = birimler.filter(b => HIZMET_BOLUM_WHITELIST.includes(b.Birim));
+                const filtered = birimler.filter(b => HIZMET_BOLUM_ADLARI.includes(String(b.Birim || "").trim()));
                 return (
                   <div className={styles.formGroup} style={{ marginBottom: 14 }}>
                     <label>Bölüm</label>

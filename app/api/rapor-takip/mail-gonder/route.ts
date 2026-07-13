@@ -129,8 +129,8 @@ export async function POST(request: Request) {
 
     const html = `<!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><title>${esc(sirketAdi)} — Analiz Raporu</title></head>
-<body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;">
-  <div style="max-width:640px;margin:24px auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+<body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;">
+  <div style="max-width:640px;margin:24px auto;background:#fff;border-radius:14px;overflow:hidden;">
     <div style="padding:24px 28px;border-bottom:1px solid #eaeaea;">
       <img src="cid:unique-logo" alt="${esc(sirketAdi)}" style="height:32px;display:block;"/>
     </div>
@@ -140,7 +140,7 @@ export async function POST(request: Request) {
       <p style="margin:0 0 12px 0;color:#86868b;font-size:14px;">Ekteki PDF'lerde aşağıdaki rapor(lar) yer almaktadır:</p>
       <table style="width:100%;border-collapse:collapse;border:1px solid #eaeaea;border-radius:8px;overflow:hidden;font-size:13px;">
         <thead>
-          <tr style="background:#f5f5f7;">
+          <tr style="background:#ffffff;">
             <th style="padding:8px 10px;text-align:left;color:#6e6e73;font-weight:600;border-bottom:1px solid #eaeaea;">Rapor No</th>
             <th style="padding:8px 10px;text-align:left;color:#6e6e73;font-weight:600;border-bottom:1px solid #eaeaea;">Numune</th>
           </tr>
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
       </table>
       <p style="margin:18px 0 0 0;font-size:12px;color:#86868b;">Bu raporlar dijital olarak imzalanmıştır. Doğrulama için PDF üzerindeki QR kodu veya <a href="https://dogrulama.uniqueanalyse.com" style="color:#0071e3;text-decoration:none;">dogrulama.uniqueanalyse.com</a> kullanılabilir.</p>
     </div>
-    <div style="padding:18px 28px;background:#fafafa;border-top:1px solid #eaeaea;font-size:12px;color:#86868b;">
+    <div style="padding:18px 28px;background:#ffffff;border-top:1px solid #eaeaea;font-size:12px;color:#86868b;">
       <strong style="color:#1d1d1f;">${esc(sirketAdi)}</strong><br/>
       ${sirketAdres ? esc(sirketAdres) + "<br/>" : ""}
       ${sirketEmail ? `<a href="mailto:${esc(sirketEmail)}" style="color:#0071e3;text-decoration:none;">${esc(sirketEmail)}</a>` : ""}
@@ -172,7 +172,7 @@ export async function POST(request: Request) {
       auth: { user: mailUser, pass: mailPass },
     });
 
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: mailFrom,
       to: to.join(", "),
       cc: cc.length ? cc.join(", ") : undefined,
@@ -181,7 +181,13 @@ export async function POST(request: Request) {
       attachments: allAttachments,
     });
 
-    return Response.json({ ok: true, gonderilen: attachments.length });
+    return Response.json({
+      ok: true,
+      gonderilen: attachments.length,
+      messageId: info.messageId,
+      accepted: info.accepted || [],
+      rejected: info.rejected || [],
+    });
   } catch (e: any) {
     console.error("[rapor-takip mail-gonder]", e);
     return Response.json({ error: e.message || "Mail gönderilemedi" }, { status: 500 });

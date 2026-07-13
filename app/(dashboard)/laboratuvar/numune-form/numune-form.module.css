@@ -104,6 +104,24 @@
   margin-bottom: 12px;
 }
 
+.lockedNoticeBtn {
+  float: right;
+  margin-left: 12px;
+  margin-bottom: 6px;
+  padding: 6px 12px;
+  border: 1px solid #c068003d;
+  border-radius: 7px;
+  background: #c06800;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lockedNoticeBtn:hover {
+  filter: brightness(0.95);
+}
+
 .readOnlyFieldset {
   border: 0;
   padding: 0;

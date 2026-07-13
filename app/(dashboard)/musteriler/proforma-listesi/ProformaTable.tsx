@@ -42,7 +42,7 @@ function statusStyle(durum: string): React.CSSProperties {
     Onaylandı: { background: "#e6f6ee", color: "#1a7f4b", borderColor: "#b8e6ce" },
     Faturalaştı: { background: "#f3eaff", color: "#6b21a8", borderColor: "#d8bcf5" },
     "Ödeme Bekliyor": { background: "#fff4e5", color: "#b35309", borderColor: "#fbd9a8" },
-    Ödendi: { background: "#e6f6ee", color: "#1a7f4b", borderColor: "#b8e6ce" },
+    Ödendi: { background: "#e8f0ff", color: "#2451a6", borderColor: "#b9ccff" },
     İptal: { background: "#fdecea", color: "#c0392b", borderColor: "#f5b8b0" },
   };
   return {
