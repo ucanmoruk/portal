@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 type Belge = {
   ID: number;
   Tarih: string | null;
-  RaporNo: number | null;
+  RaporNo: string | number | null;
   NumuneTur: string | null;
   NumuneAd: string | null;
   FirmaAd: string | null;

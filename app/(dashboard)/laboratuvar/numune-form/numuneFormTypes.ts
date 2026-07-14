@@ -61,6 +61,7 @@ export interface NkrFormData {
 
 export interface HizmetRow {
   key: string;
+  ID?: number;
   AnalizID: number;
   Termin: string;
   x3ID: number | null;

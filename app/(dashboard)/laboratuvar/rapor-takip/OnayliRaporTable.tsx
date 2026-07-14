@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import styles from "@/app/styles/table.module.css";
-import { expandReportFormats, type ReportLanguageChoice } from "@/lib/raporFormatLanguage";
+import { baseReportFormat, expandReportFormats, type ReportLanguageChoice } from "@/lib/raporFormatLanguage";
 
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 const englishPreviewFormat = (format: string): string | null => {
@@ -30,6 +30,8 @@ interface RaporRow {
   RaporDurumu: "Onaylandı" | "Yayınlandı" | string;
   MaxTermin: string | null;
   YayinUrl?: string | null;
+  TrYayinlandi?: number | null;
+  EnYayinlandi?: number | null;
 }
 
 // Sunucu Onaylandı/Yayınlandı/Arşiv döner. UI: Onaylandı | Gönderildi | Arşiv.
@@ -126,6 +128,16 @@ const buildRevizeCumle = (kod: string, eskiRev: number, sebep: string): string =
 
 // Revize cümlesinde kullanılacak takip kodu: dış kod (ÜGAM/…) varsa o, yoksa RaporNo.
 const revizeTakipKodu = (r: RaporRow): string => (r.DisRaporKodu?.trim() || r.RaporNo);
+
+const isEnglishFormat = (format: string) => baseReportFormat(format) !== String(format || "").trim();
+
+function isPublishedForFormat(row: RaporRow | undefined, format: string) {
+  if (!row) return false;
+  const english = isEnglishFormat(format);
+  const flag = english ? row.EnYayinlandi : row.TrYayinlandi;
+  if (flag != null) return Number(flag) > 0;
+  return row.RaporDurumu === "Yayınlandı";
+}
 
 // ── Ana bileşen ───────────────────────────────────────────────────────────────
 
@@ -272,7 +284,9 @@ export default function OnayliRaporTable() {
     setPublishingKey(key);
     setError("");
     try {
-      let baseYayinUrl: string | null = null;
+      let publishedUrl: string | null = null;
+      let sentTr = false;
+      let sentEn = false;
       for (const raporFormati of expandReportFormats(row.RaporFormati, reportLanguage)) {
         const res = await fetch(`/api/rapor-takip/${row.NkrID}/yayinla`, {
           method: "POST",
@@ -281,15 +295,21 @@ export default function OnayliRaporTable() {
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json.error || "Portala gönderilemedi");
-        if (raporFormati === row.RaporFormati) baseYayinUrl = json.yayinUrl ?? null;
+        publishedUrl = json.yayinUrl ?? publishedUrl;
+        if (isEnglishFormat(raporFormati)) sentEn = true;
+        else sentTr = true;
       }
-      if (reportLanguage !== "en") {
-        setRows(prev => prev.map(r =>
-          r.NkrID === row.NkrID && r.RaporFormati === row.RaporFormati
-            ? { ...r, RaporDurumu: "Yayınlandı", YayinUrl: baseYayinUrl ?? r.YayinUrl }
-            : r
-        ));
-      }
+      setRows(prev => prev.map(r =>
+        r.NkrID === row.NkrID && r.RaporFormati === row.RaporFormati
+          ? {
+              ...r,
+              RaporDurumu: "Yayınlandı",
+              YayinUrl: publishedUrl ?? r.YayinUrl,
+              TrYayinlandi: sentTr ? 1 : r.TrYayinlandi,
+              EnYayinlandi: sentEn ? 1 : r.EnYayinlandi,
+            }
+          : r
+      ));
     } catch (e: any) {
       setError(e.message || "Portala gönderilemedi");
     } finally {
@@ -452,7 +472,7 @@ export default function OnayliRaporTable() {
   // çalışır; ilerleme gösterilir. Zaten Yayınlanmış olanlar atlanır.
   const handleBulkPublish = async () => {
     const sel = expandItemsByLanguage(selectedItems());
-    const targets = sel.filter(s => reportLanguage !== "tr" || s.row?.RaporDurumu !== "Yayınlandı");
+    const targets = sel.filter(s => !isPublishedForFormat(s.row, s.raporFormati));
     if (targets.length === 0) {
       setError("Seçili raporların tümü zaten gönderilmiş.");
       return;
@@ -475,9 +495,17 @@ export default function OnayliRaporTable() {
           const json = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(json.error || "hata");
           // Satırı yerinde güncelle
+          const baseFormat = t.row?.RaporFormati ?? baseReportFormat(t.raporFormati);
+          const sentEn = isEnglishFormat(t.raporFormati);
           setRows(prev => prev.map(r =>
-            r.NkrID === t.nkrId && r.RaporFormati === t.raporFormati
-              ? { ...r, RaporDurumu: "Yayınlandı", YayinUrl: json.yayinUrl ?? r.YayinUrl }
+            r.NkrID === t.nkrId && r.RaporFormati === baseFormat
+              ? {
+                  ...r,
+                  RaporDurumu: "Yayınlandı",
+                  YayinUrl: json.yayinUrl ?? r.YayinUrl,
+                  TrYayinlandi: sentEn ? r.TrYayinlandi : 1,
+                  EnYayinlandi: sentEn ? 1 : r.EnYayinlandi,
+                }
               : r
           ));
         } catch (e: any) {

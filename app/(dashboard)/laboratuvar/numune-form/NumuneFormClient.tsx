@@ -91,6 +91,7 @@ function mapApiToForm(
 function mapHizmetler(rows: Record<string, unknown>[]): HizmetRow[] {
   return rows.map((h, i) => ({
     key: `x-${h.ID ?? i}`,
+    ID: h.ID != null && h.ID !== "" ? Number(h.ID) : undefined,
     AnalizID: Number(h.AnalizID),
     Termin: h.Termin ? dat(h.Termin) : "",
     x3ID: h.x3ID != null && h.x3ID !== "" ? Number(h.x3ID) : null,
@@ -100,6 +101,10 @@ function mapHizmetler(rows: Record<string, unknown>[]): HizmetRow[] {
     Sure: h.Sure != null && h.Sure !== "" ? Number(h.Sure) : null,
     Limit: d(h.Limit) || undefined,
     Birim: d(h.Birim) || undefined,
+    LimitEn: d(h.LimitEn) || undefined,
+    BirimEn: d(h.BirimEn) || undefined,
+    LOQ: d(h.LOQ) || undefined,
+    LOQEn: d(h.LOQEn) || undefined,
   }));
 }
 
@@ -212,12 +217,17 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
       UretimTarihi: passthroughText(form.UretimTarihi),
       SKT: passthroughText(form.SKT),
     },
-    hizmetler: hizmetler.map(({ AnalizID, Termin, x3ID, Limit, Birim }) => ({
+    hizmetler: hizmetler.map(({ ID, AnalizID, Termin, x3ID, Limit, Birim, LimitEn, BirimEn, LOQ, LOQEn }) => ({
+      ID,
       AnalizID,
       Termin: Termin || null,
       x3ID,
       Limit: Limit || null,
       Birim: Birim || null,
+      LimitEn: LimitEn || null,
+      BirimEn: BirimEn || null,
+      LOQ: LOQ || null,
+      LOQEn: LOQEn || null,
     })),
     formul: [],
     raporMetinleri: form.RaporMetinleri,

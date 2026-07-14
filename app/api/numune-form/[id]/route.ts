@@ -263,10 +263,56 @@ export async function PUT(
       `);
     }
 
-    // ── 3. NumuneX1 — sil + toplu ekle ─────────────────────────
-    await pool.request().input("id", nkrId).query("DELETE FROM NumuneX1 WHERE RaporID = @id");
+    // ── 3. NumuneX1 — mevcut analizleri koru, sadece yeni eklenenleri kabul bekleyene düşür ──
+    const existingX1Res = await pool.request()
+      .input("id", nkrId)
+      .query("SELECT ID, AnalizID, x3ID FROM NumuneX1 WHERE RaporID = @id ORDER BY ID");
 
-    if (hizmetler.length > 0) {
+    const existingById = new Map<number, { ID: number; AnalizID: number; x3ID: number | null }>();
+    const existingBySig = new Map<string, { ID: number; AnalizID: number; x3ID: number | null }[]>();
+    for (const row of existingX1Res.recordset as Array<{ ID: number; AnalizID: number; x3ID: number | null }>) {
+      existingById.set(Number(row.ID), row);
+      const sig = `${Number(row.AnalizID)}__${row.x3ID == null ? "" : Number(row.x3ID)}`;
+      const list = existingBySig.get(sig) || [];
+      list.push(row);
+      existingBySig.set(sig, list);
+    }
+
+    const usedExistingIds = new Set<number>();
+    const resolveExistingId = (h: any): number | null => {
+      const rawId = Number(h.ID ?? h.X1ID ?? h.x1ID ?? 0);
+      if (rawId > 0 && existingById.has(rawId) && !usedExistingIds.has(rawId)) {
+        usedExistingIds.add(rawId);
+        return rawId;
+      }
+
+      const sig = `${Number(h.AnalizID)}__${h.x3ID == null ? "" : Number(h.x3ID)}`;
+      const match = (existingBySig.get(sig) || []).find(item => !usedExistingIds.has(Number(item.ID)));
+      if (match) {
+        usedExistingIds.add(Number(match.ID));
+        return Number(match.ID);
+      }
+      return null;
+    };
+
+    const preparedHizmetler: Array<{ row: any; existingId: number | null }> = hizmetler.map((h: any) => ({
+      row: h,
+      existingId: resolveExistingId(h),
+    }));
+
+    const keepIds = preparedHizmetler
+      .map((item: { existingId: number | null }) => item.existingId)
+      .filter((id: number | null): id is number => typeof id === "number" && id > 0);
+
+    if (keepIds.length > 0) {
+      await pool.request()
+        .input("id", nkrId)
+        .query(`DELETE FROM NumuneX1 WHERE RaporID = @id AND ID NOT IN (${keepIds.join(",")})`);
+    } else {
+      await pool.request().input("id", nkrId).query("DELETE FROM NumuneX1 WHERE RaporID = @id");
+    }
+
+    if (preparedHizmetler.length > 0) {
       // Opsiyonel kolon kontrolü
       const x1ColRes = await pool.request().query(`
         SELECT name FROM sys.columns
@@ -275,25 +321,24 @@ export async function PUT(
       `);
       const x1Cols = new Set<string>(x1ColRes.recordset.map((r: any) => r.name));
 
-      const q = (v: string | undefined | null) =>
-        v ? `'${String(v).replace(/'/g, "''")}'` : "NULL";
-
       // StokAnalizListesi'nden Limit/Birim (TR) + LimitEn/BirimEn/LOQ/LOQEn çek
-      const analizIds = [...new Set(hizmetler.map((h: any) => Number(h.AnalizID)))];
-      const stalRes = await pool.request().query(`
-        SELECT ID,
-          ISNULL([Limit], '') AS LimitDeger, ISNULL(BirimText, '') AS Birim,
-          ISNULL(LimitEn,    '') AS LimitEn,    ISNULL(BirimEn,  '') AS BirimEn,
-          ISNULL(LOQ,        '') AS LOQ,         ISNULL(LOQEn,   '') AS LOQEn
-        FROM StokAnalizListesi WHERE ID IN (${analizIds.join(",")})
-      `);
+      const analizIds = [...new Set(preparedHizmetler.map(({ row }: any) => Number(row.AnalizID)).filter(Number.isFinite))];
+      const stalRes = analizIds.length > 0
+        ? await pool.request().query(`
+            SELECT ID,
+              ISNULL([Limit], '') AS LimitDeger, ISNULL(BirimText, '') AS Birim,
+              ISNULL(LimitEn,    '') AS LimitEn,    ISNULL(BirimEn,  '') AS BirimEn,
+              ISNULL(LOQ,        '') AS LOQ,         ISNULL(LOQEn,   '') AS LOQEn
+            FROM StokAnalizListesi WHERE ID IN (${analizIds.join(",")})
+          `)
+        : { recordset: [] as any[] };
       const stalMap = new Map<number, { LimitDeger: string; Birim: string; LimitEn: string; BirimEn: string; LOQ: string; LOQEn: string }>();
       for (const r of stalRes.recordset) {
         stalMap.set(r.ID, { LimitDeger: r.LimitDeger, Birim: r.Birim, LimitEn: r.LimitEn, BirimEn: r.BirimEn, LOQ: r.LOQ, LOQEn: r.LOQEn });
       }
 
       // NumuneX4'ten paket hizmetler için Limit/Birim (TR+EN) çek
-      const paketHizmetler = hizmetler.filter((h: any) => h.x3ID);
+      const paketHizmetler = preparedHizmetler.map(({ row }: any) => row).filter((h: any) => h.x3ID);
       const paketMap = new Map<string, { LimitDeger: string; LimitBirimi: string; LimitEn: string; BirimEn: string }>();
       if (paketHizmetler.length > 0) {
         const paketCond = paketHizmetler.map((h: any) =>
@@ -312,15 +357,7 @@ export async function PUT(
         }
       }
 
-      const extraCols: string[] = [];
-      if (x1Cols.has("Sonuc"))            extraCols.push("Sonuc");
-      if (x1Cols.has("SonucEn"))          extraCols.push("SonucEn");
-      if (x1Cols.has("Degerlendirme"))    extraCols.push("Degerlendirme");
-      if (x1Cols.has("DegerlendirmeEn"))  extraCols.push("DegerlendirmeEn");
-      if (x1Cols.has("Durum"))            extraCols.push("Durum");
-      if (x1Cols.has("HizmetDurum"))      extraCols.push("HizmetDurum");
-
-      const values = hizmetler.map((h: any) => {
+      for (const { row: h, existingId } of preparedHizmetler) {
         const stal = stalMap.get(Number(h.AnalizID)) ?? { LimitDeger: "", Birim: "", LimitEn: "", BirimEn: "", LOQ: "", LOQEn: "" };
         let limitEn: string;
         let birimEn: string;
@@ -341,26 +378,85 @@ export async function PUT(
         // Çoklu Giriş'ten gelen h.Limit/h.Birim undefined olabilir → DB değerine geri dön
         const limitVal = h.Limit  || dbLimitDeger || null;
         const birimVal = h.Birim  || dbBirim      || null;
-        const loq   = stal.LOQ;
-        const loqEn = stal.LOQEn;
+        const loq   = h.LOQ   || stal.LOQ   || null;
+        const loqEn = h.LOQEn || stal.LOQEn || null;
         const auto  = computeSonucAuto(limitVal, loq);
 
-        // Sonuc/Degerlendirme auto-fill (LOQ tabanlı) — kolaylık için.
-        // "Kayıtlı" sayılması SonucKayitTarihi kolonuna bağlı (NULL = henüz Kaydet basılmadı).
-        const extraVals = [
-          ...(x1Cols.has("Sonuc")            ? [q(auto.sonuc)]                      : []),
-          ...(x1Cols.has("SonucEn")          ? [q(auto.sonucEn)]                    : []),
-          ...(x1Cols.has("Degerlendirme")    ? ["'Uygun'"]                           : []),
-          ...(x1Cols.has("DegerlendirmeEn")  ? [q(computeDegerlendirmeEn("Uygun"))] : []),
-          ...(x1Cols.has("Durum")            ? ["'Aktif'"]                           : []),
-          ...(x1Cols.has("HizmetDurum")      ? ["'YeniAnaliz'"]                      : []),
-        ];
-        const base = `${nkrId}, ${h.AnalizID}, ${h.Termin ? `'${h.Termin}'` : "NULL"}, ${h.x3ID ?? "NULL"}, ${q(limitVal)}, ${q(birimVal)}, ${q(limitEn)}, ${q(birimEn)}, ${q(loq)}, ${q(loqEn)}`;
-        return `(${base}${extraVals.length > 0 ? ", " + extraVals.join(", ") : ""})`;
-      }).join(", ");
+        if (existingId) {
+          const setsX1 = [
+            "AnalizID = @AnalizID",
+            "Termin = @Termin",
+            "x3ID = @x3ID",
+            "[Limit] = @Limit",
+            "Birim = @Birim",
+            "LimitEn = @LimitEn",
+            "BirimEn = @BirimEn",
+            "LOQ = @LOQ",
+            "LOQEn = @LOQEn",
+          ];
+          if (x1Cols.has("Durum")) setsX1.push("Durum = N'Aktif'");
 
-      const colList = `RaporID, AnalizID, Termin, x3ID, [Limit], Birim, LimitEn, BirimEn, LOQ, LOQEn${extraCols.length > 0 ? ", " + extraCols.join(", ") : ""}`;
-      await pool.request().query(`INSERT INTO NumuneX1 (${colList}) VALUES ${values}`);
+          await pool.request()
+            .input("X1ID", existingId)
+            .input("RaporID", nkrId)
+            .input("AnalizID", Number(h.AnalizID))
+            .input("Termin", h.Termin || null)
+            .input("x3ID", h.x3ID ?? null)
+            .input("Limit", limitVal)
+            .input("Birim", birimVal)
+            .input("LimitEn", h.LimitEn || limitEn || null)
+            .input("BirimEn", h.BirimEn || birimEn || null)
+            .input("LOQ", loq)
+            .input("LOQEn", loqEn)
+            .query(`UPDATE NumuneX1 SET ${setsX1.join(", ")} WHERE ID = @X1ID AND RaporID = @RaporID`);
+          continue;
+        }
+
+        const colsX1 = ["RaporID", "AnalizID", "Termin", "x3ID", "[Limit]", "Birim", "LimitEn", "BirimEn", "LOQ", "LOQEn"];
+        const valsX1 = ["@RaporID", "@AnalizID", "@Termin", "@x3ID", "@Limit", "@Birim", "@LimitEn", "@BirimEn", "@LOQ", "@LOQEn"];
+        const insX1 = pool.request()
+          .input("RaporID", nkrId)
+          .input("AnalizID", Number(h.AnalizID))
+          .input("Termin", h.Termin || null)
+          .input("x3ID", h.x3ID ?? null)
+          .input("Limit", limitVal)
+          .input("Birim", birimVal)
+          .input("LimitEn", h.LimitEn || limitEn || null)
+          .input("BirimEn", h.BirimEn || birimEn || null)
+          .input("LOQ", loq)
+          .input("LOQEn", loqEn);
+
+        if (x1Cols.has("Sonuc")) {
+          colsX1.push("Sonuc");
+          valsX1.push("@Sonuc");
+          insX1.input("Sonuc", auto.sonuc);
+        }
+        if (x1Cols.has("SonucEn")) {
+          colsX1.push("SonucEn");
+          valsX1.push("@SonucEn");
+          insX1.input("SonucEn", auto.sonucEn);
+        }
+        if (x1Cols.has("Degerlendirme")) {
+          colsX1.push("Degerlendirme");
+          valsX1.push("@Degerlendirme");
+          insX1.input("Degerlendirme", "Uygun");
+        }
+        if (x1Cols.has("DegerlendirmeEn")) {
+          colsX1.push("DegerlendirmeEn");
+          valsX1.push("@DegerlendirmeEn");
+          insX1.input("DegerlendirmeEn", computeDegerlendirmeEn("Uygun"));
+        }
+        if (x1Cols.has("Durum")) {
+          colsX1.push("Durum");
+          valsX1.push("N'Aktif'");
+        }
+        if (x1Cols.has("HizmetDurum")) {
+          colsX1.push("HizmetDurum");
+          valsX1.push("N'YeniAnaliz'");
+        }
+
+        await insX1.query(`INSERT INTO NumuneX1 (${colsX1.join(", ")}) VALUES (${valsX1.join(", ")})`);
+      }
     }
 
     // ── 3.5. Dış Rapor Kodları (ÜGAM/RR26/XXXX) — her format için tahsis et ──

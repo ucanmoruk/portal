@@ -38,6 +38,29 @@ export async function GET(
       : "NULL AS BolumID, '' AS BolumAdi";
     const bolumJoin = hasBL ? "LEFT JOIN RootFirmaBirim b ON b.ID = s.BolumID" : "";
 
+    const tableColRes = await pool.request().query(`
+      SELECT 'table' AS Kind, TABLE_NAME AS Name
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_NAME = 'NKR_LabKabul' AND TABLE_SCHEMA IN ('dbo','cosmoroot')
+      UNION ALL
+      SELECT 'column' AS Kind, COLUMN_NAME AS Name
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = 'NumuneX1' AND COLUMN_NAME = 'HizmetDurum'
+    `);
+    const hasLabKabul = tableColRes.recordset.some((r: { Kind: string; Name: string }) => r.Kind === "table" && r.Name === "NKR_LabKabul");
+    const hasHizmetDurum = tableColRes.recordset.some((r: { Kind: string; Name: string }) => r.Kind === "column" && r.Name === "HizmetDurum");
+    const newOnlyFilter = hasLabKabul && hasHizmetDurum
+      ? `AND (
+          NOT EXISTS (
+            SELECT 1
+            FROM NKR_LabKabul k
+            WHERE k.NkrID = x1.RaporID
+              AND k.RaporFormati = @raporFormati
+          )
+          OR x1.HizmetDurum IN (N'Yeni', N'YeniAnaliz', N'Yeni Analiz')
+        )`
+      : "";
+
     const result = await pool.request()
       .input("nkrId", nkrIdNum)
       .input("raporFormati", raporFormati)
@@ -58,6 +81,7 @@ export async function GET(
         ${bolumJoin}
         WHERE x1.RaporID = @nkrId
           AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @raporFormati
+          ${newOnlyFilter}
         ORDER BY s.Kod
       `);
 

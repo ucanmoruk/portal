@@ -103,7 +103,10 @@ async function backfillRecentProformaLinks(pool: any) {
         .input("Evrak_No", evrakNo)
         .query(`
           INSERT INTO Odeme (Evrak_No, Odeme_Durumu, Tarih)
-          VALUES (@Evrak_No, N'Proforma', GETDATE())
+          SELECT @Evrak_No, N'Proforma', GETDATE()
+          WHERE NOT EXISTS (
+            SELECT 1 FROM Odeme WHERE Evrak_No = @Evrak_No
+          )
         `);
     }
   }
@@ -187,6 +190,34 @@ export async function GET(request: NextRequest) {
       END
     `;
 
+    const effectiveOdemeExpr = `
+      COALESCE(
+        (
+          SELECT TOP 1 o.Odeme_Durumu
+          FROM Odeme o
+          WHERE o.Evrak_No = n.Evrak_No
+            AND ISNULL(o.Odeme_Durumu, N'') <> N'Proforma'
+          ORDER BY o.ID DESC
+        ),
+        (
+          SELECT TOP 1 fo.Odeme_Durumu
+          FROM ProformaNkr pn2
+          INNER JOIN ProformaBaslik pb2 ON pb2.ID = pn2.ProformaID AND pb2.SilindiMi = 0
+          INNER JOIN Fatura ft2 ON ft2.Durum = 'Aktif' AND (ft2.ProformaNo = pb2.EvrakNo OR ft2.ProformaNo = pb2.ProformaNo)
+          INNER JOIN Odeme fo ON fo.Fatura_ID = ft2.ID
+          WHERE pn2.EvrakNo = CAST(n.Evrak_No AS NVARCHAR(40))
+            AND ISNULL(fo.Odeme_Durumu, N'') <> N'Proforma'
+          ORDER BY fo.ID DESC
+        ),
+        (
+          SELECT TOP 1 o.Odeme_Durumu
+          FROM Odeme o
+          WHERE o.Evrak_No = n.Evrak_No
+          ORDER BY o.ID DESC
+        )
+      )
+    `;
+
     // Filtre cümlesi: tarih aralığı + rapor durumu (NKR satırı) + ödeme (Evrak bazında)
     const filterClause =
       (tarihBas    ? " AND CONVERT(date, n.Tarih) >= @tarihBas" : "") +
@@ -194,7 +225,7 @@ export async function GET(request: NextRequest) {
       (raporDurumu ? ` AND ${raporDurumuExpr} = @raporDurumu` : "") +
       // NULL (hiç Odeme kaydı yok) = "Fatura Kesilmedi" — OdemeBadge ile aynı mantık.
       // Aksi halde Odeme satırı olmayan (yeni) evraklar "Fatura Kesilmedi" filtresinde kaybolurdu.
-      (odeme       ? " AND ISNULL((SELECT TOP 1 Odeme_Durumu FROM Odeme WHERE Evrak_No = n.Evrak_No ORDER BY ID DESC), N'Fatura Kesilmedi') = @odeme" : "");
+      (odeme       ? ` AND ISNULL(${effectiveOdemeExpr}, N'Fatura Kesilmedi') = @odeme` : "");
 
     // Filtre input'larını bir request'e ekler (yalnızca kullanılanlar)
     const addFilters = <T extends { input: (n: string, v: unknown) => T }>(req: T): T => {
@@ -236,12 +267,7 @@ export async function GET(request: NextRequest) {
                 THEN MIN(${raporDurumuExpr})
               ELSE N'Mixed'
             END                                       AS Rapor_Durumu,
-            (
-              SELECT TOP 1 Odeme_Durumu
-              FROM Odeme
-              WHERE Evrak_No = n.Evrak_No
-              ORDER BY ID DESC
-            )                                         AS Odeme_Durumu,
+            ${effectiveOdemeExpr}                    AS Odeme_Durumu,
             (
               SELECT TOP 1 p.ID
               FROM ProformaBaslik p

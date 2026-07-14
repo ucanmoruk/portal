@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 import { hasProformaFaturaFirmaCol } from "@/lib/proformaSchema";
+import { hasMysqlConfig } from "@/lib/mysqlCompat";
 
 // Fatura Takip — cosmo `Fatura` (başlık) + `Odeme` (ödeme durumu aşamaları) tabloları.
 // Proforma "Faturaya çevir" akışı: Fatura kaydı oluşturur, Odeme'ye 'Ödeme Bekliyor'
@@ -11,8 +12,45 @@ import { hasProformaFaturaFirmaCol } from "@/lib/proformaSchema";
 // = ProformaBaslik.EvrakNo. Yeni tablo YOK — mevcut legacy şema kullanılır.
 
 function toNumber(value: any, fallback = 0) {
-  const n = Number(value);
+  const raw = String(value ?? "").trim();
+  const normalized = raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw;
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function cleanOptionalText(value: any): string | null {
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
+async function ensureProformaNkrTable(pool: any) {
+  if (hasMysqlConfig()) {
+    await pool.request().query(`
+      CREATE TABLE IF NOT EXISTS ProformaNkr (
+        ID INT AUTO_INCREMENT PRIMARY KEY,
+        ProformaID INT NOT NULL,
+        NkrID INT NOT NULL,
+        EvrakNo VARCHAR(40) NULL,
+        RaporNo VARCHAR(60) NULL,
+        CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY UX_ProformaNkr_Proforma_Nkr (ProformaID, NkrID),
+        KEY IX_ProformaNkr_EvrakNo (EvrakNo)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci
+    `);
+    return;
+  }
+
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='ProformaNkr' AND xtype='U')
+    CREATE TABLE ProformaNkr (
+      ID          INT IDENTITY(1,1) PRIMARY KEY,
+      ProformaID  INT          NOT NULL,
+      NkrID       INT          NOT NULL,
+      EvrakNo     NVARCHAR(40) NULL,
+      RaporNo     NVARCHAR(60) NULL,
+      CreatedAt   DATETIME     NOT NULL DEFAULT GETDATE()
+    )
+  `);
 }
 
 export async function GET(request: NextRequest) {
@@ -27,8 +65,14 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(100, Math.max(5, parseInt(sp.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
 
-  // Güncel ödeme durumu (Evrak_No bazlı son Odeme kaydı) — birden çok yerde kullanılır.
-  const sonOdeme = `(SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No = f.ProformaNo ORDER BY o.ID DESC)`;
+  // Guncel odeme durumu: backfill'in sonradan ekledigi yalniz "Proforma" satiri,
+  // faturalasan kaydin "Odeme Bekliyor/Odendi/..." durumunu ezmemeli.
+  const sonOdeme = `COALESCE(
+    (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Fatura_ID = f.ID AND ISNULL(o.Odeme_Durumu, N'') <> N'Proforma' ORDER BY o.ID DESC),
+    (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No = f.ProformaNo AND ISNULL(o.Odeme_Durumu, N'') <> N'Proforma' ORDER BY o.ID DESC),
+    (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Fatura_ID = f.ID ORDER BY o.ID DESC),
+    (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No = f.ProformaNo ORDER BY o.ID DESC)
+  )`;
   // Yıl Fatura_No içinde gömülü (UNA2026...); Fatura.Tarih çoğunlukla boş olduğu için ondan değil bundan.
   const yilExpr = `COALESCE(NULLIF(REGEXP_SUBSTR(f.Fatura_No, '20[0-9][0-9]'), ''), DATE_FORMAT(COALESCE(NULLIF(f.Tarih, '0000-00-00 00:00:00'), (SELECT MAX(fd.Tarih) FROM FaturaDetay fd WHERE fd.ProformaNo = f.ProformaNo)), '%Y'))`;
   // Efektif tarih: gerçek Fatura.Tarih yoksa FaturaDetay'daki en güncel tarih.
@@ -71,7 +115,8 @@ export async function GET(request: NextRequest) {
         SELECT
           f.ID, f.Fatura_No AS FaturaNo, f.ProformaNo,
           ${tarihExpr} AS Tarih,
-          f.Toplam, f.Odenen_Tutar AS OdenenTutar,
+          f.Toplam, f.Tutar, f.KDV, f.Odenen_Tutar AS OdenenTutar,
+          f.FaturaFirmaID, f.Aciklama,
           ISNULL(fr.Firma_Adi, '') AS FirmaAd,
           ${sonOdeme} AS OdemeDurumu
         FROM Fatura f
@@ -114,11 +159,49 @@ export async function POST(request: NextRequest) {
     const proformaId = Number(body.proformaId);
     const faturaNo = String(body.faturaNo || "").trim();
     const faturaTarihi = String(body.faturaTarihi || "").trim();
-    if (!proformaId) return Response.json({ error: "Proforma seçimi zorunludur." }, { status: 400 });
     if (!faturaNo) return Response.json({ error: "Fatura no zorunludur." }, { status: 400 });
     if (!faturaTarihi) return Response.json({ error: "Fatura tarihi zorunludur." }, { status: 400 });
 
     const pool = await cosmoPool;
+    await ensureProformaNkrTable(pool);
+    if (!proformaId) {
+      const evrakNo = cleanOptionalText(body.evrakNo);
+      const toplam = toNumber(body.toplam);
+      const kdvOran = toNumber(body.kdvOran, 20);
+      const net = toplam / (1 + kdvOran / 100);
+      const kdv = toplam - net;
+      const faturaFirmaId = body.faturaFirmaId ? Number(body.faturaFirmaId) : null;
+      const aciklama = cleanOptionalText(body.aciklama);
+
+      const insRes = await pool.request()
+        .input("FaturaNo", faturaNo)
+        .input("ProformaNo", evrakNo)
+        .input("Toplam", Number(toplam.toFixed(2)))
+        .input("Tutar", Number(net.toFixed(2)))
+        .input("KDV", Number(kdv.toFixed(2)))
+        .input("OdenenTutar", 0)
+        .input("FaturaFirmaID", faturaFirmaId)
+        .input("Tarih", faturaTarihi)
+        .input("Aciklama", aciklama)
+        .query(`
+          INSERT INTO Fatura (Fatura_No, ProformaNo, Toplam, Tutar, KDV, Odenen_Tutar, FaturaFirmaID, Tarih, Durum, Aciklama)
+          OUTPUT INSERTED.ID
+          VALUES (@FaturaNo, @ProformaNo, @Toplam, @Tutar, @KDV, @OdenenTutar, @FaturaFirmaID, @Tarih, 'Aktif', @Aciklama)
+        `);
+      const faturaId = Number(insRes.recordset[0]?.ID);
+
+      await pool.request()
+        .input("Evrak_No", evrakNo)
+        .input("Fatura_ID", faturaId || null)
+        .input("Tarih", faturaTarihi)
+        .query(`
+          INSERT INTO Odeme (Evrak_No, Odeme_Durumu, Fatura_ID, Tarih)
+          VALUES (@Evrak_No, N'Ödeme Bekliyor', @Fatura_ID, @Tarih)
+        `);
+
+      return Response.json({ id: faturaId }, { status: 201 });
+    }
+
     // Fatura firması rapor firmasından farklı olabilir (opsiyonel kolon).
     const hasFaturaFirmaCol = await hasProformaFaturaFirmaCol(pool);
     const ffSelect = hasFaturaFirmaCol ? ", FaturaFirmaID" : "";
@@ -161,10 +244,26 @@ export async function POST(request: NextRequest) {
       `);
     const faturaId = Number(insRes.recordset[0]?.ID);
 
+    const odemeEvrakNos = new Set<string>();
+    if (evrakNo) odemeEvrakNos.add(evrakNo);
+    const linkedEvrakRes = await pool.request()
+      .input("ProformaID", proformaId)
+      .query(`
+        SELECT DISTINCT EvrakNo
+        FROM ProformaNkr
+        WHERE ProformaID = @ProformaID
+          AND EvrakNo IS NOT NULL
+          AND EvrakNo <> ''
+      `);
+    for (const row of linkedEvrakRes.recordset || []) {
+      const linkedEvrakNo = String(row.EvrakNo || "").trim();
+      if (linkedEvrakNo) odemeEvrakNos.add(linkedEvrakNo);
+    }
+
     // Ödeme aşaması → numune-takip "Ödeme" sütunu 'Ödeme Bekliyor' gösterir.
-    if (evrakNo) {
+    for (const targetEvrakNo of odemeEvrakNos) {
       await pool.request()
-        .input("Evrak_No", evrakNo)
+        .input("Evrak_No", targetEvrakNo)
         .input("Fatura_ID", faturaId || null)
         .input("Tarih", faturaTarihi)
         .query(`

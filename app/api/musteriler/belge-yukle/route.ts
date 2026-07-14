@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
+import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { type NextRequest } from "next/server";
 import { randomBytes } from "node:crypto";
 import { isRaporFtpConfigured, uploadRaporPdfToFtp } from "@/lib/raporPdfUpload";
@@ -10,7 +11,7 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 const DIGER_FIRMA_ID = 5487; // "DİĞER" — varsayılan proje
-const GECERLI_TUR = new Set(["Rapor", "Sertifika", "Diğer"]);
+const GECERLI_TUR = new Set(["Rapor", "Sertifika", "Claim", "ÜGDR", "Diğer"]);
 
 interface ItemMeta {
   raporNo?: string | number | null;
@@ -72,13 +73,15 @@ export async function POST(request: NextRequest) {
   try {
     const pool = await cosmoPool;
 
-    // RaporNo boş bırakılırsa otomatik sıradaki numarayı ver.
-    const maxRes = await pool.request().query(
-      `SELECT ISNULL(MAX(RaporNo), 0) AS mx FROM Rapor`
-    );
+    // RaporNo bos birakilirsa otomatik siradaki sayisal numarayi ver.
+    // Manuel girilen rapor numaralari alfanumerik olabilir (or. 26SE1026).
+    const maxNoSql = hasMysqlConfig()
+      ? `SELECT IFNULL(MAX(CAST(RaporNo AS UNSIGNED)), 0) AS mx FROM Rapor WHERE CAST(RaporNo AS CHAR) REGEXP '^[0-9]+$'`
+      : `SELECT ISNULL(MAX(TRY_CAST(RaporNo AS INT)), 0) AS mx FROM Rapor`;
+    const maxRes = await pool.request().query(maxNoSql);
     let autoNo = Number(maxRes.recordset[0]?.mx ?? 0) + 1;
 
-    const sonuc: { fileName: string; raporNo: number; id: number }[] = [];
+    const sonuc: { fileName: string; raporNo: string; id: number }[] = [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -86,11 +89,9 @@ export async function POST(request: NextRequest) {
       const tur = GECERLI_TUR.has(String(it.tur)) ? String(it.tur) : "Diğer";
       const numuneAdi = String(it.numuneAdi ?? "").trim() || file.name;
 
-      // Rapor No: kullanıcı girdiyse onu, yoksa otomatik.
-      const girilenNo = it.raporNo != null && String(it.raporNo).trim() !== ""
-        ? parseInt(String(it.raporNo).trim(), 10)
-        : NaN;
-      const raporNo = Number.isFinite(girilenNo) ? girilenNo : autoNo++;
+      // Rapor No: kullanici girdiyse metin olarak aynen koru, yoksa otomatik.
+      const girilenNo = it.raporNo != null ? String(it.raporNo).trim() : "";
+      const raporNo = girilenNo || String(autoNo++);
 
       // Sadece PDF — portal görüntüleyici PDF bekliyor.
       const buf = Buffer.from(await file.arrayBuffer());

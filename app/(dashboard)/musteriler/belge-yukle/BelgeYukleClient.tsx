@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 type Firma = { ID: number; Ad: string };
 type Secim = { id: number; ad: string } | null;
 
-const TUR_SECENEKLERI = ["Rapor", "Sertifika", "Diğer"] as const;
+const TUR_SECENEKLERI = ["Rapor", "Sertifika", "Claim", "ÜGDR", "Diğer"] as const;
 const DIGER: Secim = { id: 5487, ad: "DİĞER" };
 
 // ── Aranabilir firma seçici ───────────────────────────────────────────────────

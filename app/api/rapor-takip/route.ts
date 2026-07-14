@@ -118,6 +118,14 @@ export async function GET(request: Request) {
     const raporTuruExpr = "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')";
     const raporTuruNormExpr = bucketSql(raporTuruExpr);
     const raporTuruParamNorm = bucketSql("@raporTuru");
+    const raporOnayNormExpr = `
+      CASE
+        WHEN ${bucketSql("ro.RaporFormati")} = N'GENELEN' THEN N'GENEL'
+        WHEN ${bucketSql("ro.RaporFormati")} = N'CHALLENGEEN' THEN N'CHALLENGE'
+        ELSE ${bucketSql("ro.RaporFormati")}
+      END
+    `;
+    const raporOnayIsEnglishExpr = `${bucketSql("ro.RaporFormati")} IN (N'GENELEN', N'CHALLENGEEN')`;
 
     const raporTuruFilter = raporTuru
       ? `AND ${raporTuruNormExpr} = ${raporTuruParamNorm}`
@@ -222,13 +230,23 @@ export async function GET(request: Request) {
       INNER JOIN StokAnalizListesi s ON s.ID = x.AnalizID
       GROUP BY x.RaporID, ${raporTuruExpr};
 
-      ${hasRaporOnay ? `SELECT ro.NkrID, ${bucketSql("ro.RaporFormati")} AS NormFmt,
-        MAX(ro.Durum) AS RaporOnayDurum,
-        MAX(ro.YayinUrl) AS YayinUrl,
+      ${hasRaporOnay ? `SELECT ro.NkrID, ${raporOnayNormExpr} AS NormFmt,
+        CASE
+          WHEN SUM(CASE WHEN ro.Durum IN (N'Yayınlandı', N'Yayinlandi') THEN 1 ELSE 0 END) > 0 THEN N'Yayınlandı'
+          WHEN SUM(CASE WHEN ro.Durum IN (N'Arşiv', N'Arsiv') THEN 1 ELSE 0 END) > 0 THEN N'Arşiv'
+          WHEN SUM(CASE WHEN ro.Durum IN (N'Onaylandı', N'Onaylandi') THEN 1 ELSE 0 END) > 0 THEN N'Onaylandı'
+          ELSE MAX(ro.Durum)
+        END AS RaporOnayDurum,
+        COALESCE(
+          MAX(CASE WHEN ro.Durum IN (N'Yayınlandı', N'Yayinlandi') THEN ro.YayinUrl END),
+          MAX(ro.YayinUrl)
+        ) AS YayinUrl,
         ${hasDisRaporKodu ? `MAX(ro.DisRaporKodu)` : `CAST(NULL AS NVARCHAR(40))`} AS DisRaporKodu
+        ,MAX(CASE WHEN (${raporOnayIsEnglishExpr}) AND ro.Durum IN (N'Yayınlandı', N'Yayinlandi') THEN 1 ELSE 0 END) AS EnYayinlandi
+        ,MAX(CASE WHEN NOT (${raporOnayIsEnglishExpr}) AND ro.Durum IN (N'Yayınlandı', N'Yayinlandi') THEN 1 ELSE 0 END) AS TrYayinlandi
       INTO #OS
       FROM NKR_RaporOnay ro
-      GROUP BY ro.NkrID, ${bucketSql("ro.RaporFormati")};` : ``}
+      GROUP BY ro.NkrID, ${raporOnayNormExpr};` : ``}
 
       ${hasOverrideTable ? `SELECT o.NkrID, ${bucketSql("o.RaporFormati")} AS NormFmt,
         MAX(o.Durum) AS OverrideDurum${hasOverrideNotlar ? `,
@@ -247,6 +265,8 @@ export async function GET(request: Request) {
           ${hasRaporOnay ? `os.RaporOnayDurum` : `NULL`} AS RaporOnayDurum,
           ${hasRaporOnay ? `os.YayinUrl` : `NULL`} AS YayinUrl,
           ${hasDisRaporKodu ? `os.DisRaporKodu` : `CAST(NULL AS NVARCHAR(40))`} AS DisRaporKodu,
+          ${hasRaporOnay ? `COALESCE(os.TrYayinlandi, 0)` : `0`} AS TrYayinlandi,
+          ${hasRaporOnay ? `COALESCE(os.EnYayinlandi, 0)` : `0`} AS EnYayinlandi,
           hs.MaxTermin AS MaxTermin
         FROM #Rap r
         LEFT JOIN #HS hs ON hs.NkrID = r.NkrID AND hs.RaporFormati = r.RaporFormati

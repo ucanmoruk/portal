@@ -452,6 +452,56 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
     }).catch(() => {}).finally(() => setSatirLoading(false));
   }
 
+  function openCopy(t: Teklif) {
+    setModalMode("add"); setEditId(null);
+    setMusteri({ ID: t.MusteriID, Ad: t.MusteriAd });
+    setMusteriQ(t.MusteriAd); setMusteriOpts([]);
+    setSatirlar([]); setTeklifNotlar(stripKisaAciklamaPrefix(t.Notlar, "Fiyat teklifimiz"));
+    setKisaAciklama("Fiyat teklifimiz");
+    setKdvOran("20"); setGenelIskonto("0");
+    setTeklifParaBirimi(t.ParaBirimi && t.ParaBirimi !== "Çoklu" ? t.ParaBirimi : "TRY");
+    setAddMode(null); setHizmetQ(""); setHizmetOpts([]); setPaketler([]);
+    setSaveErr(""); setRevizeOfId(null);
+    setModalOpen(true);
+    setSatirLoading(true);
+    fetch(`/api/teklifler/${t.ID}`).then(r => r.json()).then(j => {
+      if (j.header) {
+        setKdvOran(String(j.header.KdvOran ?? 20));
+        setGenelIskonto(String(j.header.GenelIskonto ?? 0));
+        const ka = j.header.KisaAciklama || "Fiyat teklifimiz";
+        setKisaAciklama(ka);
+        setTeklifNotlar(stripKisaAciklamaPrefix(j.header.Notlar, ka));
+      }
+      if (j.satirlar) {
+        const apiSatirlar = j.satirlar as TeklifApiSatir[];
+        const pbVotes: Record<string, number> = {};
+        for (const s of apiSatirlar) {
+          const p = s.ParaBirimi || "TRY";
+          pbVotes[p] = (pbVotes[p] || 0) + 1;
+        }
+        const pbMajority = Object.entries(pbVotes).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "TRY";
+        setTeklifParaBirimi(pbMajority);
+        setSatirlar(apiSatirlar.map((s) => ({
+          _key: nextKey(), hizmetId: s.HizmetID, hizmetAdi: s.HizmetAdi || "",
+          hizmetKod: "", adet: s.Adet != null ? String(s.Adet) : "1",
+          fiyat: s.Fiyat != null ? String(s.Fiyat) : "",
+          paraBirimi: pbMajority, iskonto: s.Iskonto != null ? String(s.Iskonto) : "0",
+          metot: s.Metot || "", akreditasyon: s.Akreditasyon || "",
+          notlar: s.Notlar || "",
+        })));
+      }
+    }).catch(() => {}).finally(() => setSatirLoading(false));
+  }
+
+  function copyCurrentEdit() {
+    setModalMode("add");
+    setEditId(null);
+    setRevizeOfId(null);
+    setEditTab("edit");
+    setEditLogs([]);
+    setSaveErr("");
+  }
+
   // ── save ──────────────────────────────────────────────────────────────────
   // Düzenleme modunda kullanıcıya "Revizyon yapılsın mı?" sorulur:
   //   Evet → revizyon nedeni alınır, RevNo+1, log = "Revize"
@@ -821,6 +871,17 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                 <span style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginLeft: 10 }}>
                   (#{revizeOfId} revizyonu)
                 </span>
+              )}
+              {modalMode === "edit" && (
+                <button
+                  type="button"
+                  className={styles.editBtn}
+                  onClick={copyCurrentEdit}
+                  title="Bu tekliften yeni teklif oluştur"
+                  style={{ marginLeft: "auto", marginRight: 10 }}
+                >
+                  ⧉ Kopyala
+                </button>
               )}
               <button className={styles.modalClose} onClick={() => !saving && setModalOpen(false)}>✕</button>
             </div>
