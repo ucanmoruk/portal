@@ -256,6 +256,64 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function chromeRenderConcurrency(): number {
+  const configured = Number(process.env.CHROME_RENDER_CONCURRENCY || process.env.RAPOR_PDF_CONCURRENCY || 0);
+  return Number.isFinite(configured) && configured > 0 ? Math.min(Math.floor(configured), 3) : 1;
+}
+
+let activeChromeRenders = 0;
+const chromeRenderQueue: Array<() => void> = [];
+
+async function withChromeRenderSlot<T>(fn: () => Promise<T>): Promise<T> {
+  const concurrency = chromeRenderConcurrency();
+  if (activeChromeRenders >= concurrency) {
+    await new Promise<void>((resolve) => chromeRenderQueue.push(resolve));
+  }
+  activeChromeRenders += 1;
+  try {
+    return await fn();
+  } finally {
+    activeChromeRenders = Math.max(0, activeChromeRenders - 1);
+    chromeRenderQueue.shift()?.();
+  }
+}
+
+function isChromeSpawnPressureError(error: unknown): boolean {
+  const anyError = error as NodeJS.ErrnoException;
+  const msg = String(anyError?.message || error || "").toLowerCase();
+  return (
+    anyError?.code === "EAGAIN" ||
+    anyError?.code === "EMFILE" ||
+    anyError?.code === "ENFILE" ||
+    msg.includes(" eagain") ||
+    msg.includes(" emfile") ||
+    msg.includes(" enfile") ||
+    msg.includes("resource temporarily unavailable")
+  );
+}
+
+async function withChromeSpawnRetry<T>(fn: () => Promise<T>): Promise<T> {
+  const retries = Math.max(0, Math.min(Number(process.env.CHROME_SPAWN_RETRIES || 2), 5));
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isChromeSpawnPressureError(error) || attempt >= retries) break;
+      await delay(800 + attempt * 1200);
+    }
+  }
+
+  if (isChromeSpawnPressureError(lastError)) {
+    throw new Error(
+      "Sunucuda PDF için Chromium başlatılamadı: process limiti geçici olarak dolu (EAGAIN). " +
+        "Biraz sonra tekrar deneyin; aynı anda çoklu rapor gönderimi varsa istekler sıraya alınmalıdır.",
+    );
+  }
+  throw lastError;
+}
+
 function normalizeUrlForCompare(value: string): string {
   try {
     const url = new URL(value);
@@ -300,7 +358,7 @@ interface RenderTarget {
 }
 
 // Ortak Chromium yaşam döngüsü: başlat → DevTools'a bağlan → navigate → printToPDF → temizle.
-async function renderTargetToPdf(target: RenderTarget, options: PdfRenderOptions): Promise<Buffer> {
+async function renderTargetToPdfCore(target: RenderTarget, options: PdfRenderOptions): Promise<Buffer> {
   const chromeConfig = await resolveChromeLaunchConfig();
   if (!chromeConfig) {
     throw new Error(
@@ -336,6 +394,10 @@ async function renderTargetToPdf(target: RenderTarget, options: PdfRenderOptions
       "--disable-gpu",
       "--disable-dev-shm-usage",
       "--no-sandbox",
+      "--no-zygote",
+      "--single-process",
+      "--disable-extensions",
+      "--disable-background-networking",
       "--no-first-run",
       "--no-default-browser-check",
       "--remote-debugging-port=0",
@@ -527,6 +589,10 @@ async function renderTargetToPdf(target: RenderTarget, options: PdfRenderOptions
 }
 
 // Verilen HTML'i A4 PDF'e dönüştürür. Buffer döner.
+function renderTargetToPdf(target: RenderTarget, options: PdfRenderOptions): Promise<Buffer> {
+  return withChromeRenderSlot(() => withChromeSpawnRetry(() => renderTargetToPdfCore(target, options)));
+}
+
 export async function renderHtmlToPdf(html: string, options: PdfRenderOptions = {}): Promise<Buffer> {
   return renderTargetToPdf({ html }, options);
 }
