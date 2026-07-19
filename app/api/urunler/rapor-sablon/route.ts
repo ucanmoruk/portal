@@ -3,8 +3,8 @@ export const maxDuration = 60;
 
 import { randomUUID } from "node:crypto";
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { constants, existsSync } from "node:fs";
+import { access, chmod, copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import chromium from "@sparticuz/chromium";
@@ -94,6 +94,57 @@ function commandExists(command: string) {
     stdio: "ignore",
   });
   return result.status === 0;
+}
+
+async function configureChromiumTempDir(): Promise<string> {
+  const configured = sv(process.env.CHROMIUM_TMPDIR || process.env.CHROME_TMPDIR);
+  const tmpDir = configured || path.join(process.cwd(), "tmp", "chromium");
+  await mkdir(tmpDir, { recursive: true });
+
+  process.env.TMPDIR = tmpDir;
+  process.env.TMP = tmpDir;
+  process.env.TEMP = tmpDir;
+  return tmpDir;
+}
+
+async function ensureExecutable(file: string): Promise<boolean> {
+  if (!existsSync(file)) return false;
+  try {
+    await access(file, constants.X_OK);
+    return true;
+  } catch {
+    try {
+      await chmod(file, 0o755);
+      await access(file, constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+async function relocateTmpExecutable(file: string, targetDir: string): Promise<string> {
+  if (process.platform === "win32") return file;
+
+  const resolvedFile = path.resolve(file);
+  const systemTmp = path.resolve(os.tmpdir());
+  const resolvedTarget = path.resolve(targetDir);
+  if (!resolvedFile.startsWith(`${systemTmp}${path.sep}`) || resolvedTarget.startsWith(`${systemTmp}${path.sep}`)) {
+    return file;
+  }
+
+  try {
+    await mkdir(resolvedTarget, { recursive: true });
+    const target = path.join(resolvedTarget, path.basename(file) || "chromium");
+    if (path.resolve(target) === resolvedFile) return file;
+    await copyFile(resolvedFile, target);
+    await chmod(target, 0o755);
+    if (await ensureExecutable(target)) return target;
+  } catch (error) {
+    console.warn("[rapor-sablon] /tmp Chromium kopyalanamadı, mevcut yol denenecek:", error);
+  }
+
+  return file;
 }
 
 interface ChromeLaunchConfig {
@@ -193,6 +244,7 @@ async function renderDocx(html: string, form: Record<string, unknown>, language:
 }
 
 async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
+  const chromiumTmpDir = await configureChromiumTempDir();
   const configured = [
     process.env.CHROME_EXECUTABLE_PATH,
     process.env.CHROME_PATH,
@@ -223,7 +275,7 @@ async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
     : ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
 
   for (const candidate of [...configured, ...platformCandidates]) {
-    if (path.isAbsolute(candidate) && existsSync(candidate)) return { executablePath: candidate, args: [] };
+    if (path.isAbsolute(candidate) && (await ensureExecutable(candidate))) return { executablePath: candidate, args: [] };
     if (!path.isAbsolute(candidate) && commandExists(candidate)) return { executablePath: candidate, args: [] };
   }
 
@@ -235,8 +287,9 @@ async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
     chromium.setGraphicsMode = false;
     const executablePath = await chromium.executablePath();
     if (executablePath) {
+      const runnablePath = await relocateTmpExecutable(executablePath, chromiumTmpDir);
       return {
-        executablePath,
+        executablePath: runnablePath,
         args: chromium.args,
       };
     }
