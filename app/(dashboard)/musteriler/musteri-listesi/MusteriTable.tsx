@@ -29,6 +29,29 @@ interface ApiResponse {
   totalPages: number;
 }
 
+interface CariRow {
+  Kaynak: string;
+  KaynakID: number;
+  BelgeNo: string;
+  Tarih: string | null;
+  Durum: string | null;
+  Tutar: number | string;
+  ParaBirimi: string;
+  Yon: string;
+  OdemeYeri: string | null;
+  Aciklama: string | null;
+}
+
+interface CariSummary {
+  paraBirimi: string;
+  teklif: number;
+  proforma: number;
+  fatura: number;
+  gelenOdeme: number;
+  gidenOdeme: number;
+  net: number;
+}
+
 // Form, listede dönmeyen Parola alanını da taşır (yalnızca kayıt/güncelleme için).
 type FirmaForm = Omit<Musteri, "ID" | "Kimin"> & { Parola: string };
 
@@ -38,6 +61,31 @@ const emptyForm: FirmaForm = {
 };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
+const CARI_TIPLER = ["Tümü", "Teklif", "Proforma", "Fatura", "Ödeme"];
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function fmtMoney(value: number | string | null | undefined, currency = "TRY") {
+  const n = Number(value || 0);
+  const cur = currency === "TL" || currency === "TRY" ? "TRY" : currency;
+  try {
+    return new Intl.NumberFormat("tr-TR", {
+      style: "currency",
+      currency: cur || "TRY",
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return `${n.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} ${currency || "TRY"}`;
+  }
+}
+
+function fmtTarih(value?: string | null) {
+  if (!value) return "-";
+  const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : String(value);
+}
 
 // ----------------------------------------------------------------
 // Main Component
@@ -62,6 +110,25 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
 
   const [deleteTarget, setDeleteTarget] = useState<Musteri | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [cariTarget, setCariTarget] = useState<Musteri | null>(null);
+  const [cariRows, setCariRows] = useState<CariRow[]>([]);
+  const [cariSummary, setCariSummary] = useState<CariSummary[]>([]);
+  const [cariLoading, setCariLoading] = useState(false);
+  const [cariError, setCariError] = useState("");
+  const [cariTip, setCariTip] = useState("Tümü");
+  const [cariTarihBas, setCariTarihBas] = useState("");
+  const [cariTarihBit, setCariTarihBit] = useState("");
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const [paymentForm, setPaymentForm] = useState({
+    tip: "Gelen Ödeme",
+    tutar: "",
+    paraBirimi: "TRY",
+    tarih: todayIso(),
+    odemeYeri: "",
+    aciklama: "",
+  });
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -154,6 +221,69 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     }
   };
 
+  const fetchCari = useCallback(async (firma: Musteri, tip = cariTip, tarihBas = cariTarihBas, tarihBit = cariTarihBit) => {
+    setCariLoading(true);
+    setCariError("");
+    try {
+      const params = new URLSearchParams({ tip, tarihBas, tarihBit });
+      const res = await fetch(`/api/firmalar/${firma.ID}/cari?${params}`, { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Cari hareketleri alınamadı.");
+      setCariRows(Array.isArray(json.data) ? json.data : []);
+      setCariSummary(Array.isArray(json.summary) ? json.summary : []);
+    } catch (e: any) {
+      setCariError(e.message || "Cari hareketleri alınamadı.");
+    } finally {
+      setCariLoading(false);
+    }
+  }, [cariTip, cariTarihBas, cariTarihBit]);
+
+  const openCari = (m: Musteri) => {
+    setCariTarget(m);
+    setCariRows([]);
+    setCariSummary([]);
+    setCariTip("Tümü");
+    setCariTarihBas("");
+    setCariTarihBit("");
+    setCariError("");
+    setPaymentOpen(false);
+    fetchCari(m, "Tümü", "", "");
+  };
+
+  const refreshCari = () => {
+    if (!cariTarget) return;
+    fetchCari(cariTarget, cariTip, cariTarihBas, cariTarihBit);
+  };
+
+  const submitPayment = async () => {
+    if (!cariTarget) return;
+    setPaymentSaving(true);
+    setPaymentError("");
+    try {
+      const res = await fetch(`/api/firmalar/${cariTarget.ID}/cari`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(paymentForm),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Ödeme kaydedilemedi.");
+      setPaymentOpen(false);
+      setPaymentForm({
+        tip: "Gelen Ödeme",
+        tutar: "",
+        paraBirimi: "TRY",
+        tarih: todayIso(),
+        odemeYeri: "",
+        aciklama: "",
+      });
+      refreshCari();
+    } catch (e: any) {
+      setPaymentError(e.message || "Ödeme kaydedilemedi.");
+    } finally {
+      setPaymentSaving(false);
+    }
+  };
+
   const pageNumbers = () => {
     const pages: (number | "...")[] = [];
     if (totalPages <= 7) {
@@ -225,7 +355,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                 <th>V.D. / V.N.</th>
                 <th>Yetkili</th>
                 <th>İletişim</th>
-                <th style={{ width: 90 }}></th>
+                <th style={{ width: 112 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -273,6 +403,11 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                   </td>
                   <td>
                     <div className={styles.actionBtns}>
+                      <button className={styles.editBtn} onClick={() => openCari(m)} title="Cari detayları">
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                          <path d="M3 4.75A2.75 2.75 0 0 1 5.75 2h8.5A2.75 2.75 0 0 1 17 4.75v10.5A2.75 2.75 0 0 1 14.25 18h-8.5A2.75 2.75 0 0 1 3 15.25V4.75Zm2.75-1.25c-.69 0-1.25.56-1.25 1.25v10.5c0 .69.56 1.25 1.25 1.25h8.5c.69 0 1.25-.56 1.25-1.25V4.75c0-.69-.56-1.25-1.25-1.25h-8.5ZM6.5 6.75A.75.75 0 0 1 7.25 6h5.5a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1-.75-.75Zm0 3A.75.75 0 0 1 7.25 9h5.5a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z" />
+                        </svg>
+                      </button>
                       <button className={styles.editBtn} onClick={() => openEdit(m)} title="Düzenle">
                         <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                           <path d="m5.433 13.917 1.262-3.155A4 4 0 0 1 7.58 9.42l6.92-6.918a2.121 2.121 0 0 1 3 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 0 1-.65-.65Z" />
@@ -367,6 +502,197 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
             <div className={styles.modalFooter}>
               <button className={styles.cancelBtn} onClick={() => setModalOpen(false)}>İptal</button>
               <button className={styles.saveBtn} onClick={handleSave} disabled={saving}>{saving ? "..." : "KAYDET"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cariTarget && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal} style={{ maxWidth: 1120 }}>
+            <div className={styles.modalHeader}>
+              <div>
+                <h2>Cari Detayları</h2>
+                <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginTop: 4 }}>
+                  {upperTr(cariTarget.Ad)}
+                </div>
+              </div>
+              <button className={styles.modalClose} onClick={() => setCariTarget(null)}>
+                <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
+                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                </svg>
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={styles.toolbar} style={{ marginBottom: 14 }}>
+                <div className={styles.toolbarLeft}>
+                  <select
+                    className={styles.pageSizeSelect}
+                    value={cariTip}
+                    onChange={e => {
+                      const next = e.target.value;
+                      setCariTip(next);
+                      fetchCari(cariTarget, next, cariTarihBas, cariTarihBit);
+                    }}
+                  >
+                    {CARI_TIPLER.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <input
+                    type="date"
+                    value={cariTarihBas}
+                    onChange={e => {
+                      setCariTarihBas(e.target.value);
+                      fetchCari(cariTarget, cariTip, e.target.value, cariTarihBit);
+                    }}
+                    className={styles.pageSizeSelect}
+                    title="Başlangıç tarihi"
+                  />
+                  <input
+                    type="date"
+                    value={cariTarihBit}
+                    onChange={e => {
+                      setCariTarihBit(e.target.value);
+                      fetchCari(cariTarget, cariTip, cariTarihBas, e.target.value);
+                    }}
+                    className={styles.pageSizeSelect}
+                    title="Bitiş tarihi"
+                  />
+                  {(cariTarihBas || cariTarihBit || cariTip !== "Tümü") && (
+                    <button
+                      className={styles.cancelBtn}
+                      type="button"
+                      onClick={() => {
+                        setCariTip("Tümü");
+                        setCariTarihBas("");
+                        setCariTarihBit("");
+                        fetchCari(cariTarget, "Tümü", "", "");
+                      }}
+                    >
+                      Temizle
+                    </button>
+                  )}
+                </div>
+                <div className={styles.toolbarRight}>
+                  <button
+                    className={styles.addBtn}
+                    type="button"
+                    onClick={() => {
+                      setPaymentError("");
+                      setPaymentOpen(v => !v);
+                    }}
+                  >
+                    Ödeme Ekle
+                  </button>
+                </div>
+              </div>
+
+              {paymentOpen && (
+                <div style={{ border: "1px solid var(--color-border-light)", borderRadius: 10, padding: 14, marginBottom: 14, background: "var(--color-surface-2)" }}>
+                  {paymentError && <div className={styles.formError}>{paymentError}</div>}
+                  <div className={styles.formGrid3}>
+                    <div className={styles.formGroup}>
+                      <label>Ödeme Tipi</label>
+                      <select value={paymentForm.tip} onChange={e => setPaymentForm(f => ({ ...f, tip: e.target.value }))}>
+                        <option value="Gelen Ödeme">Firma Bize Ödedi</option>
+                        <option value="Giden Ödeme">Biz Firmaya Ödedik</option>
+                      </select>
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Tutar</label>
+                      <input value={paymentForm.tutar} inputMode="decimal" onChange={e => setPaymentForm(f => ({ ...f, tutar: e.target.value }))} placeholder="0,00" />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Para Birimi</label>
+                      <select value={paymentForm.paraBirimi} onChange={e => setPaymentForm(f => ({ ...f, paraBirimi: e.target.value }))}>
+                        <option value="TRY">TRY</option>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                      </select>
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Tarih</label>
+                      <input type="date" value={paymentForm.tarih} onChange={e => setPaymentForm(f => ({ ...f, tarih: e.target.value }))} />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Nereye Ödedi</label>
+                      <input value={paymentForm.odemeYeri} onChange={e => setPaymentForm(f => ({ ...f, odemeYeri: e.target.value }))} placeholder="Banka, kasa, kredi kartı..." />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>Açıklama</label>
+                      <input value={paymentForm.aciklama} onChange={e => setPaymentForm(f => ({ ...f, aciklama: e.target.value }))} placeholder="İsteğe bağlı" />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+                    <button className={styles.cancelBtn} type="button" onClick={() => setPaymentOpen(false)} disabled={paymentSaving}>Vazgeç</button>
+                    <button className={styles.saveBtn} type="button" onClick={submitPayment} disabled={paymentSaving}>
+                      {paymentSaving ? "Kaydediliyor..." : "Kaydet"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {cariError && <div className={styles.errorBar} style={{ marginBottom: 12 }}>{cariError}</div>}
+
+              <div className={styles.tableWrapper} style={{ border: "1px solid var(--color-border-light)", borderRadius: 10 }}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Tip</th>
+                      <th>Belge No</th>
+                      <th>Tarih</th>
+                      <th>Durum</th>
+                      <th>Yön</th>
+                      <th>Ödeme Yeri</th>
+                      <th style={{ textAlign: "right" }}>Tutar</th>
+                      <th>Açıklama</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cariLoading ? (
+                      <tr><td colSpan={8} className={styles.empty}>Cari hareketleri yükleniyor...</td></tr>
+                    ) : cariRows.length === 0 ? (
+                      <tr><td colSpan={8} className={styles.empty}>Cari hareket bulunamadı.</td></tr>
+                    ) : cariRows.map((row, idx) => (
+                      <tr key={`${row.Kaynak}-${row.KaynakID}-${idx}`}>
+                        <td><span className={styles.badge}>{row.Kaynak}</span></td>
+                        <td className={styles.tdMono}>{row.BelgeNo || "-"}</td>
+                        <td>{fmtTarih(row.Tarih)}</td>
+                        <td>{row.Durum || "-"}</td>
+                        <td>{row.Yon || "-"}</td>
+                        <td>{row.OdemeYeri || "-"}</td>
+                        <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
+                          {fmtMoney(row.Tutar, row.ParaBirimi)}
+                        </td>
+                        <td className={styles.tdAdres} title={row.Aciklama || ""}>{row.Aciklama || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 10, marginTop: 14 }}>
+                {cariSummary.length === 0 ? (
+                  <div style={{ color: "var(--color-text-tertiary)", fontSize: 13 }}>Toplam hesaplanacak hareket yok.</div>
+                ) : cariSummary.map(s => (
+                  <div key={s.paraBirimi} style={{ border: "1px solid var(--color-border-light)", borderRadius: 10, padding: 12, background: "var(--color-surface-2)" }}>
+                    <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 6 }}>{s.paraBirimi}</div>
+                    <div style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                      <div>Teklif: <strong>{fmtMoney(s.teklif, s.paraBirimi)}</strong></div>
+                      <div>Proforma: <strong>{fmtMoney(s.proforma, s.paraBirimi)}</strong></div>
+                      <div>Fatura: <strong>{fmtMoney(s.fatura, s.paraBirimi)}</strong></div>
+                      <div>Gelen ödeme: <strong>{fmtMoney(s.gelenOdeme, s.paraBirimi)}</strong></div>
+                      <div>Giden ödeme: <strong>{fmtMoney(s.gidenOdeme, s.paraBirimi)}</strong></div>
+                      <div style={{ borderTop: "1px solid var(--color-border-light)", paddingTop: 6, marginTop: 4 }}>
+                        Net bakiye: <strong>{fmtMoney(s.net, s.paraBirimi)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className={styles.modalFooter}>
+              <button className={styles.cancelBtn} onClick={() => setCariTarget(null)}>Kapat</button>
             </div>
           </div>
         </div>
