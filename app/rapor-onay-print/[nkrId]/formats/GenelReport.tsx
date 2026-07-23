@@ -407,6 +407,44 @@ export default function GenelReport({
     </>
   );
 
+  const moveEnglishNotesToContinuation = isEnglish && continuationRows.length > 0;
+
+  const renderNotesBlock = () => (
+    <>
+      <div className="notlar">
+      <div className="results-title" style={{marginBottom: "7px"}}>{text.notes}</div>
+          {testBaslangic && testBitis ? (
+            <>
+              {text.period}{" "}
+              <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
+            </>
+          ) : null}
+        {edit ? (
+          <textarea
+            className="rd-edit-area"
+            style={{ marginTop: 6 }}
+            value={header.Aciklamalar ?? ""}
+            placeholder={text.editPlaceholder}
+            onChange={(e) => edit.onHeaderChange({ Aciklamalar: e.target.value })}
+          />
+        ) : (
+          aciklamaSatirlar.map((satir, i) => (
+            <Fragment key={i}>
+              <br />{satir}
+            </Fragment>
+          ))
+        )}
+        {revizeNot && (
+          <div style={{ marginTop: 8, fontWeight: "bold" }}>
+            <br />{text.revisionNote} {revizeNot}
+          </div>
+        )}
+      </div>
+
+      <div className="endof">{text.end}</div>
+    </>
+  );
+
   return (
     <>
       <style>{`
@@ -1008,39 +1046,9 @@ export default function GenelReport({
           </div>
 
           {/* ───── NOTLAR ───── */}
-          <div className="notlar">
-          <div className="results-title" style={{marginBottom: "7px"}}>{text.notes}</div>
-              {testBaslangic && testBitis ? (
-                <>
-                  {text.period}{" "}
-                  <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
-                </>
-              ) : null}
-            {edit ? (
-              <textarea
-                className="rd-edit-area"
-                style={{ marginTop: 6 }}
-                value={header.Aciklamalar ?? ""}
-                placeholder={text.editPlaceholder}
-                onChange={(e) => edit.onHeaderChange({ Aciklamalar: e.target.value })}
-              />
-            ) : (
-              aciklamaSatirlar.map((satir, i) => (
-                <Fragment key={i}>
-                  <br />{satir}
-                </Fragment>
-              ))
-            )}
-            {revizeNot && (
-              <div style={{ marginTop: 8, fontWeight: "bold" }}>
-                <br />{text.revisionNote} {revizeNot}
-              </div>
-            )}
-          </div>
+          {!moveEnglishNotesToContinuation && renderNotesBlock()}
 
           {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ─────  */}
-          <div className="endof">{text.end}</div>
-          
           <div className="approval-block">
             <div className="approval-cell" style={{width:200, paddingTop:"15px"}}>
               <div className="approval-cell-title" style={{paddingLeft:"5px"}}>{text.preparedBy}</div>
@@ -1117,6 +1125,7 @@ export default function GenelReport({
             <div className="results-section continued">
               <div className="results-title">{text.testResultsContinued}</div>
               {renderResultsTable(continuationRows, { continued: true })}
+              {moveEnglishNotesToContinuation && renderNotesBlock()}
             </div>
 
             <div className="continuation-seal">

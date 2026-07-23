@@ -5,6 +5,7 @@ import { cosmoPool } from "@/lib/db";
 import Link from "next/link";
 import styles from "@/app/styles/table.module.css";
 import TalepKonusma from "./TalepKonusma";
+import TalepFirmaEslestir from "../../_components/TalepFirmaEslestir";
 
 export const metadata = { title: "Destek Talebi" };
 
@@ -123,6 +124,8 @@ export default async function DestekTalebiDetayPage({ params }: { params: Promis
         <Field label="Firma Kodu"     value={h.FirmaKodu} />
         <Field label="Firma Adı"      value={h.FirmaAd} />
       </Section>
+
+      <TalepFirmaEslestir talepId={nid} firmaKodu={h.FirmaKodu} firmaAd={h.FirmaAd} />
 
       <TalepKonusma talepId={nid} />
     </div>

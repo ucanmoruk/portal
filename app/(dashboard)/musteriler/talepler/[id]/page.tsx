@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { cosmoPool } from "@/lib/db";
 import Link from "next/link";
 import styles from "@/app/styles/table.module.css";
+import TalepFirmaEslestir from "../../_components/TalepFirmaEslestir";
 
 export const metadata = { title: "Talep Detayı" };
 
@@ -185,6 +186,8 @@ export default async function TalepDetayPage({ params }: { params: Promise<{ id:
         <Field label="Sözleşme"         value={h.Sozlesme} />
         <Field label="Oluşturan"        value={h.Olusturan} />
       </Section>
+
+      <TalepFirmaEslestir talepId={nid} firmaKodu={h.FirmaKodu} firmaAd={h.FirmaAd} />
 
       <Section title="RAPORLAMA BİLGİLERİ">
         <Field label="Firma"            value={h.RaporFirma} />

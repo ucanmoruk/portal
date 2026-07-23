@@ -3,6 +3,10 @@ import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Liste alınamadı";
+}
+
 // GET /api/musteriler/yuklenmis-belgeler?search=&page=1&limit=20
 // Bu araçla yüklenen (Yol tam URL, http… ile başlayan) ve Aktif belgeleri listeler
 // — yani müşteri portalı "Belgelerim"de görünen manuel yüklemeler.
@@ -22,6 +26,7 @@ export async function GET(request: NextRequest) {
          OR LOWER(ISNULL(r.NumuneAd, '')) LIKE LOWER(@q)
          OR LOWER(ISNULL(r.NumuneTur, '')) LIKE LOWER(@q)
          OR LOWER(ISNULL(NULLIF(r.FirmaAd, ''), ISNULL(f.Firma_Adi, ''))) LIKE LOWER(@q)
+         OR LOWER(ISNULL(NULLIF(r.Proje, ''), ISNULL(p.Firma_Adi, ''))) LIKE LOWER(@q)
        )`
     : "";
 
@@ -51,10 +56,14 @@ export async function GET(request: NextRequest) {
     `);
 
     const total = result.recordset[0]?.TotalCount ?? 0;
-    const data = result.recordset.map(({ TotalCount: _t, ...row }: any) => row);
+    const data = result.recordset.map((row: Record<string, unknown> & { TotalCount?: number }) => {
+      const item = { ...row };
+      delete item.TotalCount;
+      return item;
+    });
 
     return Response.json({ data, total, page, limit, totalPages: Math.ceil(total / limit) });
-  } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    return Response.json({ error: getErrorMessage(e) }, { status: 500 });
   }
 }
