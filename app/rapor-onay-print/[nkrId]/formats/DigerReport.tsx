@@ -1,4 +1,5 @@
 import { JetBrains_Mono } from "next/font/google";
+import { ttInterphases } from "@/app/fonts/reportFonts";
 import OnayToolbar from "../OnayToolbar";
 import type { ReportFormatProps, KarekodInfo } from "../reportTypes";
 import { disRaporLabel } from "@/lib/disKod";
@@ -43,7 +44,7 @@ function AkrediteBox({ kod, yayinTarihi, fontSize }: {
     <table className="akredite-box">
       <tbody>
         <tr><td>AB-2015-T</td></tr>
-        <tr><td style={{ fontSize: `${fontSize}px` }}>{kod}</td></tr>
+        <tr><td className="akredite-code-cell" style={{ "--akr-code-font-size": `${fontSize}px` } as React.CSSProperties}>{kod}</td></tr>
         <tr><td>{toMMYY(yayinTarihi)}</td></tr>
       </tbody>
     </table>
@@ -147,7 +148,7 @@ function ApprovalBlock({ hazirlayanAd, karekod }: { hazirlayanAd: string; kareko
         <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>Onaylayan</div>
         <div className="e-imza-pill" style={{ marginTop: 10 }}>✓ E-İmzalıdır</div>
         <div className="approval-cell-body">
-          <div className="approval-name">Alaettin ÖZDEMİR <span style={{ fontSize: "9px", color: "#646464" }}>Laboratuvar Müdürü</span></div>
+          <div className="approval-name">Oğuzhan EKER <span style={{ fontSize: "9px", color: "#646464" }}>Laboratuvar Müdürü V.</span></div>
         </div>
       </div>
       <div className="approval-cell">
@@ -247,13 +248,13 @@ export default function DigerReport({
           --accent-bg:  #eef0fd;
           --accent-bd:  #c7c9f5;
 
-          /* next/font ile yüklenen JetBrains Mono'yu (latin-ext: ş ğ İ ı ç) öncele */
-          font-family: var(--font-rapor), 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
+          /* Gövde metinleri TT Interphases Pro, teknik/başlık alanları JetBrains Mono. */
+          font-family: var(--font-tt-interphases), var(--font-rapor), 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
           background: #e9ecef;
           color: var(--ink);
           font-size: 10px;
           line-height: 1.5;
-          letter-spacing: -0.02em;
+          letter-spacing: 0;
           font-variant-ligatures: none;
           -webkit-font-smoothing: antialiased;
           -webkit-print-color-adjust: exact;
@@ -262,7 +263,7 @@ export default function DigerReport({
         }
         .page {
           max-width: 210mm;
-          min-height: 297mm;
+          min-height: 296mm;
           margin: 24px auto;
           background: #fff;
           padding: 8mm;
@@ -271,6 +272,18 @@ export default function DigerReport({
           flex-direction: column;
         }
         .page.break { page-break-after: always; }
+        .report-title,
+        .akredite-box td,
+        .meta-table strong,
+        .info-table th,
+        .results-title,
+        .results thead th,
+        .notlar-title,
+        .approval-cell-title,
+        .approval-name,
+        .endof {
+          font-family: var(--font-rapor), 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
+        }
 
         /* ───── HEADER ───── */
         .header {
@@ -323,6 +336,11 @@ export default function DigerReport({
           word-break: break-all;
           line-height: 1.1;
         }
+        .akredite-box .akredite-code-cell {
+          font-family: var(--font-tt-interphases), var(--font-rapor), 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace !important;
+          letter-spacing: 0 !important;
+          font-size: var(--akr-code-font-size) !important;
+        }
 
         /* ───── ÜST META BAR (Rapor No/Rev · Kabul · Yayın) ───── */
         .meta-box {
@@ -333,7 +351,7 @@ export default function DigerReport({
         }
         .meta-table {
           font-size: 10.5px;
-          letter-spacing: -0.03em;
+          letter-spacing: 0;
           margin-top: 6mm;
         }
         .meta-table strong { font-weight: 700; }
@@ -365,12 +383,12 @@ export default function DigerReport({
           font-size: 11px;
           font-weight: 600;
           padding-top: 5px;
-          letter-spacing: -0.03em;
+          letter-spacing: 0;
         }
         .info-table .info-line {
           color: var(--ink);
           font-size: 9.5px;
-          letter-spacing: -0.03em;
+          letter-spacing: 0;
         }
 
         /* ───── TEST SONUÇLARI SECTION ───── */
@@ -391,7 +409,7 @@ export default function DigerReport({
           color: var(--ink);
           padding-top: 4px;
           padding-bottom: 10px;
-          letter-spacing: -0.03em;
+          letter-spacing: 0;
         }
         .results {
           border-collapse: collapse;
@@ -419,8 +437,9 @@ export default function DigerReport({
           vertical-align: middle;
           font-size: 10px;
           text-align: left;
-          letter-spacing: -0.03em;
+          letter-spacing: 0;
           border-bottom: 1px solid var(--rule-soft);
+          font-family: var(--font-tt-interphases);
         }
         .results tbody td.center { text-align: left; }
         .results tbody td.muted { color: var(--ink-soft); font-size: 8.5px; }
@@ -498,7 +517,7 @@ export default function DigerReport({
         .approval-name {
           font-weight: 700;
           font-size: 10px;
-          letter-spacing: -0.02em;
+          letter-spacing: 0;
           margin-top: 2mm;
           text-align: left;
           width: 100%;
@@ -526,8 +545,8 @@ export default function DigerReport({
         }
 
         .FooterNot {
-          font-size: 7px;
-          line-height: 1.5;
+          font-size: 8px;
+          line-height: 1.3;
           color: var(--ink-soft);
           text-align: justify;
         }
@@ -548,11 +567,21 @@ export default function DigerReport({
           padding-top: 7px;
           position: relative;
           box-sizing: border-box;
+          font-family: var(--font-tt-interphases), var(--font-rapor), 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
         }
         .sirket-bilgisi {
-          text-align: center;
-          margin-bottom: 12px;
-          line-height: 1.7;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          gap: 8px;
+          text-align: left;
+          font-size: 8px;
+          margin-bottom: 4px;
+          line-height: 1.2;
+          white-space: nowrap;
+        }
+        .sirket-bilgisi span {
+          text-align: right;
         }
         .dokuman-bilgisi {
           display: flex;
@@ -561,6 +590,7 @@ export default function DigerReport({
         }
         .sol-alt {
           text-align: left;
+          font-size: 8px;
         }
         .sag-alt {
           text-align: right;
@@ -577,24 +607,40 @@ export default function DigerReport({
 
         @media print {
           body { background: #fff; }
-          .onay-toolbar { display: none !important; }
+          html, body {
+            margin: 0;
+            padding: 0;
+            min-height: 0;
+            height: auto;
+            overflow: visible;
+          }
+          .root {
+            min-height: 0;
+            background: #fff;
+          }
+          .onay-toolbar,
+          button,
+          input,
+          textarea,
+          select {
+            display: none !important;
+          }
           /* HER SAYFA SABIT A4: height 297mm + overflow:hidden — alt bilgi
              satırı (Sayfa No vb.) bir sonraki yaprağa atmaz. EK-1 sayfası
              page.break ile zorlanır. (Genel tasarımındaki page-break-after:avoid
              KOPYALANMAZ — 2 sayfalı yapıyı bozardı.) */
           .page {
             width: 210mm; max-width: 210mm;
-            height: 297mm; min-height: 297mm; max-height: 297mm;
+            height: 296mm; min-height: 296mm; max-height: 296mm;
             margin: 0 auto; box-shadow: none; padding: 8mm;
             overflow: hidden;
             page-break-inside: avoid;
           }
           .page.break { page-break-after: always; }
-          html, body { overflow: hidden; }
         }
       `}</style>
 
-      <div className={`root ${jetbrains.variable}`}>
+      <div className={`root ${ttInterphases.variable} ${jetbrains.variable}`}>
         <OnayToolbar
           nkrId={nkrId}
           format={format}
@@ -704,8 +750,8 @@ export default function DigerReport({
           {/* ───── ALT BİLGİ ───── */}
           <div className="rapor-altbilgi">
             <div className="sirket-bilgisi">
-              <strong>UNIQUE ANALİZ BELGELENDİRME ve GÖZETİM HİZMETLERİ LTD. ŞTİ.</strong><br />
-              Atatürk Mah. Hadımköy Yolu Cad. No:10 İç Kapı No:7 Esenyurt / İstanbul | info@uniqueanalyse.com
+              <strong>UNIQUE ANALİZ BELGELENDİRME ve GÖZETİM HİZMETLERİ LTD. ŞTİ.</strong>
+              <span>Atatürk Mah. Hadımköy Yolu Cad. No:10 İç Kapı No:7 Esenyurt / İstanbul | info@uniqueanalyse.com</span>
             </div>
 
             <div className="dokuman-bilgisi">

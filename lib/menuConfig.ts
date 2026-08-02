@@ -66,7 +66,6 @@ export const MENU_TREE: MenuItem[] = [
     label: "KYS",
     children: [
       { key: "laboratuvar.kys.stok-listesi", label: "Stok Listesi", href: "/laboratuvar/kys/stok-listesi" },
-      { key: "laboratuvar.kys.laboratuvar-birimleri", label: "Laboratuvar Birimleri", href: "/laboratuvar/kys/laboratuvar-birimleri" },
       { key: "laboratuvar.kys.stok-hareketleri", label: "Stok Ekle / Düş", href: "/laboratuvar/kys/stok-hareketleri" },
       { key: "laboratuvar.kys.son-kullanim", label: "Son Kullanım Listesi", href: "/laboratuvar/kys/son-kullanim" },
       { key: "laboratuvar.kys.talep-listesi", label: "Talep Listesi", href: "/laboratuvar/kys/talep-listesi" },
@@ -108,6 +107,7 @@ export const MENU_TREE: MenuItem[] = [
     children: [
       { key: "admin.yetki-listesi", label: "Yetki Listesi", href: "/admin/yetki-listesi" },
       { key: "admin.kullanici-listesi", label: "Kullanıcı Listesi", href: "/admin/kullanici-listesi" },
+      { key: "laboratuvar.kys.laboratuvar-birimleri", label: "Laboratuvar Birimleri", href: "/laboratuvar/kys/laboratuvar-birimleri" },
       { key: "admin.muhasebe", label: "Muhasebe", href: "/admin/muhasebe" },
       { key: "admin.finans", label: "Finans", href: "/admin/finans" },
       { key: "admin.veri-asistani", label: "Veri Asistanı", href: "/admin/veri-asistani" },

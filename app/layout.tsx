@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Providers from "@/components/Providers";
+import { ttInterphases } from "@/app/fonts/reportFonts";
 
 export const metadata: Metadata = {
   title: {
@@ -17,7 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr">
-      <body>
+      <body className={ttInterphases.variable}>
         <Providers>{children}</Providers>
       </body>
     </html>

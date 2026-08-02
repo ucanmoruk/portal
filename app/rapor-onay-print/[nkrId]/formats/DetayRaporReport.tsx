@@ -1,4 +1,5 @@
 import { JetBrains_Mono } from "next/font/google";
+import { ttInterphases } from "@/app/fonts/reportFonts";
 import OnayToolbar from "../OnayToolbar";
 import type { ReportFormatProps } from "../reportTypes";
 import { TableBody } from "@/components/ui/table";
@@ -85,7 +86,7 @@ export default function ChallengeReport({
         @page { size: A4; margin: 0; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         .root {
-          font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
+          font-family: var(--font-tt-interphases), var(--font-rapor), 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
           background: #e9ecef;
           color: #1d1d1f;
           font-size: 10.5px;
@@ -94,13 +95,24 @@ export default function ChallengeReport({
         }
         .page {
           max-width: 210mm;
-          min-height: 297mm;
+          min-height: 296mm;
           margin: 24px auto 64px;
           background: #fff;
           padding: 8mm 8mm 8mm 8mm;
           box-shadow: 0 4px 24px rgba(0,0,0,0.08);
           display: flex;
           flex-direction: column;
+        }
+        .report-title,
+        .akredite-box td,
+        .meta-table strong,
+        .info-table th,
+        .results-title,
+        .results thead th,
+        .notlar-title,
+        .approval-cell-title,
+        .approval-name {
+          font-family: var(--font-rapor), 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
         }
 
         /* ───── HEADER ───── */
@@ -151,6 +163,11 @@ export default function ChallengeReport({
           word-break: break-all;
           line-height: 1.1;
         }
+        .akredite-box .akredite-code-cell {
+          font-family: var(--font-tt-interphases), var(--font-rapor), 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace !important;
+          letter-spacing: 0 !important;
+          font-size: var(--akr-code-font-size) !important;
+        }
 
         /* ───── ÜST META BAR (2x2: Rapor No/Rev · Sayfa · Kabul · Yayın) ───── */
         .meta-box {
@@ -162,7 +179,7 @@ export default function ChallengeReport({
 
         .meta-table{
           font-size: 11px;              
-          letter-spacing: -0.05em;     
+          letter-spacing: 0;
           margin-top: 30px;}
         .meta-table strong { font-weight: 700; }
 
@@ -190,12 +207,12 @@ export default function ChallengeReport({
         .info-table .firma-ad {
           font-size: 11px;
           padding-top: 5px;
-          letter-spacing: -0.05em;
+          letter-spacing: 0;
         }
         .info-table .info-line {
           color: #1d1d1f;
           font-size:10px;
-          letter-spacing: -0.05em;
+          letter-spacing: 0;
         }
       
 
@@ -217,7 +234,7 @@ export default function ChallengeReport({
           background: #ffffff;
           padding-top: 4px;
           padding-bottom: 10px;
-          letter-spacing: -0.05em;
+          letter-spacing: 0;
         }
         .results {
           border-collapse: collapse; 
@@ -242,7 +259,8 @@ export default function ChallengeReport({
           vertical-align: middle;
           font-size: 10px;
           text-align: left;
-          letter-spacing: -0.05em;
+          letter-spacing: 0;
+          font-family: var(--font-tt-interphases);
         }
         .results tbody td.center { text-align: left; }
         .results tbody td.muted { color: #000000; font-size: 8px; }
@@ -318,6 +336,7 @@ export default function ChallengeReport({
         .approval-name {
           font-weight: 700;
           font-size: 10px;
+          letter-spacing: 0;
           margin-top: 2mm;          
           text-align: left;
           width: 100%;
@@ -358,36 +377,53 @@ export default function ChallengeReport({
           display: flex;
           justify-content: space-between;
           align-items: flex-end;
-          font-size: 9px;
+          font-size: 8px;
           color: #6e6e73;
           margin-top: 4mm;
           padding-top: 3mm;
         }
 
         .FooterNot{
-        font-size:6px;
-        text-align: justify;
+          font-size:8px;
+          line-height: 1.3;
+          text-align: justify;
         }
 
         @media print {
           body { background: #fff; }
-          .onay-toolbar { display: none !important; }
+          html, body {
+            margin: 0;
+            padding: 0;
+            min-height: 0;
+            height: auto;
+            overflow: visible;
+          }
+          .root {
+            min-height: 0;
+            background: #fff;
+          }
+          .onay-toolbar,
+          button,
+          input,
+          textarea,
+          select {
+            display: none !important;
+          }
           /* TEK SAYFA garantisi: sabit height + overflow:hidden. Içerik 297mm'i
              aşarsa ikinci sayfaya geçmek yerine kırpılır. */
           .page {
             width: 210mm; max-width: 210mm;
-            height: 297mm; min-height: 297mm; max-height: 297mm;
+            height: 296mm; min-height: 296mm; max-height: 296mm;
             margin: 0 auto; box-shadow: none;
             padding: 8mm 8mm 8mm 8mm;
             overflow: hidden;
             page-break-after: avoid;
             page-break-inside: avoid;
           }
-          html, body { height: 297mm; overflow: hidden; }
         }
       `}</style>
 
-      <div className={`root ${jetbrains.variable}`}>
+      <div className={`root ${ttInterphases.variable} ${jetbrains.variable}`}>
         <OnayToolbar
           nkrId={nkrId}
           format={format}
@@ -415,7 +451,7 @@ export default function ChallengeReport({
               <table className="akredite-box">
                 <tbody>
                   <tr><td>AB-2015-T</td></tr>
-                  <tr><td style={{ fontSize: `${akrKodFontSize}px` }}>{raporKodu}</td></tr>
+                  <tr><td className="akredite-code-cell" style={{ "--akr-code-font-size": `${akrKodFontSize}px` } as React.CSSProperties}>{raporKodu}</td></tr>
                   <tr><td>{toMMYY(yayinTarihi)}</td></tr>
                 </tbody>
               </table>
@@ -664,7 +700,7 @@ export default function ChallengeReport({
               <div className="approval-cell-title" style={{paddingLeft:"5px"}}>Onaylayan</div>
               <div className="e-imza-pill" style={{marginTop:10}}>✓ E-İmzalıdır</div>
               <div className="approval-cell-body">
-                <div className="approval-name">Alaettin ÖZDEMİR <span style={{fontSize:"9px" , color:"#646464"}}>Laboratuvar Müdürü</span></div>
+                <div className="approval-name">Oğuzhan EKER <span style={{fontSize:"9px" , color:"#646464"}}>Laboratuvar Müdürü V.</span></div>
              
               </div>
             </div>

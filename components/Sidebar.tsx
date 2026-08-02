@@ -96,7 +96,6 @@ const navGroups: NavGroup[] = [
     ),
     items: [
       { label: "Stok Listesi", href: "/laboratuvar/kys/stok-listesi", menuKey: "laboratuvar.kys.stok-listesi" },
-      { label: "Laboratuvar Birimleri", href: "/laboratuvar/kys/laboratuvar-birimleri", menuKey: "laboratuvar.kys.laboratuvar-birimleri" },
       { label: "Stok Ekle / Düş", href: "/laboratuvar/kys/stok-hareketleri", menuKey: "laboratuvar.kys.stok-hareketleri" },
       { label: "Son Kullanım Listesi", href: "/laboratuvar/kys/son-kullanim", menuKey: "laboratuvar.kys.son-kullanim" },
       { label: "Talep Listesi", href: "/laboratuvar/kys/talep-listesi", menuKey: "laboratuvar.kys.talep-listesi" },
@@ -165,6 +164,7 @@ const topLevelAfterLaboratuvar: NavItem[] = [];
 /** Gezilen sayfaya ait tek bir accordion grubu (üst menü linkleri hariç). */
 function groupIdForPath(path: string): string | null {
   if (path.startsWith("/admin")) return "admin";
+  if (path.startsWith("/laboratuvar/kys/laboratuvar-birimleri")) return "admin";
   if (path.startsWith("/laboratuvar/numune-form")) return "laboratuvar";
   if (path.startsWith("/laboratuvar/kys")) return "kys";
   if (path.startsWith("/laboratuvar/spektrotek")) return "spektrotek";
@@ -327,7 +327,7 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
           <nav className={styles.nav} style={{ paddingBottom: 12 }}>
             <div className={styles.navGroup}>
               <button
-                className={`${styles.navGroupHeader} ${pathname.startsWith("/admin") ? styles.navGroupHeaderActive : ""}`}
+                className={`${styles.navGroupHeader} ${pathname.startsWith("/admin") || pathname.startsWith("/laboratuvar/kys/laboratuvar-birimleri") ? styles.navGroupHeaderActive : ""}`}
                 onClick={() => toggleGroup("admin")}
                 aria-expanded={openGroups.includes("admin")}
               >
@@ -355,6 +355,12 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
                   >
                     <span className={styles.navSubDot} />
                     Kullanıcı Listesi
+                  </Link>
+                  <Link href="/laboratuvar/kys/laboratuvar-birimleri"
+                    className={`${styles.navSubLink} ${pathname.startsWith("/laboratuvar/kys/laboratuvar-birimleri") ? styles.navSubLinkActive : ""}`}
+                  >
+                    <span className={styles.navSubDot} />
+                    Laboratuvar Birimleri
                   </Link>
                   <Link href="/admin/muhasebe"
                     className={`${styles.navSubLink} ${pathname.startsWith("/admin/muhasebe") ? styles.navSubLinkActive : ""}`}

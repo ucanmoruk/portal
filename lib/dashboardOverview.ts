@@ -14,8 +14,16 @@ export interface RankedMetric {
   amount?: number;
 }
 
+export interface MonthlyRevenueMetric {
+  month: string;
+  label: string;
+  amount: number;
+  invoiceCount: number;
+}
+
 export interface DashboardOverview {
   cards: DashboardMetric[];
+  monthlyRevenue: MonthlyRevenueMetric[];
   topTestsThisMonth: RankedMetric[];
   topTestsLastYear: RankedMetric[];
   topRevenueFirms: RankedMetric[];
@@ -66,10 +74,16 @@ function mapRank(
   }));
 }
 
-export async function getDashboardOverview(): Promise<DashboardOverview> {
+export async function getDashboardOverview(selectedRevenueMonth?: string): Promise<DashboardOverview> {
   try {
     const pool = await cosmoPool;
     const invoiceDate = `COALESCE(NULLIF(f.Tarih, '0000-00-00 00:00:00'), (SELECT MAX(fd.Tarih) FROM FaturaDetay fd WHERE fd.ProformaNo = f.ProformaNo))`;
+    const safeRevenueMonth = selectedRevenueMonth && /^\d{4}-\d{2}$/.test(selectedRevenueMonth)
+      ? selectedRevenueMonth
+      : "";
+    const revenueMonthFilter = safeRevenueMonth
+      ? `AND DATE_FORMAT(${invoiceDate}, '%Y-%m') = '${safeRevenueMonth}'`
+      : "";
 
     const invoiceRes = await pool.request().query(`
       SELECT
@@ -149,6 +163,20 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       LIMIT 10
     `);
 
+    const monthlyRevenueRes = await pool.request().query(`
+      SELECT
+        DATE_FORMAT(${invoiceDate}, '%Y-%m') AS Ay,
+        DATE_FORMAT(${invoiceDate}, '%m.%Y') AS Etiket,
+        COUNT(*) AS FaturaAdet,
+        SUM(IFNULL(f.Toplam, 0)) AS Ciro
+      FROM Fatura f
+      WHERE f.Durum = 'Aktif'
+        AND ${invoiceDate} >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 11 MONTH)
+        AND ${invoiceDate} < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+      GROUP BY DATE_FORMAT(${invoiceDate}, '%Y-%m'), DATE_FORMAT(${invoiceDate}, '%m.%Y')
+      ORDER BY Ay ASC
+    `);
+
     const topRevenueRes = await pool.request().query(`
       SELECT
         IFNULL(fr.Firma_Adi, 'Firmasiz') AS FirmaAdi,
@@ -157,6 +185,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
       FROM Fatura f
       LEFT JOIN Firma fr ON fr.ID = f.FaturaFirmaID
       WHERE f.Durum = 'Aktif'
+        ${revenueMonthFilter}
       GROUP BY fr.ID, fr.Firma_Adi
       ORDER BY Ciro DESC
       LIMIT 10
@@ -265,6 +294,12 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
           color: "#af52de",
         },
       ],
+      monthlyRevenue: monthlyRevenueRes.recordset.map((row: Record<string, unknown>) => ({
+        month: String(row.Ay || ""),
+        label: String(row.Etiket || ""),
+        amount: Number(row.Ciro || 0),
+        invoiceCount: Number(row.FaturaAdet || 0),
+      })),
       topTestsThisMonth: mapRank(topTestsThisMonthRes.recordset, "Ad", "Adet", "Kod"),
       topTestsLastYear: mapRank(topTestsLastYearRes.recordset, "Ad", "Adet", "Kod"),
       topRevenueFirms: mapRank(topRevenueRes.recordset, "FirmaAdi", "FaturaAdet", undefined, "Ciro"),
@@ -274,6 +309,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   } catch (e: unknown) {
     return {
       cards: [],
+      monthlyRevenue: [],
       topTestsThisMonth: [],
       topTestsLastYear: [],
       topRevenueFirms: [],
