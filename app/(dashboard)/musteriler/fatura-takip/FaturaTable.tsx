@@ -22,6 +22,21 @@ interface FaturaRow {
 interface Summary { adet: number; toplam: number; odenen: number; }
 interface FirmaOpt { ID: number; Ad: string; }
 
+const AYLAR = [
+  ["01", "Ocak"],
+  ["02", "Şubat"],
+  ["03", "Mart"],
+  ["04", "Nisan"],
+  ["05", "Mayıs"],
+  ["06", "Haziran"],
+  ["07", "Temmuz"],
+  ["08", "Ağustos"],
+  ["09", "Eylül"],
+  ["10", "Ekim"],
+  ["11", "Kasım"],
+  ["12", "Aralık"],
+] as const;
+
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -151,6 +166,7 @@ export default function FaturaTable() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [yil, setYil] = useState(String(new Date().getFullYear()));
+  const [ay, setAy] = useState("");
   const [odeme, setOdeme] = useState("");
   const [years, setYears] = useState<string[]>([]);
   const [summary, setSummary] = useState<Summary>({ adet: 0, toplam: 0, odenen: 0 });
@@ -177,7 +193,7 @@ export default function FaturaTable() {
     setLoading(true);
     setError("");
     try {
-      const qs = new URLSearchParams({ search, yil, odeme, page: String(page), limit: String(limit) });
+      const qs = new URLSearchParams({ search, yil, ay, odeme, page: String(page), limit: String(limit) });
       const res = await fetch(`/api/faturalar?${qs.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Fatura listesi alınamadı.");
@@ -191,7 +207,7 @@ export default function FaturaTable() {
     } finally {
       setLoading(false);
     }
-  }, [search, yil, odeme, page, limit]);
+  }, [search, yil, ay, odeme, page, limit]);
 
   useEffect(() => { fetchRows(); }, [fetchRows]);
 
@@ -307,6 +323,10 @@ export default function FaturaTable() {
           <select className={styles.pageSizeSelect} value={yil} onChange={e => { setYil(e.target.value); setPage(1); }}>
             <option value="">Tüm yıllar</option>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select className={styles.pageSizeSelect} value={ay} onChange={e => { setAy(e.target.value); setPage(1); }}>
+            <option value="">Tüm aylar</option>
+            {AYLAR.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
           <select className={styles.pageSizeSelect} value={odeme} onChange={e => { setOdeme(e.target.value); setPage(1); }}>
             <option value="">Tüm ödeme durumları</option>

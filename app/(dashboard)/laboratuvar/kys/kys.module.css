@@ -1,0 +1,272 @@
+.gridCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.navCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  color: inherit;
+  text-decoration: none;
+  transition: var(--transition-fast);
+}
+
+.navCard:hover {
+  border-color: var(--color-accent-border);
+  background: var(--color-surface-2);
+}
+
+.navCardTitle {
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.navCardText {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.select {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  padding: 7px 10px;
+  font-family: inherit;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border-light);
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pillOk {
+  background: var(--color-success-light);
+  color: #248a3d;
+  border-color: #248a3d25;
+}
+
+.pillWarn {
+  background: #fff7e6;
+  color: #9a5b00;
+  border-color: #e8c27a;
+}
+
+.pillDanger {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+  border-color: #ff3b3030;
+}
+
+.lowStock {
+  color: var(--color-danger);
+  font-weight: 800;
+}
+
+.muted {
+  color: var(--color-text-tertiary);
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 1px solid var(--color-border-light);
+  margin-bottom: 14px;
+}
+
+.tabButton {
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-weight: 600;
+  padding: 9px 10px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tabButtonActive {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.detailItem {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  background: var(--color-surface);
+}
+
+.detailLabel {
+  font-size: 0.72rem;
+  color: var(--color-text-tertiary);
+  margin-bottom: 4px;
+}
+
+.detailValue {
+  color: var(--color-text-primary);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.stockVisualPanel {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: 12px;
+}
+
+.stockVisualBox {
+  width: 132px;
+  aspect-ratio: 1;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.stockVisualImg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+
+.stockVisualEmpty {
+  color: var(--color-text-tertiary);
+  font-size: 0.78rem;
+  text-align: center;
+  padding: 8px;
+}
+
+.stockVisualInfo {
+  display: grid;
+  gap: 8px;
+}
+
+.formImagePreviewWrap {
+  display: grid;
+  gap: 6px;
+}
+
+.formImagePreview {
+  width: 96px;
+  aspect-ratio: 1;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background-color: #fff;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.inlineActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.miniTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.miniTable th,
+.miniTable td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border-light);
+  text-align: left;
+}
+
+.miniTable th {
+  color: var(--color-text-tertiary);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.formHint {
+  font-size: 0.76rem;
+  color: var(--color-text-tertiary);
+  line-height: 1.45;
+}
+
+.printPage {
+  background: #fff;
+  color: #111;
+  min-height: 100vh;
+  padding: 16mm;
+  font-family: Arial, sans-serif;
+}
+
+.printCard {
+  border: 1px solid #111;
+  padding: 8mm;
+  max-width: 100mm;
+}
+
+.barcodeBox {
+  border: 2px solid #111;
+  padding: 4mm;
+  text-align: center;
+  font-family: "Courier New", monospace;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 8mm 0;
+}
+
+.barcodeBox svg {
+  display: block;
+  width: 100%;
+  max-width: 82mm;
+  height: auto;
+  margin: 0 auto;
+}
+
+@media print {
+  .noPrint {
+    display: none !important;
+  }
+  .printPage {
+    padding: 0;
+  }
+}

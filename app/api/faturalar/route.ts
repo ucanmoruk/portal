@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
   const search = sp.get("search")?.trim() || "";
   const yil = (sp.get("yil") || "").trim();           // "" = tümü, yoksa "2026" gibi
   const odeme = (sp.get("odeme") || "").trim();        // "" = tümü, yoksa ödeme durumu
+  const ay = (sp.get("ay") || "").trim();
   const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
   const limit = Math.min(100, Math.max(5, parseInt(sp.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
@@ -82,11 +83,13 @@ export async function GET(request: NextRequest) {
   let where = "WHERE f.Durum = 'Aktif'";
   if (search) where += ` AND (ISNULL(f.Fatura_No,'') LIKE @search OR ISNULL(f.ProformaNo,'') LIKE @search OR ISNULL(fr.Firma_Adi,'') LIKE @search)`;
   if (yil) where += ` AND ${yilExpr} = @yil`;
+  if (ay) where += ` AND DATE_FORMAT(${tarihExpr}, '%m') = @ay`;
   if (odeme) where += ` AND ${sonOdeme} = @odeme`;
 
   const bindFilters = (r: any) => {
     r.input("search", `%${search}%`);
     r.input("yil", yil);
+    r.input("ay", ay);
     r.input("odeme", odeme);
     return r;
   };

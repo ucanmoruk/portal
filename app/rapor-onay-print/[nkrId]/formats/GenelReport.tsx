@@ -21,6 +21,25 @@ const jetbrains = JetBrains_Mono({
   variable: "--font-rapor",
 });
 
+const LONG_REPORT_ROW_THRESHOLD = 32;
+const LONG_REPORT_FIRST_PAGE_MIN_ROWS = 16;
+const LONG_REPORT_FIRST_PAGE_MAX_ROWS = 22;
+const LONG_REPORT_CONTINUATION_MAX_ROWS = 28;
+
+function splitIntoBalancedPages<T>(rows: T[], maxRowsPerPage: number): T[][] {
+  if (rows.length === 0) return [];
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / maxRowsPerPage));
+  const pageSize = Math.ceil(rows.length / pageCount);
+  const pages: T[][] = [];
+
+  for (let i = 0; i < rows.length; i += pageSize) {
+    pages.push(rows.slice(i, i + pageSize));
+  }
+
+  return pages;
+}
+
 function fmtTarih(s: string | null | undefined): string {
   if (!s) return "—";
   const v = String(s);
@@ -205,13 +224,25 @@ export default function GenelReport({
     }
     return rows;
   });
+  const useLongReportLayout = !editing && resultRows.length > LONG_REPORT_ROW_THRESHOLD;
   const shouldSplitResults = !editing && resultRows.length > 13;
   const firstPageResultCount = shouldSplitResults
-    ? Math.min(Math.ceil(resultRows.length / 2), 10)
+    ? useLongReportLayout
+      ? Math.min(
+          Math.max(Math.ceil(resultRows.length * 0.28), LONG_REPORT_FIRST_PAGE_MIN_ROWS),
+          LONG_REPORT_FIRST_PAGE_MAX_ROWS,
+        )
+      : Math.min(Math.ceil(resultRows.length / 2), 10)
     : resultRows.length;
   const firstPageRows = resultRows.slice(0, firstPageResultCount);
-  const continuationRows = shouldSplitResults ? resultRows.slice(firstPageResultCount) : [];
-  const totalReportPages = continuationRows.length > 0 ? 2 : 1;
+  const remainingResultRows = shouldSplitResults ? resultRows.slice(firstPageResultCount) : [];
+  const continuationPages =
+    useLongReportLayout
+      ? splitIntoBalancedPages(remainingResultRows, LONG_REPORT_CONTINUATION_MAX_ROWS)
+      : remainingResultRows.length > 0
+        ? [remainingResultRows]
+        : [];
+  const totalReportPages = 1 + continuationPages.length;
 
   // Düzenleme modu yardımcıları — `edit` yoksa hepsi no-op, metin olduğu gibi basılır.
   const editText = (
@@ -407,7 +438,7 @@ export default function GenelReport({
     </>
   );
 
-  const moveEnglishNotesToContinuation = isEnglish && continuationRows.length > 0;
+  const moveEnglishNotesToContinuation = isEnglish && continuationPages.length > 0;
 
   const renderNotesBlock = () => (
     <>
@@ -505,6 +536,51 @@ export default function GenelReport({
         }
         .continuation-page {
           padding-bottom: 49mm;
+        }
+        .long-report-layout .continuation-header {
+          padding-bottom: 2mm;
+        }
+        .long-report-layout .continuation-meta {
+          margin-top: 3mm;
+        }
+        .long-report-layout .results-section.continued {
+          margin-top: 4mm;
+        }
+        .long-report-layout .continuation-page .results {
+          margin-top: 2mm;
+        }
+        .long-report-layout .continuation-page .results thead th {
+          padding-top: 4px;
+          padding-bottom: 4px;
+          font-size: 9px;
+          line-height: 1.15;
+        }
+        .long-report-layout .continuation-page .results tbody td {
+          padding-top: 4px;
+          padding-bottom: 4px;
+          font-size: 8.6px;
+          line-height: 1.18;
+        }
+        .long-report-layout .continuation-page .results tbody tr.alt-param-row td {
+          padding-top: 2px;
+          padding-bottom: 2px;
+          font-size: 7.8px;
+          line-height: 1.14;
+        }
+        .long-report-layout .continuation-page .results tbody tr.continued-parent-row td {
+          padding-top: 3px;
+          padding-bottom: 3px;
+          font-size: 8.4px;
+          line-height: 1.14;
+        }
+        .long-report-layout .continuation-page {
+          padding-bottom: 41mm;
+        }
+        .long-report-layout .continuation-seal {
+          bottom: 24mm;
+        }
+        .long-report-layout .continuation-seal img {
+          width: 78px;
         }
 
         /* ───── HEADER ───── */
@@ -921,11 +997,14 @@ export default function GenelReport({
           .continuation-page {
             padding-bottom: 49mm;
           }
+          .long-report-layout .continuation-page {
+            padding-bottom: 41mm;
+          }
           html, body { min-height: 297mm; overflow: visible; }
         }
       `}</style>
 
-      <div className={`root ${jetbrains.variable}`}>
+      <div className={`root ${jetbrains.variable}${useLongReportLayout ? " long-report-layout" : ""}`}>
         {!hideToolbar && (
           <OnayToolbar
             nkrId={nkrId}
@@ -1118,22 +1197,26 @@ export default function GenelReport({
 
 
         </div>
-        {continuationRows.length > 0 && (
-          <div className="page continuation-page">
-            {renderContinuationHeader()}
+        {continuationPages.map((rows, pageIndex) => {
+          const pageNo = pageIndex + 2;
+          const isLastContinuation = pageIndex === continuationPages.length - 1;
+          return (
+            <div className="page continuation-page" key={`continuation-${pageNo}`}>
+              {renderContinuationHeader()}
 
-            <div className="results-section continued">
-              <div className="results-title">{text.testResultsContinued}</div>
-              {renderResultsTable(continuationRows, { continued: true })}
-              {moveEnglishNotesToContinuation && renderNotesBlock()}
-            </div>
+              <div className="results-section continued">
+                <div className="results-title">{text.testResultsContinued}</div>
+                {renderResultsTable(rows, { continued: true })}
+                {moveEnglishNotesToContinuation && isLastContinuation && renderNotesBlock()}
+              </div>
 
-            <div className="continuation-seal">
-              <img src="/unique-seal.png" alt="UNIQUE ANALYSE" />
+              <div className="continuation-seal">
+                <img src="/unique-seal.png" alt="UNIQUE ANALYSE" />
+              </div>
+              {renderDocumentFooter(pageNo)}
             </div>
-            {renderDocumentFooter(2)}
-          </div>
-        )}
+          );
+        })}
       </div>
     </>
   );

@@ -86,6 +86,23 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    id: "kys",
+    menuKey: "laboratuvar.kys",
+    label: "KYS",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+        <path fillRule="evenodd" d="M4.5 2A2.5 2.5 0 0 0 2 4.5v11A2.5 2.5 0 0 0 4.5 18h11a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 15.268 4.73L12.647 2.11A2.5 2.5 0 0 0 10.379 1H4.5Zm1.75 6a.75.75 0 0 0 0 1.5h8a.75.75 0 0 0 0-1.5h-8Zm0 3.5a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5Z" clipRule="evenodd" />
+      </svg>
+    ),
+    items: [
+      { label: "Stok Listesi", href: "/laboratuvar/kys/stok-listesi", menuKey: "laboratuvar.kys.stok-listesi" },
+      { label: "Laboratuvar Birimleri", href: "/laboratuvar/kys/laboratuvar-birimleri", menuKey: "laboratuvar.kys.laboratuvar-birimleri" },
+      { label: "Stok Ekle / Düş", href: "/laboratuvar/kys/stok-hareketleri", menuKey: "laboratuvar.kys.stok-hareketleri" },
+      { label: "Son Kullanım Listesi", href: "/laboratuvar/kys/son-kullanim", menuKey: "laboratuvar.kys.son-kullanim" },
+      { label: "Talep Listesi", href: "/laboratuvar/kys/talep-listesi", menuKey: "laboratuvar.kys.talep-listesi" },
+    ],
+  },
+  {
     id: "spektrotek",
     menuKey: "spektrotek",
     label: "Spektrotek",
@@ -143,14 +160,13 @@ const navGroups: NavGroup[] = [
 ];
 
 /** Laboratuvar grubundan sonra — üst düzey (tek satır) menü */
-const topLevelAfterLaboratuvar: NavItem[] = [
-  { label: "KYS", href: "/laboratuvar/kys", menuKey: "laboratuvar.kys" },
-];
+const topLevelAfterLaboratuvar: NavItem[] = [];
 
 /** Gezilen sayfaya ait tek bir accordion grubu (üst menü linkleri hariç). */
 function groupIdForPath(path: string): string | null {
   if (path.startsWith("/admin")) return "admin";
   if (path.startsWith("/laboratuvar/numune-form")) return "laboratuvar";
+  if (path.startsWith("/laboratuvar/kys")) return "kys";
   if (path.startsWith("/laboratuvar/spektrotek")) return "spektrotek";
   if (path.startsWith("/laboratuvar/root-kozmetik")) return "root-kozmetik";
   if (path.startsWith("/laboratuvar/eurolab")) return "eurolab";
@@ -241,7 +257,8 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
         {/* Gruplar — yetki filtrelidir */}
         {mounted && navGroups.map(group => {
           // Grubun görünmesi için: parent key veya en az 1 child key yetkili olmalı
-          const visibleItems = group.items.filter(item => canSee(item.menuKey));
+          const parentAllowed = canSee(group.menuKey);
+          const visibleItems = group.items.filter(item => parentAllowed || canSee(item.menuKey));
           const groupVisible = canSee(group.menuKey) || visibleItems.length > 0;
           if (!groupVisible) return null;
 

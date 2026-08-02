@@ -125,6 +125,12 @@
   letter-spacing: 0.04em;
 }
 
+.statSub {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+}
+
 /* ── Section ── */
 .sectionTitle {
   font-size: 0.9rem;
@@ -132,6 +138,100 @@
   color: var(--color-text-primary);
   letter-spacing: -0.1px;
   margin-bottom: 12px;
+}
+
+.errorPanel {
+  background: #fff7e6;
+  border: 1px solid #f5d99b;
+  color: #8a4b00;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  font-size: 0.86rem;
+}
+
+.rankGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.rankCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: var(--shadow-card);
+  min-width: 0;
+}
+
+.rankList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rankRow {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.rankRow:last-child {
+  border-bottom: none;
+}
+
+.rankNo {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  color: var(--color-text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.rankMain {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rankLabel {
+  color: var(--color-text-primary);
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rankSub {
+  color: var(--color-text-tertiary);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rankValue {
+  color: var(--color-text-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.emptyState {
+  color: var(--color-text-tertiary);
+  font-size: 0.82rem;
+  padding: 10px 0;
 }
 
 /* ── Quick Links ── */
@@ -200,5 +300,6 @@
 
 @media (max-width: 900px) {
   .statsGrid { grid-template-columns: repeat(2, 1fr); }
+  .rankGrid { grid-template-columns: 1fr; }
   .welcomeBanner { flex-direction: column; align-items: flex-start; gap: 16px; }
 }

@@ -608,6 +608,13 @@ export const cosmoPool: PromiseLike<mssql.ConnectionPool> = {
     ).then(onfulfilled, onrejected),
 };
 
+/** Eski MSSQL cosmo kaynağı — MySQL açık olsa bile MSSQL'den okur.
+ *  Migration/sync işlerinde kaynak olarak kullanılır; normal route'lar cosmoPool'da kalır. */
+export const legacyCosmoPool: PromiseLike<mssql.ConnectionPool> = {
+  then: (onfulfilled, onrejected) =>
+    Promise.resolve(new ResilientPool(MSSQL_COSMO_DB) as unknown as mssql.ConnectionPool).then(onfulfilled, onrejected),
+};
+
 /** RootKullanici lookup (personel adı) → Postgres mirror (login ile aynı kaynak).
  *  RootKullanici MySQL'e taşınmadı; Neon Postgres mirror'da yaşıyor. MySQL moduna
  *  geçtiğimizde bile bu havuz Postgres'e gider — fallback MSSQL massgrup_root. */

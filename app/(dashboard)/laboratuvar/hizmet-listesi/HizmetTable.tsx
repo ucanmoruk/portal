@@ -49,6 +49,7 @@ const EMPTY_ALT: AltParametre = {
 };
 
 interface Birim { ID: number | null; Birim: string; }
+interface KysBirimResponse { data?: Array<{ id: number | null; legacyId?: number | null; ad: string }>; error?: string; }
 
 const RAPOR_FORMATLARI = ["Genel", "Stabilite", "Challenge", "Claim", "ÜGDR", "Diğer"] as const;
 const HIZMET_BOLUM_ADLARI = ["Mikrobiyoloji", "Kimyasal", "Dış Lab.", "Dış Laboratuvar"];
@@ -108,10 +109,13 @@ export default function HizmetTable() {
   useEffect(() => { fetchData(page, search, limit); }, [page, limit]);
 
   useEffect(() => {
-    fetch("/api/admin/birimler")
+    fetch("/api/kys/birimler")
       .then(r => r.json())
-      .then((d: Birim[] | { error?: string }) => {
+      .then((d: KysBirimResponse | Birim[] | { error?: string }) => {
         if (Array.isArray(d)) setBirimler(d);
+        else if (Array.isArray((d as KysBirimResponse).data)) {
+          setBirimler(((d as KysBirimResponse).data || []).map((b) => ({ ID: b.legacyId ?? b.id, Birim: b.ad })));
+        }
       })
       .catch(() => {});
   }, []);
