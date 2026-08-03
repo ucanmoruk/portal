@@ -283,7 +283,7 @@ export default function GenelReport({
             <td className="center" style={{ paddingLeft: 5 }}>{(isEnglish ? row.alt.LOQEn || row.alt.LOQ : row.alt.LOQ) || "-"}</td>
             <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
             <td className="center" style={{ paddingLeft: 5 }}>-</td>
-            <td className="center">{(isEnglish ? row.alt.LimitEn || row.alt.Limit : row.alt.Limit) || "-"}</td>
+            <td className="center limit-cell">{(isEnglish ? row.alt.LimitEn || row.alt.Limit : row.alt.Limit) || "-"}</td>
             <td className={adeg.cls} style={{ textAlign: "center" }}>{row.alt.Degerlendirme ? adeg.text : "-"}</td>
             {editing && <td />}
           </tr>
@@ -312,7 +312,7 @@ export default function GenelReport({
           <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText((isEnglish ? h.LOQEn || h.LOQ : h.LOQ) || "", (v) => edit.onRowChange(i, isEnglish ? { LOQEn: v } : { LOQ: v }), { center: true }) : ((isEnglish ? h.LOQEn || h.LOQ : h.LOQ) || "-")}</td>
           <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
           <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "", (v) => edit.onRowChange(i, isEnglish ? { MetotEn: v } : { Metot: v }), { center: true }) : ((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "-")}</td>
-          <td className="center">{edit ? editText((isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger) || "", (v) => edit.onRowChange(i, isEnglish ? { LimitEn: v } : { LimitDeger: v }), { center: true }) : ((isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger) || "-")}</td>
+          <td className="center limit-cell">{edit ? editText((isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger) || "", (v) => edit.onRowChange(i, isEnglish ? { LimitEn: v } : { LimitDeger: v }), { center: true }) : ((isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger) || "-")}</td>
           {edit ? (
             <td style={{ textAlign: "center" }}>
               <select
@@ -366,7 +366,7 @@ export default function GenelReport({
             <th style={{ width: 50, paddingLeft: 5 }}>LOQ</th>
             <th style={{ width: 50, paddingLeft: 5 }}>{text.uncertainty}</th>
             <th style={{ width: 110, paddingLeft: 5 }}>{text.method}</th>
-            <th style={{ width: 56 }}>{text.limit}</th>
+            <th style={{ width: 96 }}>{text.limit}</th>
             <th style={{ width: 82, textAlign: "center" }}>{text.assessment}</th>
             {editing && <th style={{ width: 40 }}></th>}
           </tr>
@@ -767,6 +767,13 @@ export default function GenelReport({
           white-space: nowrap;
         }
         .results tbody td.center { text-align: left; }
+        /* Limit metinleri cümle uzunluğunda olabiliyor (ör. 105+ karakter). Diğer
+           kolonlar tek satırda kalsın diye nowrap korunur; SADECE limit hücresi
+           sarar — aksi halde kolon şişip tabloyu sayfa dışına taşırıyor. */
+        .results tbody td.limit-cell {
+          white-space: normal;
+          overflow-wrap: break-word;
+        }
         .results tbody td.muted { color: var(--ink-soft); font-size: 8.5px; }
         .results tbody td.bold { font-weight: 700; }
         /* Alt parametre (bileşen) satırları — ana analizin altında, daha hafif */

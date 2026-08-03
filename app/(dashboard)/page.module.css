@@ -294,6 +294,106 @@
   white-space: nowrap;
 }
 
+/* ───── Ciro / tahsilat özeti ───── */
+.revenueSummary {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.revenueSummaryHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.revenueSummaryScope {
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.revenueSummaryRate {
+  color: #1a7f37;
+  background: rgba(48, 209, 88, 0.12);
+  border: 1px solid rgba(48, 209, 88, 0.28);
+  border-radius: var(--radius-full);
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.revenueSummaryItems {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.revenueSummaryItem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.revenueSummaryLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-tertiary);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.revenueSummaryValue {
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.revenueSummaryNote {
+  color: var(--color-text-tertiary);
+  font-size: 0.7rem;
+}
+
+.paidText { color: #1a7f37; }
+.unpaidText { color: #c9333f; }
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.legendDotPaid { background: #30d158; }
+.legendDotUnpaid { background: #ff375f; }
+
+.revenueRatioTrack {
+  display: block;
+  height: 6px;
+  margin-top: 10px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 55, 95, 0.22);
+  overflow: hidden;
+}
+
+.revenueRatioFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, #30d158, #1a7f37);
+}
+
 .revenueBars {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -313,16 +413,30 @@
 }
 
 .revenueValue {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  /* Sabit yukseklik: etiketler farkli satir sayisina inse de tum cubuk
+     kanallari ayni hizada baslar. */
+  min-height: 32px;
+  line-height: 1.1;
+  text-align: center;
+  overflow: hidden;
+}
+
+.revenueValueTotal {
   color: var(--color-text-secondary);
   font-size: 0.64rem;
   font-weight: 700;
-  line-height: 1.1;
-  min-height: 24px;
-  text-align: center;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+
+.revenueValueUnpaid {
+  color: #c9333f;
+  font-size: 0.56rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .revenueBarTrack {
@@ -337,14 +451,27 @@
   overflow: hidden;
 }
 
+/* Yığın çubuk: üstte ödenmeyen, altta ödenen (toplam = çubuğun tamamı). */
 .revenueBarFill {
-  display: block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, #30d158, #0071e3);
-  box-shadow: 0 8px 18px rgba(0, 113, 227, 0.2);
+  overflow: hidden;
+  box-shadow: 0 8px 18px rgba(0, 113, 227, 0.18);
   transition: height 0.18s ease, filter 0.18s ease;
 }
+
+.revenueSegUnpaid,
+.revenueSegPaid {
+  display: block;
+  width: 100%;
+  height: var(--seg);
+  flex: none;
+}
+
+.revenueSegUnpaid { background: linear-gradient(180deg, #ff6482, #ff375f); }
+.revenueSegPaid { background: linear-gradient(180deg, #30d158, #1a9e45); }
 
 .revenueMonth {
   color: var(--color-text-tertiary);
@@ -609,5 +736,17 @@
 
   .revenueBarFill {
     height: 100% !important;
+    /* Yatay çubukta yığın da yatay olmalı: row-reverse ile ödenen sola gelir. */
+    flex-direction: row-reverse;
+  }
+
+  .revenueSegUnpaid,
+  .revenueSegPaid {
+    width: var(--seg);
+    height: 100%;
+  }
+
+  .revenueSummaryItems {
+    grid-template-columns: 1fr;
   }
 }

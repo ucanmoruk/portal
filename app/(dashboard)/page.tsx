@@ -3,7 +3,12 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import poolPromise from "@/lib/db";
 import { firstAllowedHref } from "@/lib/menuConfig";
-import { getDashboardOverview, type MonthlyRevenueMetric, type RankedMetric } from "@/lib/dashboardOverview";
+import {
+  getDashboardOverview,
+  type MonthlyRevenueMetric,
+  type RankedMetric,
+  type RevenueTotals,
+} from "@/lib/dashboardOverview";
 import styles from "./page.module.css";
 
 export const metadata = {
@@ -34,22 +39,91 @@ function maxRankValue(rows: RankedMetric[], mode: "count" | "money") {
   return Math.max(...rows.map((row) => mode === "money" ? Number(row.amount || 0) : Number(row.value || 0)), 1);
 }
 
+function pctText(part: number, whole: number) {
+  if (!whole) return "-";
+  return `%${((part / whole) * 100).toFixed(1)}`;
+}
+
+/** Ciro/tahsilat ozet seridi. Kapsam: secili ay varsa o ay, yoksa son 12 ay. */
+function RevenueSummary({ totals, scopeLabel }: { totals: RevenueTotals; scopeLabel: string }) {
+  const paidWidth = totals.amount ? Math.round((totals.paid / totals.amount) * 100) : 0;
+
+  return (
+    <div className={styles.revenueSummary}>
+      <div className={styles.revenueSummaryHead}>
+        <span className={styles.revenueSummaryScope}>{scopeLabel}</span>
+        <span className={styles.revenueSummaryRate}>{pctText(totals.paid, totals.amount)} tahsil edildi</span>
+      </div>
+
+      <div className={styles.revenueSummaryItems}>
+        <div className={styles.revenueSummaryItem}>
+          <span className={styles.revenueSummaryLabel}>Toplam Ciro</span>
+          <strong className={styles.revenueSummaryValue}>{formatMoneyValue(totals.amount)}</strong>
+          <span className={styles.revenueSummaryNote}>
+            {totals.invoiceCount.toLocaleString("tr-TR")} fatura
+          </span>
+        </div>
+        <div className={styles.revenueSummaryItem}>
+          <span className={styles.revenueSummaryLabel}>
+            <span className={`${styles.legendDot} ${styles.legendDotPaid}`} />
+            Ödenen
+          </span>
+          <strong className={`${styles.revenueSummaryValue} ${styles.paidText}`}>
+            {formatMoneyValue(totals.paid)}
+          </strong>
+          <span className={styles.revenueSummaryNote}>{pctText(totals.paid, totals.amount)} tahsilat</span>
+        </div>
+        <div className={styles.revenueSummaryItem}>
+          <span className={styles.revenueSummaryLabel}>
+            <span className={`${styles.legendDot} ${styles.legendDotUnpaid}`} />
+            Ödenmeyen
+          </span>
+          <strong className={`${styles.revenueSummaryValue} ${styles.unpaidText}`}>
+            {formatMoneyValue(totals.unpaid)}
+          </strong>
+          <span className={styles.revenueSummaryNote}>
+            {totals.unpaidInvoiceCount.toLocaleString("tr-TR")} fatura açık
+          </span>
+        </div>
+      </div>
+
+      <div className={styles.revenueRatioTrack} title={`Ödenen ${pctText(totals.paid, totals.amount)}`}>
+        <span className={styles.revenueRatioFill} style={{ width: `${paidWidth}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function MonthlyRevenueChart({
   rows,
+  totals,
   selectedMonth,
 }: {
   rows: MonthlyRevenueMetric[];
+  totals: RevenueTotals;
   selectedMonth: string;
 }) {
   const maxAmount = Math.max(...rows.map((row) => row.amount), 1);
+  const selectedRow = selectedMonth ? rows.find((row) => row.month === selectedMonth) : undefined;
+
+  // Secili ay varsa ozet o aya daralir; yoksa grafikteki 12 ayin toplami.
+  const summaryTotals: RevenueTotals = selectedRow
+    ? {
+        amount: selectedRow.amount,
+        paid: selectedRow.paidAmount,
+        unpaid: selectedRow.unpaidAmount,
+        invoiceCount: selectedRow.invoiceCount,
+        unpaidInvoiceCount: selectedRow.unpaidInvoiceCount,
+      }
+    : totals;
 
   return (
     <div className={styles.monthlyRevenueCard}>
       <div className={styles.chartHeader}>
         <div>
-          <h2 className={styles.sectionTitle}>Aylık Ciro Grafiği</h2>
+          <h2 className={styles.sectionTitle}>Aylık Ciro ve Tahsilat</h2>
           <p className={styles.chartSubtitle}>
-            Aya tıklayınca ciro liderleri o aya göre filtrelenir.
+            Her çubuk ödenen ve ödenmeyen tutara ayrılır. Aya tıklayınca özet ve ciro liderleri o aya göre filtrelenir.
           </p>
         </div>
         {selectedMonth ? (
@@ -58,22 +132,56 @@ function MonthlyRevenueChart({
           <span className={styles.chartBadge}>Son 12 ay</span>
         )}
       </div>
+
+      {rows.length > 0 && (
+        <RevenueSummary
+          totals={summaryTotals}
+          scopeLabel={selectedRow ? `${selectedRow.label} ayı` : "Son 12 ay toplamı"}
+        />
+      )}
+
       <div className={styles.revenueBars}>
         {rows.length === 0 ? (
           <div className={styles.emptyState}>Aylık ciro verisi bulunamadi.</div>
         ) : rows.map((row) => {
           const height = Math.max(8, Math.round((row.amount / maxAmount) * 100));
+          // Yigin oranlari cubugun KENDI yuksekligine gore (ikisi %100 eder).
+          const paidShare = row.amount ? (row.paidAmount / row.amount) * 100 : 0;
           const active = selectedMonth === row.month;
           return (
             <a
               key={row.month}
               href={`/?ciroAy=${encodeURIComponent(row.month)}`}
               className={`${styles.revenueBarLink} ${active ? styles.revenueBarActive : ""}`}
-              title={`${row.label}: ${formatMoneyValue(row.amount)}`}
+              title={
+                `${row.label}\n` +
+                `Toplam: ${formatMoneyValue(row.amount)} (${row.invoiceCount} fatura)\n` +
+                `Ödenen: ${formatMoneyValue(row.paidAmount)} (${pctText(row.paidAmount, row.amount)})\n` +
+                `Ödenmeyen: ${formatMoneyValue(row.unpaidAmount)} (${row.unpaidInvoiceCount} fatura)`
+              }
             >
-              <span className={styles.revenueValue}>{formatMoneyValue(row.amount)}</span>
+              <span className={styles.revenueValue}>
+                <span className={styles.revenueValueTotal}>{formatMoneyValue(row.amount)}</span>
+                {/* Kirmizi = odenmeyen (ozet seridindeki lejantla ayni renk).
+                    Tam kirilim tooltip'te; ay secilince ust seritte de gorunur. */}
+                {row.unpaidAmount > 0 && (
+                  <span className={styles.revenueValueUnpaid}>
+                    {formatMoneyValue(row.unpaidAmount)}
+                  </span>
+                )}
+              </span>
               <span className={styles.revenueBarTrack}>
-                <span className={styles.revenueBarFill} style={{ height: `${height}%` }} />
+                <span className={styles.revenueBarFill} style={{ height: `${height}%` }}>
+                  {/* --seg: dikey duzende yukseklik, mobil yatay duzende genislik olur. */}
+                  <span
+                    className={styles.revenueSegUnpaid}
+                    style={{ "--seg": `${100 - paidShare}%` } as React.CSSProperties}
+                  />
+                  <span
+                    className={styles.revenueSegPaid}
+                    style={{ "--seg": `${paidShare}%` } as React.CSSProperties}
+                  />
+                </span>
               </span>
               <span className={styles.revenueMonth}>{row.label}</span>
             </a>
@@ -274,7 +382,11 @@ export default async function DashboardPage({
       )}
 
       <div className={styles.chartGrid}>
-        <MonthlyRevenueChart rows={overview.monthlyRevenue} selectedMonth={selectedRevenueMonth} />
+        <MonthlyRevenueChart
+          rows={overview.monthlyRevenue}
+          totals={overview.revenueTotals}
+          selectedMonth={selectedRevenueMonth}
+        />
         <ChartCard
           title="Bu Ay Test Yoğunluğu"
           subtitle="En cok calisilan analizlerin dagilimi"

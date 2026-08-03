@@ -19,11 +19,25 @@ export interface MonthlyRevenueMetric {
   label: string;
   amount: number;
   invoiceCount: number;
+  paidAmount: number;
+  unpaidAmount: number;
+  unpaidInvoiceCount: number;
+}
+
+/** Ciro/tahsilat ozeti. paid + unpaid = amount (kaynakta clamp edilir). */
+export interface RevenueTotals {
+  amount: number;
+  paid: number;
+  unpaid: number;
+  invoiceCount: number;
+  unpaidInvoiceCount: number;
 }
 
 export interface DashboardOverview {
   cards: DashboardMetric[];
   monthlyRevenue: MonthlyRevenueMetric[];
+  /** monthlyRevenue satirlarinin toplami — grafikteki cubuklarla birebir tutar. */
+  revenueTotals: RevenueTotals;
   topTestsThisMonth: RankedMetric[];
   topTestsLastYear: RankedMetric[];
   topRevenueFirms: RankedMetric[];
@@ -78,6 +92,15 @@ export async function getDashboardOverview(selectedRevenueMonth?: string): Promi
   try {
     const pool = await cosmoPool;
     const invoiceDate = `COALESCE(NULLIF(f.Tarih, '0000-00-00 00:00:00'), (SELECT MAX(fd.Tarih) FROM FaturaDetay fd WHERE fd.ProformaNo = f.ProformaNo))`;
+
+    // Tahsilat: Fatura.Odenen_Tutar (fatura-takip ozet satiriyla ayni kaynak).
+    // Birkac kayitta Odenen_Tutar > Toplam oldugu icin clamp'lenir; boylece
+    // HER ZAMAN odenen + odenmeyen = ciro olur ve grafikteki yigin sasmaz.
+    const invoiceTotal = `IFNULL(f.Toplam, 0)`;
+    const paidExpr = `LEAST(IFNULL(f.Odenen_Tutar, 0), ${invoiceTotal})`;
+    const unpaidExpr = `GREATEST(${invoiceTotal} - IFNULL(f.Odenen_Tutar, 0), 0)`;
+    // 1 kurustan buyuk acik = tahsil edilmemis fatura (kayan nokta toleransi).
+    const unpaidFlag = `CASE WHEN ${invoiceTotal} - IFNULL(f.Odenen_Tutar, 0) > 0.005 THEN 1 ELSE 0 END`;
     const safeRevenueMonth = selectedRevenueMonth && /^\d{4}-\d{2}$/.test(selectedRevenueMonth)
       ? selectedRevenueMonth
       : "";
@@ -98,7 +121,16 @@ export async function getDashboardOverview(selectedRevenueMonth?: string): Promi
                  THEN IFNULL(f.Toplam, 0) ELSE 0 END) AS ThisMonthTotal,
         SUM(CASE WHEN ${invoiceDate} >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
                   AND ${invoiceDate} < DATE_FORMAT(CURDATE(), '%Y-%m-01')
-                 THEN IFNULL(f.Toplam, 0) ELSE 0 END) AS PrevMonthTotal
+                 THEN IFNULL(f.Toplam, 0) ELSE 0 END) AS PrevMonthTotal,
+        SUM(CASE WHEN ${invoiceDate} >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                  AND ${invoiceDate} < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+                 THEN ${paidExpr} ELSE 0 END) AS ThisMonthPaid,
+        SUM(CASE WHEN ${invoiceDate} >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                  AND ${invoiceDate} < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+                 THEN ${unpaidExpr} ELSE 0 END) AS ThisMonthUnpaid,
+        SUM(CASE WHEN ${invoiceDate} >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                  AND ${invoiceDate} < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+                 THEN ${unpaidFlag} ELSE 0 END) AS ThisMonthUnpaidCount
       FROM Fatura f
       WHERE f.Durum = 'Aktif'
     `);
@@ -168,7 +200,10 @@ export async function getDashboardOverview(selectedRevenueMonth?: string): Promi
         DATE_FORMAT(${invoiceDate}, '%Y-%m') AS Ay,
         DATE_FORMAT(${invoiceDate}, '%m.%Y') AS Etiket,
         COUNT(*) AS FaturaAdet,
-        SUM(IFNULL(f.Toplam, 0)) AS Ciro
+        SUM(IFNULL(f.Toplam, 0)) AS Ciro,
+        SUM(${paidExpr}) AS Odenen,
+        SUM(${unpaidExpr}) AS Odenmeyen,
+        SUM(${unpaidFlag}) AS AcikFaturaAdet
       FROM Fatura f
       WHERE f.Durum = 'Aktif'
         AND ${invoiceDate} >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 11 MONTH)
@@ -223,6 +258,9 @@ export async function getDashboardOverview(selectedRevenueMonth?: string): Promi
     const prevMonthCount = Number(invoice.PrevMonthCount || 0);
     const thisMonthTotal = Number(invoice.ThisMonthTotal || 0);
     const prevMonthTotal = Number(invoice.PrevMonthTotal || 0);
+    const thisMonthPaid = Number(invoice.ThisMonthPaid || 0);
+    const thisMonthUnpaid = Number(invoice.ThisMonthUnpaid || 0);
+    const thisMonthUnpaidCount = Number(invoice.ThisMonthUnpaidCount || 0);
     const sampleStats = sampleStatsRes.recordset[0] || {};
     const thisMonthSamples = Number(sampleStats.ThisMonthSamples || 0);
     const prevMonthSamples = Number(sampleStats.PrevMonthSamples || 0);
@@ -237,6 +275,31 @@ export async function getDashboardOverview(selectedRevenueMonth?: string): Promi
       ? new Date().getMonth() + 1
       : 12;
     const monthlyReportAverage2026 = reports2026 / Math.max(1, elapsedMonths2026);
+
+    const monthlyRevenue: MonthlyRevenueMetric[] = monthlyRevenueRes.recordset.map(
+      (row: Record<string, unknown>) => ({
+        month: String(row.Ay || ""),
+        label: String(row.Etiket || ""),
+        amount: Number(row.Ciro || 0),
+        invoiceCount: Number(row.FaturaAdet || 0),
+        paidAmount: Number(row.Odenen || 0),
+        unpaidAmount: Number(row.Odenmeyen || 0),
+        unpaidInvoiceCount: Number(row.AcikFaturaAdet || 0),
+      }),
+    );
+
+    // "Genel" ozet = grafikte gorunen aylarin toplami. Ayri bir sorgu yerine
+    // satirlardan toplanir ki ust seritteki rakam cubuklarla asla celismesin.
+    const revenueTotals: RevenueTotals = monthlyRevenue.reduce<RevenueTotals>(
+      (acc, row) => ({
+        amount: acc.amount + row.amount,
+        paid: acc.paid + row.paidAmount,
+        unpaid: acc.unpaid + row.unpaidAmount,
+        invoiceCount: acc.invoiceCount + row.invoiceCount,
+        unpaidInvoiceCount: acc.unpaidInvoiceCount + row.unpaidInvoiceCount,
+      }),
+      { amount: 0, paid: 0, unpaid: 0, invoiceCount: 0, unpaidInvoiceCount: 0 },
+    );
 
     return {
       cards: [
@@ -293,13 +356,25 @@ export async function getDashboardOverview(selectedRevenueMonth?: string): Promi
           sub: "Sadece Temmuz ayindaki raporlar",
           color: "#af52de",
         },
+        {
+          label: "Bu Ay Tahsil Edilen",
+          value: money(thisMonthPaid),
+          sub: thisMonthTotal
+            ? `Bu ayin %${((thisMonthPaid / thisMonthTotal) * 100).toFixed(1)} tahsil edildi`
+            : "Bu ay fatura yok",
+          color: "#30d158",
+        },
+        {
+          label: "Bu Ay Acik Bakiye",
+          value: money(thisMonthUnpaid),
+          sub: thisMonthUnpaidCount
+            ? `${count(thisMonthUnpaidCount)} fatura tahsil bekliyor`
+            : "Bu ayin tamami tahsil edildi",
+          color: "#ff375f",
+        },
       ],
-      monthlyRevenue: monthlyRevenueRes.recordset.map((row: Record<string, unknown>) => ({
-        month: String(row.Ay || ""),
-        label: String(row.Etiket || ""),
-        amount: Number(row.Ciro || 0),
-        invoiceCount: Number(row.FaturaAdet || 0),
-      })),
+      monthlyRevenue,
+      revenueTotals,
       topTestsThisMonth: mapRank(topTestsThisMonthRes.recordset, "Ad", "Adet", "Kod"),
       topTestsLastYear: mapRank(topTestsLastYearRes.recordset, "Ad", "Adet", "Kod"),
       topRevenueFirms: mapRank(topRevenueRes.recordset, "FirmaAdi", "FaturaAdet", undefined, "Ciro"),
@@ -310,6 +385,7 @@ export async function getDashboardOverview(selectedRevenueMonth?: string): Promi
     return {
       cards: [],
       monthlyRevenue: [],
+      revenueTotals: { amount: 0, paid: 0, unpaid: 0, invoiceCount: 0, unpaidInvoiceCount: 0 },
       topTestsThisMonth: [],
       topTestsLastYear: [],
       topRevenueFirms: [],
