@@ -112,7 +112,7 @@ function FirmaSelect({
 }
 
 // ── Ana bileşen ───────────────────────────────────────────────────────────────
-type Row = { file: File; raporNo: string; tur: string; numuneAdi: string };
+type Row = { file: File; raporNo: string; tur: string; numuneAdi: string; onayToken: string };
 
 export default function BelgeYukleClient() {
   const [firma, setFirma] = useState<Secim>(null);
@@ -127,7 +127,7 @@ export default function BelgeYukleClient() {
     const yeni: Row[] = [];
     for (const f of Array.from(fileList)) {
       if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) continue;
-      yeni.push({ file: f, raporNo: "", tur: "Rapor", numuneAdi: f.name.replace(/\.pdf$/i, "") });
+      yeni.push({ file: f, raporNo: "", tur: "Rapor", numuneAdi: f.name.replace(/\.pdf$/i, ""), onayToken: "" });
     }
     if (yeni.length) setRows((r) => [...r, ...yeni]);
   }, []);
@@ -155,7 +155,7 @@ export default function BelgeYukleClient() {
         firmaAd: firma.ad,
         projeId: (proje ?? DIGER)!.id,
         projeAd: (proje ?? DIGER)!.ad,
-        items: rows.map((r) => ({ raporNo: r.raporNo, tur: r.tur, numuneAdi: r.numuneAdi })),
+        items: rows.map((r) => ({ raporNo: r.raporNo, tur: r.tur, numuneAdi: r.numuneAdi, onayToken: r.onayToken.trim() })),
       }));
       const res = await fetch("/api/musteriler/belge-yukle", { method: "POST", body: fd });
       const j = await res.json().catch(() => ({}));
@@ -216,16 +216,16 @@ export default function BelgeYukleClient() {
       {rows.length > 0 && (
         <div style={{ border: "1px solid var(--color-border)", borderRadius: 10, overflow: "hidden" }}>
           <div style={{
-            display: "grid", gridTemplateColumns: "1fr 130px 130px 1fr 40px", gap: 10,
+            display: "grid", gridTemplateColumns: "1fr 110px 110px 1fr 170px 40px", gap: 10,
             padding: "10px 14px", background: "var(--color-surface)", borderBottom: "1px solid var(--color-border-light)",
             fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em",
             color: "var(--color-text-tertiary)",
           }}>
-            <div>Dosya</div><div>Rapor No</div><div>Tür</div><div>Numune Adı</div><div></div>
+            <div>Dosya</div><div>Rapor No</div><div>Tür</div><div>Numune Adı</div><div>Onay Token <span style={{ textTransform: "none", fontWeight: 400 }}>(override)</span></div><div></div>
           </div>
           {rows.map((r, i) => (
             <div key={i} style={{
-              display: "grid", gridTemplateColumns: "1fr 130px 130px 1fr 40px", gap: 10,
+              display: "grid", gridTemplateColumns: "1fr 110px 110px 1fr 170px 40px", gap: 10,
               padding: "10px 14px", alignItems: "center", borderBottom: "1px solid var(--color-border-light)",
             }}>
               <div style={{ fontSize: "0.82rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.file.name}>
@@ -236,6 +236,7 @@ export default function BelgeYukleClient() {
                 {TUR_SECENEKLERI.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
               <input style={inp} placeholder="Numune adı" value={r.numuneAdi} onChange={(e) => patchRow(i, { numuneAdi: e.target.value })} />
+              <input style={inp} placeholder="QR kodu ya da token" value={r.onayToken} onChange={(e) => patchRow(i, { onayToken: e.target.value })} title="Doldurulursa: bu PDF, o onaylı raporun müşteri (yayın) versiyonunu değiştirir. QR altındaki 8 karakterlik kodu ya da tam token'ı girebilirsin." />
               <button
                 type="button" onClick={() => removeRow(i)} title="Kaldır"
                 style={{ border: "none", background: "transparent", cursor: "pointer", color: "#c00", fontSize: "1.1rem", lineHeight: 1 }}

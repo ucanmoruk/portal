@@ -17,7 +17,14 @@ interface ItemMeta {
   raporNo?: string | number | null;
   tur?: string;
   numuneAdi?: string;
+  /** Doldurulursa: bu PDF, o token'lı ONAYLI raporun yayın (müşteri) versiyonunu
+   *  override eder. Yeni Rapor kaydı açılmaz; NKR_RaporOnay güncellenir. */
+  onayToken?: string;
 }
+
+const TERMINAL_ONAY = new Set([
+  "Onaylandı", "Onaylandi", "Yayınlandı", "Yayinlandi", "Arşiv", "Arsiv",
+]);
 interface UploadMeta {
   firmaId: number;
   firmaAd?: string | null;
@@ -28,6 +35,43 @@ interface UploadMeta {
 
 function genToken(): string {
   return randomBytes(18).toString("base64url"); // ~24 char, base64url
+}
+
+// QR altındaki 8 karakterlik doğrulama kodu — lib/raporViewData.ts ile BİREBİR aynı türetim.
+function deriveDogrulamaKod(token: string): string {
+  return token
+    .replace(/[^A-Z0-9]/gi, "")
+    .replace(/[ILO01]/gi, "")
+    .toUpperCase()
+    .slice(0, 8)
+    .padEnd(8, "X");
+}
+
+// Kullanıcı ya tam KarekodToken'ı (~24 char) ya da QR altındaki 8-karakter kodu
+// girebilir. Onay kaydını (tam token dahil) çöz. Dönüş: kayıt | null | "ambiguous".
+async function resolveOnay(
+  pool: any,
+  input: string,
+): Promise<{ ID: number; KarekodToken: string; Durum: string } | null | "ambiguous"> {
+  const cleaned = input.replace(/\s+/g, "");
+  if (cleaned.length >= 16) {
+    const r = await pool.request().input("tok", cleaned)
+      .query(`SELECT ID, KarekodToken, Durum FROM NKR_RaporOnay WHERE KarekodToken = @tok`);
+    return r.recordset[0] ?? null;
+  }
+  // 8-karakter kod → terminal onaylar arasında türetip eşleştir.
+  const up = cleaned.toUpperCase();
+  const r = await pool.request().query(`
+    SELECT ID, KarekodToken, Durum FROM NKR_RaporOnay
+    WHERE KarekodToken IS NOT NULL
+      AND Durum IN (N'Onaylandı', N'Onaylandi', N'Yayınlandı', N'Yayinlandi', N'Arşiv', N'Arsiv')
+  `);
+  const matches = r.recordset.filter(
+    (row: any) => deriveDogrulamaKod(String(row.KarekodToken)) === up,
+  );
+  if (matches.length === 0) return null;
+  if (matches.length > 1) return "ambiguous";
+  return matches[0];
 }
 
 // POST /api/musteriler/belge-yukle
@@ -100,6 +144,57 @@ export async function POST(request: NextRequest) {
           { error: `"${file.name}" bir PDF değil. Yalnızca PDF belge yüklenebilir.` },
           { status: 400 },
         );
+      }
+
+      // ── ONAY TOKEN OVERRIDE ──
+      // onayToken verildiyse: bu PDF, o token'lı ONAYLI raporun yayın (müşteri
+      // doğrulama) versiyonunu değiştirir. FTP'ye {token}.pdf olarak yazılır
+      // (mevcut yayın PDF'inin üzerine) ve NKR_RaporOnay güncellenir. Yeni Rapor
+      // kaydı AÇILMAZ. Müşteri o token'ı sorguladığında bu PDF'i alır.
+      const onayInput = String(it.onayToken ?? "").trim();
+      if (onayInput) {
+        const onay = await resolveOnay(pool, onayInput);
+        if (onay === "ambiguous") {
+          return Response.json(
+            { error: `"${file.name}": "${onayInput}" kodu birden fazla rapora uyuyor. Lütfen tam token (QR bağlantısındaki uzun değer) girin.` },
+            { status: 409 },
+          );
+        }
+        if (!onay) {
+          return Response.json(
+            { error: `"${file.name}": "${onayInput}" ile onaylı rapor bulunamadı. (QR altındaki 8 karakterlik kodu ya da tam token'ı girin.)` },
+            { status: 404 },
+          );
+        }
+        if (!TERMINAL_ONAY.has(String(onay.Durum))) {
+          return Response.json(
+            { error: `"${file.name}": bu rapor onaylı değil (durum: ${onay.Durum ?? "yok"}).` },
+            { status: 409 },
+          );
+        }
+        // FTP dosya adı = TAM KarekodToken (yayın PDF'i {token}.pdf olarak servis edilir).
+        const fullToken = String(onay.KarekodToken);
+        let overrideUrl: string;
+        try {
+          const up = await uploadRaporPdfToFtp({ pdfBuffer: buf, token: fullToken });
+          overrideUrl = up.publicUrl;
+        } catch (e) {
+          const d = e instanceof Error ? e.message : "Bilinmeyen hata";
+          return Response.json(
+            { error: `"${file.name}" sunucuya yüklenemedi: ${d.slice(0, 300)}` },
+            { status: 502 },
+          );
+        }
+        await pool.request()
+          .input("id", onay.ID)
+          .input("url", overrideUrl)
+          .query(`
+            UPDATE NKR_RaporOnay
+            SET Durum = N'Yayınlandı', YayinTarihi = GETDATE(), YayinUrl = @url
+            WHERE ID = @id
+          `);
+        sonuc.push({ fileName: file.name, raporNo: `override:${onayInput}`, id: 0 });
+        continue; // Rapor tablosuna kayıt YOK
       }
 
       // FTP'ye yükle (VerifiedFiles) — dosya adı {token}.pdf
