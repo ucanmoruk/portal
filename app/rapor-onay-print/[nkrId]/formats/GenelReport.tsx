@@ -22,11 +22,6 @@ const jetbrains = JetBrains_Mono({
   variable: "--font-rapor",
 });
 
-const LONG_REPORT_ROW_THRESHOLD = 32;
-const LONG_REPORT_FIRST_PAGE_MIN_ROWS = 16;
-const LONG_REPORT_FIRST_PAGE_MAX_ROWS = 22;
-const LONG_REPORT_CONTINUATION_MAX_ROWS = 28;
-
 function splitIntoBalancedPages<T>(rows: T[], maxRowsPerPage: number): T[][] {
   if (rows.length === 0) return [];
 
@@ -225,24 +220,36 @@ export default function GenelReport({
     }
     return rows;
   });
-  const useLongReportLayout = !editing && resultRows.length > LONG_REPORT_ROW_THRESHOLD;
-  const shouldSplitResults = !editing && resultRows.length > 13;
-  const firstPageResultCount = shouldSplitResults
-    ? useLongReportLayout
-      ? Math.min(
-          Math.max(Math.ceil(resultRows.length * 0.28), LONG_REPORT_FIRST_PAGE_MIN_ROWS),
-          LONG_REPORT_FIRST_PAGE_MAX_ROWS,
-        )
-      : Math.min(Math.ceil(resultRows.length / 2), 10)
-    : resultRows.length;
+  // ═══════════════════════ UZUN RAPOR BÖLME KURALLARI ═══════════════════════
+  // Bu kurallar TÜM uzun raporlarda (Genel/GenelEn) tutarlı uygulanır:
+  //
+  // 1) FOOTER'lar sayfa tipine göre AYRI ve NET (footer'lara dokunulmaz):
+  //    • İlk sayfa footer'ı (page1-footer, pinned): Hazırlayan + Onaylayan imza,
+  //      seal, QR kod, FooterNot (dipnot), doküman footer (firma/adres/dok no/sayfa).
+  //    • Devam sayfaları footer'ı (pinned): sağ altta seal + doküman footer
+  //      (firma/adres/dok no/sayfa). İmza/QR/dipnot YOK.
+  //
+  // 2) Analiz tablosu (ve altındaki AÇIKLAMALAR) footer'a TEMAS ETMEDEN bölünür:
+  //    Her sayfada footer'a ayrılmış sabit alan (main-page/continuation padding-bottom)
+  //    bir "padding tamponu" oluşturur; satır sayısı bu tamponu aşmayacak şekilde
+  //    sınırlanır → tablo imza/QR başlıklarına yaklaşınca satırlar sonraki sayfaya iner.
+  //
+  //    - İlk sayfa    : en fazla FIRST_PAGE_ROWS satır (büyük footer → az satır)
+  //    - Devam sayfası : en fazla CONTINUATION_PAGE_ROWS satır (küçük footer → çok satır)
+  //    - AÇIKLAMALAR + "Rapor Sonu" bölünmüş raporlarda SON sayfada, tablonun en altında.
+  //    - Devam sayfalarında satır/font boyutu ilk sayfayla AYNI (küçültme yok).
+  //
+  // NOT: Bu satır-sayısı + padding tampon yaklaşımı, SSR/PDF (Chromium) ortamında
+  // ölçüm gerektirmeden güvenli bölme sağlar. Değerler değişirse tüm raporlar aynı
+  // şekilde davranır.
+  // ═══════════════════════════════════════════════════════════════════════════
+  const FIRST_PAGE_ROWS = 5;
+  const CONTINUATION_PAGE_ROWS = 16;
+  const shouldSplitResults = !editing && resultRows.length > FIRST_PAGE_ROWS;
+  const firstPageResultCount = shouldSplitResults ? FIRST_PAGE_ROWS : resultRows.length;
   const firstPageRows = resultRows.slice(0, firstPageResultCount);
   const remainingResultRows = shouldSplitResults ? resultRows.slice(firstPageResultCount) : [];
-  const continuationPages =
-    useLongReportLayout
-      ? splitIntoBalancedPages(remainingResultRows, LONG_REPORT_CONTINUATION_MAX_ROWS)
-      : remainingResultRows.length > 0
-        ? [remainingResultRows]
-        : [];
+  const continuationPages = splitIntoBalancedPages(remainingResultRows, CONTINUATION_PAGE_ROWS);
   const totalReportPages = 1 + continuationPages.length;
 
   // Düzenleme modu yardımcıları — `edit` yoksa hepsi no-op, metin olduğu gibi basılır.
@@ -311,7 +318,7 @@ export default function GenelReport({
           <td className="center">{edit ? editText((isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc) || "", (v) => edit.onRowChange(i, isEnglish ? { SonucEn: v } : { Sonuc: v }), { center: true }) : ((isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc) || "-")}</td>
           <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText((isEnglish ? h.LOQEn || h.LOQ : h.LOQ) || "", (v) => edit.onRowChange(i, isEnglish ? { LOQEn: v } : { LOQ: v }), { center: true }) : ((isEnglish ? h.LOQEn || h.LOQ : h.LOQ) || "-")}</td>
           <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
-          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "", (v) => edit.onRowChange(i, isEnglish ? { MetotEn: v } : { Metot: v }), { center: true }) : ((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "-")}</td>
+          <td className="center method-cell" style={{ paddingLeft: 5 }}>{edit ? editText((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "", (v) => edit.onRowChange(i, isEnglish ? { MetotEn: v } : { Metot: v }), { center: true }) : ((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "-")}</td>
           <td className="center limit-cell">{edit ? editText((isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger) || "", (v) => edit.onRowChange(i, isEnglish ? { LimitEn: v } : { LimitDeger: v }), { center: true }) : ((isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger) || "-")}</td>
           {edit ? (
             <td style={{ textAlign: "center" }}>
@@ -446,7 +453,9 @@ export default function GenelReport({
     </>
   );
 
-  const moveEnglishNotesToContinuation = isEnglish && continuationPages.length > 0;
+  // Rapor bölünmüşse AÇIKLAMALAR/EXPLANATIONS + "* Rapor Sonu *" son devam
+  // sayfasında, analiz tablosunun en altında gösterilir (tüm formatlarda).
+  const moveNotesToLast = continuationPages.length > 0;
 
   const renderNotesBlock = () => (
     <>
@@ -770,7 +779,8 @@ export default function GenelReport({
         /* Limit metinleri cümle uzunluğunda olabiliyor (ör. 105+ karakter). Diğer
            kolonlar tek satırda kalsın diye nowrap korunur; SADECE limit hücresi
            sarar — aksi halde kolon şişip tabloyu sayfa dışına taşırıyor. */
-        .results tbody td.limit-cell {
+        .results tbody td.limit-cell,
+        .results tbody td.method-cell {
           white-space: normal;
           overflow-wrap: break-word;
         }
@@ -958,6 +968,29 @@ export default function GenelReport({
           bottom: 8mm;
           width: auto;
         }
+        /* Page 1 sabit footer — imza + FooterNot + doküman footer birlikte pinned.
+           main-page padding-bottom ile analiz tablosuna yer ayrılır (üst üste binmez). */
+        .main-page {
+          padding-bottom: 78mm;
+        }
+        .page1-footer {
+          position: absolute;
+          left: 8mm;
+          right: 8mm;
+          bottom: 8mm;
+          width: auto;
+        }
+        .page1-footer .approval-block {
+          margin-top: 0;
+          padding-top: 4mm;
+        }
+        .page1-footer .FooterNot {
+          margin-top: 4px;
+          margin-bottom: 10px;
+        }
+        .page1-footer .rapor-altbilgi {
+          padding-top: 7px;
+        }
         .sirket-bilgisi {
           display: flex;
           justify-content: space-between;
@@ -1056,6 +1089,10 @@ export default function GenelReport({
             page-break-inside: avoid;
             break-inside: avoid;
           }
+          /* Page 1 sabit footer için alt rezerv — .page shorthand'ini ez. */
+          .main-page {
+            padding-bottom: 78mm;
+          }
           .page + .page {
             margin-top: 0;
             page-break-before: always;
@@ -1070,7 +1107,7 @@ export default function GenelReport({
         }
       `}</style>
 
-      <div className={`root ${ttInterphases.variable} ${jetbrains.variable}${useLongReportLayout ? " long-report-layout" : ""}`}>
+      <div className={`root ${ttInterphases.variable} ${jetbrains.variable}`}>
         {!hideToolbar && (
           <OnayToolbar
             nkrId={nkrId}
@@ -1082,7 +1119,7 @@ export default function GenelReport({
           />
         )}
 
-        <div className="page">
+        <div className="page main-page">
           {/* ───── HEADER: Sol logo + (akredite varsa) Sağ Türkak/ilac-MRA ───── */}
           <div className="header">
             <div className="header-logo">
@@ -1197,74 +1234,71 @@ export default function GenelReport({
             )}
           </div>
 
-          {/* ───── NOTLAR ───── */}
-          {!moveEnglishNotesToContinuation && renderNotesBlock()}
+          {/* AÇIKLAMALAR + "* Rapor Sonu *" — rapor bölünmemişse page 1'de, analiz
+              tablosunun hemen altında. Bölünmüşse son devam sayfasına taşınır. */}
+          {!moveNotesToLast && renderNotesBlock()}
 
-          {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ─────  */}
-          <div className="approval-block">
-            <div className="approval-cell" style={{width:200, paddingTop:"15px"}}>
-              <div className="approval-cell-title" style={{paddingLeft:"5px"}}>{text.preparedBy}</div>
-              <div className="e-imza-pill" style={{marginTop:10}}>✓ {text.signed}</div>
-              <div className="approval-cell-body">
-                <div className="approval-name">{hazirlayanAd} <span style={{fontSize:"9px" , color:"#646464"}}>{text.reporter}</span></div>
+          {/* ───── PAGE 1 SABİT FOOTER (pinned) ─────
+              İmza (Hazırlayan/Onaylayan) + seal + QR + FooterNot + doküman footer.
+              Absolute konumlu → her zaman sayfanın altında; analiz tablosu bunların
+              üstüne gelmez (main-page padding-bottom ile yer ayrılır). */}
+          <div className="page1-footer">
+            <div className="approval-block">
+              <div className="approval-cell" style={{width:200, paddingTop:"15px"}}>
+                <div className="approval-cell-title" style={{paddingLeft:"5px"}}>{text.preparedBy}</div>
+                <div className="e-imza-pill" style={{marginTop:10}}>✓ {text.signed}</div>
+                <div className="approval-cell-body">
+                  <div className="approval-name">{hazirlayanAd} <span style={{fontSize:"9px" , color:"#646464"}}>{text.reporter}</span></div>
+                </div>
+              </div>
+              <div className="approval-cell" style={{width:300, paddingTop:"15px"}}>
+                <div className="approval-cell-title" style={{paddingLeft:"5px"}}>{text.approvedBy}</div>
+                <div className="e-imza-pill" style={{marginTop:10}}>✓ {text.signed}</div>
+                <div className="approval-cell-body">
+                  <div className="approval-name">Oğuzhan EKER <span style={{fontSize:"9px" , color:"#646464"}}>{text.manager}</span></div>
+                </div>
+              </div>
+              <div className="approval-cell">
+                <div className="approval-cell-title">
+                  <img src="/unique-seal.png" alt="UNIQUE ANALYSE" style={{width: 90}}/>
+                </div>
+                <div className="approval-cell-body"></div>
+              </div>
+              <div className="approval-cell">
+                <div className="approval-cell-title">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={karekod?.qrDataUrl || "/karekod.png"}
+                    alt={text.qrAlt}
+                    title={karekod?.url || text.qrTitle}
+                    style={{ width: 90 }}
+                  />
+                </div>
+                <div className="approval-cell-body">
+                  {karekod?.dogrulamaKod && (
+                    <div
+                      title={text.codeTitle}
+                      style={{
+                        textAlign: "center",
+                        fontSize: "9px",
+                        fontWeight: 700,
+                        letterSpacing: "0.14em",
+                        color: "#000",
+                        fontFamily: "monospace",
+                        padding: "1px 0",
+                      }}
+                    >
+                      {karekod.dogrulamaKod}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="approval-cell" style={{width:300, paddingTop:"15px"}}>
-              <div className="approval-cell-title" style={{paddingLeft:"5px"}}>{text.approvedBy}</div>
-              <div className="e-imza-pill" style={{marginTop:10}}>✓ {text.signed}</div>
-              <div className="approval-cell-body">
-                <div className="approval-name">Oğuzhan EKER <span style={{fontSize:"9px" , color:"#646464"}}>{text.manager}</span></div>
-             
-              </div>
-            </div>
-            <div className="approval-cell">
-              <div className="approval-cell-title">
-                <img src="/unique-seal.png" alt="UNIQUE ANALYSE" style={{width: 90}}/>
-              </div>
-              <div className="approval-cell-body">
-              </div>
-            </div>
-            <div className="approval-cell">
-              <div className="approval-cell-title">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={karekod?.qrDataUrl || "/karekod.png"}
-                  alt={text.qrAlt}
-                  title={karekod?.url || text.qrTitle}
-                  style={{ width: 90 }}
-                />
-              </div>
-              <div className="approval-cell-body">
-                {karekod?.dogrulamaKod && (
-                  <div
-                    title={text.codeTitle}
-                    style={{
-                      textAlign: "center",
-                      fontSize: "9px",
-                      fontWeight: 700,
-                      letterSpacing: "0.14em",
-                      color: "#000",
-                      fontFamily: "monospace",
-                      padding: "1px 0",
-                    }}
-                  >
-                    {karekod.dogrulamaKod}
-                  </div>
-                )}
-              </div>
-            </div>
+
+            <div className="FooterNot">{text.footerNote}</div>
+
+            {renderDocumentFooter(1)}
           </div>
-
-          {/* ───── FOOTER ───── */}
-
-  <div className="FooterNot">
-                {text.footerNote}
-          </div>
-
-             <div style={{marginTop:"10px"}}></div>
-       
-
-          {renderDocumentFooter(1)}
 
 
 
@@ -1280,7 +1314,7 @@ export default function GenelReport({
               <div className="results-section continued">
                 <div className="results-title">{text.testResultsContinued}</div>
                 {renderResultsTable(rows, { continued: true })}
-                {moveEnglishNotesToContinuation && isLastContinuation && renderNotesBlock()}
+                {moveNotesToLast && isLastContinuation && renderNotesBlock()}
               </div>
 
               <div className="continuation-seal">
