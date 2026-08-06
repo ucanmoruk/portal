@@ -5,6 +5,7 @@ import { imzaColumnExists, imzalaVeKaydet } from "@/lib/raporImzaData";
 import { loadBilesenSonuclar } from "@/lib/altParametre";
 import { applyRaporEdit, loadRaporEdit } from "@/lib/raporDuzenleme";
 import { baseReportFormat } from "@/lib/raporFormatLanguage";
+import { getStabiliteVeriJson } from "@/lib/stabiliteData";
 
 // Rapor önizleme + imzalı PDF için ORTAK veri yükleyici.
 // Hem app/rapor-onay-print/[nkrId]/page.tsx (önizleme) hem
@@ -23,6 +24,8 @@ export interface RaporMeta {
   sirketAdi: string;
   /** Revize açıklaması — revize edilmiş raporlarda (revNo > 0) gösterilir. */
   revizeNot?: string | null;
+  /** Stabilite formatı için kayıtlı matris verisi (NKR_StabiliteVeri parse'lı). */
+  stabiliteVeri?: unknown;
 }
 
 export interface RaporViewData {
@@ -310,6 +313,17 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
     docKodu: process.env.RAPOR_DOC_KODU || "Ek-1.PR.20 Yayın Tarihi: 27.09.2023   Revizyon Tarih / No: 25.11.2024 / 01",
     sirketAdi,
   };
+
+  // Stabilite formatı: kayıtlı matris verisini (varsa) meta'ya yükle.
+  // Yoksa StabiliteReport varsayılan config ile render eder.
+  if (/stabilite/i.test(format)) {
+    try {
+      const json = await getStabiliteVeriJson(pool, nkrIdNum, format);
+      if (json) meta.stabiliteVeri = JSON.parse(json);
+    } catch (e) {
+      console.warn("[raporViewData] Stabilite verisi yüklenemedi:", e);
+    }
+  }
 
   const data = { header, hizmetler, testBaslangic, testBitis, onay, meta, karekod };
   try {

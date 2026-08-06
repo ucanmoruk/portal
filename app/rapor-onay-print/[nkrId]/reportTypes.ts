@@ -90,6 +90,8 @@ export interface ReportMeta {
   sirketAdi: string;
   /** Revize açıklaması — revize edilmiş raporlarda (revNo > 0) gösterilir. */
   revizeNot?: string | null;
+  /** Stabilite formatı için kayıtlı matris verisi (NKR_StabiliteVeri.VeriJson parse edilmiş). */
+  stabiliteVeri?: unknown;
 }
 
 export interface KarekodInfo {

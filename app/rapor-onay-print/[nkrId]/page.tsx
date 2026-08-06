@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import type { ComponentType } from "react";
 import GenelReport from "./formats/GenelReport";
 import ChallengeReport from "./formats/ChallengeReport";
+import StabiliteReport from "./formats/StabiliteReport";
 import DetayRaporReport from "./formats/DetayRaporReport";
 import DigerReport from "./formats/DigerReport";
 import type { ReportFormatProps } from "./reportTypes";
@@ -19,6 +20,8 @@ const FORMAT_COMPONENTS: Record<string, ComponentType<ReportFormatProps>> = {
   GenelEn: GenelReport,
   Challenge: ChallengeReport,
   ChallengeEn: ChallengeReport,
+  Stabilite: StabiliteReport,
+  StabiliteEn: StabiliteReport,
   DetayRapor: DetayRaporReport,
   "Diğer": DigerReport,
 };
@@ -28,6 +31,7 @@ const FORMAT_COMPONENTS: Record<string, ComponentType<ReportFormatProps>> = {
 const DATA_FORMAT_ALIAS: Record<string, string> = {
   GenelEn: "Genel",
   ChallengeEn: "Challenge",
+  StabiliteEn: "Stabilite",
   DetayRapor: "Genel",
   DetayFormat: "Genel",
 };
