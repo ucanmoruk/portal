@@ -32,6 +32,35 @@ const inputSt: React.CSSProperties = {
   fontSize: 12, background: "var(--color-bg-elevated,#fff)", color: "inherit", width: "100%",
 };
 
+// Metinli aksiyon butonu ("+ ekle", "+ boş test") — 28px ikon butonu (editBtn)
+// metni taşırdığı için düzgün pill buton.
+const smallBtn: React.CSSProperties = {
+  display: "inline-flex", alignItems: "center", gap: 4, padding: "6px 12px",
+  borderRadius: 8, border: "1px solid var(--color-accent)",
+  background: "var(--color-accent-light, #e8f0fe)", color: "var(--color-accent)",
+  fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+  fontFamily: "inherit", lineHeight: 1.2,
+};
+
+// Yeni gün/sıcaklık eklendiğinde matris hücrelerini otomatik doldur: boş bir
+// (gün|sıcaklık) hücresini aynı testin başka bir gününden (aynı sıcaklık) ya da
+// aynı günün başka sıcaklığından kopyalar. Böylece 28. gün eklenince sütun dolu gelir.
+function fillTest(t: Test, gunler: number[], sicakliklar: string[]): Test {
+  const s: Record<string, string> = { ...t.sonuclar };
+  for (const g of gunler) for (const sic of sicakliklar) {
+    const key = `${g}|${sic}`;
+    if (s[key]?.trim()) continue;
+    let val = "";
+    for (const g2 of gunler) { const v = s[`${g2}|${sic}`]; if (v?.trim()) { val = v; break; } } // aynı sıcaklık, başka gün
+    if (!val) for (const s2 of sicakliklar) { const v = s[`${g}|${s2}`]; if (v?.trim()) { val = v; break; } } // aynı gün, başka sıcaklık
+    if (val) s[key] = val;
+  }
+  return { ...t, sonuclar: s };
+}
+function fillVeri(v: Veri): Veri {
+  return { ...v, testler: v.testler.map(t => fillTest(t, v.gunler, v.sicakliklar)) };
+}
+
 export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number; format: string }) {
   const [veri, setVeri] = useState<Veri>(bos);
   const [loading, setLoading] = useState(true);
@@ -61,23 +90,33 @@ export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number;
       .finally(() => setLoading(false));
   }, [nkrId, format]);
 
-  // ── Config ──
+  // ── Config ── (eklerken fillVeri ile matris otomatik dolar; çıkarırken dokunulmaz)
   const toggleGun = (g: number) =>
-    setVeri(v => ({ ...v, gunler: v.gunler.includes(g) ? v.gunler.filter(x => x !== g) : [...v.gunler, g].sort((a, b) => a - b) }));
+    setVeri(v => {
+      const has = v.gunler.includes(g);
+      const gunler = has ? v.gunler.filter(x => x !== g) : [...v.gunler, g].sort((a, b) => a - b);
+      const nv = { ...v, gunler };
+      return has ? nv : fillVeri(nv);
+    });
   const toggleSic = (s: string) =>
-    setVeri(v => ({ ...v, sicakliklar: v.sicakliklar.includes(s) ? v.sicakliklar.filter(x => x !== s) : [...v.sicakliklar, s] }));
+    setVeri(v => {
+      const has = v.sicakliklar.includes(s);
+      const sicakliklar = has ? v.sicakliklar.filter(x => x !== s) : [...v.sicakliklar, s];
+      const nv = { ...v, sicakliklar };
+      return has ? nv : fillVeri(nv);
+    });
   const [ozelGun, setOzelGun] = useState("");
   const addOzelGun = () => {
     const n = parseInt(ozelGun, 10);
-    if (Number.isFinite(n) && n > 0 && !veri.gunler.includes(n)) {
-      setVeri(v => ({ ...v, gunler: [...v.gunler, n].sort((a, b) => a - b) }));
+    if (Number.isFinite(n) && n > 0) {
+      setVeri(v => v.gunler.includes(n) ? v : fillVeri({ ...v, gunler: [...v.gunler, n].sort((a, b) => a - b) }));
     }
     setOzelGun("");
   };
   const [ozelSic, setOzelSic] = useState("");
   const addOzelSic = () => {
     const s = ozelSic.trim();
-    if (s && !veri.sicakliklar.includes(s)) setVeri(v => ({ ...v, sicakliklar: [...v.sicakliklar, s] }));
+    if (s) setVeri(v => v.sicakliklar.includes(s) ? v : fillVeri({ ...v, sicakliklar: [...v.sicakliklar, s] }));
     setOzelSic("");
   };
 
@@ -119,20 +158,44 @@ export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number;
       testler: v.testler.map((t, idx) => idx === i ? { ...t, sonuclar: { ...t.sonuclar, [`${gun}|${sic}`]: val } } : t),
     }));
 
+  const kaydetVeri = async (): Promise<void> => {
+    const r = await fetch(`/api/rapor-takip/${nkrId}/stabilite`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ format, veri }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Kaydedilemedi");
+  };
+
   const kaydet = async () => {
     setSaving(true); setErr(""); setMsg("");
     try {
-      const r = await fetch(`/api/rapor-takip/${nkrId}/stabilite`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format, veri }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "Kaydedilemedi");
+      await kaydetVeri();
       setMsg("Kaydedildi ✓");
       setTimeout(() => setMsg(""), 3000);
     } catch (e: any) { setErr(e.message); }
     finally { setSaving(false); }
+  };
+
+  // Onaya Gönder: önce matris verisini kaydet, sonra rutin rapor akışıyla aynı
+  // şekilde durumu "Onay Bekleniyor"a çek (/tamamla) → Onay Bekleyenler'de görünür.
+  const [gonderiliyor, setGonderiliyor] = useState(false);
+  const onayaGonder = async () => {
+    setGonderiliyor(true); setErr(""); setMsg("");
+    try {
+      await kaydetVeri();
+      const r = await fetch(`/api/rapor-takip/${nkrId}/tamamla`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format, durum: "Onay Bekleniyor" }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Onaya gönderilemedi");
+      setMsg("Onaya gönderildi ✓ — Onay Bekleyenler listesinde görünecek.");
+      setTimeout(() => setMsg(""), 6000);
+    } catch (e: any) { setErr(e.message); }
+    finally { setGonderiliyor(false); }
   };
 
   if (loading) return <div style={{ padding: 24 }}>Yükleniyor…</div>;
@@ -146,11 +209,11 @@ export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number;
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className={styles.addBtn} style={{ background: "transparent", color: "var(--color-accent)", border: "1px solid var(--color-accent)" }}
-            onClick={() => window.open(`/rapor-onay-print/${nkrId}?format=${encodeURIComponent(format)}`, "_blank")}>
-            👁 Önizleme
-          </button>
-          <button className={styles.addBtn} disabled={saving} onClick={kaydet}>
+            disabled={saving || gonderiliyor} onClick={kaydet}>
             {saving ? "Kaydediliyor…" : "Kaydet"}
+          </button>
+          <button className={styles.addBtn} disabled={gonderiliyor || saving} onClick={onayaGonder}>
+            {gonderiliyor ? "Gönderiliyor…" : "↗ Onaya Gönder"}
           </button>
         </div>
       </div>
@@ -175,7 +238,7 @@ export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number;
                 </span>
               ))}
               <input value={ozelGun} onChange={e => setOzelGun(e.target.value)} onKeyDown={e => e.key === "Enter" && addOzelGun()} placeholder="özel gün" style={{ ...inputSt, width: 80 }} />
-              <button className={styles.editBtn} onClick={addOzelGun}>+ ekle</button>
+              <button type="button" style={smallBtn} onClick={addOzelGun}>+ ekle</button>
             </div>
           </div>
           <div>
@@ -192,7 +255,7 @@ export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number;
                 </span>
               ))}
               <input value={ozelSic} onChange={e => setOzelSic(e.target.value)} onKeyDown={e => e.key === "Enter" && addOzelSic()} placeholder="örn. 40°C" style={{ ...inputSt, width: 90 }} />
-              <button className={styles.editBtn} onClick={addOzelSic}>+ ekle</button>
+              <button type="button" style={smallBtn} onClick={addOzelSic}>+ ekle</button>
             </div>
           </div>
         </div>
@@ -202,7 +265,7 @@ export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number;
       <div className={styles.tableCard} style={{ padding: 16, marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <div style={{ fontWeight: 700, fontSize: 13 }}>Testler ({veri.testler.length})</div>
-          <button className={styles.editBtn} onClick={addBosTest}>+ boş test</button>
+          <button type="button" style={smallBtn} onClick={addBosTest}>+ boş test</button>
         </div>
         {/* Katalogtan test ekle */}
         <div style={{ position: "relative", marginBottom: 12, maxWidth: 480 }}>

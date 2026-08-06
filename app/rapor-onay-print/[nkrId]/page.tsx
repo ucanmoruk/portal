@@ -13,6 +13,10 @@ import { isDigerFormat } from "@/lib/formatUtil";
 
 export const metadata = { title: "Analiz Raporu — Onay Önizleme" };
 
+// Önizleme her açılışta DB'den taze okunmalı — Stabilite giriş ekranındaki
+// değişiklikler (gün/test/sonuç) anında yansısın; Full Route Cache devreye girmesin.
+export const dynamic = "force-dynamic";
+
 // Rapor türüne göre format bileşeni. Yeni format eklemek için formats/ altında
 // bir bileşen oluşturup buraya kaydetmek yeterli.
 const FORMAT_COMPONENTS: Record<string, ComponentType<ReportFormatProps>> = {

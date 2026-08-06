@@ -56,6 +56,7 @@ interface LocalEdit {
 // Accordion için benzersiz anahtar
 const rowKey = (r: RaporRow) => `${r.NkrID}__${r.RaporFormati}`;
 const isUgdrFormat = (format: string) => ["ÜGDR", "UGDR", "ÜGD", "UGD"].includes(format.toLocaleUpperCase("tr-TR"));
+const isStabiliteFormat = (format: string) => /stabilite/i.test((format || "").toLocaleUpperCase("tr-TR").replace(/İ/g, "I"));
 const englishPreviewFormat = (format: string): string | null => {
   const normalized = format.toLocaleUpperCase("tr-TR");
   if (normalized === "GENEL") return "GenelEn";
@@ -1052,6 +1053,24 @@ export default function RaporTakipTable({
                         fontSize: "0.82rem",
                       }}
                       title="ÜGDR detayını yeni sekmede aç"
+                    >
+                      {row.RaporNo}
+                    </button>
+                  ) : isStabiliteFormat(row.RaporFormati) ? (
+                    <button
+                      type="button"
+                      onClick={() => window.open(`/laboratuvar/stabilite/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}`, "_blank", "noopener,noreferrer")}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "var(--color-accent)",
+                        fontWeight: 700,
+                        padding: 0,
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        fontSize: "0.82rem",
+                      }}
+                      title="Stabilite sonuç girişini yeni sekmede aç"
                     >
                       {row.RaporNo}
                     </button>
