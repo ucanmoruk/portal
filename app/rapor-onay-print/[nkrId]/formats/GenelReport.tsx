@@ -243,8 +243,12 @@ export default function GenelReport({
   // ölçüm gerektirmeden güvenli bölme sağlar. Değerler değişirse tüm raporlar aynı
   // şekilde davranır.
   // ═══════════════════════════════════════════════════════════════════════════
-  const FIRST_PAGE_ROWS = 5;
-  const CONTINUATION_PAGE_ROWS = 16;
+  // Page 1'e imza/footer bloğu için ~78mm ayrıldığından, başlık sonrası yaklaşık
+  // 12 satır sığar. Bu sayıyı AŞAN raporlar 2. sayfaya bölünür; aşmayanlar (ör.
+  // 6 satırlık rapor) tek sayfada kalır. Devam sayfalarında footer küçük olduğu
+  // için daha çok satır sığar.
+  const FIRST_PAGE_ROWS = 12;
+  const CONTINUATION_PAGE_ROWS = 20;
   const shouldSplitResults = !editing && resultRows.length > FIRST_PAGE_ROWS;
   const firstPageResultCount = shouldSplitResults ? FIRST_PAGE_ROWS : resultRows.length;
   const firstPageRows = resultRows.slice(0, firstPageResultCount);
