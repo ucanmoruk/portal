@@ -13,6 +13,32 @@ export interface RaporEditRecord {
   kilitli: boolean;
 }
 
+const EDITABLE_HEADER_KEYS = [
+  "Numune_Adi",
+  "Numune_Adi_En",
+  "Urun_Tipi",
+  "Karar",
+  "Aciklamalar",
+] as const satisfies readonly (keyof RaporHeader)[];
+
+function sanitizeHeaderEdit(header: RaporEditPayload["header"]): RaporEditPayload["header"] {
+  if (!header) return undefined;
+  const sanitized: Partial<RaporHeader> = {};
+  for (const key of EDITABLE_HEADER_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(header, key)) {
+      sanitized[key] = header[key] as never;
+    }
+  }
+  return Object.keys(sanitized).length > 0 ? sanitized : undefined;
+}
+
+function sanitizePayload(payload: RaporEditPayload): RaporEditPayload {
+  return {
+    ...payload,
+    header: sanitizeHeaderEdit(payload.header),
+  };
+}
+
 async function ensureRaporDuzenlemeTable(pool: any) {
   if (hasMysqlConfig()) {
     await pool.request().query(`
@@ -83,7 +109,7 @@ export async function loadRaporEdit(pool: any, nkrId: number, format: string): P
 
 export async function saveRaporEdit(pool: any, nkrId: number, format: string, payload: RaporEditPayload, userId: number | null) {
   await ensureRaporDuzenlemeTable(pool);
-  const body = JSON.stringify(payload);
+  const body = JSON.stringify(sanitizePayload(payload));
   if (hasMysqlConfig()) {
     await pool.request()
       .input("nkrId", nkrId)
@@ -154,9 +180,10 @@ export function applyRaporEdit<T extends { header: RaporHeader; hizmetler: Hizme
   edit: RaporEditPayload | null,
 ): T {
   if (!edit) return data;
+  const headerEdit = sanitizeHeaderEdit(edit.header);
   return {
     ...data,
-    header: edit.header ? { ...data.header, ...edit.header } : data.header,
+    header: headerEdit ? { ...data.header, ...headerEdit } : data.header,
     hizmetler: Array.isArray(edit.hizmetler) ? edit.hizmetler : data.hizmetler,
     meta: edit.meta ? { ...data.meta, ...edit.meta } : data.meta,
   };
