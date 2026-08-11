@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { randomDisKodRapor } from "@/lib/disKod";
 import { imzalaVeKaydet } from "@/lib/raporImzaData";
-import { lockRaporEdit } from "@/lib/raporDuzenleme";
+import { buildRaporSnapshotPayload, lockRaporEdit } from "@/lib/raporDuzenleme";
 import { baseReportFormat, englishReportFormat } from "@/lib/raporFormatLanguage";
+import { loadRaporViewData } from "@/lib/raporViewData";
 
 function generateToken(): string {
   return randomBytes(18).toString("base64url");
@@ -38,6 +39,11 @@ async function newUniqueDisRaporKodu(pool: any, format: string): Promise<string 
     if (!exists.recordset.length) return kod;
   }
   return randomDisKodRapor(year, format) + String(Date.now()).slice(-2);
+}
+
+async function lockCurrentReportSnapshot(pool: any, nkrId: number, format: string) {
+  const data = await loadRaporViewData(nkrId, baseReportFormat(format), format);
+  await lockRaporEdit(pool, nkrId, format, data ? buildRaporSnapshotPayload(data) : null);
 }
 
 export async function getApprovalForFormatOrBase(pool: any, nkrId: number, format: string) {
@@ -107,6 +113,7 @@ export async function ensureEnglishApprovalForBase(
   const dateExpr = opts.raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "COALESCE(OnayTarihi, GETDATE())";
 
   if (existing) {
+    const shouldTakeSnapshot = existing.Durum !== "Onaylandı" && existing.Durum !== "Yayınlandı" && existing.Durum !== "Arşiv";
     if (existing.Durum !== "Yayınlandı" && existing.Durum !== "Arşiv") {
       await pool.request()
         .input("id", existing.ID)
@@ -123,8 +130,12 @@ export async function ensureEnglishApprovalForBase(
           WHERE ID = @id
         `);
     }
+    if (shouldTakeSnapshot) {
+      await lockCurrentReportSnapshot(pool, nkrId, englishFormat);
+    } else {
+      await lockRaporEdit(pool, nkrId, englishFormat);
+    }
     await imzalaVeKaydet(pool, existing.ID, nkrId, englishFormat);
-    await lockRaporEdit(pool, nkrId, englishFormat);
     return { format: englishFormat, id: existing.ID };
   }
 
@@ -151,7 +162,7 @@ export async function ensureEnglishApprovalForBase(
         VALUES (@nkrId, @format, @token, N'Onaylandı', @userId, @userName, ${opts.raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "GETDATE()"}, ${opts.raporYayinTarihi ? "CAST(@raporYayinTarihi AS DATE)" : "NULL"})
       `);
   const id = insertRes.recordset[0]?.ID;
+  await lockCurrentReportSnapshot(pool, nkrId, englishFormat);
   await imzalaVeKaydet(pool, id, nkrId, englishFormat);
-  await lockRaporEdit(pool, nkrId, englishFormat);
   return { format: englishFormat, id };
 }

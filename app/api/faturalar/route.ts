@@ -23,6 +23,10 @@ function cleanOptionalText(value: any): string | null {
   return text || null;
 }
 
+function isMultiEvrakLabel(value: unknown): boolean {
+  return String(value ?? "").trim().toLocaleUpperCase("tr-TR").startsWith("ÇOKLU");
+}
+
 async function ensureProformaNkrTable(pool: any) {
   if (hasMysqlConfig()) {
     await pool.request().query(`
@@ -210,7 +214,7 @@ export async function POST(request: NextRequest) {
     const ffSelect = hasFaturaFirmaCol ? ", FaturaFirmaID" : "";
     const profRes = await pool.request()
       .input("id", proformaId)
-      .query(`SELECT ID, EvrakNo, FirmaID, GenelToplam, KdvOran, Durum${ffSelect} FROM ProformaBaslik WHERE ID = @id AND SilindiMi = 0`);
+      .query(`SELECT ID, ProformaNo, EvrakNo, FirmaID, GenelToplam, KdvOran, Durum${ffSelect} FROM ProformaBaslik WHERE ID = @id AND SilindiMi = 0`);
     const proforma = profRes.recordset[0];
     if (!proforma) return Response.json({ error: "Proforma bulunamadı." }, { status: 404 });
     if (String(proforma.Durum) === "Faturalaştı") {
@@ -222,6 +226,9 @@ export async function POST(request: NextRequest) {
       : (proforma.FirmaID ? Number(proforma.FirmaID) : null);
 
     const evrakNo = proforma.EvrakNo ? String(proforma.EvrakNo) : null;
+    const faturaProformaNo = evrakNo && !isMultiEvrakLabel(evrakNo)
+      ? evrakNo
+      : String(proforma.ProformaNo || proformaId);
     // Toplam = KDV dahil (proforma GenelToplam ya da popup'ta düzeltilmiş tutar).
     const toplam = body.tutar != null && body.tutar !== "" ? toNumber(body.tutar) : toNumber(proforma.GenelToplam);
     const kdvOran = toNumber(proforma.KdvOran, 20);
@@ -232,7 +239,7 @@ export async function POST(request: NextRequest) {
     // Fatura başlığı — legacy şema (Tutar=matrah, KDV=vergi, Toplam=KDV dahil).
     const insRes = await pool.request()
       .input("FaturaNo", faturaNo)
-      .input("ProformaNo", evrakNo)
+      .input("ProformaNo", faturaProformaNo)
       .input("Toplam", Number(toplam.toFixed(2)))
       .input("Tutar", Number(net.toFixed(2)))
       .input("KDV", Number(kdv.toFixed(2)))
@@ -248,7 +255,7 @@ export async function POST(request: NextRequest) {
     const faturaId = Number(insRes.recordset[0]?.ID);
 
     const odemeEvrakNos = new Set<string>();
-    if (evrakNo) odemeEvrakNos.add(evrakNo);
+    if (evrakNo && !isMultiEvrakLabel(evrakNo)) odemeEvrakNos.add(evrakNo);
     const linkedEvrakRes = await pool.request()
       .input("ProformaID", proformaId)
       .query(`

@@ -5,8 +5,10 @@ import { randomBytes } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { imzalaVeKaydet } from "@/lib/raporImzaData";
 import { randomDisKodRapor } from "@/lib/disKod";
-import { lockRaporEdit } from "@/lib/raporDuzenleme";
+import { buildRaporSnapshotPayload, lockRaporEdit } from "@/lib/raporDuzenleme";
 import { ensureEnglishApprovalForBase } from "@/lib/raporOnaySync";
+import { loadRaporViewData } from "@/lib/raporViewData";
+import { baseReportFormat } from "@/lib/raporFormatLanguage";
 
 // 32 karakterlik URL-safe token
 function generateToken(): string {
@@ -19,6 +21,11 @@ function parseOptionalDate(value: unknown): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "__INVALID__";
   const d = new Date(`${raw}T00:00:00`);
   return Number.isNaN(d.getTime()) ? "__INVALID__" : raw;
+}
+
+async function lockCurrentReportSnapshot(pool: any, nkrId: number, format: string) {
+  const data = await loadRaporViewData(nkrId, baseReportFormat(format), format);
+  await lockRaporEdit(pool, nkrId, format, data ? buildRaporSnapshotPayload(data) : null);
 }
 
 // Benzersiz dış rapor kodu üret: ÜGAM/RR26/XXXX (çakışırsa tekrar dener).
@@ -129,8 +136,12 @@ export async function POST(
           `);
       }
 
+      if (!zatenOnayli) {
+        await lockCurrentReportSnapshot(pool, nkrIdNum, format);
+      } else {
+        await lockRaporEdit(pool, nkrIdNum, format);
+      }
       const imzaHash = await imzalaVeKaydet(pool, mevcutId, nkrIdNum, format);
-      await lockRaporEdit(pool, nkrIdNum, format);
       await ensureEnglishApprovalForBase(pool, nkrIdNum, format, {
         userId,
         userName,
@@ -226,8 +237,8 @@ export async function POST(
 
     // ───── Dijital imza (tamper-proof) ─────
     // Rapor içeriğini onay anında imzala → NKR_RaporOnay.ImzaHash'e yaz.
+    await lockCurrentReportSnapshot(pool, nkrIdNum, format);
     const imzaHash = await imzalaVeKaydet(pool, insRes.recordset[0]?.ID, nkrIdNum, format);
-    await lockRaporEdit(pool, nkrIdNum, format);
     await ensureEnglishApprovalForBase(pool, nkrIdNum, format, {
       userId,
       userName,

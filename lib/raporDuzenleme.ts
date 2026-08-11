@@ -39,6 +39,18 @@ function sanitizePayload(payload: RaporEditPayload): RaporEditPayload {
   };
 }
 
+export function buildRaporSnapshotPayload(data: {
+  header: RaporHeader;
+  hizmetler: HizmetRow[];
+  meta: RaporMeta;
+}): RaporEditPayload {
+  return {
+    header: data.header,
+    hizmetler: data.hizmetler,
+    meta: data.meta,
+  };
+}
+
 async function ensureRaporDuzenlemeTable(pool: any) {
   if (hasMysqlConfig()) {
     await pool.request().query(`
@@ -144,7 +156,7 @@ export async function saveRaporEdit(pool: any, nkrId: number, format: string, pa
     `);
 }
 
-export async function lockRaporEdit(pool: any, nkrId: number, format: string) {
+export async function lockRaporEdit(pool: any, nkrId: number, format: string, snapshot?: RaporEditPayload | null) {
   await ensureRaporDuzenlemeTable(pool);
   // Kilitleme "best-effort": düzenleme tablosu yoksa kilitlenecek bir kayıt da
   // yoktur. Onay akışını (rapor onayla) bu yüzden BLOKLAMAMALI — tablo migration
@@ -154,10 +166,14 @@ export async function lockRaporEdit(pool: any, nkrId: number, format: string) {
       await pool.request()
         .input("nkrId", nkrId)
         .input("format", format)
+        .input("payload", snapshot ? JSON.stringify(snapshot) : null)
         .query(`
-          UPDATE NKR_RaporDuzenleme
-          SET Kilitli = 1, UpdatedAt = NOW()
-          WHERE NkrID = @nkrId AND RaporFormati = @format
+          INSERT INTO NKR_RaporDuzenleme (NkrID, RaporFormati, Payload, Kilitli)
+          VALUES (@nkrId, @format, @payload, 1)
+          ON DUPLICATE KEY UPDATE
+            Payload = COALESCE(VALUES(Payload), Payload),
+            Kilitli = 1,
+            UpdatedAt = NOW()
         `);
       return;
     }
@@ -165,10 +181,18 @@ export async function lockRaporEdit(pool: any, nkrId: number, format: string) {
     await pool.request()
       .input("nkrId", nkrId)
       .input("format", format)
+      .input("payload", snapshot ? JSON.stringify(snapshot) : null)
       .query(`
-        UPDATE dbo.NKR_RaporDuzenleme
-        SET Kilitli = 1, UpdatedAt = SYSUTCDATETIME()
-        WHERE NkrID = @nkrId AND RaporFormati = @format
+        MERGE dbo.NKR_RaporDuzenleme AS target
+        USING (SELECT @nkrId AS NkrID, @format AS RaporFormati) AS src
+          ON target.NkrID = src.NkrID AND target.RaporFormati = src.RaporFormati
+        WHEN MATCHED THEN
+          UPDATE SET Payload = COALESCE(@payload, Payload),
+                     Kilitli = 1,
+                     UpdatedAt = SYSUTCDATETIME()
+        WHEN NOT MATCHED THEN
+          INSERT (NkrID, RaporFormati, Payload, Kilitli)
+          VALUES (@nkrId, @format, @payload, 1);
       `);
   } catch {
     // Tablo yok / kilitlenemedi → onay yine de geçerli.
@@ -177,14 +201,18 @@ export async function lockRaporEdit(pool: any, nkrId: number, format: string) {
 
 export function applyRaporEdit<T extends { header: RaporHeader; hizmetler: HizmetRow[]; meta: RaporMeta }>(
   data: T,
-  edit: RaporEditPayload | null,
+  edit: RaporEditPayload | RaporEditRecord | null,
 ): T {
   if (!edit) return data;
-  const headerEdit = sanitizeHeaderEdit(edit.header);
+  const isRecord = "payload" in edit || "kilitli" in edit;
+  const payload = isRecord ? edit.payload : edit;
+  const kilitli = isRecord ? Boolean(edit.kilitli) : false;
+  if (!payload) return data;
+  const headerEdit = kilitli ? payload.header : sanitizeHeaderEdit(payload.header);
   return {
     ...data,
     header: headerEdit ? { ...data.header, ...headerEdit } : data.header,
-    hizmetler: Array.isArray(edit.hizmetler) ? edit.hizmetler : data.hizmetler,
-    meta: edit.meta ? { ...data.meta, ...edit.meta } : data.meta,
+    hizmetler: Array.isArray(payload.hizmetler) ? payload.hizmetler : data.hizmetler,
+    meta: payload.meta ? { ...data.meta, ...payload.meta } : data.meta,
   };
 }

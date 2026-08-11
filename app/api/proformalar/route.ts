@@ -99,6 +99,10 @@ function parseNkrIds(value: any): number[] {
   )).slice(0, 500);
 }
 
+function isMultiEvrakLabelSql(alias = "p") {
+  return `UPPER(ISNULL(${alias}.EvrakNo, N'')) LIKE N'ÇOKLU%'`;
+}
+
 async function getProformaNkrTargets(pool: any, nkrIds: number[], evrakNo: unknown) {
   const evrakNoStr = String(evrakNo || "").trim();
   if (nkrIds.length > 0) {
@@ -232,6 +236,34 @@ export async function GET(request: NextRequest) {
         GROUP BY pb.ParaBirimi
       `);
 
+    const odemeDurumuExpr = `
+      CASE
+        WHEN p.Durum = N'Faturalaştı' THEN COALESCE(
+          (
+            SELECT TOP 1 o.Odeme_Durumu
+            FROM Fatura ft
+            INNER JOIN Odeme o ON o.Fatura_ID = ft.ID
+            WHERE ft.Durum = 'Aktif'
+              AND (
+                ft.ProformaNo = p.ProformaNo
+                OR (NOT (${isMultiEvrakLabelSql("p")}) AND ft.ProformaNo = p.EvrakNo)
+              )
+              AND ISNULL(o.Odeme_Durumu, N'') <> N'Proforma'
+            ORDER BY o.ID DESC
+          ),
+          (
+            SELECT TOP 1 o.Odeme_Durumu
+            FROM Odeme o
+            WHERE NOT (${isMultiEvrakLabelSql("p")})
+              AND o.Evrak_No = p.EvrakNo
+              AND ISNULL(o.Odeme_Durumu, N'') <> N'Proforma'
+            ORDER BY o.ID DESC
+          )
+        )
+        ELSE NULL
+      END
+    `;
+
     const dataRes = await pool.request()
       .input("search", `%${search}%`)
       .input("durum", durum)
@@ -251,7 +283,7 @@ export async function GET(request: NextRequest) {
             ELSE ISNULL(MAX(x.ParaBirimi), 'TRY')
           END AS ParaBirimi,
           COUNT(x.ID) AS KalemSayisi,
-          (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No = p.EvrakNo ORDER BY o.ID DESC) AS OdemeDurumu
+          ${odemeDurumuExpr} AS OdemeDurumu
         FROM ProformaBaslik p
         LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = p.FirmaID
         ${ffJoin}

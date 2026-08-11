@@ -70,7 +70,7 @@ export default function ProformaTable() {
   const [summary, setSummary] = useState<{ paraBirimi: string; toplam: number; adet: number }[]>([]);
   const [detail, setDetail] = useState<any | null>(null);
   const [faturaTarget, setFaturaTarget] = useState<ProformaRow | null>(null);
-  const [faturaForm, setFaturaForm] = useState({ faturaNo: "", faturaTarihi: "", tutar: "" });
+  const [faturaForm, setFaturaForm] = useState({ faturaNo: "", faturaTarihi: "", tutar: "", paraBirimi: "TRY" });
   const [faturaSaving, setFaturaSaving] = useState(false);
   const [faturaError, setFaturaError] = useState("");
 
@@ -125,10 +125,13 @@ export default function ProformaTable() {
   function openFatura(row: ProformaRow) {
     setFaturaError("");
     const bugun = new Date().toISOString().slice(0, 10);
+    const pb = String(row.ParaBirimi || "TRY").toUpperCase();
+    const initPb = ["TRY", "USD", "EUR", "GBP"].includes(pb) ? pb : "TRY";
     setFaturaForm({
       faturaNo: "",
       faturaTarihi: bugun,
       tutar: String(Number(row.GenelToplam || 0).toFixed(2)),
+      paraBirimi: initPb,
     });
     setFaturaTarget(row);
   }
@@ -148,6 +151,7 @@ export default function ProformaTable() {
           faturaNo: faturaForm.faturaNo.trim(),
           faturaTarihi: faturaForm.faturaTarihi,
           tutar: faturaForm.tutar,
+          paraBirimi: faturaForm.paraBirimi,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -225,11 +229,13 @@ export default function ProformaTable() {
               <tr><td colSpan={8} className={styles.empty}>Henüz proforma oluşturulmamış.</td></tr>
             ) : rows.map(row => {
               // Fatura kesilmiş proforma → ödeme yaşam döngüsünü göster (Ödeme Bekliyor / Ödendi),
-              // düzenleme ve tekrar faturalaştırma kapalı. Durum='Faturalaştı' VEYA Odeme tablosunda
-              // ödeme kaydı varsa faturalaşmış kabul edilir (eski kayıtlara da dayanıklı).
+              // düzenleme ve tekrar faturalaştırma kapalı.
+              // ÖNEMLİ: "faturalaşmış" kararı SADECE proformanın KENDİ Durum'una bağlıdır.
+              // OdemeDurumu Evrak_No üzerinden çekildiğinden, çok-evraklı proformalarda
+              // (EvrakNo='Çoklu (…)') aynı string'i paylaşan başka bir proformanın ödemesi
+              // yeni/taslak proformaya bulaşıyordu → o yüzden hasPayment kaldırıldı.
               const odemeRaw = (row.OdemeDurumu || "").trim();
-              const hasPayment = odemeRaw === "Ödeme Bekliyor" || odemeRaw === "Ödendi";
-              const isInvoiced = row.Durum === "Faturalaştı" || hasPayment;
+              const isInvoiced = row.Durum === "Faturalaştı";
               const odemeLabel = odemeRaw === "Ödendi" ? "Ödendi" : "Ödeme Bekliyor";
               return (
               <tr key={row.ID}>
@@ -387,8 +393,39 @@ export default function ProformaTable() {
                     value={faturaForm.tutar}
                     onChange={e => setFaturaForm(f => ({ ...f, tutar: e.target.value }))}
                   />
-                  <span style={{ color: "var(--color-text-secondary)", fontWeight: 600 }}>{faturaTarget.ParaBirimi || "TRY"}</span>
+                  <select
+                    className={styles.searchInput}
+                    style={{ ...faturaInputStyle, width: 90, flex: "0 0 auto" }}
+                    value={faturaForm.paraBirimi}
+                    onChange={e => {
+                      const yeni = e.target.value;
+                      setFaturaForm(f => {
+                        const orij = String(faturaTarget.ParaBirimi || "TRY").toUpperCase();
+                        let tutar = f.tutar;
+                        // Dövizli proforma → TL faturaya çevrilirken TL karşılığını otomatik doldur.
+                        if (yeni === "TRY" && orij !== "TRY" && faturaTarget.TlKarsiligi != null) {
+                          tutar = String(Number(faturaTarget.TlKarsiligi).toFixed(2));
+                        } else if (yeni === orij) {
+                          tutar = String(Number(faturaTarget.GenelToplam || 0).toFixed(2));
+                        }
+                        return { ...f, paraBirimi: yeni, tutar };
+                      });
+                    }}
+                  >
+                    <option value="TRY">TRY</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                  </select>
                 </div>
+                {faturaForm.paraBirimi === "TRY"
+                  && String(faturaTarget.ParaBirimi || "TRY").toUpperCase() !== "TRY"
+                  && faturaTarget.TlKarsiligi != null && (
+                  <span style={{ fontSize: 11, color: "var(--color-text-secondary)", fontWeight: 400 }}>
+                    Dövizli proforma ({faturaTarget.ParaBirimi}) — TL karşılığı otomatik dolduruldu
+                    {faturaTarget.DovizAlisKuru ? ` (kur: ${faturaTarget.DovizAlisKuru})` : ""}. Gerekirse düzenleyin.
+                  </span>
+                )}
               </label>
               <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.5 }}>
                 Fatura oluşturulunca ödeme durumu otomatik <strong>“Ödeme Bekliyor”</strong> olur ve

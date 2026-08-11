@@ -328,7 +328,7 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
   const data = { header, hizmetler, testBaslangic, testBitis, onay, meta, karekod };
   try {
     const edit = await loadRaporEdit(pool, nkrIdNum, editFormat);
-    return applyRaporEdit(data, edit.payload);
+    return applyRaporEdit(data, edit);
   } catch {
     return data;
   }

@@ -122,7 +122,8 @@ export async function POST(
             .input("nkrId", nkrIdNum).input("format", fmt)
             .query(`
               UPDATE NKR_RaporDuzenleme
-              SET Kilitli = 0
+              SET Kilitli = 0,
+                  Payload = NULL
               WHERE NkrID = @nkrId
                 AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
             `);
@@ -194,14 +195,15 @@ export async function POST(
         `);
     }
 
-    // 2.5) Rapor düzenleme kilidini aç → lab yeni sonuçları girebilsin (payload korunur)
+    // 2.5) Rapor düzenleme kilidini aç → lab yeni sonuçları girebilsin (payload temizlenir)
     if (present.has("nkr_raporduzenleme")) {
       for (const fmt of formats) {
         await pool.request()
           .input("nkrId", nkrIdNum).input("format", fmt)
           .query(`
             UPDATE NKR_RaporDuzenleme
-            SET Kilitli = 0
+            SET Kilitli = 0,
+                Payload = NULL
             WHERE NkrID = @nkrId
               AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
           `);
