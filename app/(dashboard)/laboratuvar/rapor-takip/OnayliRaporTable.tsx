@@ -141,6 +141,33 @@ function isPublishedForFormat(row: RaporRow | undefined, format: string) {
 
 // ── Ana bileşen ───────────────────────────────────────────────────────────────
 
+async function fetchJsonWithTimeout<T>(
+  url: string,
+  init: RequestInit,
+  timeoutMs = 75_000,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      throw new Error(json.error || `İstek başarısız oldu (HTTP ${res.status}).`);
+    }
+    return json as T;
+  } catch (error: unknown) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Portala gönderme zaman aşımına uğradı. PDF/FTP işlemi canlıda takılmış olabilir.");
+    }
+    if (error instanceof TypeError && String(error.message || "").toLowerCase().includes("fetch")) {
+      throw new Error("Sunucu yanıt vermeden bağlantıyı kapattı (Failed to fetch). Canlı loglarda /api/rapor-takip/[nkrId]/yayinla hatasına bakın.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 export default function OnayliRaporTable() {
   const [rows, setRows]       = useState<RaporRow[]>([]);
   const [total, setTotal]     = useState(0);
@@ -288,13 +315,11 @@ export default function OnayliRaporTable() {
       let sentTr = false;
       let sentEn = false;
       for (const raporFormati of expandReportFormats(row.RaporFormati, reportLanguage)) {
-        const res = await fetch(`/api/rapor-takip/${row.NkrID}/yayinla`, {
+        const json = await fetchJsonWithTimeout<{ yayinUrl?: string }>(`/api/rapor-takip/${row.NkrID}/yayinla`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ format: raporFormati }),
         });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(json.error || "Portala gönderilemedi");
         publishedUrl = json.yayinUrl ?? publishedUrl;
         if (isEnglishFormat(raporFormati)) sentEn = true;
         else sentTr = true;
@@ -487,13 +512,11 @@ export default function OnayliRaporTable() {
       for (let i = 0; i < targets.length; i++) {
         const t = targets[i];
         try {
-          const res = await fetch(`/api/rapor-takip/${t.nkrId}/yayinla`, {
+          const json = await fetchJsonWithTimeout<{ yayinUrl?: string }>(`/api/rapor-takip/${t.nkrId}/yayinla`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ format: t.raporFormati }),
           });
-          const json = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(json.error || "hata");
           // Satırı yerinde güncelle
           const baseFormat = t.row?.RaporFormati ?? baseReportFormat(t.raporFormati);
           const sentEn = isEnglishFormat(t.raporFormati);

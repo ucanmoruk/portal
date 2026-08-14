@@ -43,6 +43,11 @@ function ftpErrorMessage(error: unknown): string {
   return "Bilinmeyen FTP hatası";
 }
 
+function ftpTimeoutMs(): number {
+  const value = Number(process.env.RAPOR_FTP_TIMEOUT_MS || 0);
+  return Number.isFinite(value) && value >= 10_000 ? value : 30_000;
+}
+
 export async function uploadRaporPdfToFtp(opts: {
   pdfBuffer: Buffer;
   token: string;
@@ -77,7 +82,7 @@ export async function uploadRaporPdfToFtp(opts: {
 
   const filename = `${opts.token}.pdf`;
 
-  const client = new Client();
+  const client = new Client(ftpTimeoutMs());
   client.ftp.verbose = process.env.RAPOR_FTP_VERBOSE === "1";
   try {
     try {

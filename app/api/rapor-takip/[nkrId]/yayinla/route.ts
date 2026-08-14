@@ -14,6 +14,39 @@ import { isEnglishReportFormat } from "@/lib/raporFormatLanguage";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+type PublishStage = "pdf" | "ftp";
+
+class PublishTimeoutError extends Error {
+  constructor(
+    public readonly stage: PublishStage,
+    timeoutMs: number,
+  ) {
+    super(`${stage === "pdf" ? "PDF üretimi" : "FTP yükleme"} zaman aşımına uğradı (${timeoutMs} ms).`);
+    this.name = "PublishTimeoutError";
+  }
+}
+
+function envTimeoutMs(name: string, fallback: number): number {
+  const value = Number(process.env[name] || 0);
+  return Number.isFinite(value) && value >= 10_000 ? value : fallback;
+}
+
+function withTimeout<T>(promise: Promise<T>, stage: PublishStage, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new PublishTimeoutError(stage, timeoutMs)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 // Onaylı raporun PDF buffer'ını üret. Cookie auth aktarılır → /rapor-onay-print
 // auth'lu canlı sayfası render edilir. P12 sertifika varsa PAdES imza eklenir;
 // yoksa imzasız PDF döner (yükleme yine yapılır).
@@ -147,10 +180,18 @@ export async function POST(
     // ── İmzalı PDF üret + FTP'ye yükle ──
     let yayinUrl: string;
     try {
-      const pdfBuffer = await buildRaporPdf(
-        getRaporPdfBaseUrl(request), nkrIdNum, format, request.headers.get("cookie") || "",
+      console.info("[yayinla] PDF üretimi başladı", { nkrId: nkrIdNum, format });
+      const pdfBuffer = await withTimeout(
+        buildRaporPdf(getRaporPdfBaseUrl(request), nkrIdNum, format, request.headers.get("cookie") || ""),
+        "pdf",
+        envTimeoutMs("RAPOR_PDF_TIMEOUT_MS", 50_000),
       );
-      const uploaded = await uploadRaporPdfToFtp({ pdfBuffer, token: onay.KarekodToken });
+      console.info("[yayinla] FTP yükleme başladı", { nkrId: nkrIdNum, format, bytes: pdfBuffer.length });
+      const uploaded = await withTimeout(
+        uploadRaporPdfToFtp({ pdfBuffer, token: onay.KarekodToken }),
+        "ftp",
+        envTimeoutMs("RAPOR_FTP_UPLOAD_TIMEOUT_MS", 30_000),
+      );
       yayinUrl = uploaded.publicUrl;
     } catch (e) {
       if (raporYayinTarihi) {
@@ -169,7 +210,7 @@ export async function POST(
           typeof e === "string" ? e : "Bilinmeyen hata";
       return Response.json(
         { error: `Rapor PDF'i sunucuya yüklenemedi: ${detay.slice(0, 500)}` },
-        { status: 502 },
+        { status: e instanceof PublishTimeoutError ? 504 : 502 },
       );
     }
 
