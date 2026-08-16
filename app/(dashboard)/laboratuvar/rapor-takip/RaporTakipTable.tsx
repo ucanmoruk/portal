@@ -28,6 +28,7 @@ interface RaporRow {
 interface HizmetDetay {
   X1ID: number;
   AnalizID: number;
+  RaporSira: number | null;
   Kod: string | null;
   Ad: string | null;
   Akreditasyon: string | null;
@@ -46,6 +47,7 @@ interface HizmetDetay {
 }
 
 interface LocalEdit {
+  raporSira: string;
   sonuc: string;
   sonucEn: string;
   limit: string;
@@ -348,6 +350,7 @@ export default function RaporTakipTable({
         const bilesenInitial: Record<number, BilesenSonuc[]> = {};
         data.forEach(h => {
           initial[h.X1ID] = {
+            raporSira:     h.RaporSira == null ? "" : String(h.RaporSira),
             sonuc:         h.Sonuc         ?? "",
             sonucEn:       h.SonucEn       ?? "",
             limit:         h.LimitDeger    ?? "",
@@ -406,7 +409,7 @@ export default function RaporTakipTable({
   // ── Kaydet (tek satır) ────────────────────────────────────────────────────
   const saveSingleRow = async (row: RaporRow, x1Id: number) => {
     const key = rowKey(row);
-    const edit = editMap[key]?.[x1Id] ?? { sonuc: "", sonucEn: "", limit: "", limitEn: "", degerlendirme: "" };
+    const edit = editMap[key]?.[x1Id] ?? { raporSira: "", sonuc: "", sonucEn: "", limit: "", limitEn: "", degerlendirme: "" };
 
     setSavingRowId(x1Id);
     setSaveError(prev => ({ ...prev, [key]: "" }));
@@ -416,7 +419,7 @@ export default function RaporTakipTable({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          updates: [{ x1Id, sonuc: edit.sonuc, sonucEn: edit.sonucEn, limit: edit.limit, limitEn: edit.limitEn, degerlendirme: edit.degerlendirme, altParametreler: bilesenMap[key]?.[x1Id] }],
+          updates: [{ x1Id, raporSira: edit.raporSira, sonuc: edit.sonuc, sonucEn: edit.sonucEn, limit: edit.limit, limitEn: edit.limitEn, degerlendirme: edit.degerlendirme, altParametreler: bilesenMap[key]?.[x1Id] }],
           raporFormati: row.RaporFormati,
         }),
       });
@@ -428,7 +431,7 @@ export default function RaporTakipTable({
         const current = prev[key] || [];
         const updated = current.map(h =>
           h.X1ID === x1Id
-            ? { ...h, Sonuc: edit.sonuc, SonucEn: edit.sonucEn, LimitDeger: edit.limit, LimitEn: edit.limitEn, Degerlendirme: edit.degerlendirme, SonucKayitTarihi: now }
+            ? { ...h, RaporSira: edit.raporSira === "" ? null : Number(edit.raporSira), Sonuc: edit.sonuc, SonucEn: edit.sonucEn, LimitDeger: edit.limit, LimitEn: edit.limitEn, Degerlendirme: edit.degerlendirme, SonucKayitTarihi: now }
             : h
         );
         return { ...prev, [key]: updated };
@@ -454,6 +457,7 @@ export default function RaporTakipTable({
 
     const updates = Object.entries(edits).map(([x1Id, vals]) => ({
       x1Id: Number(x1Id),
+      raporSira: vals.raporSira,
       sonuc: vals.sonuc,
       sonucEn: vals.sonucEn,
       limit: vals.limit,
@@ -478,6 +482,7 @@ export default function RaporTakipTable({
         const current = prev[key] || [];
         const updated = current.map(h => ({
           ...h,
+          RaporSira:      edits[h.X1ID]?.raporSira === "" ? null : Number(edits[h.X1ID]?.raporSira ?? h.RaporSira),
           Sonuc:         edits[h.X1ID]?.sonuc         ?? h.Sonuc,
           SonucEn:       edits[h.X1ID]?.sonucEn       ?? h.SonucEn,
           LimitDeger:    edits[h.X1ID]?.limit         ?? h.LimitDeger,
@@ -1340,6 +1345,7 @@ export default function RaporTakipTable({
                       }}>
                         <colgroup>
                           <col style={{ width: 48 }} />
+                          <col style={{ width: 58 }} />
                           <col style={{ width: 80 }} />
                           <col />
                           <col style={{ width: 130 }} />
@@ -1353,7 +1359,7 @@ export default function RaporTakipTable({
                         <thead>
                           <tr style={{ background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)" }}>
                             <th />
-                            {["Kod", "Hizmet Adı", "Metot", "Birim", "Sonuç", "Limit", "Değerlendirme", "Termin", ""].map(h => (
+                            {["Sıra", "Kod", "Hizmet Adı", "Metot", "Birim", "Sonuç", "Limit", "Değerlendirme", "Termin", ""].map(h => (
                               <th key={h} style={{
                                 padding: "6px 10px", textAlign: "left",
                                 fontSize: "0.67rem", fontWeight: 700,
@@ -1366,6 +1372,7 @@ export default function RaporTakipTable({
                         <tbody>
                           {hizmetler.map((h, hi) => {
                             const edit = edits[h.X1ID] ?? {
+                              raporSira: h.RaporSira == null ? "" : String(h.RaporSira),
                               sonuc: h.Sonuc ?? "",
                               sonucEn: h.SonucEn ?? "",
                               limit: h.LimitDeger ?? "",
@@ -1418,6 +1425,22 @@ export default function RaporTakipTable({
                                 }}
                               >
                                 <td />
+                                <td style={{ padding: "6px 8px" }}>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={edit.raporSira}
+                                    onChange={e => setFieldValue(key, h.X1ID, "raporSira", e.target.value)}
+                                    placeholder={String(hi + 1)}
+                                    disabled={isLocked}
+                                    readOnly={isLocked}
+                                    title="Raporda görünmesini istediğiniz sıra"
+                                    style={isLocked ? { ...inputBase, ...lockedInputStyle, textAlign: "center" } : { ...inputBase, textAlign: "center" }}
+                                    onFocus={e => { if (!isLocked) e.currentTarget.style.borderColor = "var(--color-accent)"; }}
+                                    onBlur={e  => { if (!isLocked) e.currentTarget.style.borderColor = "var(--color-border)"; }}
+                                  />
+                                </td>
                                 <td style={{ padding: "8px 10px", color: "var(--color-text-tertiary)", fontVariantNumeric: "tabular-nums" }}>
                                   {h.Kod ?? "—"}
                                 </td>
@@ -1602,7 +1625,7 @@ export default function RaporTakipTable({
                                   borderBottom: hi < hizmetler.length - 1 ? "1px solid var(--color-border-light)" : "none",
                                 }}>
                                   <td />
-                                  <td colSpan={9} style={{ padding: "2px 12px 12px 30px" }}>
+                                  <td colSpan={10} style={{ padding: "2px 12px 12px 30px" }}>
                                     <div style={{ fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--color-text-tertiary)", margin: "4px 0 6px" }}>
                                       Alt Parametreler
                                     </div>

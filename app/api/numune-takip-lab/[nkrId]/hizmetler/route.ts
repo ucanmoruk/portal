@@ -61,7 +61,14 @@ export async function GET(
         )`
       : "";
 
-    const result = await pool.request()
+        const x1ColCheck = await pool.request().query(`
+          SELECT name FROM sys.columns
+          WHERE object_id = OBJECT_ID('NumuneX1')
+            AND name IN ('RaporSira')
+        `);
+        const hasRaporSira = x1ColCheck.recordset.some((r: any) => r.name === "RaporSira");
+
+        const result = await pool.request()
       .input("nkrId", nkrIdNum)
       .input("raporFormati", raporFormati)
       .query(`
@@ -82,7 +89,9 @@ export async function GET(
         WHERE x1.RaporID = @nkrId
           AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @raporFormati
           ${newOnlyFilter}
-        ORDER BY s.Kod
+        ORDER BY ${hasRaporSira
+          ? "CASE WHEN x1.RaporSira IS NULL THEN 1 ELSE 0 END, x1.RaporSira, s.Kod, x1.ID"
+          : "s.Kod, x1.ID"}
       `);
 
     return Response.json({ data: result.recordset });

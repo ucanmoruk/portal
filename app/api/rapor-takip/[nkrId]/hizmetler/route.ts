@@ -53,10 +53,11 @@ export async function GET(
     const colCheck = await pool.request().query(`
       SELECT name FROM sys.columns
       WHERE object_id = OBJECT_ID('NumuneX1')
-        AND name IN ('Sonuc', 'Degerlendirme', 'DegerlendirmeEn', 'Birim', 'SonucEn', 'BirimEn', 'Limit', 'LimitEn', 'SonucKayitTarihi')
+        AND name IN ('Sonuc', 'Degerlendirme', 'DegerlendirmeEn', 'Birim', 'SonucEn', 'BirimEn', 'Limit', 'LimitEn', 'SonucKayitTarihi', 'RaporSira')
     `);
     const existingCols = new Set<string>(colCheck.recordset.map((r: any) => r.name));
 
+    const raporSiraSel        = existingCols.has("RaporSira")        ? "x1.RaporSira,"                                : "CAST(NULL AS int) AS RaporSira,";
     const sonucSel            = existingCols.has("Sonuc")            ? "x1.Sonuc,"                                   : "NULL AS Sonuc,";
     const degerlendirmeSel    = existingCols.has("Degerlendirme")    ? "x1.Degerlendirme,"                            : "NULL AS Degerlendirme,";
     const degerlendirmeEnSel  = existingCols.has("DegerlendirmeEn")  ? "ISNULL(x1.DegerlendirmeEn,'') AS DegerlendirmeEn," : "'' AS DegerlendirmeEn,";
@@ -78,6 +79,7 @@ export async function GET(
       SELECT
         x1.ID                                       AS X1ID,
         x1.AnalizID,
+        ${raporSiraSel}
         s.Kod,
         s.Ad,
         s.Akreditasyon,
@@ -97,13 +99,16 @@ export async function GET(
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
       WHERE x1.RaporID        = @nkrId
         AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @raporFormati
-      ORDER BY s.Kod
+      ORDER BY ${existingCols.has("RaporSira")
+        ? "CASE WHEN x1.RaporSira IS NULL THEN 1 ELSE 0 END, x1.RaporSira, s.Kod, x1.ID"
+        : "s.Kod, x1.ID"}
     `);
 
     // Alt parametreler (bileşenler) — katalog + girilmiş sonuçlar
     const hizmetler = result.recordset as Array<{
       X1ID: number;
       AnalizID: number;
+      RaporSira?: number | null;
       LimitDeger?: string | null;
       LOQ?: string | null;
       Sonuc?: string | null;
@@ -146,7 +151,7 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const updates: { x1Id: number; sonuc: string; sonucEn?: string; limit?: string; limitEn?: string; degerlendirme: string; altParametreler?: unknown }[] = body.updates || [];
+    const updates: { x1Id: number; raporSira?: number | string | null; sonuc: string; sonucEn?: string; limit?: string; limitEn?: string; degerlendirme: string; altParametreler?: unknown }[] = body.updates || [];
 
     if (updates.length === 0) return Response.json({ ok: true });
 
@@ -156,7 +161,7 @@ export async function PATCH(
     const colCheck = await pool.request().query(`
       SELECT name FROM sys.columns
       WHERE object_id = OBJECT_ID('NumuneX1')
-        AND name IN ('Sonuc', 'Degerlendirme', 'DegerlendirmeEn', 'SonucEn', 'Limit', 'LimitEn', 'SonucKayitTarihi')
+        AND name IN ('Sonuc', 'Degerlendirme', 'DegerlendirmeEn', 'SonucEn', 'Limit', 'LimitEn', 'SonucKayitTarihi', 'RaporSira')
     `);
     const existingCols = new Set<string>(colCheck.recordset.map((r: any) => r.name));
     const hasSonuc            = existingCols.has("Sonuc");
@@ -166,6 +171,7 @@ export async function PATCH(
     const hasLimit            = existingCols.has("Limit");
     const hasLimitEn          = existingCols.has("LimitEn");
     const hasKayitTarihi      = existingCols.has("SonucKayitTarihi");
+    const hasRaporSira        = existingCols.has("RaporSira");
 
     if (!hasSonuc && !hasDegerlendirme) {
       return Response.json(
@@ -200,6 +206,15 @@ export async function PATCH(
     for (const upd of updates) {
       const sets: string[] = [];
       const req = pool.request().input("x1Id", upd.x1Id).input("nkrId", nkrIdNum);
+
+      if (hasRaporSira && Object.prototype.hasOwnProperty.call(upd, "raporSira")) {
+        const rawSira = upd.raporSira;
+        const raporSira = rawSira === null || rawSira === "" || rawSira === undefined
+          ? null
+          : Number(rawSira);
+        sets.push("RaporSira = @raporSira");
+        req.input("raporSira", Number.isFinite(raporSira) ? raporSira : null);
+      }
 
       if (hasSonuc) {
         sets.push("Sonuc = @sonuc");

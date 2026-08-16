@@ -87,6 +87,17 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
   const header = headerRes.recordset[0] as RaporHeader | undefined;
   if (!header) return null;
 
+  const x1ColCheck = await pool.request().query(`
+    SELECT name FROM sys.columns
+    WHERE object_id = OBJECT_ID('NumuneX1')
+      AND name IN ('RaporSira')
+  `);
+  const hasRaporSira = x1ColCheck.recordset.some((r: any) => r.name === "RaporSira");
+  const raporSiraSelect = hasRaporSira ? "x1.RaporSira" : "CAST(NULL AS int)";
+  const raporSiraOrder = hasRaporSira
+    ? "CASE WHEN x1.RaporSira IS NULL THEN 1 ELSE 0 END, x1.RaporSira, s.Kod, x1.ID"
+    : "s.Kod, x1.ID";
+
   const hizmetRes = await pool.request()
     .input("nkrId", nkrIdNum)
     .input("format", format)
@@ -94,6 +105,7 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
       SELECT
         s.ID                       AS AnalizID,
         x1.ID                      AS X1ID,
+        ${raporSiraSelect}          AS RaporSira,
         ISNULL(s.Kod, '')          AS Kod,
         ISNULL(s.Ad, '')           AS Ad,
         ISNULL(s.AdEn, '')         AS AdEn,
@@ -115,7 +127,7 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
       WHERE x1.RaporID = @nkrId
         AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @format
-      ORDER BY s.Kod
+      ORDER BY ${raporSiraOrder}
     `);
   const hizmetler = hizmetRes.recordset as HizmetRow[];
 

@@ -34,6 +34,16 @@ export async function loadImzaInput(
   const h = hdr.recordset[0];
   if (!h) return null;
 
+  const x1ColCheck = await pool.request().query(`
+    SELECT name FROM sys.columns
+    WHERE object_id = OBJECT_ID('NumuneX1')
+      AND name IN ('RaporSira')
+  `);
+  const hasRaporSira = x1ColCheck.recordset.some((r: any) => r.name === "RaporSira");
+  const raporSiraOrder = hasRaporSira
+    ? "CASE WHEN x1.RaporSira IS NULL THEN 1 ELSE 0 END, x1.RaporSira, s.Kod, x1.ID"
+    : "s.Kod, x1.ID";
+
   const hz = await pool.request()
     .input("nkrId", nkrId)
     .input("format", dataFormat)
@@ -48,7 +58,7 @@ export async function loadImzaInput(
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
       WHERE x1.RaporID = @nkrId
         AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @format
-      ORDER BY s.Kod
+      ORDER BY ${raporSiraOrder}
     `);
   let hizmetler = hz.recordset.map((r: any) => ({
     Kod: r.Kod,

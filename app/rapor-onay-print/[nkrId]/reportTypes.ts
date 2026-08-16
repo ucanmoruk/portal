@@ -17,6 +17,7 @@ export interface AltParametreRow {
 export interface HizmetRow {
   AnalizID: number;
   X1ID?: number;
+  RaporSira?: number | null;
   Kod: string;
   Ad: string;
   AdEn?: string | null;
