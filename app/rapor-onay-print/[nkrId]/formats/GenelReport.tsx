@@ -22,18 +22,32 @@ const jetbrains = JetBrains_Mono({
   variable: "--font-rapor",
 });
 
-function splitIntoBalancedPages<T>(rows: T[], maxRowsPerPage: number): T[][] {
+function splitIntoWeightedPages<T>(rows: T[], maxWeightPerPage: number, getWeight: (row: T) => number): T[][] {
   if (rows.length === 0) return [];
 
-  const pageCount = Math.max(1, Math.ceil(rows.length / maxRowsPerPage));
-  const pageSize = Math.ceil(rows.length / pageCount);
   const pages: T[][] = [];
+  let current: T[] = [];
+  let currentWeight = 0;
 
-  for (let i = 0; i < rows.length; i += pageSize) {
-    pages.push(rows.slice(i, i + pageSize));
+  for (const row of rows) {
+    const weight = Math.max(1, getWeight(row));
+    if (current.length > 0 && currentWeight + weight > maxWeightPerPage) {
+      pages.push(current);
+      current = [];
+      currentWeight = 0;
+    }
+    current.push(row);
+    currentWeight += weight;
   }
 
+  if (current.length > 0) pages.push(current);
   return pages;
+}
+
+function wrapWeight(value: unknown, charsPerLine: number): number {
+  const text = nonEmpty(value).replace(/\s+/g, " ");
+  if (!text || text === "-") return 1;
+  return Math.max(1, Math.ceil(text.length / charsPerLine));
 }
 
 function fmtTarih(s: string | null | undefined): string {
@@ -220,6 +234,19 @@ export default function GenelReport({
     }
     return rows;
   });
+  const resultRowWeight = (row: ResultDisplayRow): number => {
+    if (row.kind === "alt") {
+      const resultWeight = wrapWeight(isEnglish ? row.alt.SonucEn || row.alt.Sonuc : row.alt.Sonuc, 18);
+      const limitWeight = wrapWeight(isEnglish ? row.alt.LimitEn || row.alt.Limit : row.alt.Limit, 22);
+      return Math.max(1, resultWeight, limitWeight);
+    }
+
+    const h = row.service;
+    const resultWeight = wrapWeight(isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc, 18);
+    const methodWeight = wrapWeight(isEnglish ? h.MetotEn || h.Metot : h.Metot, 22);
+    const limitWeight = wrapWeight(isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger, 22);
+    return Math.max(1, resultWeight, methodWeight, limitWeight);
+  };
   // ═══════════════════════ UZUN RAPOR BÖLME KURALLARI ═══════════════════════
   // Bu kurallar TÜM uzun raporlarda (Genel/GenelEn) tutarlı uygulanır:
   //
@@ -231,11 +258,11 @@ export default function GenelReport({
   //
   // 2) Analiz tablosu (ve altındaki AÇIKLAMALAR) footer'a TEMAS ETMEDEN bölünür:
   //    Her sayfada footer'a ayrılmış sabit alan (main-page/continuation padding-bottom)
-  //    bir "padding tamponu" oluşturur; satır sayısı bu tamponu aşmayacak şekilde
-  //    sınırlanır → tablo imza/QR başlıklarına yaklaşınca satırlar sonraki sayfaya iner.
+  //    bir "padding tamponu" oluşturur; uzun Sonuç/Limit/Metot metinleri daha yüksek
+  //    ağırlık sayılır → tablo imza/QR başlıklarına yaklaşınca satırlar sonraki sayfaya iner.
   //
-  //    - İlk sayfa    : en fazla FIRST_PAGE_ROWS satır (büyük footer → az satır)
-  //    - Devam sayfası : en fazla CONTINUATION_PAGE_ROWS satır (küçük footer → çok satır)
+  //    - İlk sayfa    : en fazla FIRST_PAGE_WEIGHT ağırlık (büyük footer → az içerik)
+  //    - Devam sayfası : en fazla CONTINUATION_PAGE_WEIGHT ağırlık (küçük footer → çok içerik)
   //    - AÇIKLAMALAR + "Rapor Sonu" bölünmüş raporlarda SON sayfada, tablonun en altında.
   //    - Devam sayfalarında satır/font boyutu ilk sayfayla AYNI (küçültme yok).
   //
@@ -244,16 +271,16 @@ export default function GenelReport({
   // şekilde davranır.
   // ═══════════════════════════════════════════════════════════════════════════
   // Page 1'e imza/footer bloğu için ~78mm ayrıldığından, başlık sonrası yaklaşık
-  // 12 satır sığar. Bu sayıyı AŞAN raporlar 2. sayfaya bölünür; aşmayanlar (ör.
-  // 6 satırlık rapor) tek sayfada kalır. Devam sayfalarında footer küçük olduğu
-  // için daha çok satır sığar.
-  const FIRST_PAGE_ROWS = 12;
-  const CONTINUATION_PAGE_ROWS = 20;
-  const shouldSplitResults = !editing && resultRows.length > FIRST_PAGE_ROWS;
-  const firstPageResultCount = shouldSplitResults ? FIRST_PAGE_ROWS : resultRows.length;
-  const firstPageRows = resultRows.slice(0, firstPageResultCount);
-  const remainingResultRows = shouldSplitResults ? resultRows.slice(firstPageResultCount) : [];
-  const continuationPages = splitIntoBalancedPages(remainingResultRows, CONTINUATION_PAGE_ROWS);
+  // 12 normal satır sığar. Uzun hücreler birden fazla satır ağırlığı tüketir; böylece
+  // tek bir uzun Sonuç metni tabloyu footer üstüne bindirmez.
+  const FIRST_PAGE_WEIGHT = 12;
+  const CONTINUATION_PAGE_WEIGHT = 20;
+  const firstPageRows = editing
+    ? resultRows
+    : splitIntoWeightedPages(resultRows, FIRST_PAGE_WEIGHT, resultRowWeight)[0] ?? [];
+  const firstPageResultCount = firstPageRows.length;
+  const remainingResultRows = editing ? [] : resultRows.slice(firstPageResultCount);
+  const continuationPages = splitIntoWeightedPages(remainingResultRows, CONTINUATION_PAGE_WEIGHT, resultRowWeight);
   const totalReportPages = 1 + continuationPages.length;
 
   // Düzenleme modu yardımcıları — `edit` yoksa hepsi no-op, metin olduğu gibi basılır.
@@ -290,7 +317,7 @@ export default function GenelReport({
           <tr key={`${row.serviceIndex}-alt-${row.altIndex}`} className="alt-param-row">
             <td style={{ paddingLeft: 18, paddingRight: 10 }}>↳ {altName || "-"}</td>
             <td className="center">{(isEnglish ? row.alt.BirimEn || row.alt.Birim : row.alt.Birim) || "-"}</td>
-            <td className="center">{(isEnglish ? row.alt.SonucEn || row.alt.Sonuc : row.alt.Sonuc) || "-"}</td>
+            <td className="center result-cell">{(isEnglish ? row.alt.SonucEn || row.alt.Sonuc : row.alt.Sonuc) || "-"}</td>
             <td className="center" style={{ paddingLeft: 5 }}>{(isEnglish ? row.alt.LOQEn || row.alt.LOQ : row.alt.LOQ) || "-"}</td>
             <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
             <td className="center" style={{ paddingLeft: 5 }}>-</td>
@@ -319,7 +346,7 @@ export default function GenelReport({
               : <>{isAkr ? "*" : ""}{serviceName}</>}
           </td>
           <td className="center">{edit ? editText((isEnglish ? h.BirimEn || h.Birim : h.Birim) || "", (v) => edit.onRowChange(i, isEnglish ? { BirimEn: v } : { Birim: v }), { center: true }) : ((isEnglish ? h.BirimEn || h.Birim : h.Birim) || "-")}</td>
-          <td className="center">{edit ? editText((isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc) || "", (v) => edit.onRowChange(i, isEnglish ? { SonucEn: v } : { Sonuc: v }), { center: true }) : ((isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc) || "-")}</td>
+          <td className="center result-cell">{edit ? editText((isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc) || "", (v) => edit.onRowChange(i, isEnglish ? { SonucEn: v } : { Sonuc: v }), { center: true }) : ((isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc) || "-")}</td>
           <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText((isEnglish ? h.LOQEn || h.LOQ : h.LOQ) || "", (v) => edit.onRowChange(i, isEnglish ? { LOQEn: v } : { LOQ: v }), { center: true }) : ((isEnglish ? h.LOQEn || h.LOQ : h.LOQ) || "-")}</td>
           <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
           <td className="center method-cell" style={{ paddingLeft: 5 }}>{edit ? editText((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "", (v) => edit.onRowChange(i, isEnglish ? { MetotEn: v } : { Metot: v }), { center: true }) : ((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "-")}</td>
@@ -751,6 +778,7 @@ export default function GenelReport({
           border-collapse: collapse;
           width: 100%;
           margin-top: 3mm;
+          table-layout: fixed;
         }
         .results tr:last-child td {
           padding-bottom: 7px;
@@ -771,7 +799,7 @@ export default function GenelReport({
         .results tbody td {
           padding-top: 7px;
           padding-bottom: 6px;
-          vertical-align: middle;
+          vertical-align: top;
           font-size: 11px;
           text-align: left;
           letter-spacing: 0;
@@ -780,13 +808,16 @@ export default function GenelReport({
           white-space: nowrap;
         }
         .results tbody td.center { text-align: left; }
-        /* Limit metinleri cümle uzunluğunda olabiliyor (ör. 105+ karakter). Diğer
-           kolonlar tek satırda kalsın diye nowrap korunur; SADECE limit hücresi
-           sarar — aksi halde kolon şişip tabloyu sayfa dışına taşırıyor. */
+        /* Sonuç/limit/metot metinleri cümle uzunluğunda olabiliyor. Diğer
+           kolonlar tek satırda kalsın; bu hücreler sarıp tabloyu sayfa içinde tutsun. */
+        .results tbody td.result-cell,
         .results tbody td.limit-cell,
         .results tbody td.method-cell {
           white-space: normal;
           overflow-wrap: break-word;
+          word-break: break-word;
+          hyphens: auto;
+          line-height: 1.22;
         }
         .results tbody td.muted { color: var(--ink-soft); font-size: 8.5px; }
         .results tbody td.bold { font-weight: 700; }
