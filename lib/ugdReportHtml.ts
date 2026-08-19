@@ -593,16 +593,16 @@ export function renderUgdReportHtml(input: UGDReportInput) {
     <p>Madde veya karışımlara ait fiziksel ve kimyasal özellikler Ek-3 bölümünde detaylı olarak paylaşılmıştır.</p>
     <div style="font-weight: bold;">b. Bitmiş kozmetik ürününün fiziksel ve kimyasal özellikleri</div>
     ${infoTable([
-      [copy.appearance, localizedField(f, "Gorunum", language)],
-      [copy.color, localizedField(f, "Renk", language)],
-      [copy.odor, localizedField(f, "Koku", language)],
-      ["pH", localizedField(f, "PH", language, text(f.pH))],
-      [copy.boilingPoint, localizedField(f, "Kaynama", language)],
-      [copy.meltingPoint, localizedField(f, "Erime", language)],
-      [copy.density, localizedField(f, "Yogunluk", language)],
-      [copy.viscosity, localizedField(f, "Viskozite", language)],
-      [copy.waterSolubility, localizedField(f, "SudaCozunebilirlik", language)],
-      [copy.otherSolubility, localizedField(f, "DigerCozunebilirlik", language)],
+      [copy.appearance, localizedField(f, "Gorunum", language, "N/A")],
+      [copy.color, localizedField(f, "Renk", language, "N/A")],
+      [copy.odor, localizedField(f, "Koku", language, "N/A")],
+      ["pH", localizedField(f, "PH", language, "N/A")],
+      [copy.boilingPoint, localizedField(f, "Kaynama", language, "N/A")],
+      [copy.meltingPoint, localizedField(f, "Erime", language, "N/A")],
+      [copy.density, localizedField(f, "Yogunluk", language, "N/A")],
+      [copy.viscosity, localizedField(f, "Viskozite", language, "N/A")],
+      [copy.waterSolubility, localizedField(f, "SudaCozunebilirlik", language, "N/A")],
+      [copy.otherSolubility, localizedField(f, "DigerCozunebilirlik", language, "N/A")],
     ])}
 
     <div style="page-break-after: always;"></div> 

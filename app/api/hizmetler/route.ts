@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
     const hasBL = cols.has("BolumID");
+    const hasOB = cols.has("OlcumBelirsizligi");
 
     const whereClauses: string[] = ["Durumu = 'Aktif'"];
 
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
       hasRF ? "ISNULL(RaporFormati, '') AS RaporFormati" : "'' AS RaporFormati",
       hasYK ? "YetkiliID" : "NULL AS YetkiliID",
       hasBL ? "BolumID"   : "NULL AS BolumID",
+      hasOB ? "ISNULL(OlcumBelirsizligi, '') AS OlcumBelirsizligi" : "'' AS OlcumBelirsizligi",
     ].join(", ");
 
     const dataResult = await req.query(`
@@ -111,7 +113,7 @@ export async function POST(request: Request) {
       Kod, Ad, AdEn, Method, MethodEn, Matriks,
       Akreditasyon, Sure, NumGereklilik, NumDipnot, NumDipnotEn,
       Fiyat, ParaBirimi, RaporFormati, YetkiliID, BolumID,
-      Limit, Birim, LOQ, LimitEn, BirimEn, LOQEn,
+      Limit, Birim, LOQ, LimitEn, BirimEn, LOQEn, OlcumBelirsizligi,
     } = body;
 
     if (!Kod?.trim()) return Response.json({ error: "Kod zorunludur." }, { status: 400 });
@@ -122,6 +124,7 @@ export async function POST(request: Request) {
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
     const hasBL = cols.has("BolumID");
+    const hasOB = cols.has("OlcumBelirsizligi");
 
     const req = pool.request()
       .input("Kod",           Kod.trim())
@@ -162,6 +165,11 @@ export async function POST(request: Request) {
       req.input("BolumID", BolumID ? parseInt(BolumID) : null);
       extraCols.push("BolumID");
       extraVals.push("@BolumID");
+    }
+    if (hasOB) {
+      req.input("OlcumBelirsizligi", OlcumBelirsizligi || null);
+      extraCols.push("OlcumBelirsizligi");
+      extraVals.push("@OlcumBelirsizligi");
     }
 
     const colsPart = extraCols.length ? `, ${extraCols.join(", ")}` : "";

@@ -1,6 +1,7 @@
 import type { RaporHeader, HizmetRow } from "@/app/rapor-onay-print/[nkrId]/reportTypes";
 import type { RaporMeta } from "@/lib/raporViewData";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
+import { applyManualServiceOrder } from "@/lib/raporServiceOrder";
 
 export interface RaporEditPayload {
   header?: Partial<RaporHeader>;
@@ -199,6 +200,35 @@ export async function lockRaporEdit(pool: any, nkrId: number, format: string, sn
   }
 }
 
+function serviceKey(row: HizmetRow): string | null {
+  if (row.X1ID != null) return `x1:${row.X1ID}`;
+  if (row.AnalizID != null) return `analiz:${row.AnalizID}:${row.Kod || ""}`;
+  return row.Kod ? `kod:${row.Kod}` : null;
+}
+
+function applyEditedServicesInDbOrder(baseRows: HizmetRow[], editedRows: HizmetRow[]): HizmetRow[] {
+  const editedByKey = new Map<string, HizmetRow>();
+  for (const row of editedRows) {
+    const key = serviceKey(row);
+    if (key) editedByKey.set(key, row);
+  }
+
+  const used = new Set<HizmetRow>();
+  const ordered = baseRows.map((base) => {
+    const key = serviceKey(base);
+    const edited = key ? editedByKey.get(key) : undefined;
+    if (!edited) return base;
+    used.add(edited);
+    return { ...edited, RaporSira: base.RaporSira };
+  });
+
+  for (const row of editedRows) {
+    if (!used.has(row)) ordered.push(row);
+  }
+
+  return applyManualServiceOrder(ordered);
+}
+
 export function applyRaporEdit<T extends { header: RaporHeader; hizmetler: HizmetRow[]; meta: RaporMeta }>(
   data: T,
   edit: RaporEditPayload | RaporEditRecord | null,
@@ -212,7 +242,9 @@ export function applyRaporEdit<T extends { header: RaporHeader; hizmetler: Hizme
   return {
     ...data,
     header: headerEdit ? { ...data.header, ...headerEdit } : data.header,
-    hizmetler: Array.isArray(payload.hizmetler) ? payload.hizmetler : data.hizmetler,
+    hizmetler: Array.isArray(payload.hizmetler)
+      ? applyEditedServicesInDbOrder(data.hizmetler, payload.hizmetler)
+      : data.hizmetler,
     meta: payload.meta ? { ...data.meta, ...payload.meta } : data.meta,
   };
 }

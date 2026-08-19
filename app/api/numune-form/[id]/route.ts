@@ -317,24 +317,35 @@ export async function PUT(
       const x1ColRes = await pool.request().query(`
         SELECT name FROM sys.columns
         WHERE object_id = OBJECT_ID('NumuneX1')
-          AND name IN ('Sonuc', 'SonucEn', 'Degerlendirme', 'DegerlendirmeEn', 'Durum', 'HizmetDurum')
+          AND name IN ('Sonuc', 'SonucEn', 'Degerlendirme', 'DegerlendirmeEn', 'Durum', 'HizmetDurum', 'OlcumBelirsizligi')
       `);
       const x1Cols = new Set<string>(x1ColRes.recordset.map((r: any) => r.name));
 
       // StokAnalizListesi'nden Limit/Birim (TR) + LimitEn/BirimEn/LOQ/LOQEn çek
+      const stokColRes = await pool.request().query(`
+        SELECT name FROM sys.columns
+        WHERE object_id = OBJECT_ID('StokAnalizListesi')
+          AND name IN ('OlcumBelirsizligi')
+      `);
+      const hasStokOlcumBelirsizligi = stokColRes.recordset.some((r: any) => r.name === "OlcumBelirsizligi");
+      const olcumBelirsizligiStokSelect = hasStokOlcumBelirsizligi
+        ? "ISNULL(OlcumBelirsizligi, '') AS OlcumBelirsizligi"
+        : "'' AS OlcumBelirsizligi";
+
       const analizIds = [...new Set(preparedHizmetler.map(({ row }: any) => Number(row.AnalizID)).filter(Number.isFinite))];
       const stalRes = analizIds.length > 0
         ? await pool.request().query(`
             SELECT ID,
               ISNULL([Limit], '') AS LimitDeger, ISNULL(BirimText, '') AS Birim,
               ISNULL(LimitEn,    '') AS LimitEn,    ISNULL(BirimEn,  '') AS BirimEn,
-              ISNULL(LOQ,        '') AS LOQ,         ISNULL(LOQEn,   '') AS LOQEn
+              ISNULL(LOQ,        '') AS LOQ,         ISNULL(LOQEn,   '') AS LOQEn,
+              ${olcumBelirsizligiStokSelect}
             FROM StokAnalizListesi WHERE ID IN (${analizIds.join(",")})
           `)
         : { recordset: [] as any[] };
-      const stalMap = new Map<number, { LimitDeger: string; Birim: string; LimitEn: string; BirimEn: string; LOQ: string; LOQEn: string }>();
+      const stalMap = new Map<number, { LimitDeger: string; Birim: string; LimitEn: string; BirimEn: string; LOQ: string; LOQEn: string; OlcumBelirsizligi: string }>();
       for (const r of stalRes.recordset) {
-        stalMap.set(r.ID, { LimitDeger: r.LimitDeger, Birim: r.Birim, LimitEn: r.LimitEn, BirimEn: r.BirimEn, LOQ: r.LOQ, LOQEn: r.LOQEn });
+        stalMap.set(r.ID, { LimitDeger: r.LimitDeger, Birim: r.Birim, LimitEn: r.LimitEn, BirimEn: r.BirimEn, LOQ: r.LOQ, LOQEn: r.LOQEn, OlcumBelirsizligi: r.OlcumBelirsizligi });
       }
 
       // NumuneX4'ten paket hizmetler için Limit/Birim (TR+EN) çek
@@ -358,7 +369,7 @@ export async function PUT(
       }
 
       for (const { row: h, existingId } of preparedHizmetler) {
-        const stal = stalMap.get(Number(h.AnalizID)) ?? { LimitDeger: "", Birim: "", LimitEn: "", BirimEn: "", LOQ: "", LOQEn: "" };
+        const stal = stalMap.get(Number(h.AnalizID)) ?? { LimitDeger: "", Birim: "", LimitEn: "", BirimEn: "", LOQ: "", LOQEn: "", OlcumBelirsizligi: "" };
         let limitEn: string;
         let birimEn: string;
         let dbLimitDeger: string;
@@ -380,6 +391,7 @@ export async function PUT(
         const birimVal = h.Birim  || dbBirim      || null;
         const loq   = h.LOQ   || stal.LOQ   || null;
         const loqEn = h.LOQEn || stal.LOQEn || null;
+        const olcumBelirsizligi = h.OlcumBelirsizligi || stal.OlcumBelirsizligi || null;
         const auto  = computeSonucAuto(limitVal, loq);
 
         if (existingId) {
@@ -394,6 +406,7 @@ export async function PUT(
             "LOQ = @LOQ",
             "LOQEn = @LOQEn",
           ];
+          if (x1Cols.has("OlcumBelirsizligi")) setsX1.push("OlcumBelirsizligi = @OlcumBelirsizligi");
           if (x1Cols.has("Durum")) setsX1.push("Durum = N'Aktif'");
 
           await pool.request()
@@ -408,6 +421,7 @@ export async function PUT(
             .input("BirimEn", h.BirimEn || birimEn || null)
             .input("LOQ", loq)
             .input("LOQEn", loqEn)
+            .input("OlcumBelirsizligi", olcumBelirsizligi)
             .query(`UPDATE NumuneX1 SET ${setsX1.join(", ")} WHERE ID = @X1ID AND RaporID = @RaporID`);
           continue;
         }
@@ -424,7 +438,13 @@ export async function PUT(
           .input("LimitEn", h.LimitEn || limitEn || null)
           .input("BirimEn", h.BirimEn || birimEn || null)
           .input("LOQ", loq)
-          .input("LOQEn", loqEn);
+          .input("LOQEn", loqEn)
+          .input("OlcumBelirsizligi", olcumBelirsizligi);
+
+        if (x1Cols.has("OlcumBelirsizligi")) {
+          colsX1.push("OlcumBelirsizligi");
+          valsX1.push("@OlcumBelirsizligi");
+        }
 
         if (x1Cols.has("Sonuc")) {
           colsX1.push("Sonuc");

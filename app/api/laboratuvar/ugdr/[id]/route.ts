@@ -10,6 +10,25 @@ function asText(value: unknown, fallback = "") {
   return String(value);
 }
 
+function parseNullableInt(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseAmountParts(value: unknown): { miktar: number | null; birim: string | null } {
+  const raw = String(value ?? "").trim();
+  if (!raw) return { miktar: null, birim: null };
+  const match = raw.match(/^([-+]?\d+(?:[.,]\d+)?)(?:\s*(.*))?$/);
+  if (!match) return { miktar: null, birim: raw };
+  const miktar = Number.parseFloat(match[1].replace(",", "."));
+  return {
+    miktar: Number.isFinite(miktar) ? miktar : null,
+    birim: match[2]?.trim() || null,
+  };
+}
+
 function pickField(row: Record<string, unknown> | null | undefined, ...names: string[]) {
   if (!row) return undefined;
   for (const name of names) {
@@ -152,24 +171,34 @@ export async function GET(
 
     const [nkrRes, detayRes, textRows] = await Promise.all([
       pool.request().input("id", nkrId).query(nkrSql),
-      pool.request().input("id", nkrId).query("SELECT TOP 1 * FROM NumuneDetay WHERE RaporID = @id"),
+      pool.request().input("id", nkrId).query(`
+        SELECT TOP 1 nd.*, p.Ad AS ProjeAd
+        FROM NumuneDetay nd
+        LEFT JOIN (SELECT ID, Firma_Adi AS Ad FROM Firma) p ON p.ID = nd.ProjeID
+        WHERE nd.RaporID = @id
+      `),
       loadLabUgdrTexts(pool, nkrId),
     ]);
 
     const n = nkrRes.recordset[0];
     if (!n) return Response.json({ error: "Kayit bulunamadi" }, { status: 404 });
     const d = detayRes.recordset[0] ?? {};
+    const firmaId = pickField(n, "Firma_ID") ?? pickField(d, "Firma_ID", "FirmaID", "ProjeID");
+    const firmaAd = pickField(n, "FirmaAd") || pickField(d, "FirmaAd", "FirmaAdi", "Firma_Adi", "ProjeAd") || "";
+    const barkod = pickField(n, "Barkod") || pickField(d, "Barkod");
+    const urun = pickField(n, "Numune_Adi") || pickField(d, "Numune_Adi", "NumuneAdi", "Urun", "UrunAdi");
+    const urunEn = pickField(n, "Numune_Adi_En") || pickField(d, "Numune_Adi_En", "NumuneAdiEn", "UrunEn", "UrunAdiEn");
 
     const row: Record<string, unknown> = {
       ID: pickField(n, "ID"),
       Tarih: pickField(n, "Tarih"),
       RaporNo: pickField(n, "RaporNo"),
       Versiyon: pickField(n, "Revno") != null ? String(pickField(n, "Revno")) : "1",
-      FirmaID: pickField(n, "Firma_ID"),
-      FirmaAd: pickField(n, "FirmaAd") || "",
-      Barkod: pickField(n, "Barkod"),
-      Urun: pickField(n, "Numune_Adi"),
-      UrunEn: pickField(n, "Numune_Adi_En"),
+      FirmaID: firmaId,
+      FirmaAd: firmaAd,
+      Barkod: barkod,
+      Urun: urun,
+      UrunEn: urunEn,
       Miktar: pickField(d, "Miktar") != null
         ? `${asText(pickField(d, "Miktar"))}${pickField(d, "Birim") ? ` ${pickField(d, "Birim")}` : ""}`
         : pickField(n, "TesteMiktar") != null
@@ -244,17 +273,18 @@ export async function PUT(
       nkrUgdTipFkColumn(pool),
     ]);
 
+    const firmaId = parseNullableInt(body.FirmaID);
+    const amountParts = parseAmountParts(body.Miktar);
+
     const upd = pool.request()
       .input("id", nkrId)
       .input("Tarih", body.Tarih || null)
       .input("RaporNo", body.RaporNo || null)
-      .input("Firma_ID", body.FirmaID ? Number.parseInt(String(body.FirmaID), 10) : null)
       .input("Numune_Adi", body.Urun || null);
 
     const sets = [
       "Tarih = @Tarih",
       "RaporNo = @RaporNo",
-      "Firma_ID = @Firma_ID",
       "Numune_Adi = @Numune_Adi",
     ];
 
@@ -263,13 +293,23 @@ export async function PUT(
       upd.input(param, value);
     };
 
+    if (firmaId !== null) {
+      const firmaRes = await pool.request()
+        .input("Firma_ID", firmaId)
+        .query("SELECT TOP 1 ID FROM Firma WHERE ID = @Firma_ID");
+      if (!firmaRes.recordset?.length) {
+        return Response.json({ error: "Secilen firma kaydi bulunamadi. Lutfen firma listesinden gecerli bir firma secin." }, { status: 400 });
+      }
+      addSet("Firma_ID", "Firma_ID", firmaId);
+    }
+
     if (hasRevno) addSet("Revno", "Revno", Number.parseInt(String(body.Versiyon || "1"), 10) || 0);
     if (hasBarkod) addSet("Barkod", "Barkod", body.Barkod || null);
     if (hasNumuneAdiEn) addSet("Numune_Adi_En", "Numune_Adi_En", body.UrunEn || null);
     if (hasTur) addSet("Tur", "Tur", body.Tip1 || null);
     if (hasHedefGrup) addSet("Hedef_Grup", "Hedef_Grup", body.Hedef || null);
-    if (hasTesteMiktar) addSet("TesteMiktar", "TesteMiktar", body.Miktar ? Number.parseFloat(String(body.Miktar).replace(",", ".")) || null : null);
-    if (hasTesteMiktarBirim) addSet("TesteMiktarBirim", "TesteMiktarBirim", null);
+    if (hasTesteMiktar) addSet("TesteMiktar", "TesteMiktar", amountParts.miktar);
+    if (hasTesteMiktarBirim) addSet("TesteMiktarBirim", "TesteMiktarBirim", amountParts.birim);
     if (ugdCol) addSet(ugdCol, "UGDTip_ID", body.Tip2 ? Number.parseInt(String(body.Tip2), 10) : null);
 
     await upd.query(`UPDATE NKR SET ${sets.join(", ")} WHERE ID = @id`);

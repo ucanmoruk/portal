@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { loadBilesenSonuclar, saveBilesenSonuclar } from "@/lib/altParametre";
 import { NextRequest } from "next/server";
+import { applyManualServiceOrder } from "@/lib/raporServiceOrder";
 
 // Değerlendirme Türkçe → İngilizce çeviri
 function computeDegerlendirmeEn(degerlendirme: string | null | undefined): string | null {
@@ -99,13 +100,11 @@ export async function GET(
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
       WHERE x1.RaporID        = @nkrId
         AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @raporFormati
-      ORDER BY ${existingCols.has("RaporSira")
-        ? "CASE WHEN x1.RaporSira IS NULL THEN 1 ELSE 0 END, x1.RaporSira, s.Kod, x1.ID"
-        : "s.Kod, x1.ID"}
+      ORDER BY s.Kod, x1.ID
     `);
 
     // Alt parametreler (bileşenler) — katalog + girilmiş sonuçlar
-    const hizmetler = result.recordset as Array<{
+    const hizmetler = applyManualServiceOrder(result.recordset as Array<{
       X1ID: number;
       AnalizID: number;
       RaporSira?: number | null;
@@ -116,7 +115,7 @@ export async function GET(
       Degerlendirme?: string | null;
       DegerlendirmeEn?: string | null;
       altParametreler?: unknown;
-    }>;
+    }>);
     for (const h of hizmetler) {
       const auto = computeSonucAuto(h.LimitDeger, h.LOQ);
       if (!h.Sonuc) h.Sonuc = auto.sonuc;

@@ -30,6 +30,7 @@ export interface HizmetRow {
   LimitEn?: string | null;
   LOQ: string | null;
   LOQEn?: string | null;
+  OlcumBelirsizligi?: string | null;
   Sonuc: string | null;
   SonucEn?: string | null;
   Degerlendirme: string | null;

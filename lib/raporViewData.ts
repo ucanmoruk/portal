@@ -6,6 +6,7 @@ import { loadBilesenSonuclar } from "@/lib/altParametre";
 import { applyRaporEdit, loadRaporEdit } from "@/lib/raporDuzenleme";
 import { baseReportFormat } from "@/lib/raporFormatLanguage";
 import { getStabiliteVeriJson } from "@/lib/stabiliteData";
+import { applyManualServiceOrder } from "@/lib/raporServiceOrder";
 
 // Rapor önizleme + imzalı PDF için ORTAK veri yükleyici.
 // Hem app/rapor-onay-print/[nkrId]/page.tsx (önizleme) hem
@@ -88,15 +89,28 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
   if (!header) return null;
 
   const x1ColCheck = await pool.request().query(`
-    SELECT name FROM sys.columns
-    WHERE object_id = OBJECT_ID('NumuneX1')
-      AND name IN ('RaporSira')
+    SELECT 'x1' AS Src, COLUMN_NAME AS name
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'NumuneX1'
+      AND COLUMN_NAME IN ('RaporSira', 'OlcumBelirsizligi')
+    UNION ALL
+    SELECT 'stok' AS Src, COLUMN_NAME AS name
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'StokAnalizListesi'
+      AND COLUMN_NAME IN ('OlcumBelirsizligi')
   `);
-  const hasRaporSira = x1ColCheck.recordset.some((r: any) => r.name === "RaporSira");
+  const hasRaporSira = x1ColCheck.recordset.some((r: any) => r.Src === "x1" && r.name === "RaporSira");
+  const hasX1OlcumBelirsizligi = x1ColCheck.recordset.some((r: any) => r.Src === "x1" && r.name === "OlcumBelirsizligi");
+  const hasStokOlcumBelirsizligi = x1ColCheck.recordset.some((r: any) => r.Src === "stok" && r.name === "OlcumBelirsizligi");
   const raporSiraSelect = hasRaporSira ? "x1.RaporSira" : "CAST(NULL AS int)";
-  const raporSiraOrder = hasRaporSira
-    ? "CASE WHEN x1.RaporSira IS NULL THEN 1 ELSE 0 END, x1.RaporSira, s.Kod, x1.ID"
-    : "s.Kod, x1.ID";
+  const olcumBelirsizligiSelect =
+    hasX1OlcumBelirsizligi && hasStokOlcumBelirsizligi
+      ? "ISNULL(x1.OlcumBelirsizligi, ISNULL(s.OlcumBelirsizligi, ''))"
+      : hasX1OlcumBelirsizligi
+        ? "ISNULL(x1.OlcumBelirsizligi, '')"
+        : hasStokOlcumBelirsizligi
+          ? "ISNULL(s.OlcumBelirsizligi, '')"
+          : "''";
 
   const hizmetRes = await pool.request()
     .input("nkrId", nkrIdNum)
@@ -118,6 +132,7 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
         ISNULL(x1.LimitEn, ISNULL(s.LimitEn, '')) AS LimitEn,
         ISNULL(s.LOQ, '')          AS LOQ,
         ISNULL(x1.LOQEn, ISNULL(s.LOQEn, '')) AS LOQEn,
+        ${olcumBelirsizligiSelect} AS OlcumBelirsizligi,
         x1.Sonuc                    AS Sonuc,
         x1.SonucEn                  AS SonucEn,
         x1.Degerlendirme            AS Degerlendirme,
@@ -127,9 +142,9 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
       WHERE x1.RaporID = @nkrId
         AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @format
-      ORDER BY ${raporSiraOrder}
+      ORDER BY s.Kod, x1.ID
     `);
-  const hizmetler = hizmetRes.recordset as HizmetRow[];
+  const hizmetler = applyManualServiceOrder(hizmetRes.recordset as HizmetRow[]);
 
   // ───── Alt parametreler (bileşenler) — katalog + girilen sonuçlar ─────
   // Her hizmetin bileşenlerini (X1ID bazında girilen Sonuç/Değerlendirme ile) yükle.

@@ -241,6 +241,18 @@ function ReportLanguageSwitch({ language, onChange }: { language: 'tr' | 'en'; o
   );
 }
 
+function mergeFirmalar(primary: any[] = [], extras: any[] = []) {
+  const seen = new Set(primary.map((firma: any) => String(firma.ID)));
+  const merged = [...primary];
+  for (const firma of extras) {
+    const id = String(firma?.ID ?? "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    merged.push(firma);
+  }
+  return merged;
+}
+
 type LabStatus = 'Tamamlandı' | 'Devam Ediyor';
 
 function labSentence(kind: 'mikro' | 'challenge' | 'stabilite', status: LabStatus, shelfLife: string, pao: string) {
@@ -499,7 +511,10 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data) return;
-        setLookups(data);
+        setLookups(prev => ({
+          ...data,
+          firmalar: isLabSource ? (prev.firmalar || []) : mergeFirmalar(data.firmalar || [], prev.firmalar || []),
+        }));
         if (!isEdit && data.nextRaporNo) {
           setForm(prev => prev.RaporNo ? prev : { ...prev, RaporNo: String(data.nextRaporNo) });
         }
@@ -639,7 +654,6 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 
   useEffect(() => {
     if (!editId || !isLabSource) return;
-    if (form.RaporNo && form.FirmaID && form.Barkod && form.Miktar && form.Urun) return;
 
     fetch(`/api/numune-form/${editId}`)
       .then(r => r.ok ? r.json() : null)
@@ -654,14 +668,17 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
             ? `${nkr.TesteMiktar}${nkr.TesteMiktarBirim ? ` ${nkr.TesteMiktarBirim}` : ""}`
             : "";
 
-        if (nkr.Firma_ID) {
+        const fallbackFirmaId = nkr.Firma_ID || detay.ProjeID;
+        const fallbackFirmaAd = nkr.FirmaAd || detay.ProjeAd;
+
+        if (fallbackFirmaId) {
           setLookups(prev => {
-            const firmaId = String(nkr.Firma_ID);
+            const firmaId = String(fallbackFirmaId);
             const exists = prev.firmalar.some((f: any) => String(f.ID) === firmaId);
             if (exists) return prev;
             return {
               ...prev,
-              firmalar: [...prev.firmalar, { ID: nkr.Firma_ID, Ad: nkr.FirmaAd || `Firma #${firmaId}` }],
+              firmalar: [...prev.firmalar, { ID: fallbackFirmaId, Ad: fallbackFirmaAd || `Firma #${firmaId}` }],
             };
           });
         }
@@ -671,7 +688,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
           Tarih: prev.Tarih || (nkr.Tarih ? String(nkr.Tarih).split("T")[0] : prev.Tarih),
           RaporNo: prev.RaporNo || nkr.RaporNo || prev.RaporNo,
           Versiyon: prev.Versiyon || (nkr.Revno != null ? String(nkr.Revno) : prev.Versiyon),
-          FirmaID: prev.FirmaID || (nkr.Firma_ID ? String(nkr.Firma_ID) : prev.FirmaID),
+          FirmaID: prev.FirmaID || (fallbackFirmaId ? String(fallbackFirmaId) : prev.FirmaID),
           Barkod: prev.Barkod || nkr.Barkod || prev.Barkod,
           Miktar: prev.Miktar || fallbackMiktar || prev.Miktar,
           Urun: prev.Urun || nkr.Numune_Adi || prev.Urun,
@@ -679,7 +696,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         }));
       })
       .catch(() => {});
-  }, [editId, isLabSource, form.RaporNo, form.FirmaID, form.Barkod, form.Miktar, form.Urun]);
+  }, [editId, isLabSource]);
 
   const upd = (field: keyof ReturnType<typeof emptyForm>) => (v: string) =>
     setForm(prev => ({ ...prev, [field]: v }));
@@ -823,11 +840,14 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
           const data = await res.json();
           if (data.id) setSavedId(String(data.id));
         } else {
-          await fetch(isLabSource ? `/api/laboratuvar/ugdr/${savedId}` : `/api/urunler/${savedId}`, {
+          const targetId = savedId || editId;
+          if (!targetId) throw new Error("Guncellenecek kayit bulunamadi.");
+          const res = await fetch(isLabSource ? `/api/laboratuvar/ugdr/${targetId}` : `/api/urunler/${targetId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
           });
+          if (!res.ok) throw new Error((await res.json()).error || "Guncelleme basarisiz");
         }
       } catch (err: any) {
         setGlobalError(err.message);
@@ -864,15 +884,17 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         router.push(returnHref);
         router.refresh();
       } else {
-        const res = await fetch(isLabSource ? `/api/laboratuvar/ugdr/${savedId}` : `/api/urunler/${savedId}`, {
+        const targetId = savedId || editId;
+        if (!targetId) throw new Error("Guncellenecek kayit bulunamadi.");
+        const res = await fetch(isLabSource ? `/api/laboratuvar/ugdr/${targetId}` : `/api/urunler/${targetId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
         });
         if (!res.ok) throw new Error((await res.json()).error || "Güncelleme başarısız");
         // Formül satırlarını da kaydet
-        if (savedId && formulResults.length > 0) {
-          await saveFormulToDB(savedId, formulResults);
+        if (formulResults.length > 0) {
+          await saveFormulToDB(targetId, formulResults);
         }
         // Güncelleme → sayfada kal, rapor indirilebilsin
         setSavedOk(true);

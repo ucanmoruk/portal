@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
+import { applyManualServiceOrder } from "@/lib/raporServiceOrder";
 
 // GET /api/numune-takip-lab/[nkrId]/hizmetler?raporFormati=Genel
 // "Kabul Bekleyenler" accordion açıldığında ürüne+rapor formatına ait
@@ -67,6 +68,7 @@ export async function GET(
             AND name IN ('RaporSira')
         `);
         const hasRaporSira = x1ColCheck.recordset.some((r: any) => r.name === "RaporSira");
+        const raporSiraSelect = hasRaporSira ? "x1.RaporSira," : "CAST(NULL AS int) AS RaporSira,";
 
         const result = await pool.request()
       .input("nkrId", nkrIdNum)
@@ -75,6 +77,7 @@ export async function GET(
         SELECT
           x1.ID                                       AS X1ID,
           x1.AnalizID,
+          ${raporSiraSelect}
           ISNULL(s.Kod, '')                            AS Kod,
           ISNULL(s.Ad, '')                             AS Ad,
           ISNULL(s.Akreditasyon, '')                   AS Akreditasyon,
@@ -89,12 +92,10 @@ export async function GET(
         WHERE x1.RaporID = @nkrId
           AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @raporFormati
           ${newOnlyFilter}
-        ORDER BY ${hasRaporSira
-          ? "CASE WHEN x1.RaporSira IS NULL THEN 1 ELSE 0 END, x1.RaporSira, s.Kod, x1.ID"
-          : "s.Kod, x1.ID"}
+        ORDER BY s.Kod, x1.ID
       `);
 
-    return Response.json({ data: result.recordset });
+    return Response.json({ data: applyManualServiceOrder(result.recordset) });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

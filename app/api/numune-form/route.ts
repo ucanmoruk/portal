@@ -154,7 +154,7 @@ export async function POST(request: Request) {
       const x1ColRes = await pool.request().query(`
         SELECT name FROM sys.columns
         WHERE object_id = OBJECT_ID('NumuneX1')
-          AND name IN ('Sonuc', 'SonucEn', 'Degerlendirme', 'DegerlendirmeEn', 'Durum', 'HizmetDurum')
+          AND name IN ('Sonuc', 'SonucEn', 'Degerlendirme', 'DegerlendirmeEn', 'Durum', 'HizmetDurum', 'OlcumBelirsizligi')
       `);
       const x1Cols = new Set<string>(x1ColRes.recordset.map((r: any) => r.name));
 
@@ -164,17 +164,28 @@ export async function POST(request: Request) {
       // StokAnalizListesi'nden Limit/Birim (TR) + LimitEn/BirimEn/LOQ/LOQEn çek
       // NOT: birim = BirimText (insan-okur "kob/g"); Matriks (örn. "Kozmetik")
       // veya ham Birim kodu (örn. 6) DEĞİL.
+      const stokColRes = await pool.request().query(`
+        SELECT name FROM sys.columns
+        WHERE object_id = OBJECT_ID('StokAnalizListesi')
+          AND name IN ('OlcumBelirsizligi')
+      `);
+      const hasStokOlcumBelirsizligi = stokColRes.recordset.some((r: any) => r.name === "OlcumBelirsizligi");
+      const olcumBelirsizligiStokSelect = hasStokOlcumBelirsizligi
+        ? "ISNULL(OlcumBelirsizligi, '') AS OlcumBelirsizligi"
+        : "'' AS OlcumBelirsizligi";
+
       const analizIds = [...new Set(hizmetler.map((h: any) => Number(h.AnalizID)))];
       const stalRes = await pool.request().query(`
         SELECT ID,
           ISNULL([Limit], '') AS LimitDeger, ISNULL(BirimText, '') AS Birim,
           ISNULL(LimitEn,    '') AS LimitEn,    ISNULL(BirimEn,  '') AS BirimEn,
-          ISNULL(LOQ,        '') AS LOQ,         ISNULL(LOQEn,   '') AS LOQEn
+          ISNULL(LOQ,        '') AS LOQ,         ISNULL(LOQEn,   '') AS LOQEn,
+          ${olcumBelirsizligiStokSelect}
         FROM StokAnalizListesi WHERE ID IN (${analizIds.join(",")})
       `);
-      const stalMap = new Map<number, { LimitDeger: string; Birim: string; LimitEn: string; BirimEn: string; LOQ: string; LOQEn: string }>();
+      const stalMap = new Map<number, { LimitDeger: string; Birim: string; LimitEn: string; BirimEn: string; LOQ: string; LOQEn: string; OlcumBelirsizligi: string }>();
       for (const r of stalRes.recordset) {
-        stalMap.set(r.ID, { LimitDeger: r.LimitDeger, Birim: r.Birim, LimitEn: r.LimitEn, BirimEn: r.BirimEn, LOQ: r.LOQ, LOQEn: r.LOQEn });
+        stalMap.set(r.ID, { LimitDeger: r.LimitDeger, Birim: r.Birim, LimitEn: r.LimitEn, BirimEn: r.BirimEn, LOQ: r.LOQ, LOQEn: r.LOQEn, OlcumBelirsizligi: r.OlcumBelirsizligi });
       }
 
       // NumuneX4'ten paket hizmetler için Limit/Birim (TR+EN) çek
@@ -204,9 +215,10 @@ export async function POST(request: Request) {
       if (x1Cols.has("DegerlendirmeEn"))  extraCols.push("DegerlendirmeEn");
       if (x1Cols.has("Durum"))            extraCols.push("Durum");
       if (x1Cols.has("HizmetDurum"))      extraCols.push("HizmetDurum");
+      if (x1Cols.has("OlcumBelirsizligi")) extraCols.push("OlcumBelirsizligi");
 
       const values = hizmetler.map((h: any) => {
-        const stal = stalMap.get(Number(h.AnalizID)) ?? { LimitDeger: "", Birim: "", LimitEn: "", BirimEn: "", LOQ: "", LOQEn: "" };
+        const stal = stalMap.get(Number(h.AnalizID)) ?? { LimitDeger: "", Birim: "", LimitEn: "", BirimEn: "", LOQ: "", LOQEn: "", OlcumBelirsizligi: "" };
         let limitEn: string;
         let birimEn: string;
         let dbLimitDeger: string;
@@ -228,6 +240,7 @@ export async function POST(request: Request) {
         const birimVal = h.Birim  || dbBirim      || null;
         const loq   = stal.LOQ;
         const loqEn = stal.LOQEn;
+        const olcumBelirsizligi = h.OlcumBelirsizligi || stal.OlcumBelirsizligi || null;
         const auto  = computeSonucAuto(limitVal, loq);
 
         // Sonuc/Degerlendirme auto-fill (LOQ tabanlı) — kolaylık için.
@@ -239,6 +252,7 @@ export async function POST(request: Request) {
           ...(x1Cols.has("DegerlendirmeEn")  ? [q(computeDegerlendirmeEn("Uygun"))] : []),
           ...(x1Cols.has("Durum")            ? ["'Aktif'"]                           : []),
           ...(x1Cols.has("HizmetDurum")      ? ["'YeniAnaliz'"]                      : []),
+          ...(x1Cols.has("OlcumBelirsizligi") ? [q(olcumBelirsizligi)]                : []),
         ];
         const base = `${nkrId}, ${h.AnalizID}, ${h.Termin ? `'${h.Termin}'` : "NULL"}, ${h.x3ID ?? "NULL"}, ${q(limitVal)}, ${q(birimVal)}, ${q(limitEn)}, ${q(birimEn)}, ${q(loq)}, ${q(loqEn)}`;
         return `(${base}${extraVals.length > 0 ? ", " + extraVals.join(", ") : ""})`;

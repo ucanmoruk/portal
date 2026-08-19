@@ -2,6 +2,7 @@ import type { ConnectionPool } from "mssql";
 import type { ImzaPayloadInput } from "./raporImza";
 import { signRapor, imzaSurum } from "./raporImza";
 import { loadRaporEdit } from "./raporDuzenleme";
+import { applyManualServiceOrder } from "./raporServiceOrder";
 
 const DATA_FORMAT_ALIAS: Record<string, string> = {
   GenelEn: "Genel",
@@ -35,20 +36,21 @@ export async function loadImzaInput(
   if (!h) return null;
 
   const x1ColCheck = await pool.request().query(`
-    SELECT name FROM sys.columns
-    WHERE object_id = OBJECT_ID('NumuneX1')
-      AND name IN ('RaporSira')
+    SELECT COLUMN_NAME AS name
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'NumuneX1'
+      AND COLUMN_NAME IN ('RaporSira')
   `);
   const hasRaporSira = x1ColCheck.recordset.some((r: any) => r.name === "RaporSira");
-  const raporSiraOrder = hasRaporSira
-    ? "CASE WHEN x1.RaporSira IS NULL THEN 1 ELSE 0 END, x1.RaporSira, s.Kod, x1.ID"
-    : "s.Kod, x1.ID";
+  const raporSiraSelect = hasRaporSira ? "x1.RaporSira" : "CAST(NULL AS int)";
 
   const hz = await pool.request()
     .input("nkrId", nkrId)
     .input("format", dataFormat)
     .query(`
       SELECT
+        x1.ID AS X1ID,
+        ${raporSiraSelect} AS RaporSira,
         ISNULL(s.Kod, '') AS Kod,
         x1.Sonuc,
         x1.Degerlendirme,
@@ -58,9 +60,9 @@ export async function loadImzaInput(
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
       WHERE x1.RaporID = @nkrId
         AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @format
-      ORDER BY ${raporSiraOrder}
+      ORDER BY s.Kod, x1.ID
     `);
-  let hizmetler = hz.recordset.map((r: any) => ({
+  let hizmetler = applyManualServiceOrder(hz.recordset).map((r: any) => ({
     Kod: r.Kod,
     Sonuc: r.Sonuc,
     Degerlendirme: r.Degerlendirme,

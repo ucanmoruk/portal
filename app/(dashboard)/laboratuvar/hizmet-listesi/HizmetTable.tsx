@@ -28,6 +28,7 @@ interface Hizmet {
   LimitEn?: string;            // NEW: English limit
   BirimEn?: string;            // NEW: English unit
   LOQEn?: string;              // NEW: English LOQ
+  OlcumBelirsizligi?: string;
   altParametreler?: AltParametre[];  // NEW: alt parametreler (bileşenler)
 }
 
@@ -61,7 +62,7 @@ const EMPTY: Partial<Hizmet> = {
   Fiyat: undefined, ParaBirimi: "₺", Durumu: "Aktif",
   // Rapor Formati bos kalmasin — varsayilan Genel.
   RaporFormati: "Genel", YetkiliID: null, BolumID: null,
-  Limit: "", Birim: "", LOQ: "", LimitEn: "", BirimEn: "", LOQEn: "",
+  Limit: "", Birim: "", LOQ: "", LimitEn: "", BirimEn: "", LOQEn: "", OlcumBelirsizligi: "",
   altParametreler: [],
 };
 
@@ -624,6 +625,15 @@ export default function HizmetTable() {
               </div>
 
               {/* Satır 3: Rapor Formatı (çoktan seçmeli) */}
+              <div className={styles.formGroup} style={{ marginBottom: 14 }}>
+                <label>Ölçüm Belirsizliği</label>
+                <input
+                  value={editRow.OlcumBelirsizligi || ""}
+                  onChange={e => setEditRow(p => ({ ...p!, OlcumBelirsizligi: e.target.value }))}
+                  placeholder="örn: ± 0,2"
+                />
+              </div>
+
               <div className={styles.formGroup} style={{ marginBottom: 14 }}>
                 <label>Rapor Formatı</label>
                 <div style={{ display: "flex", gap: 16, flexWrap: "wrap", paddingTop: 4 }}>

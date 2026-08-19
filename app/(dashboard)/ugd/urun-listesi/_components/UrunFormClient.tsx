@@ -242,6 +242,29 @@ function ReportLanguageSwitch({ language, onChange }: { language: 'tr' | 'en'; o
   );
 }
 
+function mergeFirmalar(primary: any[] = [], extras: any[] = []) {
+  const seen = new Set(primary.map((firma: any) => String(firma.ID)));
+  const merged = [...primary];
+  for (const firma of extras) {
+    const id = String(firma?.ID ?? "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    merged.push(firma);
+  }
+  return merged;
+}
+
+function normalizeFirmaText(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, " ").trim().toLocaleLowerCase("tr-TR");
+}
+
+function hasStalePhysicalChemDash(html: unknown) {
+  const normalized = normalizeFirmaText(html);
+  return ["görünüm", "renk", "koku"].some((label) =>
+    normalized.includes(label) && /<td[^>]*>\s*(?:—|-)\s*<\/td>/i.test(String(html ?? "")),
+  );
+}
+
 type LabStatus = 'Tamamlandı' | 'Devam Ediyor';
 
 function labSentence(kind: 'mikro' | 'challenge' | 'stabilite', status: LabStatus, shelfLife: string, pao: string) {
@@ -522,7 +545,10 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data) return;
-        setLookups(data);
+        setLookups(prev => ({
+          ...data,
+          firmalar: isLabSource ? (prev.firmalar || []) : mergeFirmalar(data.firmalar || [], prev.firmalar || []),
+        }));
         if (!isEdit && data.nextRaporNo) {
           setForm(prev => prev.RaporNo ? prev : { ...prev, RaporNo: String(data.nextRaporNo) });
         }
@@ -662,7 +688,6 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 
   useEffect(() => {
     if (!editId || !isLabSource) return;
-    if (form.RaporNo && form.FirmaID && form.Barkod && form.Miktar && form.Urun) return;
 
     fetch(`/api/numune-form/${editId}`)
       .then(r => r.ok ? r.json() : null)
@@ -677,14 +702,17 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
             ? `${nkr.TesteMiktar}${nkr.TesteMiktarBirim ? ` ${nkr.TesteMiktarBirim}` : ""}`
             : "";
 
-        if (nkr.Firma_ID) {
+        const fallbackFirmaId = nkr.Firma_ID || detay.ProjeID;
+        const fallbackFirmaAd = nkr.FirmaAd || detay.ProjeAd;
+
+        if (fallbackFirmaId) {
           setLookups(prev => {
-            const firmaId = String(nkr.Firma_ID);
+            const firmaId = String(fallbackFirmaId);
             const exists = prev.firmalar.some((f: any) => String(f.ID) === firmaId);
             if (exists) return prev;
             return {
               ...prev,
-              firmalar: [...prev.firmalar, { ID: nkr.Firma_ID, Ad: nkr.FirmaAd || `Firma #${firmaId}` }],
+              firmalar: [...prev.firmalar, { ID: fallbackFirmaId, Ad: fallbackFirmaAd || `Firma #${firmaId}` }],
             };
           });
         }
@@ -694,7 +722,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
           Tarih: prev.Tarih || (nkr.Tarih ? String(nkr.Tarih).split("T")[0] : prev.Tarih),
           RaporNo: prev.RaporNo || nkr.RaporNo || prev.RaporNo,
           Versiyon: prev.Versiyon || (nkr.Revno != null ? String(nkr.Revno) : prev.Versiyon),
-          FirmaID: prev.FirmaID || (nkr.Firma_ID ? String(nkr.Firma_ID) : prev.FirmaID),
+          FirmaID: prev.FirmaID || (fallbackFirmaId ? String(fallbackFirmaId) : prev.FirmaID),
           Barkod: prev.Barkod || nkr.Barkod || prev.Barkod,
           Miktar: prev.Miktar || fallbackMiktar || prev.Miktar,
           Urun: prev.Urun || nkr.Numune_Adi || prev.Urun,
@@ -702,7 +730,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         }));
       })
       .catch(() => {});
-  }, [editId, isLabSource, form.RaporNo, form.FirmaID, form.Barkod, form.Miktar, form.Urun]);
+  }, [editId, isLabSource]);
 
   const upd = (field: keyof ReturnType<typeof emptyForm>) => (v: string) =>
     setForm(prev => ({ ...prev, [field]: v }));
@@ -877,11 +905,14 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
           const data = await res.json();
           if (data.id) setSavedId(String(data.id));
         } else {
-          await fetch(isLabSource ? `/api/laboratuvar/ugdr/${savedId}` : `/api/urunler/${savedId}`, {
+          const targetId = savedId || editId;
+          if (!targetId) throw new Error("Guncellenecek kayit bulunamadi.");
+          const res = await fetch(isLabSource ? `/api/laboratuvar/ugdr/${targetId}` : `/api/urunler/${targetId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
           });
+          if (!res.ok) throw new Error((await res.json()).error || "Guncelleme basarisiz");
         }
       } catch (err: any) {
         setGlobalError(err.message);
@@ -946,7 +977,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       previewWindow.document.close();
     }
     try {
-      const firmaAd = lookups.firmalar.find(f => f.ID.toString() === form.FirmaID)?.Ad || "";
+      const firmaAd = selectedFirmaAd();
       const endpointFormat = format === "preview" ? "pdf" : format === "word" ? "docx" : "pdf";
       const language = reportLang;
       const profile = isLabSource ? "lab" : "ugd";
@@ -1002,6 +1033,9 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
     .map((s, index) => editorRefs.current[editorSectionUiKey(s, index)]?.innerHTML ?? s.html ?? "")
     .join("");
 
+  const selectedFirmaAd = () =>
+    lookups.firmalar.find(f => f.ID.toString() === form.FirmaID)?.Ad || "";
+
   const saveEditedReport = async (bodyHtml: string) => {
     const recordId = Number(savedId || editId || 0);
     if (!recordId || !bodyHtml.trim()) return null;
@@ -1041,7 +1075,13 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         if (saved?.item?.bodyHtml) {
           const savedSections = Array.isArray(saved.item.sections) ? saved.item.sections : [];
           const hasSplitContent = savedSections.length === 6 && savedSections.filter((section: any) => String(section?.html || "").trim()).length > 1;
-          if (hasSplitContent) {
+          const currentFirmaAd = selectedFirmaAd();
+          const savedHasCurrentFirma = !isLabSource
+            || (currentFirmaAd
+              ? normalizeFirmaText(saved.item.bodyHtml).includes(normalizeFirmaText(currentFirmaAd))
+              : false);
+          const savedHasFreshPhysicalChem = !isLabSource || !hasStalePhysicalChemDash(saved.item.bodyHtml);
+          if (hasSplitContent && savedHasCurrentFirma && savedHasFreshPhysicalChem) {
             setEditorHead(saved.item.headHtml || "");
             setEditorSections(saved.item.sections);
             setEditorSaveStatus(saved.item.createdAt ? `Son kayıt yüklendi: ${new Date(saved.item.createdAt).toLocaleString("tr-TR")}` : "Son kayıt yüklendi.");
@@ -1050,7 +1090,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         }
       }
 
-      const firmaAd = lookups.firmalar.find(f => f.ID.toString() === form.FirmaID)?.Ad || "";
+      const firmaAd = selectedFirmaAd();
       const language = reportLang;
       const res = await fetch(`/api/urunler/rapor-sablon?format=html&language=${language}&profile=${profile}`, {
         method: "POST",
@@ -1232,7 +1272,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       } catch (saveErr) {
         console.warn("Canlı rapor kaydı yapılamadı, PDF yine de oluşturuluyor:", saveErr);
       }
-      const firmaAd = lookups.firmalar.find(f => f.ID.toString() === form.FirmaID)?.Ad || "";
+      const firmaAd = selectedFirmaAd();
       const language = reportLang;
       const profile = isLabSource ? "lab" : "ugd";
       const editedHtml = `<!doctype html><html><head><meta charset="utf-8" />${editorHead}</head><body><div class="WordSection1">${bodyHtml}</div></body></html>`;

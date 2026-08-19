@@ -152,6 +152,17 @@ export default function NumuneKabulTable() {
   const groupSelectedIds = (numuneler: NumuneItem[]) =>
     numuneler.filter(n => selectedIds.has(n.ID)).map(n => n.ID);
 
+  const toggleGroupSelection = (numuneler: NumuneItem[]) =>
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      const allSelected = numuneler.length > 0 && numuneler.every(n => next.has(n.ID));
+      for (const n of numuneler) {
+        if (allSelected) next.delete(n.ID);
+        else next.add(n.ID);
+      }
+      return next;
+    });
+
   const handlePrint = (ids: number[], lang: "tr" | "en") => {
     window.open(`/laboratuvar/rapor-yazdir?ids=${ids.join(",")}&lang=${lang}`, "_blank", "noopener,noreferrer");
     setPrintMenuEvrak(null);
@@ -588,6 +599,9 @@ export default function NumuneKabulTable() {
         {/* Accordion grupları */}
         {!loading && groups.map((group, gi) => {
           const isOpen = openGroups.has(group.evrakNo);
+          const selectedInGroup = groupSelectedIds(group.numuneler).length;
+          const allGroupSelected = group.numuneler.length > 0 && selectedInGroup === group.numuneler.length;
+          const someGroupSelected = selectedInGroup > 0 && !allGroupSelected;
           const invoiceButtonTitle = isFaturali(group.odemeDurumu)
             ? "Fatura kesilmiş"
             : (group.proformaId ? `Proformaya git${group.proformaNo ? `: ${group.proformaNo}` : ""}` : "Faturalandır");
@@ -820,7 +834,19 @@ export default function NumuneKabulTable() {
                           background: "var(--color-surface)",
                           borderBottom: "2px solid var(--color-border)",
                         }}>
-                          <th style={{ padding: "6px 6px 6px 16px" }} />
+                          <th style={{ padding: "6px 6px 6px 16px" }}>
+                            <input
+                              type="checkbox"
+                              checked={allGroupSelected}
+                              ref={el => {
+                                if (el) el.indeterminate = someGroupSelected;
+                              }}
+                              onChange={() => toggleGroupSelection(group.numuneler)}
+                              title={allGroupSelected ? "Tümünü kaldır" : "Tümünü seç"}
+                              aria-label={allGroupSelected ? "Tüm numunelerin seçimini kaldır" : "Tüm numuneleri seç"}
+                              style={{ cursor: "pointer", width: 14, height: 14, accentColor: "var(--color-accent)" }}
+                            />
+                          </th>
                           {([
                             { h: "Rapor No",     w: undefined },
                             { h: "Numune Adı",   w: undefined },

@@ -11,7 +11,7 @@ import chromium from "@sparticuz/chromium";
 import HTMLtoDOCX from "html-to-docx";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import poolPromise, { cosmoPool } from "@/lib/db";
 import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 import { renderUgdReportHtml } from "@/lib/ugdReportHtml";
 import { renderUgdReportHtmlEn } from "@/lib/ugdReportHtmlEn";
@@ -300,24 +300,26 @@ async function resolveChromeLaunchConfig(): Promise<ChromeLaunchConfig | null> {
   return null;
 }
 
-async function getFirmaDetails(firmaId: unknown) {
-  if (!firmaId) return { firmaAdres: "", firmaTelefon: "", firmaMail: "" };
+async function getFirmaDetails(firmaId: unknown, profile: ReportProfile) {
+  if (!firmaId) return { firmaAd: "", firmaAdres: "", firmaTelefon: "", firmaMail: "" };
 
   try {
-    const pool = await poolPromise;
-    const firmaRes = await pool
-      .request()
-      .input("id", firmaId)
-      .query("SELECT TOP 1 * FROM RootTedarikci WHERE ID = @id");
+    const pool = await (profile === "lab" ? cosmoPool : poolPromise);
+    const firmaRes = await pool.request().input("id", firmaId).query(
+      profile === "lab"
+        ? "SELECT TOP 1 Firma_Adi AS Ad, Adres, Telefon, Mail AS Email FROM Firma WHERE ID = @id"
+        : "SELECT TOP 1 Ad, Adres, Telefon, Mail AS Email FROM RootTedarikci WHERE ID = @id",
+    );
     const firma = firmaRes.recordset[0] ?? {};
 
     return {
+      firmaAd: sv(firma.Ad ?? firma.ad ?? firma.Firma_Adi ?? firma.firma_adi),
       firmaAdres: sv(firma.Adres ?? firma.adres ?? firma.ADRES),
       firmaTelefon: sv(firma.Telefon ?? firma.telefon ?? firma.TELEFON),
       firmaMail: sv(firma.Mail ?? firma.mail ?? firma.Email ?? firma.email),
     };
   } catch {
-    return { firmaAdres: "", firmaTelefon: "", firmaMail: "" };
+    return { firmaAd: "", firmaAdres: "", firmaTelefon: "", firmaMail: "" };
   }
 }
 
@@ -485,10 +487,11 @@ export async function POST(request: Request) {
     const format = searchParams.get("format") || "doc";
     const language = pickLanguage(searchParams.get("language") || bodyLanguage);
     const profile = pickProfile(searchParams.get("profile") || bodyProfile);
-    const firmaDetails = await getFirmaDetails(form.FirmaID);
+    const firmaDetails = await getFirmaDetails(form.FirmaID, profile);
+    const reportFirmaAd = sv(firmaAd) || firmaDetails.firmaAd;
     const enrichedFormulResults = await enrichUgdFormulaRows(formulResults);
     const renderReportHtml = language === "en" ? renderUgdReportHtmlEn : renderUgdReportHtml;
-    const html = editedHtml || renderReportHtml({ form, formulResults: enrichedFormulResults, firmaAd, ...firmaDetails, language, profile });
+    const html = editedHtml || renderReportHtml({ form, formulResults: enrichedFormulResults, ...firmaDetails, firmaAd: reportFirmaAd, language, profile });
     const safeName = `${safeReportName(form.RaporNo)}${language === "en" ? "_EN" : ""}`;
 
     if (format === "html") {
@@ -515,8 +518,8 @@ export async function POST(request: Request) {
       const wordHtml = renderUgdReportHtml({
         form,
         formulResults: enrichedFormulResults,
-        firmaAd,
         ...firmaDetails,
+        firmaAd: reportFirmaAd,
         language,
         profile,
         output: "word",

@@ -348,7 +348,7 @@ export default function GenelReport({
           <td className="center">{edit ? editText((isEnglish ? h.BirimEn || h.Birim : h.Birim) || "", (v) => edit.onRowChange(i, isEnglish ? { BirimEn: v } : { Birim: v }), { center: true }) : ((isEnglish ? h.BirimEn || h.Birim : h.Birim) || "-")}</td>
           <td className="center result-cell">{edit ? editText((isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc) || "", (v) => edit.onRowChange(i, isEnglish ? { SonucEn: v } : { Sonuc: v }), { center: true }) : ((isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc) || "-")}</td>
           <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText((isEnglish ? h.LOQEn || h.LOQ : h.LOQ) || "", (v) => edit.onRowChange(i, isEnglish ? { LOQEn: v } : { LOQ: v }), { center: true }) : ((isEnglish ? h.LOQEn || h.LOQ : h.LOQ) || "-")}</td>
-          <td className="center muted" style={{ paddingLeft: 5 }}>-</td>
+          <td className="center" style={{ paddingLeft: 5 }}>{edit ? editText(h.OlcumBelirsizligi || "", (v) => edit.onRowChange(i, { OlcumBelirsizligi: v }), { center: true }) : (h.OlcumBelirsizligi || "-")}</td>
           <td className="center method-cell" style={{ paddingLeft: 5 }}>{edit ? editText((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "", (v) => edit.onRowChange(i, isEnglish ? { MetotEn: v } : { Metot: v }), { center: true }) : ((isEnglish ? h.MetotEn || h.Metot : h.Metot) || "-")}</td>
           <td className="center limit-cell">{edit ? editText((isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger) || "", (v) => edit.onRowChange(i, isEnglish ? { LimitEn: v } : { LimitDeger: v }), { center: true }) : ((isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger) || "-")}</td>
           {edit ? (

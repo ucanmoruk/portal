@@ -33,11 +33,13 @@ export async function GET(
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
     const hasBL = cols.has("BolumID");
+    const hasOB = cols.has("OlcumBelirsizligi");
 
     const optCols = [
       hasRF ? "ISNULL(RaporFormati, '') AS RaporFormati" : "'' AS RaporFormati",
       hasYK ? "YetkiliID" : "NULL AS YetkiliID",
       hasBL ? "BolumID"   : "NULL AS BolumID",
+      hasOB ? "ISNULL(OlcumBelirsizligi, '') AS OlcumBelirsizligi" : "'' AS OlcumBelirsizligi",
     ].join(", ");
 
     const result = await pool.request()
@@ -87,7 +89,7 @@ export async function PUT(
       Kod, Ad, AdEn, Method, MethodEn, Matriks,
       Akreditasyon, Sure, NumGereklilik, NumDipnot, NumDipnotEn,
       Fiyat, ParaBirimi, Durumu, RaporFormati, YetkiliID, BolumID,
-      Limit, Birim, LOQ, LimitEn, BirimEn, LOQEn,
+      Limit, Birim, LOQ, LimitEn, BirimEn, LOQEn, OlcumBelirsizligi,
     } = body;
 
     const pool = await cosmoPool;
@@ -95,6 +97,7 @@ export async function PUT(
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
     const hasBL = cols.has("BolumID");
+    const hasOB = cols.has("OlcumBelirsizligi");
 
     const req = pool.request()
       .input("id",            id)
@@ -132,6 +135,10 @@ export async function PUT(
     if (hasBL) {
       req.input("BolumID", BolumID ? parseInt(BolumID) : null);
       extraSets.push("BolumID = @BolumID");
+    }
+    if (hasOB) {
+      req.input("OlcumBelirsizligi", OlcumBelirsizligi || null);
+      extraSets.push("OlcumBelirsizligi = @OlcumBelirsizligi");
     }
 
     const extraSetStr = extraSets.length ? `,\n          ${extraSets.join(",\n          ")}` : "";
