@@ -4,7 +4,20 @@ import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { type NextRequest } from "next/server";
 
+let proformaNkrTableReady: Promise<void> | null = null;
+let proformaLinksBackfillReady: Promise<void> | null = null;
+
 async function ensureProformaNkrTable(pool: any) {
+  if (!proformaNkrTableReady) {
+    proformaNkrTableReady = ensureProformaNkrTableUncached(pool).catch((error) => {
+      proformaNkrTableReady = null;
+      throw error;
+    });
+  }
+  return proformaNkrTableReady;
+}
+
+async function ensureProformaNkrTableUncached(pool: any) {
   if (hasMysqlConfig()) {
     await pool.request().query(`
       CREATE TABLE IF NOT EXISTS ProformaNkr (
@@ -44,6 +57,16 @@ function splitCsv(value: unknown): string[] {
 }
 
 async function backfillRecentProformaLinks(pool: any) {
+  if (!proformaLinksBackfillReady) {
+    proformaLinksBackfillReady = backfillRecentProformaLinksUncached(pool).catch((error) => {
+      proformaLinksBackfillReady = null;
+      throw error;
+    });
+  }
+  return proformaLinksBackfillReady;
+}
+
+async function backfillRecentProformaLinksUncached(pool: any) {
   const missingRes = await pool.request().query(`
     SELECT TOP 50 p.ID, p.ProformaNo, pk.RaporNoListesi
     FROM ProformaBaslik p

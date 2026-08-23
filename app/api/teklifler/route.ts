@@ -15,7 +15,19 @@ import { randomDisKodTeklif } from "@/lib/disKod";
 //  • Revizyon: her ikisi sabit kalır, RevNo (/NN) artar.
 // ─────────────────────────────────────────────────────────────────────────────
 
+let teklifTablesReady: Promise<void> | null = null;
+
 async function ensureTables() {
+  if (!teklifTablesReady) {
+    teklifTablesReady = ensureTablesUncached().catch((error) => {
+      teklifTablesReady = null;
+      throw error;
+    });
+  }
+  return teklifTablesReady;
+}
+
+async function ensureTablesUncached() {
   const pool = await cosmoPool;
 
   await pool.request().query(`

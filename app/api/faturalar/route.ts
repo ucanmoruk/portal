@@ -27,7 +27,19 @@ function isMultiEvrakLabel(value: unknown): boolean {
   return String(value ?? "").trim().toLocaleUpperCase("tr-TR").startsWith("ÇOKLU");
 }
 
+let proformaNkrTableReady: Promise<void> | null = null;
+
 async function ensureProformaNkrTable(pool: any) {
+  if (!proformaNkrTableReady) {
+    proformaNkrTableReady = ensureProformaNkrTableUncached(pool).catch((error) => {
+      proformaNkrTableReady = null;
+      throw error;
+    });
+  }
+  return proformaNkrTableReady;
+}
+
+async function ensureProformaNkrTableUncached(pool: any) {
   if (hasMysqlConfig()) {
     await pool.request().query(`
       CREATE TABLE IF NOT EXISTS ProformaNkr (

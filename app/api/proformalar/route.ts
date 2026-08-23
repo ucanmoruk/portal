@@ -8,7 +8,19 @@ import { hasMysqlConfig } from "@/lib/mysqlCompat";
 
 // Proforma — MSSQL massgrup_cosmo · YENİ tablolar ProformaBaslik / ProformaKalem
 // (cosmo'da ProformaBaslik/X2 yoktu → sıfırdan kuruluyor). Cari kaynağı: Firma.
+let proformaTablesReady: Promise<void> | null = null;
+
 async function ensureProformaTables() {
+  if (!proformaTablesReady) {
+    proformaTablesReady = ensureProformaTablesUncached().catch((error) => {
+      proformaTablesReady = null;
+      throw error;
+    });
+  }
+  return proformaTablesReady;
+}
+
+async function ensureProformaTablesUncached() {
   const pool = await cosmoPool;
   await pool.request().query(`
     IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='ProformaBaslik' AND xtype='U')
