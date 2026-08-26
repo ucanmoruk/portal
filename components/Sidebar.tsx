@@ -95,6 +95,7 @@ const navGroups: NavGroup[] = [
       </svg>
     ),
     items: [
+      { label: "Doküman Yönetimi", href: "/laboratuvar/kys/dokuman-yonetimi", menuKey: "laboratuvar.kys.dokuman-yonetimi" },
       { label: "Stok Listesi", href: "/laboratuvar/kys/stok-listesi", menuKey: "laboratuvar.kys.stok-listesi" },
       { label: "Stok Ekle / Düş", href: "/laboratuvar/kys/stok-hareketleri", menuKey: "laboratuvar.kys.stok-hareketleri" },
       { label: "Son Kullanım Listesi", href: "/laboratuvar/kys/son-kullanim", menuKey: "laboratuvar.kys.son-kullanim" },

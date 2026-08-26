@@ -5,7 +5,14 @@ import poolPromise from "@/lib/db";
 // ----------------------------------------------------------------
 // GET /api/kullanicilar
 // Durum = 'Aktif' olan kullanıcıları döner: [{ ID, Ad }]
-// RootKullanici kolon adları dinamik okunur (auth.ts ile aynı yaklaşım)
+//
+// Not: RootKullanici artık Postgres mirror'da yaşıyor (lib/db.ts → rootPool /
+// poolPromise usePostgres dalı). Ad+Soyad'ı SQL'de "+" ile birleştirmek MSSQL'e
+// özgüdür ve Postgres'te "operator does not exist: text + unknown" hatasıyla
+// patlar (compat katmanının "+" → "||" çevirisi sadece çıplak kolon + literal +
+// kolon örüntüsünü yakalıyor, ISNULL(...) gibi fonksiyon çağrılarını değil).
+// Bu yüzden birleştirme burada, JS tarafında yapılır — /api/admin/kullanicilar
+// ile aynı, kanıtlı kolon adlarını (Ad, Soyad, Durum) doğrudan kullanır.
 // ----------------------------------------------------------------
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -13,42 +20,22 @@ export async function GET() {
 
   try {
     const pool = await poolPromise;
-
-    const colsResult = await pool.request().query(`
-      SELECT COLUMN_NAME
-      FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_NAME = 'RootKullanici'
-    `);
-    const cols = new Set<string>(colsResult.recordset.map((r: any) => r.COLUMN_NAME as string));
-
-    const idCol   = ["ID", "Id", "id", "KullaniciId"].find(c => cols.has(c)) ?? "ID";
-    const nameCol = ["AdSoyad", "FullName", "Name", "Adi"].find(c => cols.has(c));
-    const fnCol   = ["Ad", "FirstName", "Firstname"].find(c => cols.has(c));
-    const lnCol   = ["Soyad", "LastName", "Lastname"].find(c => cols.has(c));
-    const durumCol = ["Durum", "durum", "Status"].find(c => cols.has(c));
-
-    let adExpr: string;
-    if (nameCol) {
-      adExpr = `ISNULL(${nameCol}, '')`;
-    } else if (fnCol && lnCol) {
-      adExpr = `LTRIM(RTRIM(ISNULL(${fnCol}, '') + ' ' + ISNULL(${lnCol}, '')))`;
-    } else if (fnCol) {
-      adExpr = `ISNULL(${fnCol}, '')`;
-    } else {
-      adExpr = `CAST(${idCol} AS NVARCHAR(50))`;
-    }
-
-    const where = durumCol ? `WHERE ${durumCol} = 'Aktif'` : "";
-
     const result = await pool.request().query(`
-      SELECT ${idCol} AS ID, ${adExpr} AS Ad
+      SELECT ID, Ad, Soyad
       FROM RootKullanici
-      ${where}
-      ORDER BY Ad
+      WHERE Durum = 'Aktif'
+      ORDER BY Ad, Soyad
     `);
 
-    return Response.json({ data: result.recordset });
-  } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    const data = result.recordset
+      .map((r: { ID: number | string; Ad?: string | null; Soyad?: string | null }) => ({
+        ID: r.ID,
+        Ad: [r.Ad, r.Soyad].filter(Boolean).join(" ").trim() || String(r.ID),
+      }))
+      .sort((a, b) => a.Ad.localeCompare(b.Ad, "tr"));
+
+    return Response.json({ data });
+  } catch (e: unknown) {
+    return Response.json({ error: e instanceof Error ? e.message : "Kullanıcı listesi alınamadı." }, { status: 500 });
   }
 }

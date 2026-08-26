@@ -1,0 +1,1158 @@
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.detailWorkspace {
+  display: block;
+}
+
+.listShell {
+  display: grid;
+  gap: 14px;
+}
+
+.summaryStrip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.summaryStrip button {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-card);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.summaryStrip button:hover {
+  border-color: var(--color-accent);
+}
+
+.summaryActive {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 1px var(--color-accent) inset;
+}
+
+.summaryStrip strong {
+  color: var(--color-text-primary);
+  font-size: 1.08rem;
+  line-height: 1;
+}
+
+.summaryStrip span {
+  color: var(--color-text-tertiary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.listCard {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  padding: 14px;
+}
+
+.documentTable {
+  min-width: 1040px;
+  font-family: inherit;
+}
+
+.documentTable th,
+.documentTable td {
+  font-family: inherit;
+}
+
+.documentTableRow {
+  cursor: default;
+}
+
+.documentTitleLink {
+  display: block;
+  color: var(--color-text-primary);
+  font-size: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentTitleLink:hover,
+.documentCodeLink:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.documentSubText {
+  display: block;
+  color: var(--color-text-tertiary);
+  font-size: 0.73rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentCodeLink {
+  color: var(--color-accent);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.libraryPanel,
+.detailPanel {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.libraryPanel {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  position: sticky;
+  top: 16px;
+}
+
+.documentList {
+  display: grid;
+  gap: 4px;
+  max-height: 620px;
+  overflow: auto;
+}
+
+.libraryHeader {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  gap: 10px;
+  color: var(--color-text-tertiary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 0 8px;
+}
+
+.documentRow {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  padding: 9px 8px;
+  color: inherit;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.documentRow:hover,
+.documentRowActive {
+  border-color: var(--color-accent-border);
+  background: var(--color-surface-2);
+}
+
+.documentCode {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.documentTitle {
+  display: block;
+  color: var(--color-text-primary);
+  font-size: 0.84rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentMeta {
+  display: block;
+  color: var(--color-text-tertiary);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.statusDraft {
+  background: var(--color-surface-2);
+  border-color: var(--color-border-light);
+  color: var(--color-text-secondary);
+}
+
+.statusWaiting {
+  background: #fff7e6;
+  border-color: #e8c27a;
+  color: #9a5b00;
+}
+
+.statusLive {
+  background: var(--color-success-light);
+  border-color: #248a3d25;
+  color: #248a3d;
+}
+
+.statusRevision {
+  background: #eef4ff;
+  border-color: #a9c5ff;
+  color: #275fbd;
+}
+
+.detailPanel {
+  min-width: 0;
+  /* overflow burada BİLEREK ayarlanmıyor: sectionNav/editorToolbar'ın
+     position:sticky ile çalışabilmesi için hiçbir üst öğede overflow:hidden/auto
+     olmamalı (aksi hâlde sticky, en yakın "scroll container"a kilitlenir). */
+}
+
+.documentHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-text-tertiary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  margin-bottom: 8px;
+}
+
+.backLink:hover {
+  color: var(--color-accent);
+}
+
+.kicker {
+  color: var(--color-text-tertiary);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.documentHeader h2 {
+  margin: 4px 0 8px;
+  color: var(--color-text-primary);
+  font-size: 1.22rem;
+  letter-spacing: 0;
+}
+
+.headerMeta,
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.headerMeta {
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+}
+
+.ghostButton,
+.editorToolbar button,
+.publishButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  min-height: 32px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 0.79rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.ghostButton:disabled,
+.editorToolbar button:disabled,
+.publishButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ghostButton:hover,
+.editorToolbar button:hover {
+  border-color: var(--color-accent-border);
+  color: var(--color-accent);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.tabButton {
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  padding: 11px 10px 10px;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tabButtonActive {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+.contentLayout {
+  display: flex;
+  align-items: flex-start;
+  min-height: 640px;
+}
+
+/* Sticky konumlandırma ve iç kaydırma İKİ AYRI öğede tutulur: aynı öğede
+   position:sticky + overflow-y:auto birlikte bazı tarayıcı motorlarında sticky'nin
+   kendi scrollport hesaplamasını bozabiliyor. Dış öğe sadece sticky/top, iç öğe
+   sadece kendi taşma/kaydırmasından sorumlu. */
+.sectionNavSticky {
+  flex: 0 0 220px;
+  position: sticky;
+  top: calc(var(--header-height) + 1px);
+  z-index: 4;
+  align-self: flex-start;
+}
+
+.sectionNav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 14px;
+  border-right: 1px solid var(--color-border-light);
+  background: var(--color-surface);
+  max-height: calc(100vh - var(--header-height) - 24px);
+  overflow-y: auto;
+}
+
+.sideTitle {
+  color: var(--color-text-tertiary);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.sectionNav button {
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  padding: 7px 8px;
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.sectionNav button:hover {
+  background: var(--color-surface-2);
+  color: var(--color-accent);
+}
+
+.editorPanel {
+  display: block;
+  min-width: 0;
+  flex: 1;
+}
+
+.editorToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-surface);
+  position: sticky;
+  top: calc(var(--header-height) + 1px);
+  z-index: 5;
+  box-shadow: 0 1px 0 var(--color-border-light);
+}
+
+.toolbarBackLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 0.79rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.toolbarBackLink:hover {
+  border-color: var(--color-accent-border);
+  color: var(--color-accent);
+}
+
+.editorToolbar .editToggle {
+  margin-left: auto;
+  border-color: var(--color-accent-border);
+  color: var(--color-accent);
+}
+
+.fontSelect {
+  height: 30px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 0 6px;
+  max-width: 132px;
+  cursor: pointer;
+}
+
+.fontSelect:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tableMenuWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.tableMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: 2px;
+  min-width: 210px;
+  padding: 6px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card), 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+
+.tableMenu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  width: 100%;
+  min-height: auto;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  padding: 8px 9px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tableMenu button:hover:not(:disabled) {
+  background: var(--color-surface-2);
+}
+
+.tableMenu button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tableMenuDivider {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--color-border-light);
+}
+
+.documentBody {
+  max-width: 900px;
+  padding: 28px 38px 44px;
+  color: var(--color-text-primary);
+  font-size: 0.92rem;
+  line-height: 1.68;
+  outline: none;
+}
+
+.documentBodyEditing {
+  background:
+    linear-gradient(#ffffffee, #ffffffee),
+    repeating-linear-gradient(0deg, transparent, transparent 31px, var(--color-border-light) 32px);
+}
+
+.documentBody h2 {
+  margin: 22px 0 8px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: 0;
+}
+
+.documentBody h3 {
+  margin: 16px 0 7px;
+  font-size: 0.98rem;
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+.documentBody h4 {
+  margin: 12px 0 6px;
+  color: var(--color-text-primary);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.documentBody h2:first-child {
+  margin-top: 0;
+}
+
+.documentBody a {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.documentBody ol,
+.documentBody ul {
+  margin: 8px 0 12px;
+  padding-left: 28px;
+  list-style-position: outside;
+}
+
+.documentBody ol {
+  list-style-type: decimal;
+}
+
+.documentBody ul {
+  list-style-type: disc;
+}
+
+.documentBody li {
+  display: list-item;
+  margin: 4px 0;
+  padding-left: 4px;
+}
+
+.documentBody table,
+.editorTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 16px;
+  font-size: 0.86rem;
+}
+
+.documentBody th,
+.documentBody td,
+.editorTable th,
+.editorTable td {
+  border: 1px solid var(--color-border);
+  padding: 8px 10px;
+  vertical-align: top;
+  text-align: left;
+}
+
+.documentBody th,
+.editorTable th {
+  background: var(--color-surface-2);
+  font-weight: 700;
+}
+
+.editorFigure,
+.documentBody figure {
+  margin: 14px 0 16px;
+}
+
+.editorFigure img,
+.documentBody figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+}
+
+.editorFigure figcaption,
+.documentBody figure figcaption {
+  margin-top: 5px;
+  color: var(--color-text-tertiary);
+  font-size: 0.75rem;
+}
+
+.hiddenFileInput {
+  display: none;
+}
+
+.flowGrid,
+.permissionGrid,
+.revisionList {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.flowGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.flowCard,
+.permissionGrid div,
+.revisionList div {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: 14px;
+}
+
+.flowCard {
+  display: grid;
+  gap: 6px;
+}
+
+.flowLabel {
+  color: var(--color-text-tertiary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.flowCard strong,
+.permissionGrid strong,
+.revisionList strong {
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+}
+
+.flowCard small,
+.permissionGrid span,
+.revisionList span {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.flowDone {
+  color: #248a3d;
+}
+
+.flowPending {
+  color: #c78917;
+}
+
+.publishButton {
+  justify-self: start;
+  border-color: var(--color-accent-border);
+  background: var(--color-accent);
+  color: #fff;
+  padding-inline: 14px;
+}
+
+.workflowActions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.flowHint {
+  grid-column: 1 / -1;
+  max-width: 780px;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.lockNotice {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  max-width: calc(100% - 20px);
+  margin: 8px 10px 0;
+  border: 1px solid #e8c27a;
+  border-radius: var(--radius-sm);
+  background: #fffaf0;
+  color: #8a5a00;
+  padding: 5px 8px;
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.permissionGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.permissionGrid div,
+.revisionList div {
+  display: grid;
+  gap: 5px;
+}
+
+.revisionComposer {
+  display: grid;
+  gap: 8px;
+  max-width: 620px;
+}
+
+.revisionComposer label {
+  color: var(--color-text-primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.revisionComposer textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  padding: 9px 10px;
+  font: inherit;
+  line-height: 1.5;
+  outline: none;
+}
+
+.revisionComposer textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+
+.revisionComposer .publishButton {
+  grid-column: auto;
+  justify-self: start;
+}
+
+.previewBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.42);
+  padding: 22px;
+}
+
+.previewModal {
+  width: min(980px, 100%);
+  max-height: min(900px, 92vh);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
+  background: var(--color-surface-2);
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+}
+
+.previewHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-surface);
+}
+
+.previewHeader h3 {
+  margin: 2px 0 0;
+  color: var(--color-text-primary);
+  font-size: 1rem;
+}
+
+.iconButton {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+/* previewPaper: 1fr grid satırını TAM dolduran, KENDİSİ kaydırılan dış kap.
+   İçindeki previewPaperInner ise görsel "kağıt" — min-height burada değil,
+   iç öğede olduğu için uzun içerikte scroll dış kapta çalışır ve en alta kadar
+   iner (aksi hâlde min-height dış kapla çakışıp .previewModal'ın overflow:hidden'ı
+   son satırları kırpıyordu). */
+.previewPaper {
+  overflow: auto;
+  background: var(--color-surface-2);
+  padding: 16px;
+}
+
+.previewPaperInner {
+  width: min(760px, 100%);
+  min-height: 820px;
+  margin: 0 auto;
+  padding: 34px 42px;
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.12);
+}
+
+.previewMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid #d1d5db;
+  color: #4b5563;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.previewPaper .documentBody {
+  padding: 0;
+}
+
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .libraryPanel {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .summaryStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .documentHeader {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .contentLayout {
+    flex-direction: column;
+  }
+
+  .sectionNavSticky {
+    flex-basis: auto;
+    width: 100%;
+    position: static;
+  }
+
+  .sectionNav {
+    border-right: none;
+    border-bottom: 1px solid var(--color-border-light);
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .flowGrid,
+  .permissionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .documentBody {
+    padding: 20px;
+  }
+
+  .libraryHeader,
+  .documentRow {
+    grid-template-columns: 82px minmax(0, 1fr);
+  }
+
+  .libraryHeader span:last-child,
+  .documentRow .statusPill {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@media print {
+  :global(html),
+  :global(body) {
+    background: #fff !important;
+  }
+
+  /* Sadece doküman gövdesi ve künye başlığı yazdırılır */
+  :global(body) * {
+    visibility: hidden !important;
+  }
+
+  .printHeader,
+  .printHeader *,
+  .printableBody,
+  .printableBody * {
+    visibility: visible !important;
+  }
+
+  .previewBackdrop {
+    display: none !important;
+  }
+
+  .printHeader {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 0 0 10px;
+    border-bottom: 1px solid #d1d5db;
+    color: #111;
+    font-size: 0.78rem;
+    line-height: 1.5;
+  }
+
+  .printableBody {
+    position: absolute;
+    top: 74px;
+    left: 0;
+    width: 100%;
+    max-height: none;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    outline: none;
+    overflow: visible;
+  }
+
+  .documentBody table {
+    page-break-inside: auto;
+  }
+
+  .documentBody tr,
+  .documentBody figure {
+    page-break-inside: avoid;
+  }
+
+  .documentBody h2,
+  .documentBody h3 {
+    page-break-after: avoid;
+  }
+}
+
+/* ── Yeni bileşenler ─────────────────────────────────────────────────────── */
+
+.statusArchive {
+  background: #eef0f2;
+  color: #4b5563;
+  border-color: #d7dade;
+}
+
+.dirtyNotice,
+.savedNotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 0.79rem;
+  font-weight: 600;
+}
+
+.dirtyNotice {
+  background: #fff8e1;
+  border: 1px solid #f4dd9a;
+  color: #7a5b00;
+}
+
+.dirtyNotice kbd {
+  background: #fff;
+  border: 1px solid #e3d6a6;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.72rem;
+  font-family: inherit;
+}
+
+.savedNotice {
+  background: #eef8f0;
+  border: 1px solid #c6e6cf;
+  color: #1f6b38;
+}
+
+.dangerButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #f2c6c0;
+  border-radius: var(--radius-md);
+  background: #fff5f4;
+  color: #b3261e;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: #ffe9e6;
+}
+
+.dangerButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.toolbarDivider {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 3px;
+  background: var(--color-border-light);
+}
+
+.sideEmpty {
+  color: var(--color-text-tertiary);
+  font-size: 0.76rem;
+  padding: 6px 10px;
+}
+
+.emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 42px 20px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+.emptyState p {
+  margin: 0;
+  max-width: 460px;
+  font-size: 0.84rem;
+}
+
+.kunyePanel {
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  padding: 18px;
+}
+
+.kunyeFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--color-border-light);
+  padding-top: 14px;
+}
+
+.revisionItem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.revisionItem > div {
+  display: grid;
+  gap: 4px;
+  border: none;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.revisionItem small {
+  color: var(--color-text-tertiary);
+  font-size: 0.73rem;
+}
+
+.logList {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  overflow-x: auto;
+}
+
+.flowDate {
+  color: var(--color-text-tertiary);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.modalHint {
+  margin: 0 0 14px;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.printHeader {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .summaryStrip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .summaryStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .revisionItem {
+    flex-direction: column;
+  }
+}

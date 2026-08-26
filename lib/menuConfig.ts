@@ -65,6 +65,11 @@ export const MENU_TREE: MenuItem[] = [
     key: "laboratuvar.kys",
     label: "KYS",
     children: [
+      { key: "laboratuvar.kys.dokuman-yonetimi", label: "Doküman Yönetimi", href: "/laboratuvar/kys/dokuman-yonetimi" },
+      { key: "laboratuvar.kys.dokuman-yonetimi.olustur", label: "Doküman Oluşturma", href: "#", virtual: true },
+      { key: "laboratuvar.kys.dokuman-yonetimi.duzenle", label: "Doküman Düzenleme", href: "#", virtual: true },
+      { key: "laboratuvar.kys.dokuman-yonetimi.kontrol", label: "Doküman Kontrol Onayı", href: "#", virtual: true },
+      { key: "laboratuvar.kys.dokuman-yonetimi.onayla", label: "Doküman Yayın Onayı", href: "#", virtual: true },
       { key: "laboratuvar.kys.stok-listesi", label: "Stok Listesi", href: "/laboratuvar/kys/stok-listesi" },
       { key: "laboratuvar.kys.stok-hareketleri", label: "Stok Ekle / Düş", href: "/laboratuvar/kys/stok-hareketleri" },
       { key: "laboratuvar.kys.son-kullanim", label: "Son Kullanım Listesi", href: "/laboratuvar/kys/son-kullanim" },
