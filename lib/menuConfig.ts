@@ -38,6 +38,7 @@ export const MENU_TREE: MenuItem[] = [
     label: "Müşteriler",
     children: [
       { key: "musteriler.musteri-listesi",  label: "Müşteri Listesi",   href: "/musteriler/musteri-listesi"  },
+      { key: "musteriler.notlar",           label: "Notlar",            href: "/musteriler/notlar"           },
       { key: "musteriler.teklif-listesi",   label: "Teklif Listesi",    href: "/musteriler/teklif-listesi"   },
       { key: "musteriler.proforma-listesi", label: "Proforma Listesi",  href: "/musteriler/proforma-listesi" },
       { key: "musteriler.analiz-talepleri", label: "Analiz Talepleri",  href: "/musteriler/analiz-talepleri" },
@@ -70,6 +71,8 @@ export const MENU_TREE: MenuItem[] = [
       { key: "laboratuvar.kys.dokuman-yonetimi.duzenle", label: "Doküman Düzenleme", href: "#", virtual: true },
       { key: "laboratuvar.kys.dokuman-yonetimi.kontrol", label: "Doküman Kontrol Onayı", href: "#", virtual: true },
       { key: "laboratuvar.kys.dokuman-yonetimi.onayla", label: "Doküman Yayın Onayı", href: "#", virtual: true },
+      { key: "laboratuvar.kys.dis-kaynakli-dokuman", label: "Dış Kaynaklı Doküman", href: "/laboratuvar/kys/dis-kaynakli-dokuman" },
+      { key: "laboratuvar.kys.dis-kaynakli-dokuman.kontrol", label: "Dış Kaynaklı Doküman Kontrol", href: "#", virtual: true },
       { key: "laboratuvar.kys.stok-listesi", label: "Stok Listesi", href: "/laboratuvar/kys/stok-listesi" },
       { key: "laboratuvar.kys.stok-hareketleri", label: "Stok Ekle / Düş", href: "/laboratuvar/kys/stok-hareketleri" },
       { key: "laboratuvar.kys.son-kullanim", label: "Son Kullanım Listesi", href: "/laboratuvar/kys/son-kullanim" },
