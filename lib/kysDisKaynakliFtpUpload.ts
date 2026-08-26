@@ -56,6 +56,18 @@ function defaultDkdPublicBase(): string {
   return raporBase ? `${raporBase}/DKD` : "https://uniqueanalyse.com/VerifiedFiles/DKD";
 }
 
+/** Kullanıcının yüklediği orijinal dosya adını FTP'de güvenli bir isme çevirir. */
+export function safePdfName(name: string): string {
+  const base = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+  return base.toLowerCase().endsWith(".pdf") ? base : `${base || "dokuman"}.pdf`;
+}
+
 export async function uploadDisKaynakliPdfToFtp(opts: {
   pdfBuffer: Buffer;
   fileName: string;
@@ -112,4 +124,37 @@ export async function uploadDisKaynakliPdfToFtp(opts: {
     publicUrl: `${publicBase}/${opts.fileName}`,
     remotePath: remoteDir ? `${remoteDir}/${opts.fileName}` : opts.fileName,
   };
+}
+
+/**
+ * Bir dış kaynaklı doküman PDF'ini FTP'den siler — kayıt silinirken veya PDF
+ * değiştirilirken eski dosyayı temizlemek için. Best-effort: dosya zaten yoksa
+ * veya FTP'ye erişilemiyorsa SESSİZCE geçer — DB işlemini (asıl kayıt
+ * silme/güncelleme) bu temizlik adımının başarısızlığı asla engellemez.
+ */
+export async function deleteDisKaynakliPdfFromFtp(pdfPathOrUrl: string): Promise<void> {
+  loadDotenvOnce();
+  const fileName = pdfPathOrUrl.split("/").pop()?.split(/[?#]/)[0];
+  if (!fileName || !SAFE_NAME_RE.test(fileName)) return;
+
+  const host = normalizeFtpHost(process.env.RAPOR_FTP_HOST || "");
+  const user = (process.env.RAPOR_FTP_USER || "").trim();
+  const password = (process.env.RAPOR_FTP_PASSWORD || "").trim();
+  if (!host || !user || !password) return;
+
+  const remoteDir = (process.env.DKD_FTP_REMOTE_DIR || defaultDkdRemoteDir()).trim().replace(/\/$/, "");
+  const secure = process.env.RAPOR_FTP_SECURE === "1";
+
+  const client = new Client(ftpTimeoutMs());
+  client.ftp.verbose = process.env.RAPOR_FTP_VERBOSE === "1";
+  try {
+    await client.access({ host, user, password, secure });
+    if (remoteDir) await client.cd(remoteDir).catch(() => {});
+    await client.remove(fileName).catch(() => {});
+  } catch {
+    // Bağlantı kurulamadıysa da sessizce geç — orphan dosya kalabilir, FTP'de
+    // elle temizlik gerekebilir ama kullanıcı işlemi engellenmemeli.
+  } finally {
+    client.close();
+  }
 }

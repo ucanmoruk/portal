@@ -1,22 +1,11 @@
 import { randomUUID } from "crypto";
 import { getPortalUser } from "@/lib/portalYetki";
 import { createDisKaynakliDokuman, listDisKaynakliDokumanlar } from "@/lib/kysDisKaynakliDokumanStore";
-import { uploadDisKaynakliPdfToFtp } from "@/lib/kysDisKaynakliFtpUpload";
+import { safePdfName, uploadDisKaynakliPdfToFtp } from "@/lib/kysDisKaynakliFtpUpload";
 
 const fail = (message: string, status: number) => Response.json({ error: message }, { status });
 const errorText = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 const MENU_KEY = "laboratuvar.kys.dis-kaynakli-dokuman";
-
-function safePdfName(name: string) {
-  const base = name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/ı/g, "i")
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 120);
-  return base.toLowerCase().endsWith(".pdf") ? base : `${base || "dokuman"}.pdf`;
-}
 
 export async function GET(request: Request) {
   const user = await getPortalUser();

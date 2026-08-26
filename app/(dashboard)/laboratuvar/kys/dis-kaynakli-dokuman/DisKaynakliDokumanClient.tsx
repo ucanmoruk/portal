@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, CheckCircle2, FilePlus2, FileText, RotateCw, Search, X } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, FilePlus2, FileText, Pencil, RotateCw, Search, Trash2, X } from "lucide-react";
 import tableStyles from "@/app/styles/table.module.css";
 import kys from "../kys.module.css";
 import styles from "../dokuman-yonetimi/dokumanYonetimi.module.css";
@@ -58,11 +58,16 @@ export default function DisKaynakliDokumanClient() {
   const [totalPages, setTotalPages] = useState(1);
   const [selected, setSelected] = useState<number[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editCurrentPdf, setEditCurrentPdf] = useState<{ path: string; name: string } | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -103,13 +108,15 @@ export default function DisKaynakliDokumanClient() {
   useEffect(() => { void fetchRows(); }, [fetchRows]);
 
   useEffect(() => {
-    if (!modalOpen) return;
+    if (!modalOpen && !deleteTarget) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !saving) setModalOpen(false);
+      if (e.key !== "Escape") return;
+      if (deleteTarget) { if (!deleting) setDeleteTarget(null); }
+      else if (!saving) setModalOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [modalOpen, saving]);
+  }, [modalOpen, saving, deleteTarget, deleting]);
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const visibleIds = useMemo(() => rows.map(row => row.id), [rows]);
@@ -130,7 +137,25 @@ export default function DisKaynakliDokumanClient() {
   }
 
   function openAdd() {
+    setEditId(null);
+    setEditCurrentPdf(null);
     setForm(emptyForm);
+    setPdfFile(null);
+    setFormError("");
+    setModalOpen(true);
+  }
+
+  function openEdit(row: Row) {
+    setEditId(row.id);
+    setEditCurrentPdf(row.pdfPath ? { path: row.pdfPath, name: row.pdfOriginalName || "Mevcut PDF" } : null);
+    setForm({
+      akreditasyon: row.akreditasyon ? "1" : "0",
+      dokumanKodu: row.dokumanKodu,
+      dokumanAdi: row.dokumanAdi,
+      yayincisi: row.yayincisi,
+      yayinTarihi: row.yayinTarihi,
+      yayinLinki: row.yayinLinki,
+    });
     setPdfFile(null);
     setFormError("");
     setModalOpen(true);
@@ -141,7 +166,8 @@ export default function DisKaynakliDokumanClient() {
       setFormError("Doküman kodu ve doküman adı zorunludur.");
       return;
     }
-    if (!pdfFile) {
+    // Yeni kayıtta PDF zorunlu; düzenlemede mevcut PDF korunabildiği için opsiyonel.
+    if (!editId && !pdfFile) {
       setFormError("PDF dosyası seçilmelidir.");
       return;
     }
@@ -150,8 +176,11 @@ export default function DisKaynakliDokumanClient() {
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([key, value]) => fd.append(key, value));
-      fd.append("pdf", pdfFile);
-      const res = await fetch("/api/kys/dis-kaynakli-dokumanlar", { method: "POST", body: fd });
+      if (pdfFile) fd.append("pdf", pdfFile);
+      const res = await fetch(
+        editId ? `/api/kys/dis-kaynakli-dokumanlar/${editId}` : "/api/kys/dis-kaynakli-dokumanlar",
+        { method: editId ? "PATCH" : "POST", body: fd },
+      );
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Doküman kaydedilemedi.");
       setModalOpen(false);
@@ -160,6 +189,23 @@ export default function DisKaynakliDokumanClient() {
       setFormError(errorMessage(e, "Doküman kaydedilemedi."));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      const res = await fetch(`/api/kys/dis-kaynakli-dokumanlar/${deleteTarget.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Doküman silinemedi.");
+      setDeleteTarget(null);
+      await fetchRows();
+    } catch (e: unknown) {
+      setDeleteError(errorMessage(e, "Doküman silinemedi."));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -265,7 +311,7 @@ export default function DisKaynakliDokumanClient() {
                   <th style={{ width: 120 }}>Yayın Tarihi</th>
                   <th style={{ width: 90 }}>Kaynak</th>
                   <th style={{ width: 210 }}>Kontrol Kaydı</th>
-                  <th style={{ width: 72 }} aria-label="Önizleme" />
+                  <th style={{ width: 110 }} aria-label="İşlemler" />
                 </tr>
               </thead>
               <tbody>
@@ -316,18 +362,31 @@ export default function DisKaynakliDokumanClient() {
                       )}
                     </td>
                     <td>
-                      {row.pdfPath ? (
-                        <a
-                          href={row.pdfPath}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={tableStyles.editBtn}
-                          title="PDF önizleme"
+                      <div className={tableStyles.actionBtns}>
+                        {row.pdfPath && (
+                          <a
+                            href={row.pdfPath}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={tableStyles.editBtn}
+                            title="PDF önizleme"
+                          >
+                            <FileText size={15} />
+                            <ArrowUpRight size={13} />
+                          </a>
+                        )}
+                        <button type="button" className={tableStyles.editBtn} title="Düzenle" onClick={() => openEdit(row)}>
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          className={tableStyles.deleteBtn}
+                          title="Sil"
+                          onClick={() => { setDeleteTarget(row); setDeleteError(""); }}
                         >
-                          <FileText size={15} />
-                          <ArrowUpRight size={13} />
-                        </a>
-                      ) : "-"}
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -346,10 +405,10 @@ export default function DisKaynakliDokumanClient() {
       </div>
 
       {modalOpen && (
-        <div className={tableStyles.modalOverlay} role="dialog" aria-modal="true" aria-label="Dış kaynaklı doküman yükle">
+        <div className={tableStyles.modalOverlay} role="dialog" aria-modal="true" aria-label={editId ? "Dış kaynaklı dokümanı düzenle" : "Dış kaynaklı doküman yükle"}>
           <div className={tableStyles.modal}>
             <div className={tableStyles.modalHeader}>
-              <h2>Dış kaynaklı doküman yükle</h2>
+              <h2>{editId ? "Dış kaynaklı dokümanı düzenle" : "Dış kaynaklı doküman yükle"}</h2>
               <button type="button" className={tableStyles.modalClose} onClick={() => setModalOpen(false)} aria-label="Kapat">×</button>
             </div>
             <div className={tableStyles.modalBody}>
@@ -383,21 +442,50 @@ export default function DisKaynakliDokumanClient() {
                   <input value={form.yayinLinki} onChange={event => setForm(f => ({ ...f, yayinLinki: event.target.value }))} placeholder="https://..." />
                 </div>
                 <div className={`${tableStyles.formGroup} ${tableStyles.colSpan2}`}>
-                  <label>PDF dosyası <span className={tableStyles.required}>*</span></label>
+                  <label>
+                    PDF dosyası {!editId && <span className={tableStyles.required}>*</span>}
+                  </label>
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept="application/pdf,.pdf"
                     onChange={event => setPdfFile(event.target.files?.[0] || null)}
                   />
-                  {pdfFile && <small>{pdfFile.name}</small>}
+                  {pdfFile ? (
+                    <small>{pdfFile.name}</small>
+                  ) : editId && editCurrentPdf ? (
+                    <small>Mevcut: {editCurrentPdf.name} — değiştirmek için yeni bir dosya seçin.</small>
+                  ) : null}
                 </div>
               </div>
             </div>
             <div className={tableStyles.modalFooter}>
               <button type="button" className={tableStyles.cancelBtn} disabled={saving} onClick={() => setModalOpen(false)}>Vazgeç</button>
               <button type="button" className={tableStyles.saveBtn} disabled={saving} onClick={() => void save()}>
-                {saving ? "Yükleniyor..." : "Kaydet"}
+                {saving ? "Kaydediliyor..." : editId ? "Güncelle" : "Kaydet"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className={tableStyles.modalOverlay} role="dialog" aria-modal="true" aria-label="Dokümanı sil">
+          <div className={`${tableStyles.modal} ${tableStyles.modalSm}`}>
+            <div className={tableStyles.modalHeader}>
+              <h2>Dokümanı sil</h2>
+              <button type="button" className={tableStyles.modalClose} onClick={() => setDeleteTarget(null)} aria-label="Kapat">×</button>
+            </div>
+            <div className={tableStyles.modalBody}>
+              {deleteError && <div className={tableStyles.formError}>{deleteError}</div>}
+              <p className={tableStyles.deleteWarning}>
+                <strong>{deleteTarget.dokumanKodu} — {deleteTarget.dokumanAdi}</strong> kalıcı olarak silinecek (PDF dosyası dahil). Bu işlem geri alınamaz.
+              </p>
+            </div>
+            <div className={tableStyles.modalFooter}>
+              <button type="button" className={tableStyles.cancelBtn} disabled={deleting} onClick={() => setDeleteTarget(null)}>Vazgeç</button>
+              <button type="button" className={tableStyles.deleteBtnPrimary} disabled={deleting} onClick={() => void confirmDelete()}>
+                {deleting ? "Siliniyor..." : "Sil"}
               </button>
             </div>
           </div>

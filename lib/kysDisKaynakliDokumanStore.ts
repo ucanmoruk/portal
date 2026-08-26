@@ -239,6 +239,78 @@ export async function createDisKaynakliDokuman(input: DisKaynakliDokumanInput) {
   };
 }
 
+export async function getDisKaynakliDokuman(id: number) {
+  await ensureKysDisKaynakliDokumanSchema();
+  const pool = await cosmoPool;
+  const res = await pool.request().input("ID", id).query(`
+    SELECT ID, Akreditasyon, DokumanKodu, DokumanAdi, Yayincisi, YayinTarihi, YayinLinki,
+           PdfPath, PdfOriginalName, KontrolEdildi, KontrolTarihi, KontrolEdenAd, CreatedAt, UpdatedAt
+    FROM KysDisKaynakliDokuman WHERE ID = @ID
+  `);
+  const row = res.recordset[0] as AnyRow | undefined;
+  return row ? mapRow(row) : null;
+}
+
+/**
+ * Doküman metadata'sını günceller. `input.pdfPath` verilmişse (yeni PDF
+ * yüklendiyse) PDF'i de değiştirir; verilmemişse mevcut PDF korunur.
+ * Dönüşteki `previousPdfPath`, PDF gerçekten değiştiyse eski dosyanın FTP'den
+ * silinebilmesi için route'a iletilir (store kendisi FTP'ye dokunmaz).
+ */
+export async function updateDisKaynakliDokuman(id: number, input: DisKaynakliDokumanInput) {
+  await ensureKysDisKaynakliDokumanSchema();
+  const pool = await cosmoPool;
+  const existingRes = await pool.request().input("ID", id).query(
+    "SELECT PdfPath, PdfOriginalName FROM KysDisKaynakliDokuman WHERE ID = @ID",
+  );
+  const existing = existingRes.recordset[0] as AnyRow | undefined;
+  if (!existing) throw new Error("Doküman bulunamadı.");
+
+  const dokumanKodu = text(input.dokumanKodu);
+  const dokumanAdi = text(input.dokumanAdi);
+  if (!dokumanKodu) throw new Error("Doküman kodu zorunludur.");
+  if (!dokumanAdi) throw new Error("Doküman adı zorunludur.");
+
+  const previousPdfPath = rowString(existing, "PdfPath");
+  const pdfReplaced = Boolean(input.pdfPath);
+  const nextPdfPath = pdfReplaced ? input.pdfPath! : previousPdfPath;
+  const nextPdfOriginalName = pdfReplaced ? nullableText(input.pdfOriginalName) : rowString(existing, "PdfOriginalName");
+
+  await pool.request()
+    .input("ID", id)
+    .input("Akreditasyon", input.akreditasyon ? 1 : 0)
+    .input("DokumanKodu", dokumanKodu)
+    .input("DokumanAdi", dokumanAdi)
+    .input("Yayincisi", nullableText(input.yayincisi))
+    .input("YayinTarihi", nullableText(input.yayinTarihi))
+    .input("YayinLinki", cleanUrl(input.yayinLinki))
+    .input("PdfPath", nextPdfPath)
+    .input("PdfOriginalName", nextPdfOriginalName)
+    .query(`
+      UPDATE KysDisKaynakliDokuman SET
+        Akreditasyon = @Akreditasyon, DokumanKodu = @DokumanKodu, DokumanAdi = @DokumanAdi,
+        Yayincisi = @Yayincisi, YayinTarihi = @YayinTarihi, YayinLinki = @YayinLinki,
+        PdfPath = @PdfPath, PdfOriginalName = @PdfOriginalName, UpdatedAt = GETDATE()
+      WHERE ID = @ID
+    `);
+
+  return { id, previousPdfPath: pdfReplaced && previousPdfPath !== nextPdfPath ? previousPdfPath : null };
+}
+
+/** Kaydı siler ve route'un FTP'den de silebilmesi için eski PdfPath'i döner. */
+export async function deleteDisKaynakliDokuman(id: number) {
+  await ensureKysDisKaynakliDokumanSchema();
+  const pool = await cosmoPool;
+  const existingRes = await pool.request().input("ID", id).query(
+    "SELECT PdfPath FROM KysDisKaynakliDokuman WHERE ID = @ID",
+  );
+  const existing = existingRes.recordset[0] as AnyRow | undefined;
+  if (!existing) throw new Error("Doküman bulunamadı.");
+
+  await pool.request().input("ID", id).query("DELETE FROM KysDisKaynakliDokuman WHERE ID = @ID");
+  return { pdfPath: rowString(existing, "PdfPath") };
+}
+
 export async function markDisKaynakliDokumanChecked(ids: number[], user: DisKaynakliDokumanKullanici) {
   await ensureKysDisKaynakliDokumanSchema();
   const cleanIds = Array.from(new Set(ids.map(Number).filter(id => Number.isFinite(id) && id > 0)));
