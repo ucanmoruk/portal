@@ -28,7 +28,11 @@ export async function ensureStabiliteTable(_pool: Pool): Promise<void> {
 // EN formatı (StabiliteEn) TR ile aynı veriyi paylaşır → base "Stabilite" altında sakla.
 function baseFormat(format: string): string {
   const f = (format || "").trim();
-  return /en$/i.test(f) && /stabilite/i.test(f) ? "Stabilite" : f;
+  const normalized = f
+    .replace(/İ/g, "I").replace(/ı/g, "i")
+    .replace(/\s+/g, "")
+    .toUpperCase();
+  return normalized.endsWith("EN") && normalized.includes("STABILITE") ? "Stabilite" : f;
 }
 
 export async function getStabiliteVeriJson(

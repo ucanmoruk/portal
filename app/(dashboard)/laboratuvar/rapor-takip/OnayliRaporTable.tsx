@@ -5,10 +5,21 @@ import styles from "@/app/styles/table.module.css";
 import { baseReportFormat, expandReportFormats, type ReportLanguageChoice } from "@/lib/raporFormatLanguage";
 
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
+const normalizeReportFormat = (format: string) => String(format || "")
+  .trim()
+  .replace(/Ü/g, "U").replace(/ü/g, "u")
+  .replace(/İ/g, "I").replace(/ı/g, "i")
+  .replace(/Ö/g, "O").replace(/ö/g, "o")
+  .replace(/Ç/g, "C").replace(/ç/g, "c")
+  .replace(/Ş/g, "S").replace(/ş/g, "s")
+  .replace(/Ğ/g, "G").replace(/ğ/g, "g")
+  .replace(/\s+/g, "")
+  .toUpperCase();
 const englishPreviewFormat = (format: string): string | null => {
-  const normalized = format.toLocaleUpperCase("tr-TR");
+  const normalized = normalizeReportFormat(format);
   if (normalized === "GENEL") return "GenelEn";
   if (normalized === "CHALLENGE") return "ChallengeEn";
+  if (normalized === "STABILITE") return "StabiliteEn";
   return null;
 };
 
@@ -60,6 +71,7 @@ function DurumBadge({ durum }: { durum: string }) {
 function displayFormat(format: string): string {
   if (format === "GenelEn") return "Genel EN";
   if (format === "ChallengeEn") return "Challenge EN";
+  if (format === "StabiliteEn") return "Stabilite EN";
   return format === "Dermatoloji" ? "Claim" : format;
 }
 
@@ -72,6 +84,7 @@ function FormatBadge({ format }: { format: string }) {
     "Mikrobiyoloji": { bg: "#34c75918", fg: "#248a3d" },
     "Kimya":         { bg: "#ff950018", fg: "#c06800" },
     "Stabilite":     { bg: "#ff950018", fg: "#c06800" },
+    "StabiliteEn":   { bg: "#ff950018", fg: "#c06800" },
     "Claim":         { bg: "#34c75918", fg: "#248a3d" },
     "Dermatoloji":   { bg: "#34c75918", fg: "#248a3d" },
     "Diğer":         { bg: "#8e8e9318", fg: "#636366" },

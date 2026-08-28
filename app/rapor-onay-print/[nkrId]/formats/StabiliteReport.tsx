@@ -37,6 +37,85 @@ function degerlendirmeLabel(d: string | null, english = false): { text: string; 
   return { text: v, cls: "deg-other" };
 }
 
+function normalizeTrText(value: string): string {
+  return value
+    .trim()
+    .replace(/Ü/g, "U").replace(/ü/g, "u")
+    .replace(/İ/g, "I").replace(/ı/g, "i")
+    .replace(/Ö/g, "O").replace(/ö/g, "o")
+    .replace(/Ç/g, "C").replace(/ç/g, "c")
+    .replace(/Ş/g, "S").replace(/ş/g, "s")
+    .replace(/Ğ/g, "G").replace(/ğ/g, "g")
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+}
+
+function translateStabilityText(value: string | null | undefined, english: boolean): string {
+  const raw = String(value ?? "").trim();
+  if (!english || !raw) return raw;
+  const normalized = normalizeTrText(raw);
+  const direct: Record<string, string> = {
+    "KOB/G": "cfu/g",
+    "BULUNMAMALI": "Absent",
+    "TESPIT EDILMEDI": "Not Detected",
+    "DEGISIM GOZLENMEMELI": "No change should be observed",
+    "DEGISIM GORULMEDI": "No change observed",
+    "GOZLENMEDI": "Not observed",
+    "CATLAMA, SIZDIRMA OLMAMALI": "No cracking or leakage should occur",
+    "FAZ AYRIMI OLMAMALI": "No phase separation should occur",
+    "ORGANOLEPTIK": "Organoleptic",
+  };
+  return direct[normalized] ?? raw;
+}
+
+function translateStabilityAnalysisName(value: string | null | undefined, english: boolean): string {
+  const raw = String(value ?? "").trim();
+  if (!english || !raw) return raw;
+  const normalized = normalizeTrText(raw);
+  const direct: Record<string, string> = {
+    "AEROBIK KOLONI SAYIMI": "Aerobic Colony Count",
+    "TOPLAM AEROBIK MEZOFILIK BAKTERI SAYIMI": "Total Aerobic Mesophilic Bacteria Count",
+    "KUF - MAYA SAYIMI": "Yeast and Mold Count",
+    "KUF-MAYA SAYIMI": "Yeast and Mold Count",
+    "MAYA VE KUF SAYIMI": "Yeast and Mold Count",
+    "PSEUDOMONAS AERUGINOSA": "Pseudomonas aeruginosa",
+    "PSEUDOMONAS AERUGINOSA ARANMASI": "Detection of Pseudomonas aeruginosa",
+    "CANDIDA ALBICANS ARANMASI": "Detection of Candida albicans",
+    "STAPHYLOCOCCUS AUREUS": "Staphylococcus aureus",
+    "STAPHYLOCOCCUS AUREUS ARANMASI": "Detection of Staphylococcus aureus",
+    "ESCHERICHIA COLI ARANMASI": "Detection of Escherichia coli",
+    "RENK": "Color",
+    "KOKU": "Odor",
+    "GORUNUM": "Appearance",
+    "AMBALAJ": "Packaging",
+    "FAZ AYRIMI": "Phase Separation",
+    "PH TAYINI": "pH Determination",
+    "YOGUNLUK TAYINI": "Density Determination",
+    "VISKOZITE": "Viscosity",
+    "HOMOJENITE": "Homogeneity",
+  };
+  if (direct[normalized]) return direct[normalized];
+  if (normalized.includes("KUF") && normalized.includes("MAYA")) return "Yeast and Mold Count";
+  if (normalized.includes("AEROBIK") && normalized.includes("SAYIM")) return "Aerobic Colony Count";
+  if (normalized.includes("PSEUDOMONAS")) return "Detection of Pseudomonas aeruginosa";
+  if (normalized.includes("CANDIDA")) return "Detection of Candida albicans";
+  if (normalized.includes("STAPHYLOCOCCUS")) return "Detection of Staphylococcus aureus";
+  if (normalized.includes("ESCHERICHIA") || normalized.includes(" E COLI") || normalized === "E.COLI") return "Detection of Escherichia coli";
+  if (normalized.includes("PH")) return "pH Determination";
+  if (normalized.includes("YOGUNLUK")) return "Density Determination";
+  return raw;
+}
+
+function translateStabilityEvaluation(value: string | null | undefined, english: boolean): string {
+  const raw = String(value ?? "").trim();
+  if (!english || !raw) return raw;
+  const normalized = normalizeTrText(raw);
+  if (normalized.includes("90 GUNLUK") && normalized.includes("STABIL")) {
+    return "As a result of the 90-day accelerated stability test, the product was observed to comply with the relevant limits and remain stable.";
+  }
+  return raw;
+}
+
 interface ChallengeText {
   reportTitle: string;
   annexTitle: string;
@@ -292,7 +371,7 @@ export default function StabiliteReport({
         explanations: "EXPLANATIONS",
         period: "Analysis Period:",
         explanation:
-          "Tests requested by the customer were evaluated according to the Turkish Medicines and Medical Devices Agency Guideline on Microbiological Control of Cosmetic Products.",
+          "The stability study requested by the customer was evaluated according to the relevant cosmetic product stability requirements.",
         revisionNote: "Revision Note:",
         preparedBy: "Prepared By",
         approvedBy: "Approved By",
@@ -350,7 +429,7 @@ export default function StabiliteReport({
         explanations: "AÇIKLAMALAR",
         period: "Analiz Periyodu:",
         explanation:
-          "Müşteri talebi doğrultusunda yapılan testler 'TİTCK Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz'a göre değerlendirilmiştir.",
+          "Müşteri talebi doğrultusunda yapılan stabilite çalışması ilgili kozmetik ürün stabilite gerekliliklerine göre değerlendirilmiştir.",
         revisionNote: "Revizyon Açıklaması:",
         preparedBy: "Raporu Hazırlayan",
         approvedBy: "Onaylayan",
@@ -965,12 +1044,16 @@ export default function StabiliteReport({
                   <tbody>
                     {veri.testler.map((t, i) => (
                       <tr key={i} style={{ textAlign: "center" }}>
-                        <td style={{ border: "1px solid #ccc", borderLeft: "none", textAlign: "left", padding: "3px 5px" }}>{t.akredite ? "*" : ""}{isEnglish ? (t.adEn || t.ad) : t.ad}</td>
-                        <td style={{ border: "1px solid #ccc", padding: "3px 4px" }}>{t.birim || "-"}</td>
-                        <td style={{ border: "1px solid #ccc", textAlign: "left", padding: "3px 5px" }}>{t.metot || "-"}</td>
-                        <td style={{ border: "1px solid #ccc", padding: "3px 4px" }}>{t.limit || "-"}</td>
+                        <td style={{ border: "1px solid #ccc", borderLeft: "none", textAlign: "left", padding: "3px 5px" }}>{t.akredite ? "*" : ""}{isEnglish ? (t.adEn || translateStabilityAnalysisName(t.ad, true)) : t.ad}</td>
+                        <td style={{ border: "1px solid #ccc", padding: "3px 4px" }}>{isEnglish ? (t.birimEn || translateStabilityText(t.birim, true)) : (t.birim || "-")}</td>
+                        <td style={{ border: "1px solid #ccc", textAlign: "left", padding: "3px 5px" }}>{isEnglish ? (t.metotEn || translateStabilityText(t.metot, true)) : (t.metot || "-")}</td>
+                        <td style={{ border: "1px solid #ccc", padding: "3px 4px" }}>{isEnglish ? (t.limitEn || translateStabilityText(t.limit, true)) : (t.limit || "-")}</td>
                         {veri.sicakliklar.map((s) => (
-                          <td key={s} style={{ border: "1px solid #ccc", borderLeft: "1px solid #ccc", padding: "3px 4px" }}>{t.sonuclar[`${g}|${s}`] || "-"}</td>
+                          <td key={s} style={{ border: "1px solid #ccc", borderLeft: "1px solid #ccc", padding: "3px 4px" }}>
+                            {isEnglish
+                              ? (t.sonuclarEn?.[`${g}|${s}`] || translateStabilityText(t.sonuclar?.[`${g}|${s}`], true) || "-")
+                              : (t.sonuclar?.[`${g}|${s}`] || "-")}
+                          </td>
                         ))}
                       </tr>
                     ))}
@@ -981,7 +1064,7 @@ export default function StabiliteReport({
           </div>
 
           <div className="results-title" style={{ marginTop: "20px" }}>{isEnglish ? "EVALUATION" : "DEĞERLENDİRME"}</div>
-          <p>{veri.degerlendirme}</p>
+          <p>{isEnglish ? (veri.degerlendirmeEn || translateStabilityEvaluation(veri.degerlendirme, true)) : veri.degerlendirme}</p>
 
           {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ─────  */}
           <div className="endof">{text.end}</div>

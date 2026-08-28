@@ -7,6 +7,7 @@ import { applyManualServiceOrder } from "./raporServiceOrder";
 const DATA_FORMAT_ALIAS: Record<string, string> = {
   GenelEn: "Genel",
   ChallengeEn: "Challenge",
+  StabiliteEn: "Stabilite",
   DetayRapor: "Genel",
   DetayFormat: "Genel",
 };

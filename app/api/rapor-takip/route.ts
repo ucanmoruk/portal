@@ -122,10 +122,11 @@ export async function GET(request: Request) {
       CASE
         WHEN ${bucketSql("ro.RaporFormati")} = N'GENELEN' THEN N'GENEL'
         WHEN ${bucketSql("ro.RaporFormati")} = N'CHALLENGEEN' THEN N'CHALLENGE'
+        WHEN ${bucketSql("ro.RaporFormati")} = N'STABILITEEN' THEN N'STABILITE'
         ELSE ${bucketSql("ro.RaporFormati")}
       END
     `;
-    const raporOnayIsEnglishExpr = `${bucketSql("ro.RaporFormati")} IN (N'GENELEN', N'CHALLENGEEN')`;
+    const raporOnayIsEnglishExpr = `${bucketSql("ro.RaporFormati")} IN (N'GENELEN', N'CHALLENGEEN', N'STABILITEEN')`;
 
     const raporTuruFilter = raporTuru
       ? `AND ${raporTuruNormExpr} = ${raporTuruParamNorm}`
