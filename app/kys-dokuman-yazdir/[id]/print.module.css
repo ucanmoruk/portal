@@ -1,0 +1,42 @@
+.screen { min-height: 100vh; padding: 24px 24px 64px; background: #e9edf2; color: #111827; }
+.document { width: min(210mm, 100%); min-height: 297mm; margin: 0 auto; padding: 30mm 14mm 22mm; background: #fff; box-shadow: 0 12px 38px #1f293724; }
+.header { display: grid; grid-template-columns: 50mm minmax(0,1fr) max-content; align-items: center; gap: 4mm; margin: -26mm 0 14mm; min-height: 29mm; padding-bottom: 2.5mm; border-bottom: 1px solid #9ca3af; }
+.header img { width: 48mm; height: auto; }
+.header h1 { margin: 0; text-align: center; font-size: 17pt; font-weight: 800; line-height: 1.22; }
+.header table,.appendix table { width: 100%; border-collapse: collapse; }
+.header table { width: max-content; table-layout: auto; font-size: 8pt; line-height: 1.2; }
+.header th,.header td,.appendix th,.appendix td { border: 1px solid #9ca3af; padding: 1.5mm; text-align: left; }
+.header th { padding: 2px 5px; white-space: nowrap; background: #f4f6f8; text-align: left; vertical-align: middle; }
+.header td { padding: 2px 5px; white-space: nowrap; text-align: left; vertical-align: middle; }
+.content { width: 100%; max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; font-size: 9.5pt; line-height: 1.48; }
+.content > :first-child { margin-top: 0 !important; }
+.content > :last-child { margin-bottom: 0 !important; }
+.content h2,.content h3,.content h4 { margin: 4mm 0 1.5mm; font-weight: 800; break-after: avoid; }
+.content p { margin: 1.5mm 0 2.5mm; }
+.content table { width: 100% !important; max-width: 100%; border-collapse: collapse; margin: 3mm 0; }
+.content th,.content td { border: 1px solid #9ca3af; padding: 2mm; text-align: left; }
+.content img { max-width: 100%; height: auto; }
+.content tr,.content figure { break-inside: avoid; }
+.appendix { margin-top: 0; break-before: page; background: #fff; }
+.appendix h2 { margin: 0 0 4mm; font-size: 12pt; }
+.appendix table { font-size: 8pt; }
+.appendix tr { break-inside: avoid; }
+.signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; margin-top: 6mm; break-inside: avoid; background: #fff; font-size: 9.5pt; }
+.signatures div { display: grid; min-height: 18mm; align-content: start; gap: 1mm; border: 1px solid #9ca3af; padding: 2mm; background: #fff; text-align: center; font-size: 9.5pt; }
+.signatures i { margin-top: 3mm; color: #4b5563; font-size: 7.5pt; }
+.document > footer { display: flex; justify-content: space-between; gap: 10mm; margin: 14mm -10mm -18mm; padding-top: 2mm; border-top: 1px solid #9ca3af; font-size: 7pt; }
+.pageNumber::after { content: "1"; }
+.pdfMode { min-height: 0; padding: 0; background: #fff; box-shadow: none; }
+.pdfMode .header,.pdfMode > footer { display: none; }
+.printButton { position: fixed; right: 24px; bottom: 24px; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; border: 0; border-radius: 999px; padding: 0 18px; background: #066bd8; color: #fff; box-shadow: 0 8px 24px #0f172a33; font: inherit; font-size: .84rem; font-weight: 750; cursor: pointer; }
+@media print {
+  @page { size: A4; }
+  :global(html), :global(body) { background: #fff !important; }
+  .screen { min-height: 100%; padding: 0; background: #fff !important; }
+  .document { width: 100%; min-height: 100%; margin: 0; padding: 0; background: #fff !important; box-shadow: none; }
+  .header { position: fixed; top: 0; left: 14mm; right: 14mm; margin: 0; min-height: 24mm; padding: 2mm 0; }
+  .document > footer { position: fixed; right: 14mm; bottom: 0; left: 14mm; margin: 0; padding-top: 2mm; }
+  .pdfMode { width: 100%; max-width: 100%; padding: 0; }
+  .appendix { margin-top: 0; break-before: page; }
+  .printButton { display: none; }
+}

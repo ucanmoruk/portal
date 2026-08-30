@@ -221,7 +221,7 @@ export default function DokumanListesiClient() {
   }
 
   function printPreview(id: number) {
-    window.open(`/laboratuvar/kys/dokuman-yonetimi/${id}/onizleme?print=1`, "_blank", "noopener,noreferrer");
+    window.open(`/kys-dokuman-yazdir/${id}?print=1`, "_blank", "noopener,noreferrer");
   }
 
   const filtreAktif = Boolean(debouncedSearch || tur || durum);

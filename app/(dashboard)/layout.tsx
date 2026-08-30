@@ -43,9 +43,9 @@ export default async function DashboardLayout({
     <SidebarProvider>
       <div className={styles.shell}>
         <Sidebar allowedKeys={allowedKeys} isAdmin={isAdmin} />
-        <div className={styles.main}>
+        <div className={styles.main} data-dashboard-main>
           <Header />
-          <div className={styles.content}>{children}</div>
+          <div className={styles.content} data-dashboard-content>{children}</div>
         </div>
       </div>
     </SidebarProvider>

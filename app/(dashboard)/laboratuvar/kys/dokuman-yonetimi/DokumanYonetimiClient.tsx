@@ -855,7 +855,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       window.open(`/api/kys/dokumanlar/${doc.id}/dosya`, "_blank", "noopener,noreferrer");
       return;
     }
-    window.open(`/laboratuvar/kys/dokuman-yonetimi/${doc?.id}/onizleme?print=1`, "_blank", "noopener,noreferrer");
+    window.open(`/kys-dokuman-yazdir/${doc?.id}?print=1`, "_blank", "noopener,noreferrer");
   }
 
   function openPreviewInNewTab() {

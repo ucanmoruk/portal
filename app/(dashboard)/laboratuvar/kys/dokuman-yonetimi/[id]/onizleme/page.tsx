@@ -43,6 +43,7 @@ export default async function DokumanOnizlemePage({ params, searchParams }: { pa
   const doc = await getKysDokuman(documentId);
   if (!doc) notFound();
   if (doc.hasDosya) redirect(`/api/kys/dokumanlar/${doc.id}/dosya`);
+  if ((await searchParams).print === "1") redirect(`/kys-dokuman-yazdir/${doc.id}?print=1`);
   const { content, headings } = prepareContent(doc.icerik || "");
 
   return (
@@ -74,7 +75,7 @@ export default async function DokumanOnizlemePage({ params, searchParams }: { pa
         </div>
       </section>
       <footer><span className={styles.pageNumber}>Sayfa </span><strong>ELEKTRONİK NÜSHA. BASILMIŞ HALİ KONTROLSÜZ KOPYADIR.</strong></footer>
-      <PrintControls autoPrint={(await searchParams).print === "1"} />
+      <PrintControls documentId={doc.id} />
     </main>
   );
 }

@@ -9,7 +9,7 @@ export default function Header() {
   const { toggle } = useSidebar();
 
   return (
-    <header className={styles.header}>
+    <header className={styles.header} data-dashboard-header>
       <div className={styles.left}>
         <button className={styles.hamburger} onClick={toggle} aria-label="Menüyü aç/kapat">
           <span /><span /><span />

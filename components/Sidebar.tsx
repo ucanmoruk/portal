@@ -217,7 +217,7 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
       {isOpen && (
         <div className={styles.overlay} onClick={close} aria-hidden="true" />
       )}
-    <aside className={`${styles.sidebar} ${isOpen ? styles.sidebarOpen : ""}`}>
+    <aside className={`${styles.sidebar} ${isOpen ? styles.sidebarOpen : ""}`} data-dashboard-sidebar>
       {/* Logo */}
       <div className={styles.brand}>
         <div className={styles.brandIcon}>
