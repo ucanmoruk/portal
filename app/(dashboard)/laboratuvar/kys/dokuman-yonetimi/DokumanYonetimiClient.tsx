@@ -212,6 +212,8 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     hazirlayanId: "", hazirlayanAd: "", onaylayanId: "", onaylayanAd: "",
   });
   const [yayinDokumanlari, setYayinDokumanlari] = useState<DokumanDetay[]>([]);
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkSearch, setLinkSearch] = useState("");
   const [revizyonOnizleme, setRevizyonOnizleme] = useState<{ etiket: string; icerik: string; aciklama: string } | null>(null);
   const [tableMenuOpen, setTableMenuOpen] = useState(false);
 
@@ -322,7 +324,8 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
         if (canEdit && dirty && !saving) void save();
       }
       if (event.key === "Escape") {
-        if (revizyonOnizleme) setRevizyonOnizleme(null);
+        if (linkModalOpen) setLinkModalOpen(false);
+        else if (revizyonOnizleme) setRevizyonOnizleme(null);
         else if (previewOpen) setPreviewOpen(false);
         else if (aksiyonModal && !aksiyonBusy) setAksiyonModal(null);
         else if (tableMenuOpen) setTableMenuOpen(false);
@@ -331,7 +334,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canEdit, dirty, saving, previewOpen, aksiyonModal, aksiyonBusy, revizyonOnizleme, tableMenuOpen]);
+  }, [canEdit, dirty, saving, previewOpen, aksiyonModal, aksiyonBusy, revizyonOnizleme, tableMenuOpen, linkModalOpen]);
 
   // Tablo menüsünün dışına tıklanınca kapat
   useEffect(() => {
@@ -713,6 +716,8 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     anchor?.setAttribute("target", "_blank");
     anchor?.setAttribute("rel", "noopener noreferrer");
     markDirty();
+    setLinkModalOpen(false);
+    setLinkSearch("");
   }
 
   function handleDocumentLinkClick(event: React.MouseEvent<HTMLElement>) {
@@ -850,10 +855,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       window.open(`/api/kys/dokumanlar/${doc.id}/dosya`, "_blank", "noopener,noreferrer");
       return;
     }
-    // Yazdırma çıktısı editör gövdesinden alınır — önce İçerik sekmesi açılmalı
-    setPreviewOpen(false);
-    setActiveTab("icerik");
-    requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+    window.open(`/laboratuvar/kys/dokuman-yonetimi/${doc?.id}/onizleme?print=1`, "_blank", "noopener,noreferrer");
   }
 
   function openPreviewInNewTab() {
@@ -1066,24 +1068,16 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 <ToolButton title="Madde listesi" disabled={!canEdit} onRun={() => runCommand("insertUnorderedList")}><List size={15} /></ToolButton>
                 <ToolButton title="Revizyon işaretle (sarı vurgu)" disabled={!canEdit} onRun={() => runCommand("backColor", "#fff3bf")}><Highlighter size={15} /></ToolButton>
                 <ToolButton title="Vurguyu kaldır" disabled={!canEdit} onRun={() => runCommand("backColor", "transparent")}><Undo2 size={15} /></ToolButton>
-                <span className={styles.documentLinkPicker}>
+                <button
+                  type="button"
+                  className={styles.documentLinkButton}
+                  disabled={!canEdit || yayinDokumanlari.length === 0}
+                  onMouseDown={rememberEditorSelection}
+                  onClick={() => { setLinkSearch(""); setLinkModalOpen(true); }}
+                >
                   <Link2 size={14} />
-                  <select
-                    aria-label="Yayındaki dokümana bağlantı ver"
-                    disabled={!canEdit || yayinDokumanlari.length === 0}
-                    defaultValue=""
-                    onMouseDown={rememberEditorSelection}
-                    onChange={event => {
-                      if (event.target.value) createPublishedDocumentLink(event.target.value);
-                      event.target.value = "";
-                    }}
-                  >
-                    <option value="">Yayındaki dokümana bağla…</option>
-                    {yayinDokumanlari.filter(item => item.id !== doc.id).map(item => (
-                      <option key={item.id} value={item.id}>{item.kod} — {item.baslik}</option>
-                    ))}
-                  </select>
-                </span>
+                  Dokümana bağla
+                </button>
                 <span className={styles.toolbarDivider} />
                 <ToolButton title="Tablo ekle" disabled={!canEdit} onRun={insertTable}><Table2 size={15} /></ToolButton>
                 <div className={styles.tableMenuWrap} ref={tableMenuRef}>
@@ -1400,6 +1394,38 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                   onClick={handleDocumentLinkClick}
                   dangerouslySetInnerHTML={{ __html: editorRef.current?.innerHTML ?? draftRef.current ?? doc.icerik }}
                 />
+                <div className={styles.previewDocumentFooter}>
+                  <span>Sayfa 1</span>
+                  <strong>ELEKTRONİK NÜSHA. BASILMIŞ HALİ KONTROLSÜZ KOPYADIR.</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {linkModalOpen && (
+        <div className={tableStyles.modalOverlay} role="dialog" aria-modal="true" aria-label="Yayındaki dokümana bağlantı ver" onMouseDown={rememberEditorSelection}>
+          <div className={`${tableStyles.modal} ${styles.documentLinkModal}`} onClick={event => event.stopPropagation()}>
+            <div className={tableStyles.modalHeader}>
+              <div><h2>Yayındaki dokümana bağla</h2><p className={styles.modalHint}>Seçili metin, seçeceğiniz dokümana yeni sekmede açılan bir bağlantı olur.</p></div>
+              <button type="button" className={tableStyles.modalClose} onClick={() => setLinkModalOpen(false)} aria-label="Kapat">×</button>
+            </div>
+            <div className={tableStyles.modalBody}>
+              <label className={styles.documentLinkSearch}>
+                <span>Doküman no veya adı</span>
+                <input autoFocus value={linkSearch} onChange={event => setLinkSearch(event.target.value)} placeholder="Örn. PR-01 veya Numune Kabul" />
+              </label>
+              <div className={styles.documentLinkResults}>
+                {yayinDokumanlari
+                  .filter(item => item.id !== doc.id)
+                  .sort((a, b) => a.kod.localeCompare(b.kod, "tr", { numeric: true }))
+                  .filter(item => `${item.kod} ${item.baslik}`.toLocaleLowerCase("tr-TR").includes(linkSearch.trim().toLocaleLowerCase("tr-TR")))
+                  .map(item => (
+                    <button key={item.id} type="button" onClick={() => createPublishedDocumentLink(String(item.id))}>
+                      <strong>{item.kod}</strong><span>{item.baslik}</span><small>{item.tur}</small>
+                    </button>
+                  ))}
               </div>
             </div>
           </div>

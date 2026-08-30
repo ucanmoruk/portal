@@ -5,6 +5,7 @@ import { dokumanYetkileri } from "@/lib/kysDokumanYetki";
 import { getKysDokuman } from "@/lib/kysDokumanStore";
 import { formatDate } from "../../dokumanTypes";
 import styles from "./onizleme.module.css";
+import PrintControls from "./PrintControls";
 
 export const metadata = { title: "KYS Doküman Önizleme" };
 
@@ -32,7 +33,7 @@ function prepareContent(html: string) {
   return { content, headings };
 }
 
-export default async function DokumanOnizlemePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DokumanOnizlemePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ print?: string }> }) {
   const user = await getPortalUser();
   if (!user) redirect("/login");
   if (!dokumanYetkileri(user).goruntule) redirect("/laboratuvar/kys/dokuman-yonetimi");
@@ -47,7 +48,7 @@ export default async function DokumanOnizlemePage({ params }: { params: Promise<
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
-        <Image src="/unique-logo-wide.png" alt="UNIQUE Analyse" width={170} height={48} priority />
+        <Image src="/unique-logo-wide.png" alt="UNIQUE Analyse" width={500} height={71} preload unoptimized />
         <h1>{doc.baslik}</h1>
         <table><tbody>
           <tr><th>Doküman No</th><td>{doc.kod}</td></tr>
@@ -73,6 +74,7 @@ export default async function DokumanOnizlemePage({ params }: { params: Promise<
         </div>
       </section>
       <footer><span className={styles.pageNumber}>Sayfa </span><strong>ELEKTRONİK NÜSHA. BASILMIŞ HALİ KONTROLSÜZ KOPYADIR.</strong></footer>
+      <PrintControls autoPrint={(await searchParams).print === "1"} />
     </main>
   );
 }

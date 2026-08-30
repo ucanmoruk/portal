@@ -674,10 +674,6 @@ export async function deleteKysDokuman(id: number, user: DokumanKullanici) {
   await ensureKysDokumanSchema();
   const row = await fetchDokumanRow(id);
   if (!row) throw new Error("Doküman bulunamadı.");
-  const durum = rowString(row, "Durum");
-  if (durum !== "Taslak") {
-    throw new Error("Sadece taslak durumundaki dokümanlar silinebilir. Yayındaki dokümanları arşivleyin.");
-  }
   const pool = await cosmoPool;
   await pool.request().input("ID", id).query("DELETE FROM KysDokumanDosya WHERE DokumanID = @ID");
   await pool.request().input("ID", id).query("DELETE FROM KysDokumanRevizyon WHERE DokumanID = @ID");

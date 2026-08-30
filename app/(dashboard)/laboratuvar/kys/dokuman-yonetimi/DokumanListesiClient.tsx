@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Download, Eye, FilePlus2, RotateCw, Search, Trash2, Upload, X } from "lucide-react";
+import { ArrowUpRight, Download, Eye, FilePlus2, Printer, RotateCw, Search, Trash2, Upload, X } from "lucide-react";
 import tableStyles from "@/app/styles/table.module.css";
 import kys from "../kys.module.css";
 import styles from "./dokumanYonetimi.module.css";
@@ -220,6 +220,10 @@ export default function DokumanListesiClient() {
     }
   }
 
+  function printPreview(id: number) {
+    window.open(`/laboratuvar/kys/dokuman-yonetimi/${id}/onizleme?print=1`, "_blank", "noopener,noreferrer");
+  }
+
   const filtreAktif = Boolean(debouncedSearch || tur || durum);
   const kisiSecenekleri = useMemo(
     () => kullanicilar.map(k => ({ id: String(k.ID), ad: k.Ad })),
@@ -391,11 +395,11 @@ export default function DokumanListesiClient() {
                         >
                           <ArrowUpRight size={15} />
                         </Link>
-                        {yetki.sil && doc.durum === "Taslak" && (
+                        {yetki.sil && (
                           <button
                             type="button"
                             className={tableStyles.deleteBtn}
-                            title="Taslağı sil"
+                            title="Dokümanı sil"
                             onClick={() => { setSilinecek(doc); setSilmeHatasi(""); }}
                           >
                             <Trash2 size={15} />
@@ -518,13 +522,13 @@ export default function DokumanListesiClient() {
         <div className={tableStyles.modalOverlay} role="dialog" aria-modal="true" aria-label="Doküman sil">
           <div className={`${tableStyles.modal} ${tableStyles.modalSm}`}>
             <div className={tableStyles.modalHeader}>
-              <h2>Taslağı sil</h2>
+              <h2>Dokümanı sil</h2>
               <button type="button" className={tableStyles.modalClose} onClick={() => setSilinecek(null)} aria-label="Kapat">×</button>
             </div>
             <div className={tableStyles.modalBody}>
               {silmeHatasi && <div className={tableStyles.formError}>{silmeHatasi}</div>}
               <p className={tableStyles.deleteWarning}>
-                <strong>{silinecek.kod} — {silinecek.baslik}</strong> kalıcı olarak silinecek. Bu işlem geri alınamaz.
+                <strong>{silinecek.kod} — {silinecek.baslik}</strong> ve dokümana ait revizyon/dosya geçmişi kalıcı olarak silinecek. Bu işlem geri alınamaz.
               </p>
             </div>
             <div className={tableStyles.modalFooter}>
@@ -559,6 +563,12 @@ export default function DokumanListesiClient() {
                     Yeni sekmede aç
                   </Link>
                 )}
+                {previewDoc && (
+                  <button type="button" className={styles.ghostButton} onClick={() => printPreview(previewDoc.id)}>
+                    <Printer size={15} />
+                    Yazdır / PDF
+                  </button>
+                )}
                 <button type="button" className={styles.iconButton} aria-label="Önizlemeyi kapat" onClick={() => setPreviewId(null)}>
                   <X size={17} />
                 </button>
@@ -570,14 +580,20 @@ export default function DokumanListesiClient() {
                 {previewError && <div className={tableStyles.formError}>{previewError}</div>}
                 {previewDoc && (
                   <>
-                    <div className={styles.previewMeta}>
-                      <span>{previewDoc.tur}</span>
-                      <span>Durum: {previewDoc.durum}</span>
-                      <span>Yürürlük: {formatDate(previewDoc.yururlukTarihi)}</span>
-                      <span>Hazırlayan: {previewDoc.hazirlayanAd || "-"}</span>
-                      <span>Onay: {previewDoc.onaylayanAd || "-"}</span>
+                    <div className={styles.previewDocumentHeader}>
+                      <img src="/unique-logo-wide.png" alt="UNIQUE Analyse" />
+                      <strong>{previewDoc.baslik}</strong>
+                      <table><tbody>
+                        <tr><th>Doküman No</th><td>{previewDoc.kod}</td></tr>
+                        <tr><th>Revizyon</th><td>{previewDoc.revizyonEtiket}</td></tr>
+                        <tr><th>Yürürlük Tarihi</th><td>{formatDate(previewDoc.yururlukTarihi)}</td></tr>
+                      </tbody></table>
                     </div>
                     <div className={styles.documentBody} dangerouslySetInnerHTML={{ __html: previewDoc.icerik }} />
+                    <div className={styles.previewDocumentFooter}>
+                      <span>Sayfa 1</span>
+                      <strong>ELEKTRONİK NÜSHA. BASILMIŞ HALİ KONTROLSÜZ KOPYADIR.</strong>
+                    </div>
                   </>
                 )}
               </div>

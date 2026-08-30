@@ -1,7 +1,7 @@
 .shell { position: fixed; inset: 0; z-index: 1000; overflow: auto; background: #eef1f5; color: #18202b; }
 .header { position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: 190px minmax(0,1fr) 285px; align-items: center; gap: 22px; min-height: 92px; padding: 12px 28px; background: #fff; border-bottom: 1px solid #cfd5dd; box-shadow: 0 3px 14px #1f293714; }
 .header img { width: 170px; height: auto; object-fit: contain; }
-.header h1 { margin: 0; text-align: center; font-size: 1.12rem; }
+.header h1 { margin: 0; text-align: center; font-size: 1.28rem; font-weight: 800; line-height: 1.25; }
 .header table { width: 100%; border-collapse: collapse; font-size: .72rem; }
 .header th,.header td { border: 1px solid #bfc6cf; padding: 4px 7px; text-align: left; }
 .header th { width: 54%; background: #f4f6f8; }
@@ -11,9 +11,9 @@
 .body aside a { padding-block: 6px; border-radius: 6px; color: #45536a; font-size: .78rem; font-weight: 650; text-decoration: none; }
 .body aside a:hover { background: #eef5ff; color: #066bd8; }
 .body article { min-height: 1050px; padding: 40px 48px 80px; background: #fff; box-shadow: 0 12px 38px #1f293719; font-size: .92rem; line-height: 1.58; }
-.body article h2 { margin: 16px 0 5px; font-size: 1.07rem; scroll-margin-top: 116px; }
-.body article h3 { margin: 12px 0 4px; font-size: 1rem; scroll-margin-top: 116px; }
-.body article h4 { margin: 9px 0 3px; font-size: .94rem; scroll-margin-top: 116px; }
+.body article h2 { margin: 16px 0 5px; font-size: 1.07rem; font-weight: 800; scroll-margin-top: 116px; }
+.body article h3 { margin: 12px 0 4px; font-size: 1rem; font-weight: 800; scroll-margin-top: 116px; }
+.body article h4 { margin: 9px 0 3px; font-size: .94rem; font-weight: 800; scroll-margin-top: 116px; }
 .body article p { margin: 5px 0 9px; }
 .body article table,.printAppendix table { width: 100%; border-collapse: collapse; margin: 12px 0; }
 .body article th,.body article td,.printAppendix th,.printAppendix td { border: 1px solid #bfc6cf; padding: 7px 9px; text-align: left; }
@@ -24,6 +24,8 @@
 .signatures i { margin-top: 25px; color: #667085; font-size: .75rem; }
 .shell > footer { position: fixed; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; padding: 7px 28px; border-top: 1px solid #cfd5dd; background: #fff; font-size: .68rem; }
 .pageNumber::after { content: counter(page); }
+.printButton { position: fixed; right: 24px; bottom: 42px; z-index: 8; display: inline-flex; align-items: center; gap: 8px; min-height: 42px; border: 0; border-radius: 999px; padding: 0 18px; background: #066bd8; color: #fff; box-shadow: 0 8px 24px #0f172a33; font: inherit; font-size: .84rem; font-weight: 750; cursor: pointer; }
+.printButton:hover { background: #045dbd; }
 @media(max-width:800px){.header{grid-template-columns:1fr}.header h1{text-align:left}.body{grid-template-columns:1fr}.body aside{position:static}.shell>footer{position:static}}
 @media print {
   @page { size: A4; margin: 32mm 14mm 22mm; }
@@ -39,4 +41,5 @@
   .body article tr,.body article figure { break-inside: avoid; }
   .printAppendix { display: block; break-before: page; }
   .shell > footer { position: fixed; bottom: -17mm; padding: 2mm 0; }
+  .printButton { display: none; }
 }
