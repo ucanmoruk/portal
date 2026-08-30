@@ -466,6 +466,9 @@
   cursor: not-allowed;
 }
 
+.documentLinkPicker { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 7px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-secondary); }
+.documentLinkPicker select { max-width: 220px; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-size: .76rem; }
+
 .tableMenuWrap {
   position: relative;
   display: inline-flex;
@@ -525,7 +528,7 @@
   padding: 28px 38px 44px;
   color: var(--color-text-primary);
   font-size: 0.92rem;
-  line-height: 1.68;
+  line-height: 1.56;
   outline: none;
 }
 
@@ -536,7 +539,7 @@
 }
 
 .documentBody h2 {
-  margin: 22px 0 8px;
+  margin: 15px 0 5px;
   font-size: 1.05rem;
   font-weight: 700;
   color: var(--color-text-primary);
@@ -544,18 +547,20 @@
 }
 
 .documentBody h3 {
-  margin: 16px 0 7px;
+  margin: 11px 0 4px;
   font-size: 0.98rem;
   color: var(--color-text-primary);
   font-weight: 700;
 }
 
 .documentBody h4 {
-  margin: 12px 0 6px;
+  margin: 8px 0 3px;
   color: var(--color-text-primary);
   font-size: 0.92rem;
   font-weight: 700;
 }
+
+.documentBody p { margin: 5px 0 9px; }
 
 .documentBody h2:first-child {
   margin-top: 0;
@@ -645,7 +650,7 @@
 }
 
 .flowGrid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .flowCard,
@@ -860,6 +865,13 @@
   font-weight: 700;
 }
 
+.previewDocumentHeader { display: grid; grid-template-columns: 150px minmax(0,1fr) 250px; align-items: center; gap: 16px; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #cfd5dd; }
+.previewDocumentHeader img { width: 145px; height: auto; }
+.previewDocumentHeader > strong { text-align: center; font-size: 1rem; }
+.previewDocumentHeader table { width: 100%; border-collapse: collapse; font-size: .68rem; }
+.previewDocumentHeader th,.previewDocumentHeader td { border: 1px solid #bfc6cf; padding: 4px 6px; text-align: left; }
+.previewDocumentHeader th { background: #f4f6f8; }
+
 .previewPaper .documentBody {
   padding: 0;
 }
@@ -933,8 +945,7 @@
     visibility: hidden !important;
   }
 
-  .printHeader,
-  .printHeader *,
+  .printHeader, .printHeader *, .printFooter, .printFooter *, .printAppendix, .printAppendix *,
   .printableBody,
   .printableBody * {
     visibility: visible !important;
@@ -944,22 +955,18 @@
     display: none !important;
   }
 
-  .printHeader {
-    display: block;
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    padding: 0 0 10px;
-    border-bottom: 1px solid #d1d5db;
-    color: #111;
-    font-size: 0.78rem;
-    line-height: 1.5;
-  }
+  @page { size: A4; margin: 32mm 14mm 22mm; }
+  .printHeader { display: grid; position: fixed; top: -27mm; left: 0; right: 0; grid-template-columns: 36mm 1fr 55mm; align-items: center; gap: 5mm; min-height: 24mm; padding: 2mm 0; border-bottom: 1px solid #9ca3af; color: #111; font-size: 7pt; }
+  .printHeader img { width: 34mm; height: auto; }
+  .printHeader > strong { text-align: center; font-size: 10pt; }
+  .printHeader table { width: 100%; border-collapse: collapse; }
+  .printHeader th,.printHeader td { border: 1px solid #9ca3af; padding: 1mm; text-align: left; }
+  .printFooter { display: flex; position: fixed; bottom: -17mm; left: 0; right: 0; justify-content: space-between; padding-top: 2mm; border-top: 1px solid #9ca3af; color: #111; font-size: 7pt; }
+  .printPageNumber::after { content: counter(page); }
 
   .printableBody {
     position: absolute;
-    top: 74px;
+    top: 0;
     left: 0;
     width: 100%;
     max-height: none;
@@ -969,6 +976,12 @@
     outline: none;
     overflow: visible;
   }
+  .printAppendix { display: block; position: relative; break-before: page; color: #111; }
+  .printAppendix table { width: 100%; border-collapse: collapse; font-size: 8pt; }
+  .printAppendix th,.printAppendix td { border: 1px solid #9ca3af; padding: 2mm; text-align: left; }
+  .signatureGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 15mm; margin-top: 12mm; }
+  .signatureGrid div { display: grid; min-height: 30mm; align-content: start; gap: 2mm; border: 1px solid #9ca3af; padding: 3mm; text-align: center; }
+  .signatureGrid i { margin-top: 8mm; color: #4b5563; }
 
   .documentBody table {
     page-break-inside: auto;
@@ -1140,6 +1153,7 @@
 .printHeader {
   display: none;
 }
+.printFooter,.printAppendix { display: none; }
 
 @media (max-width: 1100px) {
   .summaryStrip {

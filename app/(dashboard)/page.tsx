@@ -5,6 +5,7 @@ import poolPromise from "@/lib/db";
 import { firstAllowedHref } from "@/lib/menuConfig";
 import {
   getDashboardOverview,
+  type MonthlySampleGroupMetric,
   type MonthlyRevenueMetric,
   type RankedMetric,
   type RevenueTotals,
@@ -192,6 +193,62 @@ function MonthlyRevenueChart({
   );
 }
 
+function MonthlySampleGroupChart({
+  rows,
+  years,
+  selectedYear,
+  selectedRevenueMonth,
+}: {
+  rows: MonthlySampleGroupMetric[];
+  years: number[];
+  selectedYear: number;
+  selectedRevenueMonth: string;
+}) {
+  const maxTotal = Math.max(...rows.map((row) => row.ozel + row.kd), 1);
+  const totalOzel = rows.reduce((sum, row) => sum + row.ozel, 0);
+  const totalKd = rows.reduce((sum, row) => sum + row.kd, 0);
+
+  return (
+    <div className={styles.monthlySampleCard}>
+      <div className={styles.chartHeader}>
+        <div>
+          <h2 className={styles.sectionTitle}>Özel / K.D. Numune Dağılımı</h2>
+          <p className={styles.chartSubtitle}>Aylık numune sayıları; varsayılan görünüm 2026 yılıdır.</p>
+        </div>
+        <form className={styles.sampleYearForm}>
+          {selectedRevenueMonth && <input type="hidden" name="ciroAy" value={selectedRevenueMonth} />}
+          <label htmlFor="numuneYil">Yıl</label>
+          <select id="numuneYil" name="numuneYil" defaultValue={selectedYear}>
+            {years.map((year) => <option key={year} value={year}>{year}</option>)}
+          </select>
+          <button type="submit">Göster</button>
+        </form>
+      </div>
+      <div className={styles.sampleLegend}>
+        <span><i className={styles.sampleDotOzel} />Özel <strong>{totalOzel.toLocaleString("tr-TR")}</strong></span>
+        <span><i className={styles.sampleDotKd} />K.D. <strong>{totalKd.toLocaleString("tr-TR")}</strong></span>
+      </div>
+      <div className={styles.sampleBars}>
+        {rows.map((row) => {
+          const total = row.ozel + row.kd;
+          return (
+            <div className={styles.sampleBarColumn} key={row.month} title={`${row.label} ${selectedYear}: Özel ${row.ozel}, K.D. ${row.kd}`}>
+              <span className={styles.sampleBarValue}>{total || ""}</span>
+              <span className={styles.sampleBarTrack}>
+                <span className={styles.sampleBarStack} style={{ height: `${Math.max(total ? 5 : 0, (total / maxTotal) * 100)}%` }}>
+                  <i className={styles.sampleBarKd} style={{ height: `${total ? (row.kd / total) * 100 : 0}%` }} />
+                  <i className={styles.sampleBarOzel} style={{ height: `${total ? (row.ozel / total) * 100 : 0}%` }} />
+                </span>
+              </span>
+              <span className={styles.sampleMonth}>{row.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ChartCard({
   title,
   subtitle,
@@ -273,7 +330,7 @@ function RankingCard({
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ ciroAy?: string }>;
+  searchParams?: Promise<{ ciroAy?: string; numuneYil?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -314,7 +371,8 @@ export default async function DashboardPage({
 
   const sp = searchParams ? await searchParams : {};
   const selectedRevenueMonth = /^\d{4}-\d{2}$/.test(sp.ciroAy || "") ? sp.ciroAy || "" : "";
-  const overview = await getDashboardOverview(selectedRevenueMonth);
+  const requestedSampleYear = /^\d{4}$/.test(sp.numuneYil || "") ? Number(sp.numuneYil) : 2026;
+  const overview = await getDashboardOverview(selectedRevenueMonth, requestedSampleYear);
   const primaryCards = overview.cards.slice(0, 4);
   const secondaryCards = overview.cards.slice(4);
 
@@ -382,6 +440,12 @@ export default async function DashboardPage({
       )}
 
       <div className={styles.chartGrid}>
+        <MonthlySampleGroupChart
+          rows={overview.monthlySampleGroups}
+          years={overview.sampleYears}
+          selectedYear={overview.selectedSampleYear}
+          selectedRevenueMonth={selectedRevenueMonth}
+        />
         <MonthlyRevenueChart
           rows={overview.monthlyRevenue}
           totals={overview.revenueTotals}

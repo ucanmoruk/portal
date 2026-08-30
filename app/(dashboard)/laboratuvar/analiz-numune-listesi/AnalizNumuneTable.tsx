@@ -43,6 +43,7 @@ export default function AnalizNumuneTable() {
   const [hizmetKodu, setHizmetKodu] = useState("");
   const [tarihBas, setTarihBas] = useState("");
   const [tarihBit, setTarihBit] = useState("");
+  const [grup, setGrup] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
 
@@ -57,6 +58,7 @@ export default function AnalizNumuneTable() {
     nextHizmetKodu: string,
     nextTarihBas: string,
     nextTarihBit: string,
+    nextGrup: string,
   ) => {
     const reqId = ++latestReq.current;
     abortRef.current?.abort();
@@ -74,6 +76,7 @@ export default function AnalizNumuneTable() {
       if (nextHizmetKodu.trim()) params.set("hizmetKodu", nextHizmetKodu.trim());
       if (nextTarihBas) params.set("tarihBas", nextTarihBas);
       if (nextTarihBit) params.set("tarihBit", nextTarihBit);
+      if (nextGrup) params.set("grup", nextGrup);
 
       const res = await fetch(`/api/analiz-numune-listesi?${params}`, {
         signal: ctrl.signal,
@@ -96,7 +99,7 @@ export default function AnalizNumuneTable() {
   }, []);
 
   useEffect(() => {
-    fetchData(page, limit, search, hizmetKodu, tarihBas, tarihBit);
+    fetchData(page, limit, search, hizmetKodu, tarihBas, tarihBit, grup);
   }, [page, limit, fetchData]);
 
   const handleSearch = (value: string) => {
@@ -104,13 +107,13 @@ export default function AnalizNumuneTable() {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
       setPage(1);
-      fetchData(1, limit, value, hizmetKodu, tarihBas, tarihBit);
+      fetchData(1, limit, value, hizmetKodu, tarihBas, tarihBit, grup);
     }, 300);
   };
 
   const applyFilters = () => {
     setPage(1);
-    fetchData(1, limit, search, hizmetKodu, tarihBas, tarihBit);
+    fetchData(1, limit, search, hizmetKodu, tarihBas, tarihBit, grup);
   };
 
   const clearFilters = () => {
@@ -118,8 +121,9 @@ export default function AnalizNumuneTable() {
     setHizmetKodu("");
     setTarihBas("");
     setTarihBit("");
+    setGrup("");
     setPage(1);
-    fetchData(1, limit, "", "", "", "");
+    fetchData(1, limit, "", "", "", "", "");
   };
 
   const pageNumbers = () => {
@@ -179,10 +183,15 @@ export default function AnalizNumuneTable() {
             style={filterInputStyle}
             title="Bitiş tarihi"
           />
+          <select value={grup} onChange={e => setGrup(e.target.value)} style={filterInputStyle} title="Numune grubu">
+            <option value="">Grup: Tümü</option>
+            <option value="Özel">Özel</option>
+            <option value="K.D.">K.D.</option>
+          </select>
           <button type="button" className={styles.pageSizeSelect} onClick={applyFilters} style={{ fontWeight: 600 }}>
             Filtrele
           </button>
-          {(search || hizmetKodu || tarihBas || tarihBit) && (
+          {(search || hizmetKodu || tarihBas || tarihBit || grup) && (
             <button type="button" className={styles.pageSizeSelect} onClick={clearFilters}>
               Temizle
             </button>

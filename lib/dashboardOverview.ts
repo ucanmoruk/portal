@@ -24,6 +24,13 @@ export interface MonthlyRevenueMetric {
   unpaidInvoiceCount: number;
 }
 
+export interface MonthlySampleGroupMetric {
+  month: number;
+  label: string;
+  ozel: number;
+  kd: number;
+}
+
 /** Ciro/tahsilat ozeti. paid + unpaid = amount (kaynakta clamp edilir). */
 export interface RevenueTotals {
   amount: number;
@@ -36,6 +43,9 @@ export interface RevenueTotals {
 export interface DashboardOverview {
   cards: DashboardMetric[];
   monthlyRevenue: MonthlyRevenueMetric[];
+  monthlySampleGroups: MonthlySampleGroupMetric[];
+  sampleYears: number[];
+  selectedSampleYear: number;
   /** monthlyRevenue satirlarinin toplami — grafikteki cubuklarla birebir tutar. */
   revenueTotals: RevenueTotals;
   topTestsThisMonth: RankedMetric[];
@@ -88,7 +98,7 @@ function mapRank(
   }));
 }
 
-export async function getDashboardOverview(selectedRevenueMonth?: string): Promise<DashboardOverview> {
+export async function getDashboardOverview(selectedRevenueMonth?: string, selectedSampleYear = 2026): Promise<DashboardOverview> {
   try {
     const pool = await cosmoPool;
     const invoiceDate = `COALESCE(NULLIF(f.Tarih, '0000-00-00 00:00:00'), (SELECT MAX(fd.Tarih) FROM FaturaDetay fd WHERE fd.ProformaNo = f.ProformaNo))`;
@@ -107,6 +117,9 @@ export async function getDashboardOverview(selectedRevenueMonth?: string): Promi
     const revenueMonthFilter = safeRevenueMonth
       ? `AND DATE_FORMAT(${invoiceDate}, '%Y-%m') = '${safeRevenueMonth}'`
       : "";
+    const safeSampleYear = Number.isInteger(selectedSampleYear) && selectedSampleYear >= 2000 && selectedSampleYear <= 2100
+      ? selectedSampleYear
+      : 2026;
 
     const invoiceRes = await pool.request().query(`
       SELECT
@@ -212,6 +225,25 @@ export async function getDashboardOverview(selectedRevenueMonth?: string): Promi
       ORDER BY Ay ASC
     `);
 
+    const [monthlySampleGroupsRes, sampleYearsRes] = await Promise.all([
+      pool.request().query(`
+        SELECT MONTH(n.Tarih) AS Ay,
+          SUM(CASE WHEN TRIM(n.Grup) = 'Özel' THEN 1 ELSE 0 END) AS Ozel,
+          SUM(CASE WHEN TRIM(n.Grup) = 'K.D.' THEN 1 ELSE 0 END) AS KD
+        FROM NKR n
+        WHERE n.Durum = 'Aktif' AND YEAR(n.Tarih) = ${safeSampleYear}
+          AND TRIM(n.Grup) IN ('Özel', 'K.D.')
+        GROUP BY MONTH(n.Tarih)
+        ORDER BY Ay
+      `),
+      pool.request().query(`
+        SELECT DISTINCT YEAR(n.Tarih) AS Yil
+        FROM NKR n
+        WHERE n.Durum = 'Aktif' AND n.Tarih IS NOT NULL
+        ORDER BY Yil DESC
+      `),
+    ]);
+
     const topRevenueRes = await pool.request().query(`
       SELECT
         IFNULL(fr.Firma_Adi, 'Firmasiz') AS FirmaAdi,
@@ -287,6 +319,12 @@ export async function getDashboardOverview(selectedRevenueMonth?: string): Promi
         unpaidInvoiceCount: Number(row.AcikFaturaAdet || 0),
       }),
     );
+    const sampleByMonth = new Map(monthlySampleGroupsRes.recordset.map((row: Record<string, unknown>) => [Number(row.Ay), row]));
+    const monthLabels = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+    const monthlySampleGroups: MonthlySampleGroupMetric[] = monthLabels.map((label, index) => {
+      const row = sampleByMonth.get(index + 1) as Record<string, unknown> | undefined;
+      return { month: index + 1, label, ozel: Number(row?.Ozel || 0), kd: Number(row?.KD || 0) };
+    });
 
     // "Genel" ozet = grafikte gorunen aylarin toplami. Ayri bir sorgu yerine
     // satirlardan toplanir ki ust seritteki rakam cubuklarla asla celismesin.
@@ -374,6 +412,9 @@ export async function getDashboardOverview(selectedRevenueMonth?: string): Promi
         },
       ],
       monthlyRevenue,
+      monthlySampleGroups,
+      sampleYears: sampleYearsRes.recordset.map((row: Record<string, unknown>) => Number(row.Yil)).filter(Boolean),
+      selectedSampleYear: safeSampleYear,
       revenueTotals,
       topTestsThisMonth: mapRank(topTestsThisMonthRes.recordset, "Ad", "Adet", "Kod"),
       topTestsLastYear: mapRank(topTestsLastYearRes.recordset, "Ad", "Adet", "Kod"),
@@ -385,6 +426,9 @@ export async function getDashboardOverview(selectedRevenueMonth?: string): Promi
     return {
       cards: [],
       monthlyRevenue: [],
+      monthlySampleGroups: [],
+      sampleYears: [],
+      selectedSampleYear: 2026,
       revenueTotals: { amount: 0, paid: 0, unpaid: 0, invoiceCount: 0, unpaidInvoiceCount: 0 },
       topTestsThisMonth: [],
       topTestsLastYear: [],

@@ -23,7 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const result = await runKysDokumanAksiyon(
       Number(id),
       aksiyon,
-      { aciklama: body?.aciklama, yururlukTarihi: body?.yururlukTarihi },
+      { maddeNo: body?.maddeNo, aciklama: body?.aciklama, yururlukTarihi: body?.yururlukTarihi },
       { userId: user.userId, userName: user.userName },
     );
     return Response.json(result);

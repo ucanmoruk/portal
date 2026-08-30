@@ -98,6 +98,35 @@
   line-height: 1.45;
 }
 
+.monthlySampleCard {
+  grid-column: 1 / -1;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+}
+
+.sampleYearForm { display: flex; align-items: center; gap: 8px; }
+.sampleYearForm label { font-size: 0.76rem; color: var(--color-text-tertiary); }
+.sampleYearForm select, .sampleYearForm button {
+  height: 32px; border: 1px solid var(--color-border-light); border-radius: 8px;
+  background: var(--color-surface); color: var(--color-text-primary); padding: 0 10px; font: inherit;
+}
+.sampleYearForm button { background: var(--color-accent); color: #fff; border-color: var(--color-accent); cursor: pointer; }
+.sampleLegend { display: flex; gap: 18px; margin: 16px 0 12px; font-size: 0.8rem; color: var(--color-text-secondary); }
+.sampleLegend span { display: inline-flex; align-items: center; gap: 6px; }
+.sampleLegend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.sampleDotOzel, .sampleBarOzel { background: #30d158; }
+.sampleDotKd, .sampleBarKd { background: #0071e3; }
+.sampleBars { display: grid; grid-template-columns: repeat(12, minmax(32px, 1fr)); gap: 10px; height: 230px; }
+.sampleBarColumn { display: grid; grid-template-rows: 22px 1fr 22px; min-width: 0; text-align: center; }
+.sampleBarValue { font-size: 0.7rem; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.sampleBarTrack { position: relative; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid var(--color-border-light); }
+.sampleBarStack { display: flex; flex-direction: column; justify-content: flex-end; width: min(34px, 70%); border-radius: 6px 6px 2px 2px; overflow: hidden; min-height: 0; }
+.sampleBarStack i { display: block; width: 100%; }
+.sampleMonth { align-self: end; font-size: 0.72rem; color: var(--color-text-tertiary); }
+
 .badgeDot {
   width: 6px;
   height: 6px;

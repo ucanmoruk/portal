@@ -30,6 +30,7 @@ const ASAMA_STYLE: Record<string, { bg: string; color: string }> = {
 
 interface EvrakGroup {
   evrakNo: string;
+  oldEvrakNo?: string | null;
   tarih: string | null;
   firmaAd: string | null;
   projeAd: string | null;
@@ -114,6 +115,7 @@ export default function NumuneKabulTable() {
   const router = useRouter();
   const [groups, setGroups]         = useState<EvrakGroup[]>([]);
   const [total, setTotal]           = useState(0);
+  const [totalSamples, setTotalSamples] = useState(0);
   const [page, setPage]             = useState(1);
   const [limit, setLimit]           = useState(20);
   const [totalPages, setTotalPages] = useState(1);
@@ -125,7 +127,8 @@ export default function NumuneKabulTable() {
   const [tarihBit, setTarihBit]           = useState(defaultRange.tarihBit);
   const [odemeFilter, setOdemeFilter]     = useState("");
   const [raporDurumFilter, setRaporDurumFilter] = useState("");
-  const filtersRef = useRef({ tarihBas: defaultRange.tarihBas, tarihBit: defaultRange.tarihBit, odeme: "", raporDurumu: "" });
+  const [grupFilter, setGrupFilter]       = useState("");
+  const filtersRef = useRef({ tarihBas: defaultRange.tarihBas, tarihBit: defaultRange.tarihBit, odeme: "", raporDurumu: "", grup: "" });
   const [loading, setLoading]       = useState(true);
   const [transitioning, setTransitioning] = useState(false); // sayfa geçişi (skeleton değil, overlay)
   const [error, setError]           = useState("");
@@ -232,7 +235,8 @@ export default function NumuneKabulTable() {
         (fr.tarihBas    ? `&tarihBas=${fr.tarihBas}` : "") +
         (fr.tarihBit    ? `&tarihBit=${fr.tarihBit}` : "") +
         (fr.odeme       ? `&odeme=${encodeURIComponent(fr.odeme)}` : "") +
-        (fr.raporDurumu ? `&raporDurumu=${encodeURIComponent(fr.raporDurumu)}` : "");
+        (fr.raporDurumu ? `&raporDurumu=${encodeURIComponent(fr.raporDurumu)}` : "") +
+        (fr.grup        ? `&grup=${encodeURIComponent(fr.grup)}` : "");
       const res = await fetch(
         `/api/numune-kabul?page=${p}&limit=${l}&search=${encodeURIComponent(s)}${filterQs}`,
         { signal: ctrl.signal }
@@ -246,6 +250,7 @@ export default function NumuneKabulTable() {
 
       setGroups(json.data);
       setTotal(json.total);
+      setTotalSamples(json.totalSamples || 0);
       setTotalPages(json.totalPages);
     } catch (e: any) {
       if (e.name === "AbortError" || reqId !== latestReqId.current) return;
@@ -279,25 +284,26 @@ export default function NumuneKabulTable() {
   };
 
   // ── Filtre uygula / temizle ──
-  const applyFilters = (patch: Partial<{ tarihBas: string; tarihBit: string; odeme: string; raporDurumu: string }>) => {
+  const applyFilters = (patch: Partial<{ tarihBas: string; tarihBit: string; odeme: string; raporDurumu: string; grup: string }>) => {
     const next = { ...filtersRef.current, ...patch };
     filtersRef.current = next;
     setTarihBas(next.tarihBas);
     setTarihBit(next.tarihBit);
     setOdemeFilter(next.odeme);
     setRaporDurumFilter(next.raporDurumu);
+    setGrupFilter(next.grup);
     setPage(1);
     fetchData(1, search, limit, { clearFirst: true });
   };
 
   const clearFilters = () => {
-    filtersRef.current = { tarihBas: "", tarihBit: "", odeme: "", raporDurumu: "" };
-    setTarihBas(""); setTarihBit(""); setOdemeFilter(""); setRaporDurumFilter("");
+    filtersRef.current = { tarihBas: "", tarihBit: "", odeme: "", raporDurumu: "", grup: "" };
+    setTarihBas(""); setTarihBit(""); setOdemeFilter(""); setRaporDurumFilter(""); setGrupFilter("");
     setPage(1);
     fetchData(1, search, limit, { clearFirst: true });
   };
 
-  const hasActiveFilter = !!(tarihBas || tarihBit || odemeFilter || raporDurumFilter);
+  const hasActiveFilter = !!(tarihBas || tarihBit || odemeFilter || raporDurumFilter || grupFilter);
 
   const ODEME_OPTS = ["Ödendi", "Fatura Kesilmedi", "Ödeme Bekliyor", "Proforma Onaylandı", "Proforma Reddedildi", "Kısmen Ödendi", "İptal"];
   const RAPOR_DURUM_OPTS = RAPOR_DURUM_MANUEL_OPTS;
@@ -469,7 +475,7 @@ export default function NumuneKabulTable() {
               </button>
             )}
           </div>
-          <span className={styles.totalCount}>{total} evrak</span>
+          <span className={styles.totalCount}>{total} evrak, {totalSamples} numune</span>
           {selectedVisibleCount > 0 && (
             <button
               className={styles.addBtn}
@@ -517,6 +523,12 @@ export default function NumuneKabulTable() {
           style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 12, background: "var(--color-bg-elevated, #fff)", color: "inherit", cursor: "pointer" }}>
           <option value="">Ödeme: Tümü</option>
           {ODEME_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+        <select value={grupFilter} onChange={e => applyFilters({ grup: e.target.value })}
+          style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 12, background: "var(--color-bg-elevated, #fff)", color: "inherit", cursor: "pointer" }}>
+          <option value="">Grup: Tümü</option>
+          <option value="Özel">Özel</option>
+          <option value="K.D.">K.D.</option>
         </select>
         <select value={raporDurumFilter} onChange={e => applyFilters({ raporDurumu: e.target.value })}
           style={{
@@ -642,8 +654,13 @@ export default function NumuneKabulTable() {
                 </div>
 
                 {/* Evrak No */}
-                <div style={{ width: 104, flexShrink: 0, fontWeight: 700, fontSize: "0.82rem", color: "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>
-                  {group.evrakNo}
+                <div style={{ width: 104, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.82rem", color: "var(--color-text-primary)" }}>{group.evrakNo}</div>
+                  {group.oldEvrakNo && (
+                    <div style={{ marginTop: 2, fontSize: "0.66rem", fontWeight: 400, color: "#a1a1a6" }}>
+                      eski: {group.oldEvrakNo}
+                    </div>
+                  )}
                 </div>
 
                 {/* Firma / Proje */}
@@ -976,7 +993,7 @@ export default function NumuneKabulTable() {
                   >{n}</button>
             )}
             <button className={styles.pageBtn} onClick={() => goTo(page + 1)} disabled={page === totalPages || transitioning}>›</button>
-            <span className={styles.pageInfo}>{total} evrak</span>
+            <span className={styles.pageInfo}>{total} evrak, {totalSamples} numune</span>
           </div>
         )}
       </div>

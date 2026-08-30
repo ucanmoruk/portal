@@ -29,7 +29,11 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
 const ALLOWED_STYLE_PROPS = new Set([
   "width", "height", "min-width", "max-width", "text-align", "vertical-align",
   "background-color", "color", "font-weight", "font-style", "text-decoration",
-  "padding", "margin", "font-family",
+  "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
+  "margin", "margin-top", "margin-right", "margin-bottom", "margin-left", "font-family",
+  "font-size", "line-height", "letter-spacing", "text-indent", "white-space",
+  "border", "border-width", "border-style", "border-color", "border-collapse",
+  "list-style-type",
 ]);
 
 // font-family değerleri sadece harf, rakam, boşluk, tire, virgül ve tırnak içerebilir

@@ -28,6 +28,7 @@ import {
   Table2,
   Underline,
   Undo2,
+  ExternalLink,
   X,
   XCircle,
 } from "lucide-react";
@@ -47,7 +48,6 @@ import {
 type Kullanici = { ID: number | string; Ad: string };
 type Aksiyon =
   | "onaya-gonder"
-  | "kontrol-onayi"
   | "yayin-onayi"
   | "reddet"
   | "revizyon-baslat"
@@ -65,18 +65,11 @@ type AksiyonTanim = {
 
 const AKSIYONLAR: Record<Aksiyon, AksiyonTanim> = {
   "onaya-gonder": {
-    baslik: "Kontrole gönder",
-    aciklama: "Doküman kilitlenecek ve kontrol eden kişinin onayına düşecek.",
-    notEtiketi: "Kontrol notu (opsiyonel)",
+    baslik: "Onaya gönder",
+    aciklama: "Doküman kilitlenecek ve onaylayan kişinin yayına alma onayına düşecek.",
+    notEtiketi: "Onay notu (opsiyonel)",
     notZorunlu: false,
     onayEtiketi: "Gönder",
-  },
-  "kontrol-onayi": {
-    baslik: "Kontrol onayı ver",
-    aciklama: "Teknik kontrolü tamamladığınızı onaylıyorsunuz. Doküman yayın onayına geçecek.",
-    notEtiketi: "Kontrol notu (opsiyonel)",
-    notZorunlu: false,
-    onayEtiketi: "Kontrolü onayla",
   },
   "yayin-onayi": {
     baslik: "Yayına al",
@@ -209,14 +202,16 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   const [sections, setSections] = useState<Array<{ id: string; title: string }>>([]);
   const [aksiyonModal, setAksiyonModal] = useState<Aksiyon | null>(null);
   const [aksiyonNot, setAksiyonNot] = useState("");
+  const [aksiyonMaddeNo, setAksiyonMaddeNo] = useState("");
   const [aksiyonYururluk, setAksiyonYururluk] = useState("");
   const [aksiyonHata, setAksiyonHata] = useState("");
   const [aksiyonBusy, setAksiyonBusy] = useState(false);
   const [kullanicilar, setKullanicilar] = useState<Kullanici[]>([]);
   const [kunye, setKunye] = useState({
     kod: "", baslik: "", tur: "Prosedür", ozet: "", yururlukTarihi: "",
-    hazirlayanId: "", hazirlayanAd: "", kontrolEdenId: "", kontrolEdenAd: "", onaylayanId: "", onaylayanAd: "",
+    hazirlayanId: "", hazirlayanAd: "", onaylayanId: "", onaylayanAd: "",
   });
+  const [yayinDokumanlari, setYayinDokumanlari] = useState<DokumanDetay[]>([]);
   const [revizyonOnizleme, setRevizyonOnizleme] = useState<{ etiket: string; icerik: string; aciklama: string } | null>(null);
   const [tableMenuOpen, setTableMenuOpen] = useState(false);
 
@@ -269,6 +264,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     }
     setDirty(false);
     setEditing(false);
+    if (doc.hasDosya) setActiveTab("kunye");
     setKunye({
       kod: doc.kod,
       baslik: doc.baslik,
@@ -277,8 +273,6 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       yururlukTarihi: doc.yururlukTarihi || "",
       hazirlayanId: doc.hazirlayanId,
       hazirlayanAd: doc.hazirlayanAd,
-      kontrolEdenId: doc.kontrolEdenId,
-      kontrolEdenAd: doc.kontrolEdenAd,
       onaylayanId: doc.onaylayanId,
       onaylayanAd: doc.onaylayanAd,
     });
@@ -296,13 +290,20 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
      
   }, [activeTab, doc]);
 
-  // Hazırlayan/kontrol eden/onaylayan seçimleri için personel listesi — künye
+  // Hazırlayan/onaylayan seçimleri için personel listesi — künye
   // salt okunur olsa bile mevcut isimler doğru gösterilebilsin diye her zaman çekilir.
   useEffect(() => {
     fetch("/api/kullanicilar")
       .then(r => r.json())
       .then(j => setKullanicilar(j.data || []))
       .catch(() => { /* liste alınamazsa mevcut isim salt metin olarak gösterilir */ });
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/kys/dokumanlar?durum=Yayında&limit=200&sort=kod-asc")
+      .then(r => r.json())
+      .then(j => setYayinDokumanlari(j.data || []))
+      .catch(() => setYayinDokumanlari([]));
   }, []);
 
   // Kaydedilmemiş değişiklikle sayfadan ayrılma uyarısı
@@ -498,6 +499,22 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     const editor = editorRef.current;
     if (!editor) return;
     const number = nextHeadingNumber(level);
+    const selectedRange = currentSelectionInsideEditor() || savedRangeRef.current;
+    if (selectedRange && !selectedRange.collapsed && editor.contains(selectedRange.commonAncestorContainer)) {
+      restoreEditorSelection();
+      document.execCommand("formatBlock", false, `h${level}`);
+      const selection = window.getSelection();
+      const block = topLevelBlockFromNode(editor, selection?.anchorNode || null);
+      if (block) {
+        const currentText = block.textContent?.trim() || "";
+        if (!/^\d+(?:\.\d+)*\.?\s/.test(currentText)) block.textContent = `${number} ${currentText}`;
+        headingSeqRef.current += 1;
+        block.id = slugifyHeading(block.textContent || currentText, headingSeqRef.current);
+      }
+      markDirty();
+      refreshSections();
+      return;
+    }
     const label = level === 2 ? "Yeni başlık" : level === 3 ? "Yeni alt başlık" : "Yeni alt alt başlık";
     headingSeqRef.current += 1;
     const heading = document.createElement(`h${level}`);
@@ -668,25 +685,42 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       const file = imageItem.getAsFile();
       if (file) { event.preventDefault(); handleImageFile(file); return; }
     }
-    // Word/web'den gelen biçimlendirmeyi taşımadan düz metin olarak yapıştır
-    const plain = event.clipboardData.getData("text/plain");
-    if (plain) {
+    // Word/web kaynaklı kalın, italik, liste, tablo ve benzeri zengin biçimi koru.
+    const html = event.clipboardData.getData("text/html");
+    if (html) {
       event.preventDefault();
-      document.execCommand("insertText", false, plain);
+      document.execCommand("insertHTML", false, html);
     }
     requestAnimationFrame(() => { markDirty(); refreshSections(); });
   }
 
-  function createLink() {
+  function createPublishedDocumentLink(targetId: string) {
     if (!ensureEditing()) return;
     const range = currentSelectionInsideEditor() || savedRangeRef.current;
     if (!range || range.collapsed) {
       window.alert("Önce bağlantı verilecek metni seçin.");
       return;
     }
-    const url = window.prompt("Bağlantı adresi (https://... veya /laboratuvar/kys/dokuman-yonetimi/12)");
-    if (!url) return;
-    runCommand("createLink", url.trim());
+    const target = yayinDokumanlari.find(item => String(item.id) === targetId);
+    if (!target) return;
+    const url = target.hasDosya
+      ? `/api/kys/dokumanlar/${target.id}/dosya`
+      : `/laboratuvar/kys/dokuman-yonetimi/${target.id}/onizleme`;
+    restoreEditorSelection();
+    document.execCommand("createLink", false, url);
+    const selection = window.getSelection();
+    const anchor = (selection?.anchorNode instanceof HTMLElement ? selection.anchorNode : selection?.anchorNode?.parentElement)?.closest("a");
+    anchor?.setAttribute("target", "_blank");
+    anchor?.setAttribute("rel", "noopener noreferrer");
+    markDirty();
+  }
+
+  function handleDocumentLinkClick(event: React.MouseEvent<HTMLElement>) {
+    const target = event.target as HTMLElement;
+    const anchor = target.closest("a");
+    if (!anchor?.href || editing) return;
+    event.preventDefault();
+    window.open(anchor.href, "_blank", "noopener,noreferrer");
   }
 
   function scrollToSection(id: string) {
@@ -744,8 +778,6 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       yururlukTarihi: kunye.yururlukTarihi || null,
       hazirlayanId: kunye.hazirlayanId || null,
       hazirlayanAd: kunye.hazirlayanAd || null,
-      kontrolEdenId: kunye.kontrolEdenId || null,
-      kontrolEdenAd: kunye.kontrolEdenAd || null,
       onaylayanId: kunye.onaylayanId || null,
       onaylayanAd: kunye.onaylayanAd || null,
     });
@@ -755,6 +787,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   function openAksiyon(aksiyon: Aksiyon) {
     setAksiyonModal(aksiyon);
     setAksiyonNot("");
+    setAksiyonMaddeNo("");
     setAksiyonHata("");
     setAksiyonYururluk(doc?.yururlukTarihi || new Date().toISOString().slice(0, 10));
   }
@@ -764,6 +797,10 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     const tanim = AKSIYONLAR[aksiyonModal];
     if (tanim.notZorunlu && !aksiyonNot.trim()) {
       setAksiyonHata("Bu işlem için açıklama girmelisiniz.");
+      return;
+    }
+    if (aksiyonModal === "revizyon-baslat" && !aksiyonMaddeNo.trim()) {
+      setAksiyonHata("Revizyon için madde no girmelisiniz.");
       return;
     }
     setAksiyonBusy(true);
@@ -779,6 +816,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           aksiyon: aksiyonModal,
+          maddeNo: aksiyonMaddeNo.trim(),
           aciklama: aksiyonNot.trim(),
           ...(tanim.yururlukSor ? { yururlukTarihi: aksiyonYururluk } : {}),
         }),
@@ -788,7 +826,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       setAksiyonModal(null);
       loadedKeyRef.current = "";
       await fetchDoc();
-      setActiveTab(aksiyonModal === "revizyon-baslat" || aksiyonModal === "reddet" ? "icerik" : "akis");
+      setActiveTab(aksiyonModal === "revizyon-baslat" || aksiyonModal === "reddet" ? (doc.hasDosya ? "kunye" : "icerik") : "akis");
     } catch (e: unknown) {
       setAksiyonHata(errorMessage(e, "İşlem tamamlanamadı."));
     } finally {
@@ -808,10 +846,21 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   }
 
   function printDocument() {
+    if (doc?.hasDosya) {
+      window.open(`/api/kys/dokumanlar/${doc.id}/dosya`, "_blank", "noopener,noreferrer");
+      return;
+    }
     // Yazdırma çıktısı editör gövdesinden alınır — önce İçerik sekmesi açılmalı
     setPreviewOpen(false);
     setActiveTab("icerik");
     requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+  }
+
+  function openPreviewInNewTab() {
+    const url = doc?.hasDosya
+      ? `/api/kys/dokumanlar/${doc.id}/dosya`
+      : `/laboratuvar/kys/dokuman-yonetimi/${doc?.id}/onizleme`;
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   // ── Görünüm ────────────────────────────────────────────────────────────────
@@ -846,7 +895,6 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   }
 
   const durum = doc.durum;
-  const kontrolTamam = Boolean(doc.kontrolTarihi) && durum !== "Kontrol Bekliyor";
   const yayinTamam = durum === "Yayında";
   const kisiSecenekleri = kullanicilar.map(k => ({ id: String(k.ID), ad: k.Ad }));
 
@@ -856,21 +904,14 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       person: doc.hazirlayanAd || "-",
       note: durum === "Taslak" || durum === "Revize Ediliyor"
         ? "Doküman üzerinde çalışılıyor"
-        : "Dokümanı kontrole gönderdi",
+        : "Dokümanı onaya gönderdi",
       done: durum !== "Taslak" && durum !== "Revize Ediliyor",
       date: null as string | null,
     },
     {
-      label: "Kontrol Eden",
-      person: doc.kontrolEdenAd || "-",
-      note: kontrolTamam ? "Teknik kontrol onaylandı" : "Teknik kontrol bekleniyor",
-      done: kontrolTamam,
-      date: doc.kontrolTarihi,
-    },
-    {
       label: "Onaylayan",
       person: doc.onaylayanAd || "-",
-      note: yayinTamam ? "Dokümanı yayına aldı" : "Kontrol onayı sonrası yayın onayı bekler",
+      note: yayinTamam ? "Dokümanı yayına aldı" : "Yayın onayı bekleniyor",
       done: yayinTamam,
       date: doc.onayTarihi,
     },
@@ -901,7 +942,6 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
               <span>Rev. {doc.revizyonEtiket}</span>
               <span>Yürürlük: {formatDate(doc.yururlukTarihi)}</span>
               <span>Hazırlayan: {doc.hazirlayanAd || "-"}</span>
-              <span>Kontrol: {doc.kontrolEdenAd || "-"}</span>
               <span>Onay: {doc.onaylayanAd || "-"}</span>
             </div>
           </div>
@@ -912,7 +952,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 {saving ? "Kaydediliyor..." : dirty ? "Kaydet" : "Kaydedildi"}
               </button>
             )}
-            <button type="button" className={styles.ghostButton} onClick={() => setPreviewOpen(true)}>
+            <button type="button" className={styles.ghostButton} onClick={() => doc.hasDosya ? openPreviewInNewTab() : setPreviewOpen(true)}>
               <Eye size={15} />
               Önizle
             </button>
@@ -923,7 +963,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
             {canEdit && (
               <button type="button" className={styles.publishButton} onClick={() => openAksiyon("onaya-gonder")}>
                 <Send size={16} />
-                Kontrole gönder
+                Onaya gönder
               </button>
             )}
             {durum === "Yayında" && yetki.duzenle && (
@@ -947,7 +987,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
 
         <div className={styles.tabs} role="tablist" aria-label="Doküman sekmeleri">
           {([
-            ["icerik", "İçerik"],
+            ...(!doc.hasDosya ? [["icerik", "İçerik"]] : []),
             ["kunye", "Künye"],
             ["akis", "Onay Akışı"],
             ["revizyon", `Revizyonlar (${doc.revizyonlar.length})`],
@@ -959,7 +999,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
               role="tab"
               aria-selected={activeTab === key}
               className={`${styles.tabButton} ${activeTab === key ? styles.tabButtonActive : ""}`}
-              onClick={() => setActiveTab(key)}
+              onClick={() => setActiveTab(key as typeof activeTab)}
             >
               {label}
             </button>
@@ -1026,7 +1066,24 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 <ToolButton title="Madde listesi" disabled={!canEdit} onRun={() => runCommand("insertUnorderedList")}><List size={15} /></ToolButton>
                 <ToolButton title="Revizyon işaretle (sarı vurgu)" disabled={!canEdit} onRun={() => runCommand("backColor", "#fff3bf")}><Highlighter size={15} /></ToolButton>
                 <ToolButton title="Vurguyu kaldır" disabled={!canEdit} onRun={() => runCommand("backColor", "transparent")}><Undo2 size={15} /></ToolButton>
-                <ToolButton title="Bağlantı ekle" disabled={!canEdit} onRun={createLink}><Link2 size={15} /></ToolButton>
+                <span className={styles.documentLinkPicker}>
+                  <Link2 size={14} />
+                  <select
+                    aria-label="Yayındaki dokümana bağlantı ver"
+                    disabled={!canEdit || yayinDokumanlari.length === 0}
+                    defaultValue=""
+                    onMouseDown={rememberEditorSelection}
+                    onChange={event => {
+                      if (event.target.value) createPublishedDocumentLink(event.target.value);
+                      event.target.value = "";
+                    }}
+                  >
+                    <option value="">Yayındaki dokümana bağla…</option>
+                    {yayinDokumanlari.filter(item => item.id !== doc.id).map(item => (
+                      <option key={item.id} value={item.id}>{item.kod} — {item.baslik}</option>
+                    ))}
+                  </select>
+                </span>
                 <span className={styles.toolbarDivider} />
                 <ToolButton title="Tablo ekle" disabled={!canEdit} onRun={insertTable}><Table2 size={15} /></ToolButton>
                 <div className={styles.tableMenuWrap} ref={tableMenuRef}>
@@ -1086,7 +1143,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                       ? "Yayındaki doküman düzenlenemez. Değişiklik için revizyon başlatın."
                       : durum === "Arşiv"
                         ? "Arşivdeki doküman düzenlenemez. Önce arşivden çıkarın."
-                        : "Doküman onay akışında olduğu için kilitli. Kontrol/onay tamamlanana kadar düzenlenemez."}
+                        : "Doküman onay akışında olduğu için kilitli. Onay tamamlanana kadar düzenlenemez."}
                 </div>
               )}
 
@@ -1100,6 +1157,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 onMouseUp={rememberEditorSelection}
                 onFocus={rememberEditorSelection}
                 onPaste={handlePaste}
+                onClick={handleDocumentLinkClick}
               />
             </div>
           </div>
@@ -1130,8 +1188,8 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 <label>Revizyon</label>
                 <input value={doc.revizyonEtiket} disabled readOnly />
               </div>
-              {(["hazirlayan", "kontrolEden", "onaylayan"] as const).map(alan => {
-                const etiket = alan === "hazirlayan" ? "Hazırlayan" : alan === "kontrolEden" ? "Kontrol eden" : "Onaylayan";
+              {(["hazirlayan", "onaylayan"] as const).map(alan => {
+                const etiket = alan === "hazirlayan" ? "Hazırlayan" : "Onaylayan";
                 const idKey = `${alan}Id` as const;
                 const adKey = `${alan}Ad` as const;
                 const currentId = kunye[idKey];
@@ -1198,23 +1256,13 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 disabled={!canEdit}
               >
                 <Send size={16} />
-                Kontrole gönder
-              </button>
-              <button
-                type="button"
-                className={styles.ghostButton}
-                onClick={() => openAksiyon("kontrol-onayi")}
-                disabled={durum !== "Kontrol Bekliyor" || !yetki.kontrol}
-                title={!yetki.kontrol ? "Kontrol onayı yetkiniz yok" : undefined}
-              >
-                <CheckCircle2 size={16} />
-                Kontrol onayı ver
+                Onaya gönder
               </button>
               <button
                 type="button"
                 className={styles.ghostButton}
                 onClick={() => openAksiyon("yayin-onayi")}
-                disabled={durum !== "Onay Bekliyor" || !yetki.onayla}
+                disabled={(durum !== "Onay Bekliyor" && durum !== "Kontrol Bekliyor") || !yetki.onayla}
                 title={!yetki.onayla ? "Yayın onayı yetkiniz yok" : undefined}
               >
                 <CheckCircle2 size={16} />
@@ -1224,7 +1272,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 type="button"
                 className={styles.dangerButton}
                 onClick={() => openAksiyon("reddet")}
-                disabled={(durum !== "Kontrol Bekliyor" && durum !== "Onay Bekliyor") || (!yetki.kontrol && !yetki.onayla)}
+                disabled={(durum !== "Kontrol Bekliyor" && durum !== "Onay Bekliyor") || !yetki.onayla}
               >
                 <XCircle size={16} />
                 Revizyona geri gönder
@@ -1250,8 +1298,8 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
             </div>
 
             <p className={styles.flowHint}>
-              Doküman kontrole gönderildiğinde kilitlenir. Önce kontrol eden kişi teknik kontrolü onaylar, ardından
-              onaylayan kişi dokümanı yayına alır ve o sürüm revizyon geçmişine kaydedilir. Yayındaki bir dokümanda
+              Doküman onaya gönderildiğinde kilitlenir. Onaylayan kişi dokümanı yayına alır ve o sürüm revizyon
+              geçmişine kaydedilir. Yayındaki bir dokümanda
               değişiklik yapmak için revizyon başlatılır; revizyon numarası otomatik artar.
             </p>
           </div>
@@ -1270,8 +1318,8 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                   <strong>Rev. {rev.revizyonEtiket}</strong>
                   <span>{rev.aciklama || "Açıklama girilmedi."}</span>
                   <small>
-                    Yayın: {formatDate(rev.yayinTarihi)} · Hazırlayan: {rev.hazirlayanAd || "-"} ·
-                    Kontrol: {rev.kontrolEdenAd || "-"} · Onay: {rev.onaylayanAd || "-"}
+                    Madde: {rev.maddeNo || "-"} · Yayın: {formatDate(rev.yayinTarihi)} ·
+                    Hazırlayan: {rev.hazirlayanAd || "-"} · Onay: {rev.onaylayanAd || "-"}
                   </small>
                 </div>
                 <button type="button" className={styles.ghostButton} onClick={() => void openRevizyon(rev.id, rev.revizyonEtiket)}>
@@ -1323,6 +1371,10 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 <h3>{doc.baslik}</h3>
               </div>
               <div className={styles.headerActions}>
+                <button type="button" className={styles.ghostButton} onClick={openPreviewInNewTab}>
+                  <ExternalLink size={15} />
+                  Yeni sekmede aç
+                </button>
                 <button type="button" className={styles.ghostButton} onClick={printDocument}>
                   <Printer size={15} />
                   Yazdır / PDF
@@ -1334,16 +1386,18 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
             </div>
             <div className={styles.previewPaper}>
               <div className={styles.previewPaperInner}>
-                <div className={styles.previewMeta}>
-                  <span>{doc.tur}</span>
-                  <span>Durum: {durum}</span>
-                  <span>Yürürlük: {formatDate(doc.yururlukTarihi)}</span>
-                  <span>Hazırlayan: {doc.hazirlayanAd || "-"}</span>
-                  <span>Kontrol: {doc.kontrolEdenAd || "-"}</span>
-                  <span>Onay: {doc.onaylayanAd || "-"}</span>
+                <div className={styles.previewDocumentHeader}>
+                  <img src="/unique-logo-wide.png" alt="UNIQUE Analyse" />
+                  <strong>{doc.baslik}</strong>
+                  <table><tbody>
+                    <tr><th>Doküman No</th><td>{doc.kod}</td></tr>
+                    <tr><th>Revizyon</th><td>{doc.revizyonEtiket}</td></tr>
+                    <tr><th>Yürürlük Tarihi</th><td>{formatDate(doc.yururlukTarihi)}</td></tr>
+                  </tbody></table>
                 </div>
                 <div
                   className={styles.documentBody}
+                  onClick={handleDocumentLinkClick}
                   dangerouslySetInnerHTML={{ __html: editorRef.current?.innerHTML ?? draftRef.current ?? doc.icerik }}
                 />
               </div>
@@ -1390,12 +1444,18 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                   <input type="date" value={aksiyonYururluk} onChange={e => setAksiyonYururluk(e.target.value)} />
                 </div>
               )}
+              {aksiyonModal === "revizyon-baslat" && (
+                <div className={tableStyles.formGroup}>
+                  <label>Madde no <span className={tableStyles.required}> *</span></label>
+                  <input value={aksiyonMaddeNo} autoFocus onChange={e => setAksiyonMaddeNo(e.target.value)} placeholder="Örn. 4.2, 5.1-5.3" />
+                </div>
+              )}
               <div className={tableStyles.formGroup}>
                 <label>
                   {AKSIYONLAR[aksiyonModal].notEtiketi}
                   {AKSIYONLAR[aksiyonModal].notZorunlu && <span className={tableStyles.required}> *</span>}
                 </label>
-                <textarea rows={3} value={aksiyonNot} autoFocus onChange={e => setAksiyonNot(e.target.value)} />
+                <textarea rows={3} value={aksiyonNot} autoFocus={aksiyonModal !== "revizyon-baslat"} onChange={e => setAksiyonNot(e.target.value)} />
               </div>
             </div>
             <div className={tableStyles.modalFooter}>
@@ -1408,16 +1468,28 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
         </div>
       )}
 
-      {/* Yazdırma başlığı — sadece print çıktısında görünür */}
+      {/* Yazdırma üst/alt bilgileri — her sayfada sabitlenir */}
       <div className={styles.printHeader} aria-hidden="true">
-        <div>
-          <strong>{doc.kod}</strong> · {doc.baslik}
-        </div>
-        <div>
-          Rev. {doc.revizyonEtiket} · Yürürlük: {formatDate(doc.yururlukTarihi)} · Durum: {durum}
-        </div>
-        <div>
-          Hazırlayan: {doc.hazirlayanAd || "-"} · Kontrol: {doc.kontrolEdenAd || "-"} · Onay: {doc.onaylayanAd || "-"}
+        <img src="/unique-logo-wide.png" alt="UNIQUE Analyse" />
+        <strong>{doc.baslik}</strong>
+        <table><tbody>
+          <tr><th>Doküman No</th><td>{doc.kod}</td></tr>
+          <tr><th>Revizyon</th><td>{doc.revizyonEtiket}</td></tr>
+          <tr><th>Yürürlük Tarihi</th><td>{formatDate(doc.yururlukTarihi)}</td></tr>
+        </tbody></table>
+      </div>
+      <div className={styles.printFooter} aria-hidden="true">
+        <span className={styles.printPageNumber}>Sayfa </span>
+        <strong>ELEKTRONİK NÜSHA. BASILMIŞ HALİ KONTROLSÜZ KOPYADIR.</strong>
+      </div>
+      <div className={styles.printAppendix} aria-hidden="true">
+        <h2>Revizyon Geçmişi</h2>
+        <table><thead><tr><th>Rev.</th><th>Madde No</th><th>Açıklama</th><th>Yayın Tarihi</th></tr></thead>
+          <tbody>{doc.revizyonlar.map(rev => <tr key={rev.id}><td>{rev.revizyonEtiket}</td><td>{rev.maddeNo || "-"}</td><td>{rev.aciklama || "-"}</td><td>{formatDate(rev.yayinTarihi)}</td></tr>)}</tbody>
+        </table>
+        <div className={styles.signatureGrid}>
+          <div><span>Hazırlayan</span><strong>{doc.hazirlayanAd || "-"}</strong><i>Islak İmza</i></div>
+          <div><span>Onaylayan</span><strong>{doc.onaylayanAd || "-"}</strong><i>Islak İmza</i></div>
         </div>
       </div>
     </div>

@@ -507,86 +507,19 @@ export default function YeniNumuneClient() {
   });
   const [evrakOpen, setEvrakOpen] = useState(true);
   const [evrakSaved, setEvrakSaved] = useState(false);
-  const [loadingNos, setLoadingNos] = useState(false);
 
   const [numuneler, setNumuneler] = useState<NumuneCard[]>([]);
   const [lookup, setLookup] = useState<LookupData>({ grupTurleri: [], rUGDTipler: [], paketler: [] });
   const [cameraCardId, setCameraCardId] = useState<string | null>(null);
-  const reservedRaporNos = useRef<Set<string>>(new Set());
 
   // Load lookup data
   useEffect(() => {
     fetch("/api/numune-form/lookup").then(r => r.json()).then((d: LookupData) => { if (d.grupTurleri) setLookup(d); }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    reservedRaporNos.current.clear();
-  }, [evrak.Grup]);
-
-  // Auto-fill Evrak_No when Grup changes (if not yet filled)
-  useEffect(() => {
-    if (!evrak.Grup || evrak.Evrak_No) return;
-    let cancelled = false;
-    (async () => {
-      setLoadingNos(true);
-      try {
-        const r = await fetch(`/api/numune-form/next-no?grup=${encodeURIComponent(evrak.Grup)}`);
-        const j = await r.json();
-        if (!cancelled && r.ok) setEvrak(e => ({ ...e, Evrak_No: j.evrakNo }));
-      } finally { if (!cancelled) setLoadingNos(false); }
-    })();
-    return () => { cancelled = true; };
-  }, [evrak.Grup]);
-
   const patchEvrak = (u: Partial<EvrakForm>) => setEvrak(e => ({ ...e, ...u }));
 
-  // Fetch next Rapor No for a new card
-  const fetchNextRaporNo = async (): Promise<string> => {
-    try {
-      const r = await fetch(`/api/numune-form/next-no?grup=${encodeURIComponent(evrak.Grup || "Özel")}`);
-      const j = await r.json();
-      return r.ok ? j.raporNo : "";
-    } catch { return ""; }
-  };
-
-  const reserveNextRaporNo = (serverNo: string, existingCards: NumuneCard[]) => {
-    const base = String(serverNo || "").trim();
-    const asNumber = (value: string) => {
-      const clean = String(value || "").trim();
-      return /^\d+$/.test(clean) ? Number(clean) : null;
-    };
-    const start = asNumber(base);
-    if (start == null) return base;
-
-    const width = base.length;
-    const used = new Set<string>([
-      ...existingCards.map(card => String(card.RaporNo || "").trim()).filter(Boolean),
-      ...reservedRaporNos.current,
-    ]);
-
-    let next = start;
-    for (const value of used) {
-      const n = asNumber(value);
-      if (n != null && n >= next) next = n + 1;
-    }
-
-    let candidate = String(next).padStart(width, "0");
-    while (used.has(candidate)) {
-      next += 1;
-      candidate = String(next).padStart(width, "0");
-    }
-    reservedRaporNos.current.add(candidate);
-    return candidate;
-  };
-
-  const addNumune = async () => {
-    const serverNo = await fetchNextRaporNo();
-    setNumuneler(prev => {
-      const raporNo = reserveNextRaporNo(serverNo, prev);
-      const card = emptyCard({ RaporNo: raporNo, Tur: "" });
-      return [...prev, card];
-    });
-  };
+  const addNumune = () => setNumuneler(prev => [...prev, emptyCard({ RaporNo: "", Tur: "" })]);
 
   const patchCard = (cardId: string, update: Partial<NumuneCard>) => {
     setNumuneler(prev => prev.map(c => c.cardId === cardId ? { ...c, ...update } : c));
@@ -623,10 +556,22 @@ export default function YeniNumuneClient() {
 
   const saveCard = async (card: NumuneCard) => {
     if (!card.Numune_Adi.trim()) { patchCard(card.cardId, { error: "Numune Adı zorunludur." }); return; }
-    if (!card.RaporNo.trim()) { patchCard(card.cardId, { error: "Rapor No zorunludur." }); return; }
-    if (!evrak.Evrak_No.trim()) { patchCard(card.cardId, { error: "Önce Evrak No girin." }); return; }
-
     patchCard(card.cardId, { saving: true, error: "" });
+
+    let assignedEvrakNo = evrak.Evrak_No.trim();
+    let assignedRaporNo = card.RaporNo.trim();
+    if (!card.savedId && (!assignedEvrakNo || !assignedRaporNo)) {
+      try {
+        const numberRes = await fetch(`/api/numune-form/next-no?grup=${encodeURIComponent(evrak.Grup || "Özel")}`);
+        const numbers = await numberRes.json();
+        if (!numberRes.ok) throw new Error(numbers.error || "Numaralar oluşturulamadı");
+        assignedEvrakNo ||= String(numbers.evrakNo || "");
+        assignedRaporNo = String(numbers.raporNo || "");
+      } catch (e: any) {
+        patchCard(card.cardId, { saving: false, error: e.message || "Numaralar oluşturulamadı" });
+        return;
+      }
+    }
 
     const body = {
       nkr: {
@@ -634,8 +579,8 @@ export default function YeniNumuneClient() {
         Barkod: card.Barkod || null,
         Teklif_No: evrak.Teklif_No || null,
         Talep_No: evrak.Talep_No || null,
-        Evrak_No: evrak.Evrak_No.trim(),
-        RaporNo: card.RaporNo.trim(),
+        Evrak_No: assignedEvrakNo,
+        RaporNo: assignedRaporNo,
         Revno: "0",
         Grup: evrak.Grup || null,
         Tur: card.Tur || null,
@@ -671,7 +616,8 @@ export default function YeniNumuneClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Kaydedilemedi");
       const newSavedId = card.savedId ?? (data.id as number);
-      patchCard(card.cardId, { saving: false, saved: true, savedId: newSavedId, open: false });
+      patchCard(card.cardId, { saving: false, saved: true, savedId: newSavedId, open: false, RaporNo: assignedRaporNo });
+      setEvrak(current => ({ ...current, Evrak_No: assignedEvrakNo }));
       setEvrakSaved(true);
     } catch (e: any) {
       patchCard(card.cardId, { saving: false, error: e.message || "Hata" });
@@ -730,8 +676,8 @@ export default function YeniNumuneClient() {
                 </select>
               </div>
               <div className={yn.fg}>
-                <label>Evrak No {loadingNos && <span style={{ fontWeight: 400, color: "var(--color-text-tertiary)", fontSize: "0.7rem" }}>…</span>}</label>
-                <input style={sel} value={evrak.Evrak_No} onChange={e => patchEvrak({ Evrak_No: e.target.value })} />
+                <label>Evrak No</label>
+                <input style={sel} value={evrak.Evrak_No} onChange={e => patchEvrak({ Evrak_No: e.target.value })} placeholder="Kaydet sırasında oluşturulur" />
               </div>
             </div>
             <div className={yn.evrakGrid2}>
@@ -788,7 +734,7 @@ export default function YeniNumuneClient() {
               Tüm Barkodları Yazdır
             </button>
           )}
-          <button type="button" className={yn.addBtn} onClick={() => void addNumune()}>
+          <button type="button" className={yn.addBtn} onClick={addNumune}>
             <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
               <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
             </svg>
@@ -858,7 +804,7 @@ export default function YeniNumuneClient() {
                   </div>
                   <div className={yn.fg}>
                     <label>Rapor No *</label>
-                    <input style={sel} value={card.RaporNo} onChange={e => patchCard(card.cardId, { RaporNo: e.target.value })} />
+                    <input style={sel} value={card.RaporNo} onChange={e => patchCard(card.cardId, { RaporNo: e.target.value })} placeholder="Kaydet sırasında oluşturulur" />
                   </div>
                   <div className={yn.fg}>
                     <label>Ürün türü</label>

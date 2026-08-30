@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Eye, FilePlus2, RotateCw, Search, Trash2, X } from "lucide-react";
+import { ArrowUpRight, Download, Eye, FilePlus2, RotateCw, Search, Trash2, Upload, X } from "lucide-react";
 import tableStyles from "@/app/styles/table.module.css";
 import kys from "../kys.module.css";
 import styles from "./dokumanYonetimi.module.css";
@@ -41,8 +41,6 @@ const bosForm = {
   tur: "Prosedür",
   hazirlayanId: "",
   hazirlayanAd: "",
-  kontrolEdenId: "",
-  kontrolEdenAd: "",
   onaylayanId: "",
   onaylayanAd: "",
   yururlukTarihi: "",
@@ -70,6 +68,7 @@ export default function DokumanListesiClient() {
   const [form, setForm] = useState(bosForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [kullanicilar, setKullanicilar] = useState<Kullanici[]>([]);
   const [silinecek, setSilinecek] = useState<DokumanOzet | null>(null);
   const [silmeHatasi, setSilmeHatasi] = useState("");
@@ -118,7 +117,7 @@ export default function DokumanListesiClient() {
 
   useEffect(() => { void fetchRows(); }, [fetchRows]);
 
-  // Hazırlayan/kontrol eden/onaylayan seçimleri için personel listesi — modal
+  // Hazırlayan/onaylayan seçimleri için personel listesi — modal
   // açılmadan önce hazır olsun diye baştan çekilir.
   useEffect(() => {
     fetch("/api/kullanicilar")
@@ -141,6 +140,11 @@ export default function DokumanListesiClient() {
   }, [modalOpen, silinecek, saving, previewId]);
 
   async function openPreview(id: number) {
+    const row = rows.find(item => item.id === id);
+    if (row?.hasDosya) {
+      window.open(`/api/kys/dokumanlar/${id}/dosya`, "_blank", "noopener,noreferrer");
+      return;
+    }
     setPreviewId(id);
     setPreviewDoc(null);
     setPreviewError("");
@@ -160,6 +164,7 @@ export default function DokumanListesiClient() {
   function openAdd() {
     kodDokunuldu.current = false;
     setForm(bosForm);
+    setDocumentFile(null);
     setFormError("");
     setModalOpen(true);
     void suggestKod(bosForm.tur);
@@ -182,11 +187,10 @@ export default function DokumanListesiClient() {
     setSaving(true);
     setFormError("");
     try {
-      const res = await fetch("/api/kys/dokumanlar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
+      const requestBody = new FormData();
+      requestBody.set("document", JSON.stringify(form));
+      if (documentFile) requestBody.set("file", documentFile);
+      const res = await fetch("/api/kys/dokumanlar", { method: "POST", body: requestBody });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Doküman kaydedilemedi.");
       setModalOpen(false);
@@ -222,7 +226,7 @@ export default function DokumanListesiClient() {
     [kullanicilar],
   );
 
-  function setKisi(alan: "hazirlayan" | "kontrolEden" | "onaylayan", id: string) {
+  function setKisi(alan: "hazirlayan" | "onaylayan", id: string) {
     const kisi = kisiSecenekleri.find(k => k.id === id);
     setForm(f => ({ ...f, [`${alan}Id`]: id, [`${alan}Ad`]: kisi?.ad || "" }));
   }
@@ -235,9 +239,6 @@ export default function DokumanListesiClient() {
         </button>
         <button type="button" className={durum === "Taslak" ? styles.summaryActive : ""} onClick={() => setDurum("Taslak")}>
           <strong>{stats.taslak}</strong><span>Taslak</span>
-        </button>
-        <button type="button" className={durum === "Kontrol Bekliyor" ? styles.summaryActive : ""} onClick={() => setDurum("Kontrol Bekliyor")}>
-          <strong>{stats.kontrolBekliyor}</strong><span>Kontrol bekliyor</span>
         </button>
         <button type="button" className={durum === "Onay Bekliyor" ? styles.summaryActive : ""} onClick={() => setDurum("Onay Bekliyor")}>
           <strong>{stats.onayBekliyor}</strong><span>Onay bekliyor</span>
@@ -359,9 +360,9 @@ export default function DokumanListesiClient() {
                       <Link href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}`} className={styles.documentTitleLink}>
                         {doc.baslik}
                       </Link>
-                      {(doc.kontrolEdenAd || doc.onaylayanAd) && (
+                      {doc.onaylayanAd && (
                         <span className={styles.documentSubText}>
-                          Kontrol: {doc.kontrolEdenAd || "-"} · Onay: {doc.onaylayanAd || "-"}
+                          Onay: {doc.onaylayanAd}
                         </span>
                       )}
                     </td>
@@ -376,13 +377,13 @@ export default function DokumanListesiClient() {
                         <button
                           type="button"
                           className={tableStyles.editBtn}
-                          title="Önizle"
+                          title={doc.hasDosya ? (doc.dosyaMimeType === "application/pdf" ? "Dosyayı önizle" : "Dosyayı indir") : "Önizle"}
                           onClick={() => void openPreview(doc.id)}
                         >
-                          <Eye size={15} />
+                          {doc.hasDosya && doc.dosyaMimeType !== "application/pdf" ? <Download size={15} /> : <Eye size={15} />}
                         </button>
                         <Link
-                          href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}`}
+                          href={doc.hasDosya ? `/api/kys/dokumanlar/${doc.id}/dosya` : `/laboratuvar/kys/dokuman-yonetimi/${doc.id}/onizleme`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className={tableStyles.editBtn}
@@ -473,15 +474,18 @@ export default function DokumanListesiClient() {
                   <input type="date" value={form.yururlukTarihi} onChange={event => setForm(f => ({ ...f, yururlukTarihi: event.target.value }))} />
                 </div>
                 <div className={tableStyles.formGroup}>
-                  <label>Kontrol eden</label>
-                  <select
-                    value={form.kontrolEdenId}
-                    disabled={!kisiSecenekleri.length}
-                    onChange={event => setKisi("kontrolEden", event.target.value)}
-                  >
-                    <option value="">{kisiSecenekleri.length ? "Seçilmedi" : "Personel listesi yükleniyor..."}</option>
-                    {kisiSecenekleri.map(k => <option key={k.id} value={k.id}>{k.ad}</option>)}
-                  </select>
+                  <label>Doküman dosyası</label>
+                  <label className={styles.ghostButton} style={{ cursor: "pointer", justifyContent: "center" }}>
+                    <Upload size={15} />
+                    {documentFile ? documentFile.name : "Doküman yükle"}
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      hidden
+                      onChange={event => setDocumentFile(event.target.files?.[0] || null)}
+                    />
+                  </label>
+                  <small style={{ color: "var(--color-text-tertiary)" }}>PDF, Word veya Excel · en fazla 20 MB</small>
                 </div>
                 <div className={tableStyles.formGroup}>
                   <label>Onaylayan</label>
@@ -546,7 +550,7 @@ export default function DokumanListesiClient() {
               <div className={tableStyles.toolbarRight}>
                 {previewDoc && (
                   <Link
-                    href={`/laboratuvar/kys/dokuman-yonetimi/${previewDoc.id}`}
+                    href={`/laboratuvar/kys/dokuman-yonetimi/${previewDoc.id}/onizleme`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={styles.ghostButton}
@@ -571,7 +575,6 @@ export default function DokumanListesiClient() {
                       <span>Durum: {previewDoc.durum}</span>
                       <span>Yürürlük: {formatDate(previewDoc.yururlukTarihi)}</span>
                       <span>Hazırlayan: {previewDoc.hazirlayanAd || "-"}</span>
-                      <span>Kontrol: {previewDoc.kontrolEdenAd || "-"}</span>
                       <span>Onay: {previewDoc.onaylayanAd || "-"}</span>
                     </div>
                     <div className={styles.documentBody} dangerouslySetInnerHTML={{ __html: previewDoc.icerik }} />

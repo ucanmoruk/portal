@@ -158,6 +158,7 @@ export async function GET(request: NextRequest) {
   const tarihBit    = sp.get("tarihBit")?.trim()    || "";
   const odeme       = sp.get("odeme")?.trim()       || "";
   const raporDurumu = sp.get("raporDurumu")?.trim() || "";
+  const grup        = sp.get("grup")?.trim()        || "";
 
   try {
     const pool = await cosmoPool;
@@ -196,6 +197,11 @@ export async function GET(request: NextRequest) {
     const searchClause = search
       ? `AND (
           LOWER(ISNULL(CAST(n.Evrak_No AS NVARCHAR), '')) LIKE LOWER(@searchLike)
+          OR EXISTS (
+            SELECT 1 FROM EvrakNoMigration2026OzelDoc em
+            WHERE em.NewEvrakNo = CAST(n.Evrak_No AS NVARCHAR(50))
+              AND LOWER(em.OldEvrakNo) LIKE LOWER(@searchLike)
+          )
           OR LOWER(ISNULL(CAST(n.RaporNo AS NVARCHAR), '')) LIKE LOWER(@searchLike)
           OR LOWER(ISNULL(f.Ad, '')) LIKE LOWER(@searchLike)
           OR LOWER(ISNULL(n.Numune_Adi, '')) LIKE LOWER(@searchLike)
@@ -245,6 +251,7 @@ export async function GET(request: NextRequest) {
     const filterClause =
       (tarihBas    ? " AND CONVERT(date, n.Tarih) >= @tarihBas" : "") +
       (tarihBit    ? " AND CONVERT(date, n.Tarih) <= @tarihBit" : "") +
+      (grup        ? " AND n.Grup = @grup" : "") +
       (raporDurumu ? ` AND ${raporDurumuExpr} = @raporDurumu` : "") +
       // NULL (hiç Odeme kaydı yok) = "Fatura Kesilmedi" — OdemeBadge ile aynı mantık.
       // Aksi halde Odeme satırı olmayan (yeni) evraklar "Fatura Kesilmedi" filtresinde kaybolurdu.
@@ -254,6 +261,7 @@ export async function GET(request: NextRequest) {
     const addFilters = <T extends { input: (n: string, v: unknown) => T }>(req: T): T => {
       if (tarihBas)    req.input("tarihBas", tarihBas);
       if (tarihBit)    req.input("tarihBit", tarihBit);
+      if (grup)        req.input("grup", grup);
       if (raporDurumu) req.input("raporDurumu", raporDurumu);
       if (odeme)       req.input("odeme", odeme);
       return req;
@@ -272,7 +280,7 @@ export async function GET(request: NextRequest) {
       addFilters(pool.request()
         .input("search", search)
         .input("searchLike", `%${search}%`))
-        .query(`SELECT COUNT(DISTINCT n.Evrak_No) AS total ${baseJoin}`),
+        .query(`SELECT COUNT(DISTINCT n.Evrak_No) AS total, COUNT(DISTINCT n.ID) AS totalSamples ${baseJoin}`),
 
       addFilters(pool.request()
         .input("search", search)
@@ -282,6 +290,9 @@ export async function GET(request: NextRequest) {
         .query(`
           SELECT
             n.Evrak_No,
+            (SELECT TOP 1 m.OldEvrakNo
+             FROM EvrakNoMigration2026OzelDoc m
+             WHERE m.NewEvrakNo = CAST(n.Evrak_No AS NVARCHAR(50))) AS OldEvrakNo,
             MIN(CONVERT(varchar(10), n.Tarih, 120))  AS Tarih,
             MIN(f.Ad)                                 AS FirmaAd,
             COUNT(*)                                  AS NumuneSayisi,
@@ -338,20 +349,22 @@ export async function GET(request: NextRequest) {
             ) THEN 1 ELSE 0 END AS BIT)             AS HasEslestirme
           ${baseJoin}
           GROUP BY n.Evrak_No
-          ORDER BY n.Evrak_No DESC
+          ORDER BY MIN(n.Tarih) DESC, n.Evrak_No DESC
           OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
         `),
     ]);
 
     if (signal.aborted) return new Response(null, { status: 499 });
 
-    const total  = countResult.recordset[0].total;
+    const total  = Number(countResult.recordset[0].total || 0);
+    const totalSamples = Number(countResult.recordset[0].totalSamples || 0);
     const groups = groupResult.recordset as any[];
 
     // ── Query 3: Bu sayfadaki gruplara ait numuneler ──
     let numunesByEvrak: Record<string, any[]> = {};
     if (groups.length > 0) {
       const req3 = pool.request();
+      if (grup) req3.input("grup", grup);
       const inParams = groups.map((g, i) => {
         req3.input(`ev${i}`, g.Evrak_No);
         return `@ev${i}`;
@@ -391,6 +404,7 @@ export async function GET(request: NextRequest) {
         FROM NKR n
         WHERE n.Durum = 'Aktif'
           AND n.Evrak_No IN (${inParams})
+          ${grup ? "AND n.Grup = @grup" : ""}
         ORDER BY n.Evrak_No DESC, n.RaporNo DESC
       `);
 
@@ -405,6 +419,7 @@ export async function GET(request: NextRequest) {
       const normalizedOdeme = g.Odeme_Durumu || (g.ProformaID ? "Proforma" : null);
       return {
         evrakNo:        g.Evrak_No,
+        oldEvrakNo:     g.OldEvrakNo && String(g.OldEvrakNo) !== String(g.Evrak_No) ? String(g.OldEvrakNo) : null,
         tarih:          g.Tarih,
         firmaAd:        g.FirmaAd,
         projeAd:        g.ProjeAd,
@@ -418,7 +433,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return Response.json({ data, total, page, limit, totalPages: Math.ceil(total / limit) });
+    return Response.json({ data, total, totalSamples, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

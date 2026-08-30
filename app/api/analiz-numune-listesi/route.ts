@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
   const hizmetKodu = sp.get("hizmetKodu")?.trim() || "";
   const tarihBas = sp.get("tarihBas")?.trim() || "";
   const tarihBit = sp.get("tarihBit")?.trim() || "";
+  const grup = sp.get("grup")?.trim() || "";
   const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
   const limit = Math.min(100, Math.max(5, parseInt(sp.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
@@ -34,7 +35,8 @@ export async function GET(request: NextRequest) {
     const filterClause =
       (hizmetKodu ? " AND LOWER(ISNULL(s.Kod, '')) LIKE LOWER(@hizmetKoduLike)" : "") +
       (tarihBas ? " AND CONVERT(date, n.Tarih) >= @tarihBas" : "") +
-      (tarihBit ? " AND CONVERT(date, n.Tarih) <= @tarihBit" : "");
+      (tarihBit ? " AND CONVERT(date, n.Tarih) <= @tarihBit" : "") +
+      (grup ? " AND n.Grup = @grup" : "");
 
     const query = `
       WITH Liste AS (
@@ -72,6 +74,7 @@ export async function GET(request: NextRequest) {
     if (hizmetKodu) req.input("hizmetKoduLike", `%${hizmetKodu}%`);
     if (tarihBas) req.input("tarihBas", tarihBas);
     if (tarihBit) req.input("tarihBit", tarihBit);
+    if (grup) req.input("grup", grup);
 
     const result = await req.query(query);
     const total = Number(result.recordset[0]?.TotalCount ?? 0);

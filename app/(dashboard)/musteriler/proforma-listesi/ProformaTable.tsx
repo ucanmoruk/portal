@@ -8,6 +8,7 @@ interface ProformaRow {
   ID: number;
   ProformaNo: string;
   EvrakNo: string | null;
+  EvrakNolari?: string[];
   TeklifID: number | null;
   Tarih: string;
   Durum: string;
@@ -250,7 +251,7 @@ export default function ProformaTable() {
                     </div>
                   )}
                 </td>
-                <td>{row.EvrakNo || "-"}</td>
+                <td>{row.EvrakNolari?.length ? row.EvrakNolari.join(", ") : (row.EvrakNo || "-")}</td>
                 {/* Fatura firması seçiliyse o; değilse fatura rapor firmasına kesilir → onu göster */}
                 <td>{upperTr(row.FaturaFirmaAd || row.FirmaAd) || "-"}</td>
                 <td>{row.Tarih}</td>

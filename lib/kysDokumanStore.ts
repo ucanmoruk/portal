@@ -67,8 +67,6 @@ export type DokumanInput = {
   birimId?: number | string | null;
   hazirlayanId?: string | null;
   hazirlayanAd?: string | null;
-  kontrolEdenId?: string | null;
-  kontrolEdenAd?: string | null;
   onaylayanId?: string | null;
   onaylayanAd?: string | null;
   yururlukTarihi?: string | null;
@@ -208,6 +206,22 @@ async function createSchema() {
         KEY IX_KysDokumanLog_DokumanID (DokumanID)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci
     `);
+    await pool.request().query(`
+      CREATE TABLE IF NOT EXISTS KysDokumanDosya (
+        ID INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        DokumanID INT NOT NULL,
+        DosyaAdi VARCHAR(260) NOT NULL,
+        MimeType VARCHAR(120) NOT NULL,
+        DosyaBoyutu INT NOT NULL,
+        Dosya LONGBLOB NOT NULL,
+        CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY UX_KysDokumanDosya_DokumanID (DokumanID)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci
+    `);
+    const revMadde = await pool.request().query(`SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'KysDokumanRevizyon' AND column_name = 'MaddeNo'`);
+    if (!revMadde.recordset[0]) await pool.request().query("ALTER TABLE KysDokumanRevizyon ADD MaddeNo VARCHAR(100) NULL AFTER Revizyon");
+    const logMadde = await pool.request().query(`SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'KysDokumanLog' AND column_name = 'MaddeNo'`);
+    if (!logMadde.recordset[0]) await pool.request().query("ALTER TABLE KysDokumanLog ADD MaddeNo VARCHAR(100) NULL AFTER Revizyon");
   } else {
     await pool.request().query(`
       IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'KysDokuman')
@@ -268,6 +282,20 @@ async function createSchema() {
         CreatedAt DATETIME NOT NULL DEFAULT GETDATE()
       )
     `);
+    await pool.request().query(`IF COL_LENGTH('KysDokumanRevizyon', 'MaddeNo') IS NULL ALTER TABLE KysDokumanRevizyon ADD MaddeNo NVARCHAR(100) NULL`);
+    await pool.request().query(`IF COL_LENGTH('KysDokumanLog', 'MaddeNo') IS NULL ALTER TABLE KysDokumanLog ADD MaddeNo NVARCHAR(100) NULL`);
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'KysDokumanDosya')
+      CREATE TABLE KysDokumanDosya (
+        ID INT IDENTITY(1,1) PRIMARY KEY,
+        DokumanID INT NOT NULL UNIQUE,
+        DosyaAdi NVARCHAR(260) NOT NULL,
+        MimeType NVARCHAR(120) NOT NULL,
+        DosyaBoyutu INT NOT NULL,
+        Dosya VARBINARY(MAX) NOT NULL,
+        CreatedAt DATETIME NOT NULL DEFAULT GETDATE()
+      )
+    `);
   }
 }
 
@@ -313,6 +341,10 @@ function mapDokuman(r: AnyRow, withContent: boolean) {
     onayTarihi: asDateTime(r.OnayTarihi),
     arsivTarihi: asDateTime(r.ArsivTarihi),
     ozet: rowString(r, "Ozet"),
+    dosyaAdi: rowString(r, "DosyaAdi"),
+    dosyaMimeType: rowString(r, "DosyaMimeType"),
+    dosyaBoyutu: rowNumber(r, "DosyaBoyutu"),
+    hasDosya: Boolean(rowString(r, "DosyaAdi")),
     duzenlenebilir: DUZENLENEBILIR_DURUMLAR.includes(durum),
     createdAt: asDateTime(r.CreatedAt),
     updatedAt: asDateTime(r.UpdatedAt),
@@ -351,8 +383,8 @@ export async function listKysDokumanlar(params: {
     params.sort === "kod-asc" ? "Kod ASC" :
     params.sort === "kod-desc" ? "Kod DESC" :
     params.sort === "baslik-asc" ? "Baslik ASC" :
-    params.sort === "yururluk-desc" ? "YururlukTarihi DESC, ID DESC" :
-    "UpdatedAt DESC, ID DESC";
+    params.sort === "yururluk-desc" ? "YururlukTarihi DESC, KysDokuman.ID DESC" :
+    "UpdatedAt DESC, KysDokuman.ID DESC";
 
   const bind = (req: any) => req
     .input("search", `%${search}%`)
@@ -364,10 +396,12 @@ export async function listKysDokumanlar(params: {
     .input("offset", offset)
     .input("limit", limit)
     .query(`
-      SELECT ID, Kod, Baslik, Tur, Durum, Revizyon, BirimID,
+      SELECT KysDokuman.ID, Kod, Baslik, Tur, Durum, Revizyon, BirimID,
              HazirlayanID, HazirlayanAd, KontrolEdenID, KontrolEdenAd, OnaylayanID, OnaylayanAd,
-             YururlukTarihi, KontrolTarihi, OnayTarihi, ArsivTarihi, Ozet, CreatedAt, UpdatedAt
+             YururlukTarihi, KontrolTarihi, OnayTarihi, ArsivTarihi, Ozet, KysDokuman.CreatedAt, UpdatedAt,
+             kd.DosyaAdi, kd.MimeType AS DosyaMimeType, kd.DosyaBoyutu
       FROM KysDokuman
+      LEFT JOIN KysDokumanDosya kd ON kd.DokumanID = KysDokuman.ID
       ${where}
       ORDER BY ${order}
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -406,10 +440,13 @@ export async function listKysDokumanlar(params: {
 async function fetchDokumanRow(id: number) {
   const pool = await cosmoPool;
   const res = await pool.request().input("ID", id).query(`
-    SELECT ID, Kod, Baslik, Tur, Durum, Revizyon, BirimID,
+    SELECT KysDokuman.ID, Kod, Baslik, Tur, Durum, Revizyon, BirimID,
            HazirlayanID, HazirlayanAd, KontrolEdenID, KontrolEdenAd, OnaylayanID, OnaylayanAd,
-           YururlukTarihi, KontrolTarihi, OnayTarihi, ArsivTarihi, Ozet, Icerik, CreatedAt, UpdatedAt
-    FROM KysDokuman WHERE ID = @ID
+           YururlukTarihi, KontrolTarihi, OnayTarihi, ArsivTarihi, Ozet, Icerik, KysDokuman.CreatedAt, UpdatedAt,
+           kd.DosyaAdi, kd.MimeType AS DosyaMimeType, kd.DosyaBoyutu
+    FROM KysDokuman
+    LEFT JOIN KysDokumanDosya kd ON kd.DokumanID = KysDokuman.ID
+    WHERE KysDokuman.ID = @ID
   `);
   return (res.recordset[0] as AnyRow) || null;
 }
@@ -422,7 +459,7 @@ export async function getKysDokuman(id: number) {
   const pool = await cosmoPool;
 
   const revRes = await pool.request().input("ID", id).query(`
-    SELECT ID, Revizyon, Aciklama, YayinTarihi, HazirlayanAd, KontrolEdenAd, OnaylayanAd, OlusturanAd, CreatedAt
+    SELECT ID, Revizyon, MaddeNo, Aciklama, YayinTarihi, HazirlayanAd, OnaylayanAd, OlusturanAd, CreatedAt
     FROM KysDokumanRevizyon WHERE DokumanID = @ID ORDER BY Revizyon DESC, ID DESC
   `);
   const logRes = await pool.request().input("ID", id).query(`
@@ -436,10 +473,10 @@ export async function getKysDokuman(id: number) {
       id: rowNumber(r, "ID"),
       revizyon: rowNumber(r, "Revizyon"),
       revizyonEtiket: String(rowNumber(r, "Revizyon")).padStart(2, "0"),
+      maddeNo: rowString(r, "MaddeNo"),
       aciklama: rowString(r, "Aciklama"),
       yayinTarihi: asDate(r.YayinTarihi),
       hazirlayanAd: rowString(r, "HazirlayanAd"),
-      kontrolEdenAd: rowString(r, "KontrolEdenAd"),
       onaylayanAd: rowString(r, "OnaylayanAd"),
       olusturanAd: rowString(r, "OlusturanAd"),
       createdAt: asDateTime(r.CreatedAt),
@@ -465,7 +502,7 @@ export async function getKysDokumanRevizyonIcerik(dokumanId: number, revizyonId:
     .input("DokumanID", dokumanId)
     .input("ID", revizyonId)
     .query(`
-      SELECT ID, Revizyon, Aciklama, Icerik, YayinTarihi, CreatedAt
+    SELECT ID, Revizyon, MaddeNo, Aciklama, Icerik, YayinTarihi, CreatedAt
       FROM KysDokumanRevizyon WHERE ID = @ID AND DokumanID = @DokumanID
     `);
   const r = res.recordset[0] as AnyRow | undefined;
@@ -474,6 +511,7 @@ export async function getKysDokumanRevizyonIcerik(dokumanId: number, revizyonId:
     id: rowNumber(r, "ID"),
     revizyon: rowNumber(r, "Revizyon"),
     revizyonEtiket: String(rowNumber(r, "Revizyon")).padStart(2, "0"),
+    maddeNo: rowString(r, "MaddeNo"),
     aciklama: rowString(r, "Aciklama"),
     icerik: rowString(r, "Icerik"),
     yayinTarihi: asDate(r.YayinTarihi),
@@ -489,6 +527,7 @@ async function writeLog(entry: {
   oncekiDurum?: string | null;
   yeniDurum?: string | null;
   revizyon?: number | null;
+  maddeNo?: string | null;
   aciklama?: string | null;
   user: DokumanKullanici;
 }) {
@@ -499,12 +538,13 @@ async function writeLog(entry: {
     .input("OncekiDurum", entry.oncekiDurum ?? null)
     .input("YeniDurum", entry.yeniDurum ?? null)
     .input("Revizyon", entry.revizyon ?? null)
+    .input("MaddeNo", entry.maddeNo ?? null)
     .input("Aciklama", entry.aciklama ?? null)
     .input("KullaniciID", entry.user.userId || null)
     .input("KullaniciAd", entry.user.userName || null)
     .query(`
-      INSERT INTO KysDokumanLog (DokumanID, Islem, OncekiDurum, YeniDurum, Revizyon, Aciklama, KullaniciID, KullaniciAd)
-      VALUES (@DokumanID, @Islem, @OncekiDurum, @YeniDurum, @Revizyon, @Aciklama, @KullaniciID, @KullaniciAd)
+      INSERT INTO KysDokumanLog (DokumanID, Islem, OncekiDurum, YeniDurum, Revizyon, MaddeNo, Aciklama, KullaniciID, KullaniciAd)
+      VALUES (@DokumanID, @Islem, @OncekiDurum, @YeniDurum, @Revizyon, @MaddeNo, @Aciklama, @KullaniciID, @KullaniciAd)
     `);
 }
 
@@ -544,8 +584,6 @@ export async function createKysDokuman(input: DokumanInput, user: DokumanKullani
     .input("BirimID", input.birimId ? Number(input.birimId) : null)
     .input("HazirlayanID", nullableText(input.hazirlayanId) || user.userId || null)
     .input("HazirlayanAd", nullableText(input.hazirlayanAd) || user.userName)
-    .input("KontrolEdenID", nullableText(input.kontrolEdenId))
-    .input("KontrolEdenAd", nullableText(input.kontrolEdenAd))
     .input("OnaylayanID", nullableText(input.onaylayanId))
     .input("OnaylayanAd", nullableText(input.onaylayanAd))
     .input("YururlukTarihi", dateValue(input.yururlukTarihi))
@@ -555,11 +593,11 @@ export async function createKysDokuman(input: DokumanInput, user: DokumanKullani
     .query(`
       INSERT INTO KysDokuman
         (Kod, Baslik, Tur, Durum, Revizyon, BirimID, HazirlayanID, HazirlayanAd,
-         KontrolEdenID, KontrolEdenAd, OnaylayanID, OnaylayanAd, YururlukTarihi, Ozet, Icerik, DuzMetin)
+         OnaylayanID, OnaylayanAd, YururlukTarihi, Ozet, Icerik, DuzMetin)
       OUTPUT INSERTED.ID
       VALUES
         (@Kod, @Baslik, @Tur, 'Taslak', 0, @BirimID, @HazirlayanID, @HazirlayanAd,
-         @KontrolEdenID, @KontrolEdenAd, @OnaylayanID, @OnaylayanAd, @YururlukTarihi, @Ozet, @Icerik, @DuzMetin)
+         @OnaylayanID, @OnaylayanAd, @YururlukTarihi, @Ozet, @Icerik, @DuzMetin)
     `);
 
   const id = Number(res.recordset[0]?.ID ?? res.recordset[0]?.id ?? 0);
@@ -603,8 +641,6 @@ export async function updateKysDokuman(id: number, input: DokumanInput, user: Do
     .input("BirimID", input.birimId === undefined ? (row.BirimID ?? null) : (input.birimId ? Number(input.birimId) : null))
     .input("HazirlayanID", input.hazirlayanId === undefined ? rowString(row, "HazirlayanID") || null : nullableText(input.hazirlayanId))
     .input("HazirlayanAd", input.hazirlayanAd === undefined ? rowString(row, "HazirlayanAd") || null : nullableText(input.hazirlayanAd))
-    .input("KontrolEdenID", input.kontrolEdenId === undefined ? rowString(row, "KontrolEdenID") || null : nullableText(input.kontrolEdenId))
-    .input("KontrolEdenAd", input.kontrolEdenAd === undefined ? rowString(row, "KontrolEdenAd") || null : nullableText(input.kontrolEdenAd))
     .input("OnaylayanID", input.onaylayanId === undefined ? rowString(row, "OnaylayanID") || null : nullableText(input.onaylayanId))
     .input("OnaylayanAd", input.onaylayanAd === undefined ? rowString(row, "OnaylayanAd") || null : nullableText(input.onaylayanAd))
     .input("YururlukTarihi", input.yururlukTarihi === undefined ? asDate(row.YururlukTarihi) : dateValue(input.yururlukTarihi))
@@ -615,7 +651,6 @@ export async function updateKysDokuman(id: number, input: DokumanInput, user: Do
       UPDATE KysDokuman SET
         Kod = @Kod, Baslik = @Baslik, Tur = @Tur, BirimID = @BirimID,
         HazirlayanID = @HazirlayanID, HazirlayanAd = @HazirlayanAd,
-        KontrolEdenID = @KontrolEdenID, KontrolEdenAd = @KontrolEdenAd,
         OnaylayanID = @OnaylayanID, OnaylayanAd = @OnaylayanAd,
         YururlukTarihi = @YururlukTarihi, Ozet = @Ozet, Icerik = @Icerik, DuzMetin = @DuzMetin,
         UpdatedAt = GETDATE()
@@ -644,11 +679,52 @@ export async function deleteKysDokuman(id: number, user: DokumanKullanici) {
     throw new Error("Sadece taslak durumundaki dokümanlar silinebilir. Yayındaki dokümanları arşivleyin.");
   }
   const pool = await cosmoPool;
+  await pool.request().input("ID", id).query("DELETE FROM KysDokumanDosya WHERE DokumanID = @ID");
   await pool.request().input("ID", id).query("DELETE FROM KysDokumanRevizyon WHERE DokumanID = @ID");
   await pool.request().input("ID", id).query("DELETE FROM KysDokumanLog WHERE DokumanID = @ID");
   await pool.request().input("ID", id).query("DELETE FROM KysDokuman WHERE ID = @ID");
   void user;
   return { ok: true };
+}
+
+export async function saveKysDokumanDosya(
+  dokumanId: number,
+  file: { name: string; type: string; size: number; buffer: Buffer },
+  user: DokumanKullanici,
+) {
+  await ensureKysDokumanSchema();
+  const row = await fetchDokumanRow(dokumanId);
+  if (!row) throw new Error("Doküman bulunamadı.");
+  const pool = await cosmoPool;
+  await pool.request().input("DokumanID", dokumanId).query("DELETE FROM KysDokumanDosya WHERE DokumanID = @DokumanID");
+  await pool.request()
+    .input("DokumanID", dokumanId)
+    .input("DosyaAdi", file.name)
+    .input("MimeType", file.type)
+    .input("DosyaBoyutu", file.size)
+    .input("Dosya", file.buffer)
+    .query(`
+      INSERT INTO KysDokumanDosya (DokumanID, DosyaAdi, MimeType, DosyaBoyutu, Dosya)
+      VALUES (@DokumanID, @DosyaAdi, @MimeType, @DosyaBoyutu, @Dosya)
+    `);
+  await writeLog({ dokumanId, islem: "Dosya yüklendi", aciklama: file.name, user });
+}
+
+export async function getKysDokumanDosya(dokumanId: number) {
+  await ensureKysDokumanSchema();
+  const pool = await cosmoPool;
+  const res = await pool.request().input("DokumanID", dokumanId).query(`
+    SELECT DosyaAdi, MimeType, DosyaBoyutu, Dosya
+    FROM KysDokumanDosya WHERE DokumanID = @DokumanID
+  `);
+  const row = res.recordset[0] as AnyRow | undefined;
+  if (!row) return null;
+  return {
+    name: rowString(row, "DosyaAdi"),
+    type: rowString(row, "MimeType"),
+    size: rowNumber(row, "DosyaBoyutu"),
+    buffer: Buffer.isBuffer(row.Dosya) ? row.Dosya : Buffer.from(row.Dosya || []),
+  };
 }
 
 // ── Onay akışı ───────────────────────────────────────────────────────────────
@@ -663,7 +739,7 @@ export const AKSIYON_KURALLARI: Record<DokumanAksiyon, {
   "onaya-gonder": {
     izinliDurumlar: ["Taslak", "Revize Ediliyor"],
     yetkiKeys: ["laboratuvar.kys.dokuman-yonetimi.duzenle", "laboratuvar.kys.dokuman-yonetimi"],
-    etiket: "Kontrole gönderildi",
+    etiket: "Onaya gönderildi",
   },
   "kontrol-onayi": {
     izinliDurumlar: ["Kontrol Bekliyor"],
@@ -671,7 +747,7 @@ export const AKSIYON_KURALLARI: Record<DokumanAksiyon, {
     etiket: "Kontrol onayı verildi",
   },
   "yayin-onayi": {
-    izinliDurumlar: ["Onay Bekliyor"],
+    izinliDurumlar: ["Onay Bekliyor", "Kontrol Bekliyor"],
     yetkiKeys: ["laboratuvar.kys.dokuman-yonetimi.onayla"],
     etiket: "Yayına alındı",
   },
@@ -703,7 +779,7 @@ export const AKSIYON_KURALLARI: Record<DokumanAksiyon, {
 export async function runKysDokumanAksiyon(
   id: number,
   aksiyon: DokumanAksiyon,
-  payload: { aciklama?: string; yururlukTarihi?: string | null },
+  payload: { maddeNo?: string; aciklama?: string; yururlukTarihi?: string | null },
   user: DokumanKullanici,
 ) {
   await ensureKysDokumanSchema();
@@ -719,6 +795,7 @@ export async function runKysDokumanAksiyon(
   }
 
   const aciklama = text(payload.aciklama);
+  const maddeNo = text(payload.maddeNo);
   if (kural.aciklamaZorunlu && !aciklama) throw new Error("Bu işlem için açıklama girmelisiniz.");
 
   const pool = await cosmoPool;
@@ -727,9 +804,9 @@ export async function runKysDokumanAksiyon(
   let yeniRevizyon = revizyon;
 
   if (aksiyon === "onaya-gonder") {
-    yeniDurum = "Kontrol Bekliyor";
+    yeniDurum = "Onay Bekliyor";
     await pool.request().input("ID", id).query(`
-      UPDATE KysDokuman SET Durum = 'Kontrol Bekliyor', KontrolTarihi = NULL, OnayTarihi = NULL, UpdatedAt = GETDATE()
+      UPDATE KysDokuman SET Durum = 'Onay Bekliyor', KontrolTarihi = NULL, OnayTarihi = NULL, UpdatedAt = GETDATE()
       WHERE ID = @ID
     `);
   } else if (aksiyon === "kontrol-onayi") {
@@ -757,23 +834,25 @@ export async function runKysDokumanAksiyon(
         WHERE ID = @ID
       `);
     // Yayınlanan sürümün anlık görüntüsünü revizyon geçmişine yaz
-    const revAciklama = aciklama || (await sonRevizyonNotu(id, revizyon)) || (revizyon === 0 ? "İlk yayın." : "Revizyon yayınlandı.");
+    const revNotu = await sonRevizyonNotu(id, revizyon);
+    const revAciklama = aciklama || revNotu?.aciklama || (revizyon === 0 ? "İlk yayın." : "Revizyon yayınlandı.");
+    const revMaddeNo = maddeNo || revNotu?.maddeNo || (revizyon === 0 ? "İlk yayın" : "-");
     await pool.request()
       .input("DokumanID", id)
       .input("Revizyon", revizyon)
+      .input("MaddeNo", revMaddeNo)
       .input("Aciklama", revAciklama)
       .input("Icerik", rowString(row, "Icerik"))
       .input("YayinTarihi", yururluk)
       .input("HazirlayanAd", rowString(row, "HazirlayanAd") || null)
-      .input("KontrolEdenAd", rowString(row, "KontrolEdenAd") || null)
       .input("OnaylayanAd", user.userName)
       .input("OlusturanID", user.userId || null)
       .input("OlusturanAd", user.userName)
       .query(`
         INSERT INTO KysDokumanRevizyon
-          (DokumanID, Revizyon, Aciklama, Icerik, YayinTarihi, HazirlayanAd, KontrolEdenAd, OnaylayanAd, OlusturanID, OlusturanAd)
+          (DokumanID, Revizyon, MaddeNo, Aciklama, Icerik, YayinTarihi, HazirlayanAd, OnaylayanAd, OlusturanID, OlusturanAd)
         VALUES
-          (@DokumanID, @Revizyon, @Aciklama, @Icerik, @YayinTarihi, @HazirlayanAd, @KontrolEdenAd, @OnaylayanAd, @OlusturanID, @OlusturanAd)
+          (@DokumanID, @Revizyon, @MaddeNo, @Aciklama, @Icerik, @YayinTarihi, @HazirlayanAd, @OnaylayanAd, @OlusturanID, @OlusturanAd)
       `);
   } else if (aksiyon === "reddet") {
     yeniDurum = revizyon > 0 ? "Revize Ediliyor" : "Taslak";
@@ -807,6 +886,7 @@ export async function runKysDokumanAksiyon(
     oncekiDurum,
     yeniDurum,
     revizyon: yeniRevizyon,
+    maddeNo: maddeNo || null,
     aciklama: aciklama || null,
     user,
   });
@@ -815,15 +895,16 @@ export async function runKysDokumanAksiyon(
 }
 
 /** Revizyon başlatılırken girilen notu, yayın anında revizyon kaydına taşımak için okur. */
-async function sonRevizyonNotu(dokumanId: number, revizyon: number): Promise<string | null> {
+async function sonRevizyonNotu(dokumanId: number, revizyon: number): Promise<{ maddeNo: string; aciklama: string } | null> {
   const pool = await cosmoPool;
   const res = await pool.request()
     .input("DokumanID", dokumanId)
     .input("Revizyon", revizyon)
     .query(`
-      SELECT TOP 1 Aciklama FROM KysDokumanLog
+      SELECT TOP 1 MaddeNo, Aciklama FROM KysDokumanLog
       WHERE DokumanID = @DokumanID AND Revizyon = @Revizyon AND Islem = 'Revizyon başlatıldı'
       ORDER BY ID DESC
     `);
-  return nullableText(res.recordset[0]?.Aciklama ?? res.recordset[0]?.aciklama);
+  const row = res.recordset[0];
+  return row ? { maddeNo: rowString(row, "MaddeNo"), aciklama: rowString(row, "Aciklama") } : null;
 }

@@ -210,6 +210,11 @@ export async function GET(request: NextRequest) {
       ? `AND (
           ISNULL(p.ProformaNo, '') COLLATE Turkish_CI_AS LIKE @search
           OR ISNULL(p.EvrakNo, '') COLLATE Turkish_CI_AS LIKE @search
+          OR EXISTS (
+            SELECT 1 FROM ProformaNkr pn
+            WHERE pn.ProformaID = p.ID
+              AND ISNULL(pn.EvrakNo, '') COLLATE Turkish_CI_AS LIKE @search
+          )
           OR ISNULL(f.Ad, '') COLLATE Turkish_CI_AS LIKE @search
           OR ISNULL(p.Durum, '') COLLATE Turkish_CI_AS LIKE @search
         )`
@@ -317,12 +322,36 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const evrakNosByProforma = new Map<number, string[]>();
+    if (dataRes.recordset.length > 0) {
+      const evrakReq = pool.request();
+      const proformaParams = dataRes.recordset.map((row: any, index: number) => {
+        evrakReq.input(`proforma${index}`, Number(row.ID));
+        return `@proforma${index}`;
+      }).join(", ");
+      const evrakRes = await evrakReq.query(`
+        SELECT ProformaID, EvrakNo
+        FROM ProformaNkr
+        WHERE ProformaID IN (${proformaParams})
+          AND EvrakNo IS NOT NULL AND EvrakNo <> ''
+        ORDER BY ProformaID, EvrakNo
+      `);
+      for (const linked of evrakRes.recordset as Array<{ ProformaID: number; EvrakNo: string }>) {
+        const id = Number(linked.ProformaID);
+        const list = evrakNosByProforma.get(id) || [];
+        const evrakNo = String(linked.EvrakNo).trim();
+        if (evrakNo && !list.includes(evrakNo)) list.push(evrakNo);
+        evrakNosByProforma.set(id, list);
+      }
+    }
+
     const data = dataRes.recordset.map((row: any) => {
       const paraBirimi = normalizeParaBirimi(row.ParaBirimi);
       const rate = rates[paraBirimi]?.forexBuying ?? null;
       const tlKarsiligi = calculateTlEquivalent(row.GenelToplam, paraBirimi, rates);
       return {
         ...row,
+        EvrakNolari: evrakNosByProforma.get(Number(row.ID)) || (row.EvrakNo ? [String(row.EvrakNo)] : []),
         ParaBirimi: paraBirimi === "ÇOKLU" ? "Çoklu" : paraBirimi,
         DovizAlisKuru: rate,
         TlKarsiligi: tlKarsiligi,
