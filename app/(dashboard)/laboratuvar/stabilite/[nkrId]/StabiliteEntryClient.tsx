@@ -42,14 +42,55 @@ const smallBtn: React.CSSProperties = {
   fontFamily: "inherit", lineHeight: 1.2,
 };
 
+const normalizeTestName = (value: string) => value
+  .toLocaleUpperCase("tr-TR")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "");
+
+const physicalValueKind = (testName: string): "ph" | "density" | null => {
+  const normalized = normalizeTestName(testName);
+  if (normalized === "PH" || normalized.startsWith("PH ")) return "ph";
+  if (normalized.includes("YOGUNLUK") || normalized.includes("DENSITY")) return "density";
+  return null;
+};
+
+const randomPhysicalValue = (kind: "ph" | "density") => {
+  if (kind === "ph") {
+    return (5.5 + Math.random() * 0.4).toFixed(2).replace(".", ",");
+  }
+  return (0.991 + Math.random() * (1.0199 - 0.991)).toFixed(4).replace(".", ",");
+};
+
+function randomizePhysicalValues(v: Veri): Veri {
+  return {
+    ...v,
+    testler: v.testler.map(test => {
+      const kind = physicalValueKind(test.ad);
+      if (!kind) return test;
+      const sonuclar = { ...test.sonuclar };
+      for (const gun of v.gunler) {
+        for (const sicaklik of v.sicakliklar) {
+          sonuclar[`${gun}|${sicaklik}`] = randomPhysicalValue(kind);
+        }
+      }
+      return { ...test, sonuclar };
+    }),
+  };
+}
+
 // Yeni gün/sıcaklık eklendiğinde matris hücrelerini otomatik doldur: boş bir
 // (gün|sıcaklık) hücresini aynı testin başka bir gününden (aynı sıcaklık) ya da
 // aynı günün başka sıcaklığından kopyalar. Böylece 28. gün eklenince sütun dolu gelir.
 function fillTest(t: Test, gunler: number[], sicakliklar: string[]): Test {
   const s: Record<string, string> = { ...t.sonuclar };
+  const physicalKind = physicalValueKind(t.ad);
   for (const g of gunler) for (const sic of sicakliklar) {
     const key = `${g}|${sic}`;
     if (s[key]?.trim()) continue;
+    if (physicalKind) {
+      s[key] = randomPhysicalValue(physicalKind);
+      continue;
+    }
     let val = "";
     for (const g2 of gunler) { const v = s[`${g2}|${sic}`]; if (v?.trim()) { val = v; break; } } // aynı sıcaklık, başka gün
     if (!val) for (const s2 of sicakliklar) { const v = s[`${g}|${s2}`]; if (v?.trim()) { val = v; break; } } // aynı gün, başka sıcaklık
@@ -83,10 +124,10 @@ export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number;
           setVeri({ ...bos, ...j.veri });
         } else {
           // Kayıt yok → önizlemedeki varsayılan testlerle doldur (kullanıcı siler/ekler)
-          setVeri(JSON.parse(JSON.stringify(DEFAULT_STABILITE_VERI)) as Veri);
+          setVeri(randomizePhysicalValues(JSON.parse(JSON.stringify(DEFAULT_STABILITE_VERI)) as Veri));
         }
       })
-      .catch(() => setVeri(JSON.parse(JSON.stringify(DEFAULT_STABILITE_VERI)) as Veri))
+      .catch(() => setVeri(randomizePhysicalValues(JSON.parse(JSON.stringify(DEFAULT_STABILITE_VERI)) as Veri)))
       .finally(() => setLoading(false));
   }, [nkrId, format]);
 
@@ -263,9 +304,14 @@ export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number;
 
       {/* ── Testler (metot/birim/limit hizmet listesinden) ── */}
       <div className={styles.tableCard} style={{ padding: 16, marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
           <div style={{ fontWeight: 700, fontSize: 13 }}>Testler ({veri.testler.length})</div>
-          <button type="button" style={smallBtn} onClick={addBosTest}>+ boş test</button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" style={smallBtn} onClick={() => setVeri(randomizePhysicalValues)}>
+              pH / yoğunluk değerlerini yenile
+            </button>
+            <button type="button" style={smallBtn} onClick={addBosTest}>+ boş test</button>
+          </div>
         </div>
         {/* Katalogtan test ekle */}
         <div style={{ position: "relative", marginBottom: 12, maxWidth: 480 }}>

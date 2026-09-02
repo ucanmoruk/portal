@@ -236,16 +236,18 @@ export default function GenelReport({
   });
   const resultRowWeight = (row: ResultDisplayRow): number => {
     if (row.kind === "alt") {
+      const nameWeight = wrapWeight(isEnglish ? row.alt.BilesenAdiEn || row.alt.BilesenAdi : row.alt.BilesenAdi, 34);
       const resultWeight = wrapWeight(isEnglish ? row.alt.SonucEn || row.alt.Sonuc : row.alt.Sonuc, 18);
       const limitWeight = wrapWeight(isEnglish ? row.alt.LimitEn || row.alt.Limit : row.alt.Limit, 22);
-      return Math.max(1, resultWeight, limitWeight);
+      return Math.max(1, nameWeight, resultWeight, limitWeight);
     }
 
     const h = row.service;
+    const nameWeight = wrapWeight(isEnglish ? h.AdEn || h.Ad : h.Ad, 34);
     const resultWeight = wrapWeight(isEnglish ? h.SonucEn || h.Sonuc : h.Sonuc, 18);
     const methodWeight = wrapWeight(isEnglish ? h.MetotEn || h.Metot : h.Metot, 22);
     const limitWeight = wrapWeight(isEnglish ? h.LimitEn || h.LimitDeger : h.LimitDeger, 22);
-    return Math.max(1, resultWeight, methodWeight, limitWeight);
+    return Math.max(1, nameWeight, resultWeight, methodWeight, limitWeight);
   };
   // ═══════════════════════ UZUN RAPOR BÖLME KURALLARI ═══════════════════════
   // Bu kurallar TÜM uzun raporlarda (Genel/GenelEn) tutarlı uygulanır:
@@ -315,7 +317,7 @@ export default function GenelReport({
         const adeg = degerlendirmeLabel((isEnglish ? row.alt.Degerlendirme : row.alt.Degerlendirme) || null, isEnglish);
         return (
           <tr key={`${row.serviceIndex}-alt-${row.altIndex}`} className="alt-param-row">
-            <td style={{ paddingLeft: 18, paddingRight: 10 }}>↳ {altName || "-"}</td>
+            <td className="analysis-name-cell" style={{ paddingLeft: 18, paddingRight: 10 }}>↳ {altName || "-"}</td>
             <td className="center">{(isEnglish ? row.alt.BirimEn || row.alt.Birim : row.alt.Birim) || "-"}</td>
             <td className="center result-cell">{(isEnglish ? row.alt.SonucEn || row.alt.Sonuc : row.alt.Sonuc) || "-"}</td>
             <td className="center" style={{ paddingLeft: 5 }}>{(isEnglish ? row.alt.LOQEn || row.alt.LOQ : row.alt.LOQ) || "-"}</td>
@@ -336,7 +338,7 @@ export default function GenelReport({
       const serviceName = isEnglish ? nonEmpty(h.AdEn) || h.Ad : h.Ad;
       return (
         <tr key={`${i}-main`}>
-          <td style={{ paddingRight: 10 }}>
+          <td className="analysis-name-cell" style={{ paddingRight: 10 }}>
             {edit
               ? editText(
                   (isEnglish ? h.AdEn || h.Ad : h.Ad) || "",
@@ -808,6 +810,13 @@ export default function GenelReport({
           white-space: nowrap;
         }
         .results tbody td.center { text-align: left; }
+        .results tbody td.analysis-name-cell {
+          white-space: normal;
+          overflow-wrap: anywhere;
+          word-break: normal;
+          hyphens: auto;
+          line-height: 1.22;
+        }
         /* Sonuç/limit/metot metinleri cümle uzunluğunda olabiliyor. Diğer
            kolonlar tek satırda kalsın; bu hücreler sarıp tabloyu sayfa içinde tutsun. */
         .results tbody td.result-cell,
