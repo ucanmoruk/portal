@@ -253,6 +253,14 @@ export default function RaporTakipTable({
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<Record<string, string>>({});
   const [exporting, setExporting] = useState(false);
+  const [batchApproving, setBatchApproving] = useState(false);
+
+  // Sonuç Girişi > ÜGDR'de analiz akordiyonu yoktur. Rapor, detay ekranında
+  // hazırlanır; bu listede yalnız seçim ve doğrudan onaya gönderme yapılır.
+  const directApprovalMode = phase === "lab" && Boolean(fixedRaporTuru) && isUgdrFormat(fixedRaporTuru || "");
+  const selectionColumnWidth = directApprovalMode || !phase ? "32px" : "0";
+  const expandColumnWidth = directApprovalMode ? "0" : "24px";
+  const listGridColumns = `${selectionColumnWidth} ${expandColumnWidth} 80px 108px 108px 1fr ${phase === "lab" ? "0" : "108px"} 170px 100px ${phase === "approval" ? "0" : phase === "returned" ? "180px" : phase === "lab" ? "140px" : "110px"} ${(phase === "returned" || phase === "lab") ? "0 0 0" : "36px 36px 36px"}`;
 
   // Gönder modal
   const [gonderRow,    setGonderRow]    = useState<RaporRow | null>(null);
@@ -606,6 +614,32 @@ export default function RaporTakipTable({
     window.open(`/api/rapor-takip/yazdir?ids=${ids}`, "_blank");
   };
 
+  const approveSelectedReports = async () => {
+    if (batchApproving) return;
+    const selectedRows = rows.filter(row => selectedIds.has(rowKey(row)));
+    if (!selectedRows.length) return;
+
+    setBatchApproving(true);
+    setError("");
+    try {
+      for (const row of selectedRows) {
+        const res = await fetch(`/api/rapor-takip/${row.NkrID}/tamamla`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ format: row.RaporFormati, durum: "Onay Bekleniyor" }),
+        });
+        await readApiJson<{ ok: boolean }>(res, `${row.RaporNo || row.NkrID} onaya gönderilemedi`);
+      }
+      setSelectedIds(new Set());
+      await fetchData(page, search, limit, year, raporDurumu, raporTuru, terminDate, { clearFirst: false });
+      onRefresh?.();
+    } catch (e: any) {
+      setError(e.message || "Seçili raporlar onaya gönderilemedi");
+    } finally {
+      setBatchApproving(false);
+    }
+  };
+
   const exportExcel = async () => {
     if (exporting) return;
     setExporting(true);
@@ -882,8 +916,28 @@ export default function RaporTakipTable({
             )}
           </select>
 
+          {/* ÜGDR seçim modu: detayda hazırlanan raporları doğrudan onaya gönder. */}
+          {directApprovalMode && selectedIds.size > 0 && (
+            <button
+              type="button"
+              onClick={approveSelectedReports}
+              disabled={batchApproving}
+              title={`${selectedIds.size} ÜGDR raporunu onaya gönder`}
+              style={{
+                padding: "6px 10px", borderRadius: 6, border: "none",
+                background: "var(--color-accent)", color: "#fff",
+                fontSize: "0.75rem", fontWeight: 700,
+                cursor: batchApproving ? "wait" : "pointer",
+                opacity: batchApproving ? 0.65 : 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {batchApproving ? "Onaya Gönderiliyor..." : `Seçilenleri Onaya Gönder (${selectedIds.size})`}
+            </button>
+          )}
+
           {/* Seçili Yazdır */}
-          {selectedIds.size > 0 && (
+          {!directApprovalMode && selectedIds.size > 0 && (
             <button
               onClick={batchPrint}
               title={`${selectedIds.size} rapor yazdır`}
@@ -937,14 +991,14 @@ export default function RaporTakipTable({
         {/* Başlık satırı */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: `${phase ? "0" : "32px"} 24px 80px 108px 108px 1fr ${phase === "lab" ? "0" : "108px"} 170px 100px ${phase === "approval" ? "0" : phase === "returned" ? "180px" : phase === "lab" ? "140px" : "110px"} ${(phase === "returned" || phase === "lab") ? "0 0 0" : "36px 36px 36px"}`,
+          gridTemplateColumns: listGridColumns,
           alignItems: "center",
           padding: "8px 16px",
           borderBottom: "1px solid var(--color-border-light)",
           background: "var(--color-surface)",
           minWidth: 1140,
         }}>
-          {phase ? <div /> : (
+          {phase && !directApprovalMode ? <div /> : (
             <input type="checkbox" checked={selectedIds.size === rows.length && rows.length > 0}
               onChange={toggleSelectAll} style={{ cursor: "pointer", width: 16, height: 16 }} />
           )}
@@ -1009,10 +1063,10 @@ export default function RaporTakipTable({
             >
               {/* ── Ana satır ── */}
               <div
-                onClick={() => toggleRow(row)}
+                onClick={() => directApprovalMode ? toggleSelectRow(key) : toggleRow(row)}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: `${phase ? "0" : "32px"} 24px 80px 108px 108px 1fr ${phase === "lab" ? "0" : "108px"} 170px 100px ${phase === "approval" ? "0" : phase === "returned" ? "180px" : phase === "lab" ? "140px" : "110px"} ${(phase === "returned" || phase === "lab") ? "0 0 0" : "36px 36px 36px"}`,
+                  gridTemplateColumns: listGridColumns,
                   alignItems: "center",
                   padding: "12px 16px",
                   cursor: "pointer",
@@ -1023,23 +1077,25 @@ export default function RaporTakipTable({
                 }}
               >
                 {/* Checkbox — sadece default (Rapor Takip) modunda; Numune Takip alt tablarında gizli */}
-                {phase ? <span /> : (
+                {phase && !directApprovalMode ? <span /> : (
                   <input type="checkbox" checked={selectedIds.has(key)}
                     onChange={() => toggleSelectRow(key)} onClick={e => e.stopPropagation()}
                     style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--color-accent)" }} />
                 )}
 
                 {/* Chevron */}
-                <svg
-                  viewBox="0 0 20 20" fill="currentColor" width="14" height="14"
-                  style={{
-                    color: "var(--color-text-tertiary)", flexShrink: 0,
-                    transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
-                    transition: "transform 0.18s ease",
-                  }}
-                >
-                  <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" />
-                </svg>
+                {directApprovalMode ? <span /> : (
+                  <svg
+                    viewBox="0 0 20 20" fill="currentColor" width="14" height="14"
+                    style={{
+                      color: "var(--color-text-tertiary)", flexShrink: 0,
+                      transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
+                      transition: "transform 0.18s ease",
+                    }}
+                  >
+                    <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" />
+                  </svg>
+                )}
 
                 {/* Tarih */}
                 <div style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
@@ -1183,7 +1239,9 @@ export default function RaporTakipTable({
                           || row.RaporDurumu === "Yayınlandı"
                           || (row.RaporDurumu === "Analiz Devam Ediyor" && allSaved));
                     if (!showButton) return null;
-                    const isLabPasif = phase === "lab" && !allSaved;
+                    // ÜGDR sonuçları kendi detay ekranında hazırlanır; hizmet sonuç sayısı
+                    // bu akışı temsil etmediği için tekli onay butonu burada daima aktiftir.
+                    const isLabPasif = phase === "lab" && !directApprovalMode && !allSaved;
                     return (
                     <button
                       type="button"
