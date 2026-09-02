@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import styles from '@/app/styles/table.module.css';
 import * as XLSX from "xlsx";
 
+type ReportVariant = 'tr' | 'en' | 'cpsr';
+
+const reportLanguage = (variant: ReportVariant): 'tr' | 'en' => variant === 'tr' ? 'tr' : 'en';
+
 // ── Interfaces ───────────────────────────────────────────────────────────────
 interface MatchedIngredient {
   inputName: string; inputAmount: string; matched: boolean;
@@ -220,8 +224,8 @@ function RaporField({ label, value, valueEn, onChange, onChangeEn, language, row
   );
 }
 
-function ReportLanguageSwitch({ language, onChange }: { language: 'tr' | 'en'; onChange: (v: 'tr' | 'en') => void }) {
-  const btn = (lang: 'tr' | 'en'): React.CSSProperties => ({
+function ReportLanguageSwitch({ language, onChange }: { language: ReportVariant; onChange: (v: ReportVariant) => void }) {
+  const btn = (lang: ReportVariant): React.CSSProperties => ({
     border: 'none',
     borderRadius: 999,
     padding: '7px 14px',
@@ -237,6 +241,7 @@ function ReportLanguageSwitch({ language, onChange }: { language: 'tr' | 'en'; o
       <div style={{ display: 'inline-flex', gap: 4, padding: 4, background: 'var(--color-surface-2)', border: '1px solid var(--color-border-light)', borderRadius: 999 }}>
         <button type="button" style={btn('tr')} onClick={() => onChange('tr')}>Türkçe</button>
         <button type="button" style={btn('en')} onClick={() => onChange('en')}>English</button>
+        <button type="button" style={btn('cpsr')} onClick={() => onChange('cpsr')}>CPSR</button>
       </div>
     </div>
   );
@@ -263,6 +268,13 @@ function hasStalePhysicalChemDash(html: unknown) {
   return ["görünüm", "renk", "koku"].some((label) =>
     normalized.includes(label) && /<td[^>]*>\s*(?:—|-)\s*<\/td>/i.test(String(html ?? "")),
   );
+}
+
+function normalizeSavedCpsrHtml(value: unknown) {
+  return String(value || "")
+    .replace(/<p\b[^>]*class=["'][^"']*\bbasis\b[^"']*["'][^>]*>\s*Prepared in accordance with the Turkish Medicines and Medical Devices Agency Guideline on Safety Assessment of Cosmetic Products Version 3\.0\.\s*<\/p>/gi, "")
+    .replace(/\bWater Solubility\b/g, "Solubility in water")
+    .replace(/\bOther Solubility\b/g, "Solubility in other solvents and oils");
 }
 
 type LabStatus = 'Tamamlandı' | 'Devam Ediyor';
@@ -469,7 +481,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
   const [printLoading, setPrintLoading] = useState(false);
   const [editorSaveStatus, setEditorSaveStatus] = useState("");
   const [loadingEdit, setLoadingEdit] = useState(isEdit);
-  const [reportLang, setReportLang] = useState<'tr' | 'en'>('tr');
+  const [reportLang, setReportLang] = useState<ReportVariant>('tr');
 
   const [formulInput, setFormulInput] = useState("");
   const [formulResults, setFormulResults] = useState<MatchedIngredient[]>([]);
@@ -969,6 +981,18 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
   };
 
   // ── Rapor İndir ───────────────────────────────────────────────────────────
+  const loadSavedEditedHtml = async (language: ReportVariant, profile: 'ugd' | 'lab') => {
+    const recordId = Number(savedId || editId || 0);
+    if (!recordId) return "";
+    const saved = await fetch(`/api/urunler/canli-rapor?source=${isLabSource ? "lab" : "ugd"}&recordId=${recordId}&language=${language}&profile=${profile}`)
+      .then(response => response.ok ? response.json() : null)
+      .catch(() => null);
+    const bodyHtml = String(saved?.item?.bodyHtml || "").trim();
+    if (!bodyHtml) return "";
+    const headHtml = String(saved?.item?.headHtml || "");
+    return `<!doctype html><html><head><meta charset="utf-8" />${headHtml}</head><body><div class="WordSection1">${bodyHtml}</div></body></html>`;
+  };
+
   const handleReportDownload = async (format: "preview" | "word" | "pdf") => {
     setPrintLoading(true);
     const previewWindow = format === "preview" ? window.open("", "_blank") : null;
@@ -981,10 +1005,16 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       const endpointFormat = format === "preview" ? "pdf" : format === "word" ? "docx" : "pdf";
       const language = reportLang;
       const profile = isLabSource ? "lab" : "ugd";
+      const currentEditorBody = language === "cpsr" && activeTab === "canli-rapor" ? getEditedReportHtml().trim() : "";
+      const editedHtml = language === "cpsr"
+        ? currentEditorBody
+          ? `<!doctype html><html><head><meta charset="utf-8" />${editorHead}</head><body><div class="WordSection1">${currentEditorBody}</div></body></html>`
+          : await loadSavedEditedHtml(language, profile)
+        : "";
       const res = await fetch(`/api/urunler/rapor-sablon?format=${endpointFormat}&language=${language}&profile=${profile}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ form, formulResults, firmaAd, language, profile }),
+        body: JSON.stringify({ form, formulResults, firmaAd, language, profile, editedHtml }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -1011,7 +1041,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         .replace(/\s+/g, "_")
         .slice(0, 80) || "rapor";
       const ext = format === "word" ? "docx" : "pdf";
-      const baseName = language === "en" ? `CPSR-${safeName}` : `UGD_${safeName}`;
+      const baseName = language === "tr" ? `UGD_${safeName}` : `CPSR-${safeName}`;
       const a = document.createElement("a");
       a.href = url;
       a.download = `${baseName}.${ext}`;
@@ -1073,17 +1103,25 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
           .then(r => r.ok ? r.json() : null)
           .catch(() => null);
         if (saved?.item?.bodyHtml) {
-          const savedSections = Array.isArray(saved.item.sections) ? saved.item.sections : [];
+          const savedBodyHtml = reportLang === "cpsr"
+            ? normalizeSavedCpsrHtml(saved.item.bodyHtml)
+            : saved.item.bodyHtml;
+          const savedSections = Array.isArray(saved.item.sections)
+            ? saved.item.sections.map((section: any) => ({
+                ...section,
+                html: reportLang === "cpsr" ? normalizeSavedCpsrHtml(section?.html) : section?.html,
+              }))
+            : [];
           const hasSplitContent = savedSections.length === 6 && savedSections.filter((section: any) => String(section?.html || "").trim()).length > 1;
           const currentFirmaAd = selectedFirmaAd();
           const savedHasCurrentFirma = !isLabSource
             || (currentFirmaAd
-              ? normalizeFirmaText(saved.item.bodyHtml).includes(normalizeFirmaText(currentFirmaAd))
+              ? normalizeFirmaText(savedBodyHtml).includes(normalizeFirmaText(currentFirmaAd))
               : false);
-          const savedHasFreshPhysicalChem = !isLabSource || !hasStalePhysicalChemDash(saved.item.bodyHtml);
+          const savedHasFreshPhysicalChem = !isLabSource || !hasStalePhysicalChemDash(savedBodyHtml);
           if (hasSplitContent && savedHasCurrentFirma && savedHasFreshPhysicalChem) {
             setEditorHead(saved.item.headHtml || "");
-            setEditorSections(saved.item.sections);
+            setEditorSections(savedSections);
             setEditorSaveStatus(saved.item.createdAt ? `Son kayıt yüklendi: ${new Date(saved.item.createdAt).toLocaleString("tr-TR")}` : "Son kayıt yüklendi.");
             return;
           }
@@ -1659,7 +1697,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
             <PhysChemGrid
               form={form}
               onChange={(field, v) => setForm(prev => ({ ...prev, [field]: v }))}
-              language={reportLang}
+              language={reportLanguage(reportLang)}
               groups={[
                 [
                   { label: 'Görünüm', tr: 'Gorunum', en: 'GorunumEn' },
@@ -1734,29 +1772,29 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 
           <SectionCard title="A.5 (Etiket) — Kutu / Etiket Bilgileri">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <DualInput label="Kullanım" value={form.Kullanim} valueEn={form.KullanimEn} onChange={upd('Kullanim')} onChangeEn={upd('KullanimEn')} language={reportLang} rows={3} />
-              <DualInput label="Uyarılar" value={form.Uyarilar} valueEn={form.UyarilarEn} onChange={upd('Uyarilar')} onChangeEn={upd('UyarilarEn')} language={reportLang} rows={3} />
+              <DualInput label="Kullanım" value={form.Kullanim} valueEn={form.KullanimEn} onChange={upd('Kullanim')} onChangeEn={upd('KullanimEn')} language={reportLanguage(reportLang)} rows={3} />
+              <DualInput label="Uyarılar" value={form.Uyarilar} valueEn={form.UyarilarEn} onChange={upd('Uyarilar')} onChangeEn={upd('UyarilarEn')} language={reportLanguage(reportLang)} rows={3} />
               <ImagePicker label="Etiket görseli ekle" value={form.EtiketGorsel} onChange={v => setForm(prev => ({ ...prev, EtiketGorsel: v }))} />
             </div>
           </SectionCard>
 
           <SectionCard title="A.6 — Kozmetik Ürüne Maruziyet">
-            <RaporField label="Maruziyet Değerlendirmesi" value={form.MaruziyetAciklama} valueEn={form.MaruziyetAciklamaEn} onChange={upd('MaruziyetAciklama')} onChangeEn={upd('MaruziyetAciklamaEn')} language={reportLang} rows={8} readOnly hint="Bu alan 1. Genel Bilgiler bölümündeki ürün tipi, uygulama alanı, hedef grup ve rUGDTip değerlerinden otomatik oluşturulur." />
+            <RaporField label="Maruziyet Değerlendirmesi" value={form.MaruziyetAciklama} valueEn={form.MaruziyetAciklamaEn} onChange={upd('MaruziyetAciklama')} onChangeEn={upd('MaruziyetAciklamaEn')} language={reportLanguage(reportLang)} rows={8} readOnly hint="Bu alan 1. Genel Bilgiler bölümündeki ürün tipi, uygulama alanı, hedef grup ve rUGDTip değerlerinden otomatik oluşturulur." />
           </SectionCard>
 
           <SectionCard title="B.4 — Güvenlilik Değerlendirme Sorumlusu">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className={styles.formGroup}>
                 <label>Ad Soyad / Kuruluş</label>
-                <input value={reportLang === 'en' ? form.SorumluAdEn : form.SorumluAd} onChange={e => setForm({ ...form, [reportLang === 'en' ? 'SorumluAdEn' : 'SorumluAd']: e.target.value })} />
+                <input value={reportLang !== 'tr' ? form.SorumluAdEn : form.SorumluAd} onChange={e => setForm({ ...form, [reportLang !== 'tr' ? 'SorumluAdEn' : 'SorumluAd']: e.target.value })} />
               </div>
               <div className={styles.formGroup}>
                 <label>Adres</label>
-                <textarea rows={3} value={reportLang === 'en' ? form.SorumluAdresEn : form.SorumluAdres} onChange={e => setForm({ ...form, [reportLang === 'en' ? 'SorumluAdresEn' : 'SorumluAdres']: e.target.value })} style={{ width: '100%' }} />
+                <textarea rows={3} value={reportLang !== 'tr' ? form.SorumluAdresEn : form.SorumluAdres} onChange={e => setForm({ ...form, [reportLang !== 'tr' ? 'SorumluAdresEn' : 'SorumluAdres']: e.target.value })} style={{ width: '100%' }} />
               </div>
               <div className={styles.formGroup}>
                 <label>Yeterlilik Kanıtı / Belge Referansı</label>
-                <input value={reportLang === 'en' ? form.SorumluKanitEn : form.SorumluKanit} onChange={e => setForm({ ...form, [reportLang === 'en' ? 'SorumluKanitEn' : 'SorumluKanit']: e.target.value })} />
+                <input value={reportLang !== 'tr' ? form.SorumluKanitEn : form.SorumluKanit} onChange={e => setForm({ ...form, [reportLang !== 'tr' ? 'SorumluKanitEn' : 'SorumluKanit']: e.target.value })} />
               </div>
             </div>
           </SectionCard>

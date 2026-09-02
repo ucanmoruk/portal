@@ -15,8 +15,9 @@ import poolPromise, { cosmoPool } from "@/lib/db";
 import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 import { renderUgdReportHtml } from "@/lib/ugdReportHtml";
 import { renderUgdReportHtmlEn } from "@/lib/ugdReportHtmlEn";
+import { renderUgdReportHtmlCpsr } from "@/lib/ugdReportHtmlCpsr";
 
-type ReportLanguage = "tr" | "en";
+type ReportLanguage = "tr" | "en" | "cpsr";
 type ReportProfile = "ugd" | "lab";
 
 function sv(v: unknown, fb = ""): string {
@@ -38,6 +39,7 @@ function htmlEsc(v: unknown) {
 }
 
 function pickLanguage(value: unknown): ReportLanguage {
+  if (value === "cpsr") return "cpsr";
   return value === "en" ? "en" : "tr";
 }
 
@@ -54,6 +56,15 @@ function reportHeaderCopy(language: ReportLanguage, profile: ReportProfile) {
     ugd: "Prepared pursuant to Regulation (EC) No 1223/2009 and the Turkish Cosmetic Regulation published in the Official Gazette No. 25823 on 23 May 2005.",
     lab: "Prepared pursuant to Regulation (EC) No 1223/2009 and the Turkish Cosmetic Regulation published in the Official Gazette No. 25823 on 23 May 2005.",
   };
+
+  if (language === "cpsr") {
+    return {
+      title: "COSMETIC PRODUCT SAFETY ASSESSMENT",
+      subtitle: "It has been prepared According to REGULATION (EC) No 1223/2009 OF THE EUROPEAN PARLIAMENT AND OF THE COUNCIL on Cosmetic Products",
+      formVersion: "Form / Version Nr:",
+      docxLang: "en-US",
+    };
+  }
 
   if (language === "en") {
     return {
@@ -490,9 +501,13 @@ export async function POST(request: Request) {
     const firmaDetails = await getFirmaDetails(form.FirmaID, profile);
     const reportFirmaAd = sv(firmaAd) || firmaDetails.firmaAd;
     const enrichedFormulResults = await enrichUgdFormulaRows(formulResults);
-    const renderReportHtml = language === "en" ? renderUgdReportHtmlEn : renderUgdReportHtml;
-    const html = editedHtml || renderReportHtml({ form, formulResults: enrichedFormulResults, ...firmaDetails, firmaAd: reportFirmaAd, language, profile });
-    const safeName = `${safeReportName(form.RaporNo)}${language === "en" ? "_EN" : ""}`;
+    const html = editedHtml || (language === "cpsr"
+      ? renderUgdReportHtmlCpsr({ form, formulResults: enrichedFormulResults, ...firmaDetails, firmaAd: reportFirmaAd, language, profile })
+      : language === "en"
+        ? renderUgdReportHtmlEn({ form, formulResults: enrichedFormulResults, ...firmaDetails, firmaAd: reportFirmaAd, language, profile })
+        : renderUgdReportHtml({ form, formulResults: enrichedFormulResults, ...firmaDetails, firmaAd: reportFirmaAd, language, profile }));
+    const languageSuffix = language === "cpsr" ? "_CPSR" : language === "en" ? "_EN" : "";
+    const safeName = `${safeReportName(form.RaporNo)}${languageSuffix}`;
 
     if (format === "html") {
       return new Response(html, {
@@ -515,15 +530,19 @@ export async function POST(request: Request) {
     }
 
     if (format === "docx" || format === "doc" || format === "word") {
-      const wordHtml = renderUgdReportHtml({
+      const wordInput = {
         form,
         formulResults: enrichedFormulResults,
         ...firmaDetails,
         firmaAd: reportFirmaAd,
-        language,
         profile,
-        output: "word",
-      });
+        output: "word" as const,
+      };
+      const wordHtml = language === "cpsr"
+        ? renderUgdReportHtmlCpsr({ ...wordInput, language })
+        : language === "en"
+          ? renderUgdReportHtmlEn({ ...wordInput, language })
+          : renderUgdReportHtml({ ...wordInput, language });
       const docx = await renderDocx(wordHtml, form, language, profile);
       return new Response(docx as unknown as BodyInit, {
         status: 200,

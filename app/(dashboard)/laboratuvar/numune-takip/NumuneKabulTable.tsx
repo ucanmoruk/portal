@@ -451,6 +451,42 @@ export default function NumuneKabulTable() {
     0
   );
 
+  const exportSelectedToExcel = async () => {
+    const rows = groups.flatMap(group => group.numuneler
+      .filter(numune => selectedIds.has(numune.ID))
+      .map(numune => ({
+        "Evrak No": group.evrakNo,
+        "Eski Evrak No": group.oldEvrakNo || "",
+        "Rapor No": numune.RaporNo || "",
+        "Onaylı Rapor No": numune.DisRaporKodu || "",
+        "Numune Adı": numune.Numune_Adi || "",
+        "Firma": group.firmaAd || "",
+        "Proje": group.projeAd || "",
+        "Kayıt Tarihi": group.tarih || "",
+        "Rapor Durumu": numune.Asama || group.raporDurumu || "",
+        "Ödeme Durumu": group.odemeDurumu || "Fatura Kesilmedi",
+        "Grup": numune.Grup || "",
+        "Tür": numune.Tur || "",
+        "Proforma No": group.proformaNo || "",
+      })));
+
+    if (!rows.length) return;
+
+    const XLSX = await import("xlsx");
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    sheet["!cols"] = [
+      { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 24 }, { wch: 32 },
+      { wch: 32 }, { wch: 28 }, { wch: 14 }, { wch: 22 }, { wch: 20 },
+      { wch: 14 }, { wch: 18 }, { wch: 18 },
+    ];
+    if (sheet["!ref"]) sheet["!autofilter"] = { ref: sheet["!ref"] };
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Seçili Numuneler");
+    const date = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `Secili_Numuneler_${date}.xlsx`);
+  };
+
   // ── Render ───────────────────────────────────────────────────
   return (
     <>
@@ -477,14 +513,24 @@ export default function NumuneKabulTable() {
           </div>
           <span className={styles.totalCount}>{total} evrak, {totalSamples} numune</span>
           {selectedVisibleCount > 0 && (
-            <button
-              className={styles.addBtn}
-              onClick={openSelectedInvoice}
-              style={{ padding: "7px 12px", fontSize: 12 }}
-              title="Seçili numunelerden tek proforma oluştur"
-            >
-              Seçili Proforma ({selectedVisibleCount})
-            </button>
+            <>
+              <button
+                className={styles.addBtn}
+                onClick={exportSelectedToExcel}
+                style={{ padding: "7px 12px", fontSize: 12 }}
+                title="Seçili numuneleri Excel dosyasına aktar"
+              >
+                Seçili Ürünleri Excel’e Aktar ({selectedVisibleCount})
+              </button>
+              <button
+                className={styles.addBtn}
+                onClick={openSelectedInvoice}
+                style={{ padding: "7px 12px", fontSize: 12 }}
+                title="Seçili numunelerden tek proforma oluştur"
+              >
+                Seçili Proforma ({selectedVisibleCount})
+              </button>
+            </>
           )}
         </div>
         <div className={styles.toolbarRight} style={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
