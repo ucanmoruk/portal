@@ -273,9 +273,9 @@ export default function GenelReport({
   // şekilde davranır.
   // ═══════════════════════════════════════════════════════════════════════════
   // Page 1'e imza/footer bloğu için ~78mm ayrıldığından, başlık sonrası yaklaşık
-  // 12 normal satır sığar. Uzun hücreler birden fazla satır ağırlığı tüketir; böylece
+  // 11 normal satır sığar. Uzun hücreler birden fazla satır ağırlığı tüketir; böylece
   // tek bir uzun Sonuç metni tabloyu footer üstüne bindirmez.
-  const FIRST_PAGE_WEIGHT = 12;
+  const FIRST_PAGE_WEIGHT = 11;
   const CONTINUATION_PAGE_WEIGHT = 20;
   const firstPageRows = editing
     ? resultRows
