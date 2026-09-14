@@ -8,7 +8,7 @@ import styles from "@/app/styles/table.module.css";
 import kys from "../../kys.module.css";
 
 type Birim = { id: number; ad: string };
-type Detail = { talep: any; kalemler: any[]; kabuller: any[] };
+type Detail = { talep: any; kalemler: any[]; kabuller: any[]; satinAlmaYetkisi?: boolean };
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -38,6 +38,12 @@ export default function TalepDetayClient({ id }: { id: number }) {
     sktUygun: true,
     sertifikaGerekli: false,
     genelDegerlendirme: "",
+    tedarikci: "",
+    satinAlmaTarihi: today(),
+    birimFiyat: "",
+    paraBirimi: "TRY",
+    toplamTutar: "",
+    faturaNo: "",
   });
 
   const fetchDetail = useCallback(async () => {
@@ -86,6 +92,12 @@ export default function TalepDetayClient({ id }: { id: number }) {
       sktUygun: true,
       sertifikaGerekli: false,
       genelDegerlendirme: "",
+      tedarikci: "",
+      satinAlmaTarihi: today(),
+      birimFiyat: "",
+      paraBirimi: "TRY",
+      toplamTutar: "",
+      faturaNo: "",
     });
     setFormError("");
   }
@@ -172,11 +184,11 @@ export default function TalepDetayClient({ id }: { id: number }) {
       <div className={styles.tableCard}>
         <div className={styles.tableWrapper}>
           <table className={styles.table}>
-            <thead><tr><th>Kabul tarihi</th><th>Kalem</th><th>Gelen miktar</th><th>Değerlendiren</th><th>Genel değerlendirme</th></tr></thead>
+            <thead><tr><th>Kabul tarihi</th><th>Kalem</th><th>Gelen miktar</th>{detail.satinAlmaYetkisi && <><th>Tedarikçi</th><th>Toplam</th></>}<th>Değerlendiren</th><th>Genel değerlendirme</th></tr></thead>
             <tbody>
-              {detail.kabuller.length === 0 ? <tr><td colSpan={5}><div className={styles.empty}>Kabul kaydı yok.</div></td></tr> : detail.kabuller.map(k => {
+              {detail.kabuller.length === 0 ? <tr><td colSpan={detail.satinAlmaYetkisi ? 7 : 5}><div className={styles.empty}>Kabul kaydı yok.</div></td></tr> : detail.kabuller.map(k => {
                 const item = detail.kalemler.find(i => i.id === k.kalemId);
-                return <tr key={k.id}><td>{dateFmt(k.kabulTarihi)}</td><td>{item?.malzemeAdi || k.kalemId}</td><td>{k.gelenMiktar}</td><td>{k.degerlendirenAd || "-"}</td><td>{k.genelDegerlendirme || "-"}</td></tr>;
+                return <tr key={k.id}><td>{dateFmt(k.kabulTarihi)}</td><td>{item?.malzemeAdi || k.kalemId}</td><td>{k.gelenMiktar}</td>{detail.satinAlmaYetkisi && <><td>{k.tedarikci || "-"}</td><td>{k.toplamTutar == null ? "-" : `${Number(k.toplamTutar).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ${k.paraBirimi || "TRY"}`}</td></>}<td>{k.degerlendirenAd || "-"}</td><td>{k.genelDegerlendirme || "-"}</td></tr>;
               })}
             </tbody>
           </table>
@@ -196,6 +208,19 @@ export default function TalepDetayClient({ id }: { id: number }) {
                 <div className={styles.formGroup}><label>Marka</label><input value={form.marka} onChange={e => setForm(f => ({ ...f, marka: e.target.value }))} /></div>
                 <div className={styles.formGroup}><label>Lot</label><input value={form.lot} onChange={e => setForm(f => ({ ...f, lot: e.target.value }))} /></div>
                 <div className={styles.formGroup}><label>SKT</label><input type="date" value={form.skt} onChange={e => setForm(f => ({ ...f, skt: e.target.value }))} /></div>
+                {detail.satinAlmaYetkisi && (
+                  <div className={kys.purchaseSection}>
+                    <div className={kys.purchaseSectionTitle}>Satın alma bilgileri</div>
+                    <div className={styles.formGrid3}>
+                      <div className={styles.formGroup}><label>Kimden satın alındı?</label><input value={form.tedarikci} onChange={e => setForm(f => ({ ...f, tedarikci: e.target.value }))} placeholder="Tedarikçi / firma" /></div>
+                      <div className={styles.formGroup}><label>Satın alma tarihi</label><input type="date" value={form.satinAlmaTarihi} onChange={e => setForm(f => ({ ...f, satinAlmaTarihi: e.target.value }))} /></div>
+                      <div className={styles.formGroup}><label>Fatura no</label><input value={form.faturaNo} onChange={e => setForm(f => ({ ...f, faturaNo: e.target.value }))} /></div>
+                      <div className={styles.formGroup}><label>Birim fiyat</label><input inputMode="decimal" value={form.birimFiyat} onChange={e => setForm(f => ({ ...f, birimFiyat: e.target.value }))} /></div>
+                      <div className={styles.formGroup}><label>Para birimi</label><select value={form.paraBirimi} onChange={e => setForm(f => ({ ...f, paraBirimi: e.target.value }))}><option>TRY</option><option>EUR</option><option>USD</option><option>GBP</option></select></div>
+                      <div className={styles.formGroup}><label>Toplam tutar</label><input inputMode="decimal" value={form.toplamTutar} onChange={e => setForm(f => ({ ...f, toplamTutar: e.target.value }))} /></div>
+                    </div>
+                  </div>
+                )}
                 {[
                   ["İstenilen miktarda geldi mi?", "istenilenMiktardaGeldi"],
                   ["İstenilen marka ve özelliklerde geldi mi?", "markaOzellikUygun"],

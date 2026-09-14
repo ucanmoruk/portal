@@ -6,6 +6,7 @@ import { hasNkrFormulTable, hasNkrLogTable, nkrHasColumn } from "@/lib/numuneFor
 import { loadLabUgdrTexts, saveLabUgdrTexts } from "@/lib/labUgdrStorage";
 import { ensureDisRaporKodlari } from "@/lib/disKod";
 import { getNkrEditLock } from "@/lib/nkrEditLock";
+import { syncNkrCommercialReferences } from "@/lib/nkrCommercialReferenceSync";
 
 // Limit ve LOQ değerine göre Sonuç ve SonucEn otomatik hesapla
 function computeSonucAuto(
@@ -170,6 +171,11 @@ export async function PUT(
         { status: 409 },
       );
     }
+
+    const previousReference = (await pool.request()
+      .input("id", nkrId)
+      .query(`SELECT TOP 1 Evrak_No, RaporNo FROM NKR WHERE ID = @id`)).recordset?.[0];
+    if (!previousReference) return Response.json({ error: "Kayıt bulunamadı" }, { status: 404 });
 
     const [
       hasRevno, hasKarar, hasDil, hasAciklama, hasTur,
@@ -505,6 +511,13 @@ export async function PUT(
     }
 
     await saveLabUgdrTexts(pool, nkrId, raporMetinleri || {});
+
+    await syncNkrCommercialReferences(
+      pool,
+      nkrId,
+      { evrakNo: previousReference.Evrak_No, raporNo: previousReference.RaporNo },
+      { evrakNo: nkr.Evrak_No, raporNo: nkr.RaporNo },
+    );
 
     // ── 5. NKR_Log ───────────────────────────────────────────────
     if (doLog) {

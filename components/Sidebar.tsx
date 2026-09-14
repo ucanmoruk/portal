@@ -102,6 +102,7 @@ const navGroups: NavGroup[] = [
       { label: "Stok Ekle / Düş", href: "/laboratuvar/kys/stok-hareketleri", menuKey: "laboratuvar.kys.stok-hareketleri" },
       { label: "Son Kullanım Listesi", href: "/laboratuvar/kys/son-kullanim", menuKey: "laboratuvar.kys.son-kullanim" },
       { label: "Talep Listesi", href: "/laboratuvar/kys/talep-listesi", menuKey: "laboratuvar.kys.talep-listesi" },
+      { label: "Satın Alma Geçmişi", href: "/laboratuvar/kys/satin-alma-gecmisi", menuKey: "laboratuvar.kys.satin-alma-gecmisi" },
     ],
   },
   {

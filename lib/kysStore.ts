@@ -273,10 +273,26 @@ async function createKysSchema() {
         DegerlendirenAd VARCHAR(160) NULL,
         StokID INT NULL,
         HareketID INT NULL,
+        Tedarikci VARCHAR(220) NULL,
+        SatinAlmaTarihi DATE NULL,
+        BirimFiyat DECIMAL(18,4) NULL,
+        ParaBirimi VARCHAR(10) NULL,
+        ToplamTutar DECIMAL(18,4) NULL,
+        FaturaNo VARCHAR(100) NULL,
+        SatinAlanID VARCHAR(80) NULL,
+        SatinAlanAd VARCHAR(160) NULL,
         CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         KEY IX_KysTalepKabul_TalepID (TalepID)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci
     `);
+    await pool.request().query("ALTER TABLE KysTalepKabul ADD COLUMN IF NOT EXISTS Tedarikci VARCHAR(220) NULL");
+    await pool.request().query("ALTER TABLE KysTalepKabul ADD COLUMN IF NOT EXISTS SatinAlmaTarihi DATE NULL");
+    await pool.request().query("ALTER TABLE KysTalepKabul ADD COLUMN IF NOT EXISTS BirimFiyat DECIMAL(18,4) NULL");
+    await pool.request().query("ALTER TABLE KysTalepKabul ADD COLUMN IF NOT EXISTS ParaBirimi VARCHAR(10) NULL");
+    await pool.request().query("ALTER TABLE KysTalepKabul ADD COLUMN IF NOT EXISTS ToplamTutar DECIMAL(18,4) NULL");
+    await pool.request().query("ALTER TABLE KysTalepKabul ADD COLUMN IF NOT EXISTS FaturaNo VARCHAR(100) NULL");
+    await pool.request().query("ALTER TABLE KysTalepKabul ADD COLUMN IF NOT EXISTS SatinAlanID VARCHAR(80) NULL");
+    await pool.request().query("ALTER TABLE KysTalepKabul ADD COLUMN IF NOT EXISTS SatinAlanAd VARCHAR(160) NULL");
   } else {
     await pool.request().query(`
       IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'KysLaboratuvarBirim')
@@ -418,9 +434,25 @@ async function createKysSchema() {
         DegerlendirenAd NVARCHAR(160) NULL,
         StokID INT NULL,
         HareketID INT NULL,
+        Tedarikci NVARCHAR(220) NULL,
+        SatinAlmaTarihi DATE NULL,
+        BirimFiyat DECIMAL(18,4) NULL,
+        ParaBirimi NVARCHAR(10) NULL,
+        ToplamTutar DECIMAL(18,4) NULL,
+        FaturaNo NVARCHAR(100) NULL,
+        SatinAlanID NVARCHAR(80) NULL,
+        SatinAlanAd NVARCHAR(160) NULL,
         CreatedAt DATETIME NOT NULL DEFAULT GETDATE()
       )
     `);
+    await pool.request().query("IF COL_LENGTH('KysTalepKabul', 'Tedarikci') IS NULL ALTER TABLE KysTalepKabul ADD Tedarikci NVARCHAR(220) NULL");
+    await pool.request().query("IF COL_LENGTH('KysTalepKabul', 'SatinAlmaTarihi') IS NULL ALTER TABLE KysTalepKabul ADD SatinAlmaTarihi DATE NULL");
+    await pool.request().query("IF COL_LENGTH('KysTalepKabul', 'BirimFiyat') IS NULL ALTER TABLE KysTalepKabul ADD BirimFiyat DECIMAL(18,4) NULL");
+    await pool.request().query("IF COL_LENGTH('KysTalepKabul', 'ParaBirimi') IS NULL ALTER TABLE KysTalepKabul ADD ParaBirimi NVARCHAR(10) NULL");
+    await pool.request().query("IF COL_LENGTH('KysTalepKabul', 'ToplamTutar') IS NULL ALTER TABLE KysTalepKabul ADD ToplamTutar DECIMAL(18,4) NULL");
+    await pool.request().query("IF COL_LENGTH('KysTalepKabul', 'FaturaNo') IS NULL ALTER TABLE KysTalepKabul ADD FaturaNo NVARCHAR(100) NULL");
+    await pool.request().query("IF COL_LENGTH('KysTalepKabul', 'SatinAlanID') IS NULL ALTER TABLE KysTalepKabul ADD SatinAlanID NVARCHAR(80) NULL");
+    await pool.request().query("IF COL_LENGTH('KysTalepKabul', 'SatinAlanAd') IS NULL ALTER TABLE KysTalepKabul ADD SatinAlanAd NVARCHAR(160) NULL");
   }
 
   for (const birim of ["Depo", "Mikrobiyoloji", "Kimyasal", "Dış Laboratuvar", "Numune Kabul"]) {
@@ -985,7 +1017,7 @@ export async function createKysRequest(input: KysRequestInput) {
   return id;
 }
 
-export async function getKysRequestDetail(id: number) {
+export async function getKysRequestDetail(id: number, includePurchaseDetails = false) {
   await ensureKysSchema();
   const pool = await cosmoPool;
   const reqRes = await pool.request().input("ID", id).query(`SELECT * FROM KysTalep WHERE ID = @ID`);
@@ -1030,6 +1062,15 @@ export async function getKysRequestDetail(id: number) {
       kabulTarihi: asDate(r.KabulTarihi),
       degerlendirenAd: rowString(r, "DegerlendirenAd"),
       genelDegerlendirme: rowString(r, "GenelDegerlendirme"),
+      ...(includePurchaseDetails ? {
+        tedarikci: rowString(r, "Tedarikci"),
+        satinAlmaTarihi: asDate(r.SatinAlmaTarihi),
+        birimFiyat: r.BirimFiyat == null ? null : Number(r.BirimFiyat),
+        paraBirimi: rowString(r, "ParaBirimi"),
+        toplamTutar: r.ToplamTutar == null ? null : Number(r.ToplamTutar),
+        faturaNo: rowString(r, "FaturaNo"),
+        satinAlanAd: rowString(r, "SatinAlanAd"),
+      } : {}),
     })),
   };
 }
@@ -1107,13 +1148,23 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
     .input("DegerlendirenAd", nullableText(input.degerlendirenAd))
     .input("StokID", stokId)
     .input("HareketID", hareketId)
+    .input("Tedarikci", nullableText(input.tedarikci))
+    .input("SatinAlmaTarihi", dateValue(input.satinAlmaTarihi))
+    .input("BirimFiyat", input.birimFiyat === "" || input.birimFiyat == null ? null : numberValue(input.birimFiyat))
+    .input("ParaBirimi", nullableText(input.paraBirimi))
+    .input("ToplamTutar", input.toplamTutar === "" || input.toplamTutar == null ? null : numberValue(input.toplamTutar))
+    .input("FaturaNo", nullableText(input.faturaNo))
+    .input("SatinAlanID", nullableText(input.satinAlanId))
+    .input("SatinAlanAd", nullableText(input.satinAlanAd))
     .query(`
       INSERT INTO KysTalepKabul
         (TalepID, KalemID, GelenMiktar, IstenilenMiktardaGeldi, MarkaOzellikUygun, SktUygun, SertifikaGerekli,
-         GenelDegerlendirme, KabulTarihi, DegerlendirenID, DegerlendirenAd, StokID, HareketID)
+         GenelDegerlendirme, KabulTarihi, DegerlendirenID, DegerlendirenAd, StokID, HareketID,
+         Tedarikci, SatinAlmaTarihi, BirimFiyat, ParaBirimi, ToplamTutar, FaturaNo, SatinAlanID, SatinAlanAd)
       VALUES
         (@TalepID, @KalemID, @GelenMiktar, @IstenilenMiktardaGeldi, @MarkaOzellikUygun, @SktUygun, @SertifikaGerekli,
-         @GenelDegerlendirme, @KabulTarihi, @DegerlendirenID, @DegerlendirenAd, @StokID, @HareketID)
+         @GenelDegerlendirme, @KabulTarihi, @DegerlendirenID, @DegerlendirenAd, @StokID, @HareketID,
+         @Tedarikci, @SatinAlmaTarihi, @BirimFiyat, @ParaBirimi, @ToplamTutar, @FaturaNo, @SatinAlanID, @SatinAlanAd)
     `);
 
   await pool.request()
@@ -1137,4 +1188,61 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
   `);
 
   return { stokId, hareketId };
+}
+
+export async function listKysPurchases(params: { search?: string; page?: number; limit?: number }) {
+  await ensureKysSchema();
+  const pool = await cosmoPool;
+  const page = Math.max(1, Number(params.page || 1));
+  const limit = Math.min(100, Math.max(5, Number(params.limit || 25)));
+  const offset = (page - 1) * limit;
+  const search = text(params.search);
+  const where = `
+    WHERE (k.Tedarikci IS NOT NULL OR k.SatinAlmaTarihi IS NOT NULL OR k.BirimFiyat IS NOT NULL OR k.ToplamTutar IS NOT NULL)
+      ${search ? "AND (s.Kod LIKE @search OR s.Ad LIKE @search OR tk.MalzemeAdi LIKE @search OR k.Tedarikci LIKE @search OR t.TalepNo LIKE @search OR k.FaturaNo LIKE @search)" : ""}
+  `;
+  const bind = (request: any) => request.input("search", `%${search}%`);
+  const from = `
+    FROM KysTalepKabul k
+    INNER JOIN KysTalep t ON t.ID = k.TalepID
+    INNER JOIN KysTalepKalem tk ON tk.ID = k.KalemID
+    LEFT JOIN KysStokKart s ON s.ID = k.StokID
+  `;
+  const count = await bind(pool.request()).query(`SELECT COUNT(*) AS total ${from} ${where}`);
+  const rows = await bind(pool.request())
+    .input("offset", offset)
+    .input("limit", limit)
+    .query(`
+      SELECT k.ID, k.StokID, s.Kod AS StokKod, COALESCE(s.Ad, tk.MalzemeAdi) AS MalzemeAdi,
+             t.ID AS TalepID, t.TalepNo, k.GelenMiktar, tk.Birim, k.Tedarikci,
+             k.SatinAlmaTarihi, k.BirimFiyat, k.ParaBirimi, k.ToplamTutar,
+             k.FaturaNo, k.SatinAlanAd, k.CreatedAt
+      ${from} ${where}
+      ORDER BY COALESCE(k.SatinAlmaTarihi, CAST(k.CreatedAt AS DATE)) DESC, k.ID DESC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `);
+  const total = Number(count.recordset[0]?.total || 0);
+  return {
+    data: rows.recordset.map((r: AnyRow) => ({
+      id: rowNumber(r, "ID"),
+      stokId: r.StokID == null ? null : Number(r.StokID),
+      stokKod: rowString(r, "StokKod"),
+      malzemeAdi: rowString(r, "MalzemeAdi"),
+      talepId: rowNumber(r, "TalepID"),
+      talepNo: rowString(r, "TalepNo"),
+      miktar: Number(r.GelenMiktar || 0),
+      birim: rowString(r, "Birim"),
+      tedarikci: rowString(r, "Tedarikci"),
+      satinAlmaTarihi: asDate(r.SatinAlmaTarihi),
+      birimFiyat: r.BirimFiyat == null ? null : Number(r.BirimFiyat),
+      paraBirimi: rowString(r, "ParaBirimi"),
+      toplamTutar: r.ToplamTutar == null ? null : Number(r.ToplamTutar),
+      faturaNo: rowString(r, "FaturaNo"),
+      satinAlanAd: rowString(r, "SatinAlanAd"),
+    })),
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
 }

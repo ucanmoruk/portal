@@ -1,3 +1,4 @@
+/* Hallmark · pre-emit critique: P4 H4 E4 S5 R5 V3 */
 .gridCards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -202,6 +203,64 @@
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.stockFitTable {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  font-size: 0.72rem;
+}
+
+.stockFitTable th,
+.stockFitTable td {
+  padding-inline: 5px;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: normal;
+}
+
+.stockFitTable th:nth-child(1) { width: 7%; }
+.stockFitTable th:nth-child(2) { width: 7%; }
+.stockFitTable th:nth-child(3) { width: 6%; }
+.stockFitTable th:nth-child(4) { width: 10%; }
+.stockFitTable th:nth-child(5) { width: 9%; }
+.stockFitTable th:nth-child(6) { width: 7%; }
+.stockFitTable th:nth-child(7) { width: 10%; }
+.stockFitTable th:nth-child(8) { width: 7%; }
+.stockFitTable th:nth-child(9) { width: 9%; }
+.stockFitTable th:nth-child(10) { width: 6%; }
+.stockFitTable th:nth-child(11) { width: 5%; }
+.stockFitTable th:nth-child(12) { width: 8%; }
+.stockFitTable th:nth-child(13) { width: 9%; }
+
+.stockActions {
+  gap: 3px;
+  flex-wrap: nowrap;
+}
+
+.purchaseLink {
+  color: var(--color-accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.purchaseLink:hover {
+  text-decoration: underline;
+}
+
+.purchaseSection {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--color-border-light);
+  margin-top: 4px;
+  padding-top: 12px;
+}
+
+.purchaseSectionTitle {
+  color: var(--color-text-primary);
+  font-size: 0.82rem;
+  font-weight: 750;
+  margin-bottom: 10px;
 }
 
 .miniTable {

@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
+import { syncNkrCommercialReferences } from "@/lib/nkrCommercialReferenceSync";
 
 // ----------------------------------------------------------------
 // PUT /api/numune-kabul/[id]  (güncelle)
@@ -18,8 +19,13 @@ export async function PUT(
     const { Tarih, Evrak_No, RaporNo, Firma_ID, Numune_Adi, Grup } = body;
 
     const pool = await cosmoPool;
+    const nkrId = Number(id);
+    const previousReference = (await pool.request()
+      .input("id", nkrId)
+      .query(`SELECT TOP 1 Evrak_No, RaporNo FROM NKR WHERE ID = @id`)).recordset?.[0];
+    if (!previousReference) return Response.json({ error: "Kayıt bulunamadı" }, { status: 404 });
     await pool.request()
-      .input("id",        id)
+      .input("id",        nkrId)
       .input("Tarih",     Tarih      || null)
       .input("Evrak_No",  Evrak_No   || null)
       .input("RaporNo",   RaporNo    || null)
@@ -37,6 +43,13 @@ export async function PUT(
           Grup       = @Grup
         WHERE ID = @id
       `);
+
+    await syncNkrCommercialReferences(
+      pool,
+      nkrId,
+      { evrakNo: previousReference.Evrak_No, raporNo: previousReference.RaporNo },
+      { evrakNo: Evrak_No, raporNo: RaporNo },
+    );
 
     return Response.json({ message: "Güncellendi" });
   } catch (e: any) {

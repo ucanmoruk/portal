@@ -4,6 +4,7 @@ import { cosmoPool } from "@/lib/db";
 import { loadLabUgdrTexts, saveLabUgdrTexts } from "@/lib/labUgdrStorage";
 import { nkrHasColumn } from "@/lib/numuneFormTables";
 import { nkrUgdTipFkColumn } from "@/lib/nkrUgdTipColumn";
+import { syncNkrCommercialReferences } from "@/lib/nkrCommercialReferenceSync";
 
 function asText(value: unknown, fallback = "") {
   if (value === null || value === undefined) return fallback;
@@ -252,6 +253,10 @@ export async function PUT(
     const pool = await cosmoPool;
     const nkrId = await resolveNkrId(pool, id);
     if (!nkrId) return Response.json({ error: "Kayit bulunamadi" }, { status: 404 });
+    const previousReference = (await pool.request()
+      .input("id", nkrId)
+      .query(`SELECT TOP 1 Evrak_No, RaporNo FROM NKR WHERE ID = @id`)).recordset?.[0];
+    if (!previousReference) return Response.json({ error: "Kayit bulunamadi" }, { status: 404 });
 
     const [
       hasRevno,
@@ -314,6 +319,12 @@ export async function PUT(
 
     await upd.query(`UPDATE NKR SET ${sets.join(", ")} WHERE ID = @id`);
     await saveLabUgdrTexts(pool, nkrId, body);
+    await syncNkrCommercialReferences(
+      pool,
+      nkrId,
+      { evrakNo: previousReference.Evrak_No, raporNo: previousReference.RaporNo },
+      { evrakNo: previousReference.Evrak_No, raporNo: body.RaporNo },
+    );
 
     return Response.json({ message: "UGDR kaydi guncellendi" });
   } catch (e: any) {

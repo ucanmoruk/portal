@@ -77,6 +77,7 @@ export const MENU_TREE: MenuItem[] = [
       { key: "laboratuvar.kys.stok-hareketleri", label: "Stok Ekle / Düş", href: "/laboratuvar/kys/stok-hareketleri" },
       { key: "laboratuvar.kys.son-kullanim", label: "Son Kullanım Listesi", href: "/laboratuvar/kys/son-kullanim" },
       { key: "laboratuvar.kys.talep-listesi", label: "Talep Listesi", href: "/laboratuvar/kys/talep-listesi" },
+      { key: "laboratuvar.kys.satin-alma-gecmisi", label: "Satın Alma Geçmişi", href: "/laboratuvar/kys/satin-alma-gecmisi" },
     ],
   },
   {

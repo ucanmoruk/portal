@@ -256,7 +256,7 @@ export default function StokListesiClient() {
       <div className={styles.tableCard}>
         {error && <div className={styles.errorBar}>{error}</div>}
         <div className={styles.tableWrapper}>
-          <table className={styles.table}>
+          <table className={`${styles.table} ${kys.stockFitTable}`}>
             <thead>
               <tr>
                 <th>Barkod</th>
@@ -269,9 +269,9 @@ export default function StokListesiClient() {
                 <th>Ambalaj</th>
                 <th>Saklama</th>
                 <th>Kritik limit</th>
-                <th>Stok durumu</th>
                 <th>Birim</th>
-                <th></th>
+                <th>İşlem</th>
+                <th>Stok durumu</th>
               </tr>
             </thead>
             <tbody>
@@ -293,18 +293,18 @@ export default function StokListesiClient() {
                   <td>{row.ambalaj || "-"}</td>
                   <td className={styles.tdAdres}>{row.saklamaKosullari || "-"}</td>
                   <td className={styles.tdMono}>{fmt(row.kritikLimit)}</td>
-                  <td>
-                    <span className={`${kys.pill} ${row.kritikMi ? kys.pillDanger : kys.pillOk}`}>
-                      <span className={row.kritikMi ? kys.lowStock : ""}>{fmt(row.stokMiktari)}</span> {row.birim}
-                    </span>
-                  </td>
                   <td>{row.birim}</td>
                   <td>
-                    <div className={styles.actionBtns}>
+                    <div className={`${styles.actionBtns} ${kys.stockActions}`}>
                       <Link className={styles.editBtn} title="Detay" href={`/laboratuvar/kys/stok-listesi/${row.id}`}>i</Link>
                       <Link className={styles.editBtn} title="Yazdır" href={`/laboratuvar/kys/stok-karti-yazdir/${row.id}`}>⎙</Link>
                       <button className={styles.editBtn} title="Düzenle" onClick={() => openEdit(row)}>✎</button>
                     </div>
+                  </td>
+                  <td>
+                    <span className={`${kys.pill} ${row.kritikMi ? kys.pillDanger : kys.pillOk}`}>
+                      <span className={row.kritikMi ? kys.lowStock : ""}>{fmt(row.stokMiktari)}</span> {row.birim}
+                    </span>
                   </td>
                 </tr>
               ))}

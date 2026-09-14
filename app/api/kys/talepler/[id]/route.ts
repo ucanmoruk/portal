@@ -1,16 +1,20 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getKysRequestDetail, updateKysRequestStatus } from "@/lib/kysStore";
+import { getPortalUser } from "@/lib/portalYetki";
+
+const PURCHASE_KEY = "laboratuvar.kys.satin-alma-gecmisi";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
+  const user = await getPortalUser();
+  if (!user) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
 
   try {
     const { id } = await params;
-    const detail = await getKysRequestDetail(Number(id));
+    const satinAlmaYetkisi = user.can(PURCHASE_KEY);
+    const detail = await getKysRequestDetail(Number(id), satinAlmaYetkisi);
     if (!detail) return Response.json({ error: "Talep bulunamadı" }, { status: 404 });
-    return Response.json(detail);
+    return Response.json({ ...detail, satinAlmaYetkisi });
   } catch (e: unknown) {
     return Response.json({ error: e instanceof Error ? e.message : "Talep detayı alınamadı." }, { status: 500 });
   }
