@@ -20,6 +20,31 @@ function isEnglishReport(format: string) {
   return String(format || "").trim().toLocaleLowerCase("tr-TR").endsWith("en");
 }
 
+function isUgdrReport(format: string) {
+  return ["UGDR", "UGD"].includes(String(format || "").trim().replace(/Ü/gi, "U").toUpperCase());
+}
+
+async function buildUgdrPdf(origin: string, nkrId: number, cookieHeader: string): Promise<Buffer> {
+  const headers = cookieHeader ? { cookie: cookieHeader } : undefined;
+  const [formResponse, formulaResponse] = await Promise.all([
+    fetch(`${origin}/api/laboratuvar/ugdr/${nkrId}`, { headers, cache: "no-store" }),
+    fetch(`${origin}/api/laboratuvar/ugdr/${nkrId}/formul`, { headers, cache: "no-store" }),
+  ]);
+  if (!formResponse.ok || !formulaResponse.ok) {
+    throw new Error("ÜGD rapor verileri alınamadı.");
+  }
+  const form = await formResponse.json();
+  const formulResults = await formulaResponse.json();
+  const response = await fetch(`${origin}/api/urunler/rapor-sablon?format=pdf&language=tr&profile=lab`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(cookieHeader ? { cookie: cookieHeader } : {}) },
+    body: JSON.stringify({ form, formulResults, firmaAd: form?.FirmaAd || "", language: "tr", profile: "lab" }),
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error("Hazırlanmış ÜGD PDF'i oluşturulamadı.");
+  return Buffer.from(await response.arrayBuffer());
+}
+
 function sanitizeFileNamePart(value: unknown) {
   const cleaned = String(value ?? "")
     .replace(/[\\/:*?"<>|]+/g, " ")
@@ -85,7 +110,7 @@ export async function GET(
     // Onaylı / Yayınlanmış / Arşivlenmiş raporlar imzalı PDF olarak indirilebilir.
     // "Arşiv" = önceden onaylanmış, sonradan arşive alınmış rapor → indirilebilir olmalı.
     const durum = data.onay?.durum;
-    if (!data.onay || (durum !== "Onaylandı" && durum !== "Yayınlandı" && durum !== "Arşiv")) {
+    if (!data.onay || (durum !== "Onaylandı" && durum !== "Ödeme bekliyor" && durum !== "Yayınlandı" && durum !== "Arşiv")) {
       return Response.json(
         { error: "Bu rapor henüz onaylanmamış. Önce raporu onaylayın." },
         { status: 409 },
@@ -94,19 +119,18 @@ export async function GET(
 
     // Chromium'u canlı önizleme sayfasına yönlendir; oturum cookie'sini aktar.
     const origin = getRaporPdfBaseUrl(request);
-    const previewUrl =
-      `${origin}/rapor-onay-print/${nkrIdNum}?format=${encodeURIComponent(format)}`;
     const cookieHeader = request.headers.get("cookie") || undefined;
-
-    const pdf = await renderUrlToPdf(previewUrl, {
-      cookieHeader,
-      printBackground: true,
-      marginTop: 0,
-      marginBottom: 0,
-      marginLeft: 0,
-      marginRight: 0,
-      settleMs: 1500,
-    });
+    const pdf = isUgdrReport(format)
+      ? await buildUgdrPdf(origin, nkrIdNum, cookieHeader || "")
+      : await renderUrlToPdf(`${origin}/rapor-onay-print/${nkrIdNum}?format=${encodeURIComponent(format)}`, {
+          cookieHeader,
+          printBackground: true,
+          marginTop: 0,
+          marginBottom: 0,
+          marginLeft: 0,
+          marginRight: 0,
+          settleMs: 1500,
+        });
 
     // "Diğer" formatında: kayıtlı Ek-1 PDF'i ilk sayfanın arkasına ekle (merge).
     const pool = await cosmoPool;

@@ -140,6 +140,8 @@ export async function GET(request: Request) {
       ? "AND EffectiveDurum = N'Onay Bekleniyor'"
       : raporDurumu === "Onayland\u0131"
       ? "AND EffectiveDurum = N'Onayland\u0131'"
+      : raporDurumu === "\u00d6deme bekliyor"
+      ? "AND EffectiveDurum = N'\u00d6deme bekliyor'"
       : raporDurumu === "Yay\u0131nland\u0131"
       ? "AND EffectiveDurum = N'Yay\u0131nland\u0131'"
       : raporDurumu === "Geri G\u00f6nderildi"
@@ -161,7 +163,7 @@ export async function GET(request: Request) {
       : phase === "returned"
       ? "AND EffectiveDurum = N'Geri G\u00f6nderildi'"
       : phase === "approved"
-      ? "AND EffectiveDurum IN (N'Onayland\u0131', N'Yay\u0131nland\u0131', N'Ar\u015fiv')"
+      ? "AND EffectiveDurum IN (N'Onayland\u0131', N'\u00d6deme bekliyor', N'Yay\u0131nland\u0131', N'Ar\u015fiv')"
       : "";
 
     // Override tablosunda Notlar kolonu var mı? (Geri Gönder notu için)
@@ -235,9 +237,11 @@ export async function GET(request: Request) {
         CASE
           WHEN SUM(CASE WHEN ro.Durum IN (N'Yayınlandı', N'Yayinlandi') THEN 1 ELSE 0 END) > 0 THEN N'Yayınlandı'
           WHEN SUM(CASE WHEN ro.Durum IN (N'Arşiv', N'Arsiv') THEN 1 ELSE 0 END) > 0 THEN N'Arşiv'
+          WHEN SUM(CASE WHEN ro.Durum = N'Ödeme bekliyor' THEN 1 ELSE 0 END) > 0 THEN N'Ödeme bekliyor'
           WHEN SUM(CASE WHEN ro.Durum IN (N'Onaylandı', N'Onaylandi') THEN 1 ELSE 0 END) > 0 THEN N'Onaylandı'
           ELSE MAX(ro.Durum)
         END AS RaporOnayDurum,
+        MAX(ro.OnayTarihi) AS OnayTarihi,
         COALESCE(
           MAX(CASE WHEN ro.Durum IN (N'Yayınlandı', N'Yayinlandi') THEN ro.YayinUrl END),
           MAX(ro.YayinUrl)
@@ -264,6 +268,7 @@ export async function GET(request: Request) {
           ${hasOverrideTable ? `ov.OverrideDurum` : `NULL`} AS OverrideDurum,
           ${hasOverrideNotlar ? `ov.GeriGonderNotu` : `NULL`} AS GeriGonderNotu,
           ${hasRaporOnay ? `os.RaporOnayDurum` : `NULL`} AS RaporOnayDurum,
+          ${hasRaporOnay ? `os.OnayTarihi` : `NULL`} AS OnayTarihi,
           ${hasRaporOnay ? `os.YayinUrl` : `NULL`} AS YayinUrl,
           ${hasDisRaporKodu ? `os.DisRaporKodu` : `CAST(NULL AS NVARCHAR(40))`} AS DisRaporKodu,
           ${hasRaporOnay ? `COALESCE(os.TrYayinlandi, 0)` : `0`} AS TrYayinlandi,
@@ -307,6 +312,8 @@ export async function GET(request: Request) {
       ORDER BY
         ${phase === "lab"
           ? `CASE WHEN MaxTermin IS NULL THEN 1 ELSE 0 END, MaxTermin ASC, RaporNo DESC,`
+          : phase === "approved"
+          ? `CASE WHEN OnayTarihi IS NULL THEN 1 ELSE 0 END, OnayTarihi DESC, RaporNo DESC,`
           : `RaporNo DESC,`}
         RaporFormati
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;

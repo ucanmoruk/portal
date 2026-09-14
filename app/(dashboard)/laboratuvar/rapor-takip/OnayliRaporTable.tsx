@@ -39,7 +39,7 @@ interface RaporRow {
   ProjeAd: string | null;
   RaporFormati: string;
   RaporDurumu: "Onaylandı" | "Yayınlandı" | string;
-  MaxTermin: string | null;
+  OnayTarihi: string | null;
   YayinUrl?: string | null;
   TrYayinlandi?: number | null;
   EnYayinlandi?: number | null;
@@ -55,6 +55,7 @@ function DurumBadge({ durum }: { durum: string }) {
   const label = durumLabel(durum);
   const map: Record<string, { bg: string; fg: string }> = {
     "Onaylandı":  { bg: "#34c75918", fg: "#248a3d" },
+    "Ödeme bekliyor": { bg: "#ff950018", fg: "#c06800" },
     "Gönderildi": { bg: "#bf5af218", fg: "#8944ab" },
     "Arşiv":      { bg: "#8e8e9322", fg: "#3a3a3c" },
   };
@@ -119,8 +120,14 @@ function FaturaBadge({ durum }: { durum: "Fatura kesilmedi" | "Ödeme bekliyor" 
 
 const formatTarih = (t: string | null) => {
   if (!t) return "—";
-  const [y, m, d] = t.split("-");
-  return `${d}.${m}.${y}`;
+  const isoMatch = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[3]}.${isoMatch[2]}.${isoMatch[1]}`;
+
+  const trMatch = t.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
+  if (trMatch) return `${trMatch[1].padStart(2, "0")}.${trMatch[2].padStart(2, "0")}.${trMatch[3]}`;
+
+  const parsed = new Date(t);
+  return Number.isNaN(parsed.getTime()) ? "—" : parsed.toLocaleDateString("tr-TR");
 };
 
 // Revno metin ("0","1",…) → sayı (boş/geçersiz → 0)
@@ -190,7 +197,7 @@ export default function OnayliRaporTable() {
   const [search, setSearch]   = useState("");
   const [year, setYear]       = useState("2026");
   // İlk girişte sadece "Onaylandı" görünür. Tüm / Gönderildi / Arşiv kullanıcı seçimiyle açılır.
-  const [durum, setDurum]     = useState<"" | "Onaylandı" | "Yayınlandı" | "Arşiv">("Onaylandı");
+  const [durum, setDurum]     = useState<"" | "Onaylandı" | "Ödeme bekliyor" | "Yayınlandı" | "Arşiv">("Onaylandı");
   const [raporTuru, setRaporTuru] = useState("");
   const [faturaDurumu, setFaturaDurumu] = useState<"" | "Fatura kesilmedi" | "Ödeme bekliyor" | "Ödendi">("");
   const [loading, setLoading] = useState(true);
@@ -201,7 +208,7 @@ export default function OnayliRaporTable() {
 
   // Çoklu seçim — key = `${NkrID}__${RaporFormati}`
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [bulkBusy, setBulkBusy] = useState<"arsivle" | "mail" | "yayinla" | "indir" | null>(null);
+  const [bulkBusy, setBulkBusy] = useState<"arsivle" | "odeme" | "mail" | "yayinla" | "indir" | null>(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [reportLanguage, setReportLanguage] = useState<ReportLanguageChoice>("tr");
 
@@ -583,6 +590,28 @@ export default function OnayliRaporTable() {
     }
   };
 
+  const handleOdemeBekliyor = async () => {
+    const items = selectedItems().map(({ nkrId, raporFormati }) => ({ nkrId, raporFormati }));
+    if (!items.length) return;
+    setBulkBusy("odeme");
+    setError("");
+    try {
+      const res = await fetch("/api/rapor-takip/durum", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items, durum: "Ödeme bekliyor" }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Durum güncellenemedi");
+      setSelectedKeys(new Set());
+      fetchData(page, search, limit, year, durum, raporTuru, { clearFirst: false });
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : "Durum güncellenemedi");
+    } finally {
+      setBulkBusy(null);
+    }
+  };
+
   const openMailModal = () => {
     const sel = selectedItems();
     if (sel.length === 0) return;
@@ -707,6 +736,23 @@ export default function OnayliRaporTable() {
               </button>
               <button
                 type="button"
+                onClick={handleOdemeBekliyor}
+                disabled={!!bulkBusy}
+                title="Seçili onaylı raporları ödeme bekliyor durumuna al"
+                style={{
+                  padding: "6px 12px", borderRadius: 7,
+                  border: "1px solid #ff950055",
+                  background: bulkBusy === "odeme" ? "var(--color-surface-2)" : "#ff950018",
+                  color: "#c06800",
+                  fontSize: "0.78rem", fontWeight: 700,
+                  cursor: bulkBusy ? "wait" : "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Ödeme Bekliyor
+              </button>
+              <button
+                type="button"
                 onClick={handleArsivle}
                 disabled={!!bulkBusy}
                 style={{
@@ -781,6 +827,7 @@ export default function OnayliRaporTable() {
             style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg)", fontSize: "0.75rem", cursor: "pointer" }}>
             <option value="">Tüm Durumlar</option>
             <option value="Onaylandı">Onaylandı</option>
+            <option value="Ödeme bekliyor">Ödeme bekliyor</option>
             <option value="Yayınlandı">Gönderildi</option>
             <option value="Arşiv">Arşiv</option>
           </select>
@@ -830,7 +877,7 @@ export default function OnayliRaporTable() {
             />
           </div>
           {[
-            "Kabul Tarihi", "Termin Tarihi", "Evrak No", "Rapor No",
+            "Kabul Tarihi", "Onay Tarihi", "Evrak No", "Rapor No",
             "Firma / Proje · Numune", "Rapor Türü", "Durum", "Fatura", "", "", "", "",
           ].map((h, i) => (
             <div key={i} style={{
@@ -910,9 +957,9 @@ export default function OnayliRaporTable() {
               <div style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
                 {formatTarih(row.KabulTarihi)}
               </div>
-              {/* Termin Tarihi */}
+              {/* Onay Tarihi */}
               <div style={{ fontSize: "0.78rem", color: "var(--color-text-secondary)", fontVariantNumeric: "tabular-nums" }}>
-                {formatTarih(row.MaxTermin)}
+                {formatTarih(row.OnayTarihi)}
               </div>
               {/* Evrak No */}
               <div style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>

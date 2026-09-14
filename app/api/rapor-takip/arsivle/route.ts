@@ -32,7 +32,7 @@ export async function POST(request: Request) {
           SET Durum = N'Arşiv'
           WHERE NkrID = @nkrId
             AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
-            AND Durum IN (N'Onaylandı', N'Yayınlandı')
+            AND Durum IN (N'Onaylandı', N'Ödeme bekliyor', N'Yayınlandı')
         `);
       updated += r.rowsAffected?.[0] ?? 0;
     }

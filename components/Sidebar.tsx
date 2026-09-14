@@ -260,9 +260,8 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
 
         {/* Gruplar — yetki filtrelidir */}
         {mounted && navGroups.map(group => {
-          // Grubun görünmesi için: parent key veya en az 1 child key yetkili olmalı
-          const parentAllowed = canSee(group.menuKey);
-          const visibleItems = group.items.filter(item => parentAllowed || canSee(item.menuKey));
+          // Üst anahtar grup başlığını, alt anahtarlar yalnız kendi sayfalarını açar.
+          const visibleItems = group.items.filter(item => canSee(item.menuKey));
           const groupVisible = canSee(group.menuKey) || visibleItems.length > 0;
           if (!groupVisible) return null;
 

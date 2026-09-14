@@ -101,11 +101,11 @@ export async function POST(
     if (existRes.recordset[0]) {
       // Mevcut satır var — placeholder (Durum=NULL, ensureDisRaporKodlari ile oluşturulmuş)
       // VEYA gerçekten onaylanmış olabilir. Durum'a göre dallan:
-      //  - Durum gerçek onay durumu ('Onaylandı'/'Yayınlandı') ise idempotent dön
+      //  - Durum gerçek onay durumuysa idempotent dön
       //  - Durum NULL veya farklı ise BU çağrı onaylama → Durum'u 'Onaylandı' yap
       const mevcutId = existRes.recordset[0].ID;
       const mevcutDurum = existRes.recordset[0].Durum;
-      const zatenOnayli = mevcutDurum === "Onaylandı" || mevcutDurum === "Yayınlandı";
+      const zatenOnayli = mevcutDurum === "Onaylandı" || mevcutDurum === "Ödeme bekliyor" || mevcutDurum === "Yayınlandı";
 
       if (!zatenOnayli) {
         // Placeholder satırı → bu çağrı asıl onay. Durum + onaylayan bilgisini set et.

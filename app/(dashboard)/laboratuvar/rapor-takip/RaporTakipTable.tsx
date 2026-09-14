@@ -623,18 +623,18 @@ export default function RaporTakipTable({
     setError("");
     try {
       for (const row of selectedRows) {
-        const res = await fetch(`/api/rapor-takip/${row.NkrID}/tamamla`, {
+        const res = await fetch(`/api/rapor-takip/${row.NkrID}/onayla`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ format: row.RaporFormati, durum: "Onay Bekleniyor" }),
+          body: JSON.stringify({ format: row.RaporFormati }),
         });
-        await readApiJson<{ ok: boolean }>(res, `${row.RaporNo || row.NkrID} onaya gönderilemedi`);
+        await readApiJson<{ ok: boolean }>(res, `${row.RaporNo || row.NkrID} onaylanamadı`);
       }
       setSelectedIds(new Set());
       await fetchData(page, search, limit, year, raporDurumu, raporTuru, terminDate, { clearFirst: false });
       onRefresh?.();
     } catch (e: any) {
-      setError(e.message || "Seçili raporlar onaya gönderilemedi");
+      setError(e.message || "Seçili raporlar onaylanamadı");
     } finally {
       setBatchApproving(false);
     }
@@ -711,6 +711,13 @@ export default function RaporTakipTable({
         });
         await readApiJson<{ ok: boolean }>(res, "Geri gönderilemedi");
         // Liste yenilensin — bu satır artık Geri Gönderildi durumunda, mevcut tab'tan düşer
+      } else if (directApprovalMode) {
+        const res = await fetch(`/api/rapor-takip/${row.NkrID}/onayla`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ format: row.RaporFormati }),
+        });
+        await readApiJson<{ ok: boolean }>(res, "Rapor onaylanamadı");
       } else {
         const res = await fetch(`/api/rapor-takip/${row.NkrID}/tamamla`, {
           method: "POST",
@@ -922,7 +929,7 @@ export default function RaporTakipTable({
               type="button"
               onClick={approveSelectedReports}
               disabled={batchApproving}
-              title={`${selectedIds.size} ÜGDR raporunu onaya gönder`}
+              title={`${selectedIds.size} ÜGDR raporunu doğrudan onayla`}
               style={{
                 padding: "6px 10px", borderRadius: 6, border: "none",
                 background: "var(--color-accent)", color: "#fff",
@@ -932,7 +939,7 @@ export default function RaporTakipTable({
                 whiteSpace: "nowrap",
               }}
             >
-              {batchApproving ? "Onaya Gönderiliyor..." : `Seçilenleri Onaya Gönder (${selectedIds.size})`}
+              {batchApproving ? "Onaylanıyor..." : `Seçilenleri Onayla (${selectedIds.size})`}
             </button>
           )}
 
@@ -1252,7 +1259,7 @@ export default function RaporTakipTable({
                           ? "Rapor onaylanmış — durum değiştirilemez"
                           : row.RaporDurumu === "Onay Bekleniyor"
                           ? "Raporu laboratuvara geri gönder (Geri Gönderildi)"
-                          : "Onaya gönder (Onay Bekleniyor)"
+                        : directApprovalMode ? "ÜGDR raporunu onayla" : "Onaya gönder (Onay Bekleniyor)"
                       }
                       disabled={isLabPasif || row.RaporDurumu === "Onaylandı" || row.RaporDurumu === "Yayınlandı"}
                       onClick={() => toggleCompletion(row)}
@@ -1269,7 +1276,7 @@ export default function RaporTakipTable({
                       }}
                     >
                       {phase === "lab"
-                        ? "Onaya Gönder"
+                        ? directApprovalMode ? "Onayla" : "Onaya Gönder"
                         : row.RaporDurumu === "Onay Bekleniyor" ? "Geri Al" : "Onaya Gönder"}
                     </button>
                     );
