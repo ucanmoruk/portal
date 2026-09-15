@@ -700,7 +700,7 @@ export default function ChallengeReport({
               <div className="approval-cell-title" style={{paddingLeft:"5px"}}>Onaylayan</div>
               <div className="e-imza-pill" style={{marginTop:10}}>✓ E-İmzalıdır</div>
               <div className="approval-cell-body">
-                <div className="approval-name">Oğuzhan EKER <span style={{fontSize:"9px" , color:"#646464"}}>Laboratuvar Müdürü V.</span></div>
+                <div className="approval-name">Selin EKER <span style={{fontSize:"9px" , color:"#646464"}}>Laboratuvar Müdürü</span></div>
              
               </div>
             </div>

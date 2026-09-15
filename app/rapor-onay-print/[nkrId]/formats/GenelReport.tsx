@@ -131,7 +131,7 @@ export default function GenelReport({
         approvedBy: "Approved By",
         signed: "E-Signed",
         reporter: "Reporter",
-        manager: "D. Laboratory Manager",
+        manager: "Laboratory Manager",
         page: "Page",
         continued: "continued",
         qrAlt: "Report Verification QR Code",
@@ -174,7 +174,7 @@ export default function GenelReport({
         approvedBy: "Onaylayan",
         signed: "E-İmzalıdır",
         reporter: "Raportör",
-        manager: "Laboratuvar Müdürü V.",
+        manager: "Laboratuvar Müdürü",
         page: "Sayfa",
         continued: "devam",
         qrAlt: "Rapor Doğrulama Karekodu",
@@ -1299,7 +1299,7 @@ export default function GenelReport({
                 <div className="approval-cell-title" style={{paddingLeft:"5px"}}>{text.approvedBy}</div>
                 <div className="e-imza-pill" style={{marginTop:10}}>✓ {text.signed}</div>
                 <div className="approval-cell-body">
-                  <div className="approval-name">Oğuzhan EKER <span style={{fontSize:"9px" , color:"#646464"}}>{text.manager}</span></div>
+                  <div className="approval-name">Selin EKER <span style={{fontSize:"9px" , color:"#646464"}}>{text.manager}</span></div>
                 </div>
               </div>
               <div className="approval-cell">

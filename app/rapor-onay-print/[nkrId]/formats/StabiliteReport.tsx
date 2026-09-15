@@ -285,7 +285,7 @@ function ApprovalBlock({ hazirlayanAd, karekod, text }: { hazirlayanAd: string; 
         <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>{text.approvedBy}</div>
         <div className="e-imza-pill" style={{ marginTop: 10 }}>✓ {text.signed}</div>
         <div className="approval-cell-body">
-          <div className="approval-name">Oğuzhan EKER <span style={{ fontSize: "9px", color: "#646464" }}>{text.manager}</span></div>
+          <div className="approval-name">Selin EKER <span style={{ fontSize: "9px", color: "#646464" }}>{text.manager}</span></div>
         </div>
       </div>
       <div className="approval-cell">
@@ -377,7 +377,7 @@ export default function StabiliteReport({
         approvedBy: "Approved By",
         signed: "E-Signed",
         reporter: "Reporter",
-        manager: "D. Laboratory Manager",
+        manager: "Laboratory Manager",
         qrAlt: "Report Verification QR Code",
         qrTitle: "Report verification",
         codeTitle: "Verification Code - this code is used for manual verification",
@@ -435,7 +435,7 @@ export default function StabiliteReport({
         approvedBy: "Onaylayan",
         signed: "E-İmzalıdır",
         reporter: "Raportör",
-        manager: "Laboratuvar Müdürü V.",
+        manager: "Laboratuvar Müdürü",
         qrAlt: "Rapor Doğrulama Karekodu",
         qrTitle: "Rapor doğrulama",
         codeTitle: "Doğrulama Kodu — manuel doğrulamada bu kod kullanılır",
