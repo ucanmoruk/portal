@@ -44,7 +44,7 @@ export async function POST(
 
   const body = await request.json().catch(() => ({}));
   const format = String(body?.format || "").trim();
-  const aciklama = String(body?.aciklama || "").trim();
+  let aciklama = String(body?.aciklama || "").trim();
   if (!format) return Response.json({ error: "format gerekli" }, { status: 400 });
 
   const userId = ((session.user as any)?.userId ?? null) as number | null;
@@ -96,6 +96,14 @@ export async function POST(
     const eskiRevRaw = parseInt(String(nkr.Revno ?? "0").trim(), 10);
     const eskiRev = Number.isFinite(eskiRevRaw) ? eskiRevRaw : 0;
     const yeniRev = eskiRev + 1;
+    if (body?.sebep !== undefined) {
+      const sebep = String(body.sebep || "").trim();
+      const kod = onay?.DisRaporKodu || raporNo;
+      const label = (rev: number) => `${kod}-${String(rev).padStart(2, "0")}`;
+      aciklama = sebep
+        ? `${label(eskiRev)} numaralı rapor ${sebep} sebebi ile revize edilmiştir. ${label(eskiRev)} numaralı rapor geçersizdir. Geçerli rapor numarası ${label(yeniRev)}.`
+        : "";
+    }
 
     if (!aciklama) {
       for (const row of onayRows) {
@@ -122,8 +130,7 @@ export async function POST(
             .input("nkrId", nkrIdNum).input("format", fmt)
             .query(`
               UPDATE NKR_RaporDuzenleme
-              SET Kilitli = 0,
-                  Payload = NULL
+              SET Kilitli = 0
               WHERE NkrID = @nkrId
                 AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
             `);
@@ -202,8 +209,7 @@ export async function POST(
           .input("nkrId", nkrIdNum).input("format", fmt)
           .query(`
             UPDATE NKR_RaporDuzenleme
-            SET Kilitli = 0,
-                Payload = NULL
+            SET Kilitli = 0
             WHERE NkrID = @nkrId
               AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
           `);

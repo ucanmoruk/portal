@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { ODEME_DURUMLARI } from "@/lib/faturaConstants";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
+import { hasProformaFaturaFirmaCol } from "@/lib/proformaSchema";
 
 function toNumber(value: any, fallback = 0) {
   const raw = String(value ?? "").trim();
@@ -75,10 +76,11 @@ export async function PATCH(
     }
 
     const pool = await cosmoPool;
+    const hasFaturaFirmaCol = await hasProformaFaturaFirmaCol(pool);
     await ensureProformaNkrTable(pool);
     const fatRes = await pool.request()
       .input("id", Number(id))
-      .query(`SELECT ID, ProformaNo, Toplam, KDV FROM Fatura WHERE ID = @id AND Durum = 'Aktif'`);
+      .query(`SELECT ID, ProformaNo, Toplam, KDV, FaturaFirmaID FROM Fatura WHERE ID = @id AND Durum = 'Aktif'`);
     const fatura = fatRes.recordset[0];
     if (!fatura) return Response.json({ error: "Fatura bulunamadı." }, { status: 404 });
 
@@ -154,10 +156,12 @@ export async function PATCH(
 
     const proformaRes = await pool.request()
       .input("ProformaNo", evrakNo)
+      .input("FaturaFirmaID", hasOwn(body, "faturaFirmaId") ? (body.faturaFirmaId ? Number(body.faturaFirmaId) : null) : fatura.FaturaFirmaID)
       .query(`
         SELECT TOP 1 ID
         FROM ProformaBaslik
         WHERE SilindiMi = 0
+          AND ${hasFaturaFirmaCol ? "COALESCE(FaturaFirmaID, FirmaID)" : "FirmaID"} = @FaturaFirmaID
           AND (EvrakNo = @ProformaNo OR ProformaNo = @ProformaNo)
         ORDER BY ID DESC
       `);

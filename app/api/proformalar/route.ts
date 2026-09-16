@@ -261,6 +261,7 @@ export async function GET(request: NextRequest) {
             FROM Fatura ft
             INNER JOIN Odeme o ON o.Fatura_ID = ft.ID
             WHERE ft.Durum = 'Aktif'
+              AND ft.FaturaFirmaID = ${hasFF ? "COALESCE(p.FaturaFirmaID, p.FirmaID)" : "p.FirmaID"}
               AND (
                 ft.ProformaNo = p.ProformaNo
                 OR (NOT (${isMultiEvrakLabelSql("p")}) AND ft.ProformaNo = p.EvrakNo)
@@ -273,6 +274,10 @@ export async function GET(request: NextRequest) {
             FROM Odeme o
             WHERE NOT (${isMultiEvrakLabelSql("p")})
               AND o.Evrak_No = p.EvrakNo
+              AND (o.Fatura_ID IS NULL OR EXISTS (
+                SELECT 1 FROM Fatura pf WHERE pf.ID = o.Fatura_ID AND pf.Durum = 'Aktif'
+                  AND pf.FaturaFirmaID = ${hasFF ? "COALESCE(p.FaturaFirmaID, p.FirmaID)" : "p.FirmaID"}
+              ))
               AND ISNULL(o.Odeme_Durumu, N'') <> N'Proforma'
             ORDER BY o.ID DESC
           )

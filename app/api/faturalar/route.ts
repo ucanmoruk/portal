@@ -86,9 +86,9 @@ export async function GET(request: NextRequest) {
   // faturalasan kaydin "Odeme Bekliyor/Odendi/..." durumunu ezmemeli.
   const sonOdeme = `COALESCE(
     (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Fatura_ID = f.ID AND ISNULL(o.Odeme_Durumu, N'') <> N'Proforma' ORDER BY o.ID DESC),
-    (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No = f.ProformaNo AND ISNULL(o.Odeme_Durumu, N'') <> N'Proforma' ORDER BY o.ID DESC),
+    (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No = f.ProformaNo AND o.Fatura_ID IS NULL AND ISNULL(o.Odeme_Durumu, N'') <> N'Proforma' ORDER BY o.ID DESC),
     (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Fatura_ID = f.ID ORDER BY o.ID DESC),
-    (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No = f.ProformaNo ORDER BY o.ID DESC)
+    (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No = f.ProformaNo AND o.Fatura_ID IS NULL ORDER BY o.ID DESC)
   )`;
   // Yıl Fatura_No içinde gömülü (UNA2026...); Fatura.Tarih çoğunlukla boş olduğu için ondan değil bundan.
   const yilExpr = `COALESCE(NULLIF(REGEXP_SUBSTR(f.Fatura_No, '20[0-9][0-9]'), ''), DATE_FORMAT(COALESCE(NULLIF(f.Tarih, '0000-00-00 00:00:00'), (SELECT MAX(fd.Tarih) FROM FaturaDetay fd WHERE fd.ProformaNo = f.ProformaNo)), '%Y'))`;

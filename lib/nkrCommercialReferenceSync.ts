@@ -105,8 +105,14 @@ export async function syncNkrCommercialReferences(
           .input("oldEvrakNo", oldEvrakNo)
           .input("proformaNo", clean(proformaRow.ProformaNo))
           .query(`
-            SELECT ID, ProformaNo FROM Fatura
-            WHERE Durum = 'Aktif' AND (ProformaNo = @oldEvrakNo OR ProformaNo = @proformaNo)
+            SELECT f.ID, f.ProformaNo FROM Fatura f
+            WHERE f.Durum = 'Aktif' AND (
+              f.ProformaNo = @proformaNo
+              OR (f.ProformaNo = @oldEvrakNo AND EXISTS (
+                SELECT 1 FROM Odeme o
+                WHERE o.Fatura_ID = f.ID AND o.Evrak_No = @oldEvrakNo
+              ))
+            )
           `)).recordset || []
       : [];
 

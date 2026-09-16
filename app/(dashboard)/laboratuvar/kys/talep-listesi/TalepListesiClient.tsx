@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "@/app/styles/table.module.css";
 import kys from "../kys.module.css";
+import KysStockPicker from "./KysStockPicker";
 
 type RequestRow = {
   id: number;
@@ -56,8 +57,6 @@ export default function TalepListesiClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [stocks, setStocks] = useState<Stock[]>([]);
-  const [stockSearch, setStockSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState({ talepTuru: "Sarf", notlar: "", teknikSartname: "", kalemler: [{ ...emptyItem }] });
@@ -82,13 +81,9 @@ export default function TalepListesiClient() {
   }, [durum, limit, page, search, tur]);
 
   useEffect(() => { fetchRows(); }, [fetchRows]);
-  useEffect(() => {
-    const qs = new URLSearchParams({ search: stockSearch, limit: "25" });
-    fetch(`/api/kys/stoklar?${qs.toString()}`).then(r => r.json()).then(j => setStocks(j.data || [])).catch(() => {});
-  }, [stockSearch]);
 
-  function pickStock(index: number, stockId: string) {
-    const stock = stocks.find(s => String(s.id) === stockId);
+  function pickStock(index: number, stock: Stock|null) {
+    const stockId=stock?String(stock.id):"";
     setForm(f => {
       const items = [...f.kalemler];
       items[index] = {
@@ -104,6 +99,7 @@ export default function TalepListesiClient() {
   }
 
   async function save() {
+    if(saving)return;
     setSaving(true);
     setFormError("");
     try {
@@ -128,6 +124,12 @@ export default function TalepListesiClient() {
     }
   }
 
+  async function deleteRow(row:RequestRow){
+    if(!confirm(`${row.talepNo} listeden kaldırılacak. Kabul edilmiş stok ve satın alma geçmişi korunur. Devam edilsin mi?`))return;
+    try{const r=await fetch(`/api/kys/talepler/${row.id}`,{method:"DELETE"});const j=await r.json();if(!r.ok)throw new Error(j.error);await fetchRows();}catch(e){setError(errorMessage(e,"Talep silinemedi."));}
+  }
+  async function restoreRow(row:RequestRow){try{const r=await fetch(`/api/kys/talepler/${row.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({islem:"geri-al"})});const j=await r.json();if(!r.ok)throw new Error(j.error);await fetchRows();}catch(e){setError(errorMessage(e,"Geri alınamadı."));}}
+
   return (
     <>
       <div className={styles.toolbar}>
@@ -135,11 +137,11 @@ export default function TalepListesiClient() {
           <div className={styles.searchBox}><input className={styles.searchInput} placeholder="Talep no, oluşturan veya not ara..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
           <span className={styles.totalCount}>{total} talep</span>
         </div>
-        <div className={styles.toolbarRight}><button className={styles.addBtn} onClick={() => setModalOpen(true)}>+ Talep oluştur</button></div>
+        <div className={styles.toolbarRight}><Link className={styles.cancelBtn} href="/laboratuvar/kys/tedarikci-listesi">Tedarikçi listesi</Link><button className={styles.addBtn} onClick={() => setModalOpen(true)}>+ Talep oluştur</button></div>
       </div>
       <div className={kys.filterRow}>
         <select className={kys.select} value={tur} onChange={e => { setTur(e.target.value); setPage(1); }}><option value="">Tüm türler</option><option>Sarf</option><option>Cihaz</option></select>
-        <select className={kys.select} value={durum} onChange={e => { setDurum(e.target.value); setPage(1); }}><option value="">Tüm durumlar</option><option>Onay Bekliyor</option><option>Onaylandı</option><option>İşleme Alındı</option><option>Kısmi Kabul</option><option>Tamamlandı</option><option>İptal</option></select>
+        <select className={kys.select} value={durum} onChange={e => { setDurum(e.target.value); setPage(1); }}><option value="">Tüm durumlar</option><option>Onay Bekliyor</option><option>Onaylandı</option><option>İşleme Alındı</option><option>Kısmi Kabul</option><option>Tamamlandı</option><option>İptal</option><option value="Silindi">Silinen talepler</option></select>
         <select className={styles.pageSizeSelect} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>{[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} / sayfa</option>)}</select>
       </div>
       <div className={styles.tableCard}>
@@ -157,7 +159,7 @@ export default function TalepListesiClient() {
                   <td>{row.olusturanAd || "-"}<div className={kys.muted}>{dateFmt(row.olusturmaTarihi)}</div></td>
                   <td>{row.onaylayanAd || "-"}<div className={kys.muted}>{dateFmt(row.onayTarihi)}</div></td>
                   <td>{row.islemeAlanAd || "-"}<div className={kys.muted}>{dateFmt(row.islemeAlmaTarihi)}</div></td>
-                  <td><Link className={styles.editBtn} href={`/laboratuvar/kys/talep-listesi/${row.id}`}>i</Link></td>
+                  <td>{row.durum==="Silindi"?<button className={styles.editBtn} onClick={()=>restoreRow(row)}>Geri al</button>:<><Link className={styles.editBtn} href={`/laboratuvar/kys/talep-listesi/${row.id}`}>Detay</Link><button className={styles.cancelBtn} onClick={()=>deleteRow(row)}>Sil</button></>}</td>
                 </tr>
               ))}
             </tbody>
@@ -178,21 +180,24 @@ export default function TalepListesiClient() {
               {formError && <div className={styles.formError}>{formError}</div>}
               <div className={styles.formGrid}>
                 <div className={styles.formGroup}><label>Talep türü</label><select value={form.talepTuru} onChange={e => setForm(f => ({ ...f, talepTuru: e.target.value }))}><option>Sarf</option><option>Cihaz</option></select></div>
-                <div className={styles.formGroup}><label>Stok ara</label><input value={stockSearch} onChange={e => setStockSearch(e.target.value)} placeholder="Stoktan seçmek için ara..." /></div>
                 <div className={`${styles.formGroup} ${styles.colSpan2}`}><label>Not</label><textarea rows={2} value={form.notlar} onChange={e => setForm(f => ({ ...f, notlar: e.target.value }))} /></div>
                 {form.talepTuru === "Cihaz" && <div className={`${styles.formGroup} ${styles.colSpan2}`}><label>Teknik şartname</label><textarea rows={5} value={form.teknikSartname} onChange={e => setForm(f => ({ ...f, teknikSartname: e.target.value }))} /></div>}
               </div>
               <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
                 {form.kalemler.map((item, index) => (
-                  <div key={index} className={styles.formGrid3} style={{ borderTop: "1px solid var(--color-border-light)", paddingTop: 10 }}>
-                    <div className={styles.formGroup}><label>Stok</label><select value={item.stokId} onChange={e => pickStock(index, e.target.value)}><option value="">Manuel</option>{stocks.map(s => <option key={s.id} value={s.id}>{s.kod} - {s.ad}</option>)}</select></div>
+                  <details key={index} open={index===form.kalemler.length-1} style={{ border: "1px solid var(--color-border-light)", borderRadius:8,padding:10 }}>
+                    <summary style={{cursor:"pointer",fontWeight:600}}>Kalem {index+1} · {item.malzemeAdi||"Yeni malzeme"} · {item.miktar} {item.birim}</summary>
+                    <div className={styles.formGrid3} style={{marginTop:10}}>
+                    <div className={styles.formGroup}><label>Stok</label><KysStockPicker value={item.stokId?`${item.kod} — ${item.malzemeAdi}`:""} onPick={stock=>pickStock(index,stock)}/></div>
                     <div className={styles.formGroup}><label>Kod</label><input value={item.kod} onChange={e => setForm(f => { const a = [...f.kalemler]; a[index] = { ...a[index], kod: e.target.value }; return { ...f, kalemler: a }; })} /></div>
                     <div className={styles.formGroup}><label>Malzeme adı</label><input value={item.malzemeAdi} onChange={e => setForm(f => { const a = [...f.kalemler]; a[index] = { ...a[index], malzemeAdi: e.target.value }; return { ...f, kalemler: a }; })} /></div>
                     <div className={styles.formGroup}><label>Miktar</label><input value={item.miktar} onChange={e => setForm(f => { const a = [...f.kalemler]; a[index] = { ...a[index], miktar: e.target.value }; return { ...f, kalemler: a }; })} /></div>
-                    <div className={styles.formGroup}><label>Birim</label><input value={item.birim} onChange={e => setForm(f => { const a = [...f.kalemler]; a[index] = { ...a[index], birim: e.target.value }; return { ...f, kalemler: a }; })} /></div>
+                    <div className={styles.formGroup}><label>Birim {item.stokId?"(stok kartı — sabit)":""}</label><input readOnly={!!item.stokId} value={item.birim} onChange={e => setForm(f => { const a = [...f.kalemler]; a[index] = { ...a[index], birim: e.target.value }; return { ...f, kalemler: a }; })} /></div>
                     <div className={styles.formGroup}><label>Marka</label><input value={item.marka} onChange={e => setForm(f => { const a = [...f.kalemler]; a[index] = { ...a[index], marka: e.target.value }; return { ...f, kalemler: a }; })} /></div>
                     <div className={`${styles.formGroup} ${styles.colSpan3}`}><label>Kullanıcı notu / özellik</label><textarea rows={2} value={item.kullaniciNotu || item.ozellik} onChange={e => setForm(f => { const a = [...f.kalemler]; a[index] = { ...a[index], kullaniciNotu: e.target.value }; return { ...f, kalemler: a }; })} /></div>
-                  </div>
+                    {form.kalemler.length>1&&<button className={styles.cancelBtn} type="button" onClick={()=>setForm(f=>({...f,kalemler:f.kalemler.filter((_,i)=>i!==index)}))}>Kalemi kaldır</button>}
+                    </div>
+                  </details>
                 ))}
                 <button className={styles.cancelBtn} type="button" onClick={() => setForm(f => ({ ...f, kalemler: [...f.kalemler, { ...emptyItem }] }))}>+ Kalem ekle</button>
               </div>

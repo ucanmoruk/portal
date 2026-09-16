@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
+import { requireRequestAcceptance, requireRequestTransition } from "@/lib/kysRequestRules";
 
 type AnyRow = Record<string, any>;
 
@@ -601,12 +602,12 @@ function mapStock(r: AnyRow) {
   };
 }
 
-export async function createKysStock(input: KysStockInput) {
+export async function createKysStock(input: KysStockInput, executor?: any) {
   await ensureKysSchema();
   const kod = text(input.kod);
   const ad = text(input.ad);
   if (!kod || !ad) throw new Error("Kod ve ad zorunludur.");
-  const pool = await cosmoPool;
+  const pool = executor || await cosmoPool;
   const res = await pool.request()
     .input("Barkod", nullableText(input.barkod) || await generatedUniqueStockBarcode(pool))
     .input("MalzemeTuru", text(input.malzemeTuru) || "Sarf")
@@ -790,9 +791,9 @@ async function adjustUnitBalance(pool: any, stokId: number, birimId: number | nu
   }
 }
 
-export async function createKysStockMovement(stokId: number, input: KysMovementInput) {
+export async function createKysStockMovement(stokId: number, input: KysMovementInput, executor?: any) {
   await ensureKysSchema();
-  const pool = await cosmoPool;
+  const pool = executor || await cosmoPool;
   const hareketTipi = text(input.hareketTipi) || "Giriş";
   const miktar = numberValue(input.miktar);
   if (miktar <= 0) throw new Error("Miktar 0'dan büyük olmalıdır.");
@@ -933,7 +934,7 @@ export async function listKysRequests(params: { search?: string; durum?: string;
   const search = text(params.search);
   const durum = text(params.durum);
   const tur = text(params.tur);
-  let where = "WHERE 1=1";
+  let where = durum === "Silindi" ? "WHERE 1=1" : "WHERE t.Durum <> 'Silindi'";
   if (search) where += " AND (t.TalepNo LIKE @search OR t.OlusturanAd LIKE @search OR t.Notlar LIKE @search)";
   if (durum) where += " AND t.Durum = @durum";
   if (tur) where += " AND t.TalepTuru = @tur";
@@ -980,7 +981,11 @@ function mapRequest(r: AnyRow) {
 
 export async function createKysRequest(input: KysRequestInput) {
   await ensureKysSchema();
-  const pool = await cosmoPool;
+  if(!Array.isArray(input.kalemler)||!input.kalemler.length||input.kalemler.length>100)throw new Error("1–100 talep kalemi ekleyin.");
+  if(input.kalemler.some(k=>!text(k.malzemeAdi)||numberValue(k.miktar,NaN)<=0||!Number.isFinite(numberValue(k.miktar,NaN))))throw new Error("Her kalemin adı ve pozitif miktarı zorunludur.");
+  const basePool = await cosmoPool;
+  const pool=await basePool.transaction();await pool.begin();
+  try {
   const talepNo = `KYS-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
   const talepTuru = text(input.talepTuru) || "Sarf";
   const res = await pool.request()
@@ -999,13 +1004,18 @@ export async function createKysRequest(input: KysRequestInput) {
   for (const item of input.kalemler || []) {
     const name = text(item.malzemeAdi);
     if (!name) continue;
+    let canonicalUnit=text(item.birim)||"Adet";
+    if(item.stokId){
+      const stock=(await pool.request().input("ID",Number(item.stokId)).query("SELECT ID,Birim FROM KysStokKart WHERE ID=@ID")).recordset[0];
+      if(!stock)throw new Error("Seçili stok kartı bulunamadı.");canonicalUnit=stock.Birim||"Adet";
+    }
     await pool.request()
       .input("TalepID", id)
       .input("StokID", item.stokId ? Number(item.stokId) : null)
       .input("Kod", nullableText(item.kod))
       .input("MalzemeAdi", name)
       .input("Miktar", numberValue(item.miktar))
-      .input("Birim", text(item.birim) || "Adet")
+      .input("Birim", canonicalUnit)
       .input("Ozellik", nullableText(item.ozellik))
       .input("Marka", nullableText(item.marka))
       .input("KullaniciNotu", nullableText(item.kullaniciNotu))
@@ -1014,24 +1024,26 @@ export async function createKysRequest(input: KysRequestInput) {
         VALUES (@TalepID, @StokID, @Kod, @MalzemeAdi, @Miktar, @Birim, @Ozellik, @Marka, @KullaniciNotu)
       `);
   }
-  return id;
+  await pool.commit();return id;
+  }catch(e){await pool.rollback();throw e;}
 }
 
-export async function getKysRequestDetail(id: number, includePurchaseDetails = false) {
+export async function getKysRequestDetail(id: number, includePurchaseDetails = false, executor?: any) {
   await ensureKysSchema();
-  const pool = await cosmoPool;
+  const pool = executor || await cosmoPool;
   const reqRes = await pool.request().input("ID", id).query(`SELECT * FROM KysTalep WHERE ID = @ID`);
   const talep = reqRes.recordset[0];
-  if (!talep) return null;
+  if (!talep || talep.Durum === 'Silindi') return null;
   const itemsRes = await pool.request().input("ID", id).query(`
-    SELECT k.*, s.Kod AS StokKod, s.Ad AS StokAd
+    SELECT k.*, s.Kod AS StokKod, s.Ad AS StokAd, s.Birim AS StokBirim
     FROM KysTalepKalem k
     LEFT JOIN KysStokKart s ON s.ID = k.StokID
     WHERE k.TalepID = @ID
     ORDER BY k.ID
   `);
   const acceptRes = await pool.request().input("ID", id).query(`
-    SELECT * FROM KysTalepKabul WHERE TalepID = @ID ORDER BY ID DESC
+    SELECT k.*, h.HedefBirimID, h.Marka, h.Lot, h.SKT FROM KysTalepKabul k
+    LEFT JOIN KysStokHareket h ON h.ID=k.HareketID WHERE k.TalepID = @ID ORDER BY k.ID DESC
   `);
   return {
     talep: {
@@ -1048,7 +1060,7 @@ export async function getKysRequestDetail(id: number, includePurchaseDetails = f
       kod: rowString(r, "Kod"),
       malzemeAdi: rowString(r, "MalzemeAdi"),
       miktar: Number(r.Miktar || 0),
-      birim: rowString(r, "Birim"),
+      birim: rowString(r, "StokBirim") || rowString(r, "Birim"),
       ozellik: rowString(r, "Ozellik"),
       marka: rowString(r, "Marka"),
       kullaniciNotu: rowString(r, "KullaniciNotu"),
@@ -1062,12 +1074,17 @@ export async function getKysRequestDetail(id: number, includePurchaseDetails = f
       kabulTarihi: asDate(r.KabulTarihi),
       degerlendirenAd: rowString(r, "DegerlendirenAd"),
       genelDegerlendirme: rowString(r, "GenelDegerlendirme"),
+      hedefBirimId: r.HedefBirimID == null ? null : Number(r.HedefBirimID),
+      marka: rowString(r, "Marka"), lot: rowString(r, "Lot"), skt: asDate(r.SKT),
+      istenilenMiktardaGeldi: Boolean(r.IstenilenMiktardaGeldi), markaOzellikUygun: Boolean(r.MarkaOzellikUygun),
+      sktUygun: Boolean(r.SktUygun), sertifikaGerekli: Boolean(r.SertifikaGerekli),
       ...(includePurchaseDetails ? {
         tedarikci: rowString(r, "Tedarikci"),
+        tedarikciId: r.TedarikciID == null ? null : Number(r.TedarikciID),
         satinAlmaTarihi: asDate(r.SatinAlmaTarihi),
         birimFiyat: r.BirimFiyat == null ? null : Number(r.BirimFiyat),
         paraBirimi: rowString(r, "ParaBirimi"),
-        toplamTutar: r.ToplamTutar == null ? null : Number(r.ToplamTutar),
+        toplamTutar: r.ToplamTutar == null ? (r.BirimFiyat == null ? null : Number(r.BirimFiyat) * Number(r.GelenMiktar)) : Number(r.ToplamTutar),
         faturaNo: rowString(r, "FaturaNo"),
         satinAlanAd: rowString(r, "SatinAlanAd"),
       } : {}),
@@ -1080,6 +1097,9 @@ export async function updateKysRequestStatus(id: number, input: { durum?: string
   const pool = await cosmoPool;
   const durum = text(input.durum);
   if (!durum) throw new Error("Durum zorunludur.");
+  const current = (await pool.request().input("ID", id).query("SELECT Durum FROM KysTalep WHERE ID=@ID")).recordset[0];
+  if (!current) throw new Error("Talep bulunamadı.");
+  requireRequestTransition(current.Durum, durum);
   const dateFields =
     durum === "Onaylandı"
       ? ", OnaylayanID = @UserID, OnaylayanAd = @UserName, OnayTarihi = GETDATE()"
@@ -1089,21 +1109,33 @@ export async function updateKysRequestStatus(id: number, input: { durum?: string
   await pool.request()
     .input("ID", id)
     .input("Durum", durum)
+    .input("Current", current.Durum)
     .input("UserID", nullableText(input.userId))
     .input("UserName", nullableText(input.userName))
-    .query(`UPDATE KysTalep SET Durum = @Durum${dateFields}, UpdatedAt = GETDATE() WHERE ID = @ID`);
+    .query(`UPDATE KysTalep SET Durum = @Durum${dateFields}, UpdatedAt = GETDATE() WHERE ID = @ID AND Durum=@Current`)
+    .then(result => { if (!result.rowsAffected?.[0]) throw new Error("Talep durumu değişmiş. Sayfayı yenileyin."); });
 }
 
 export async function acceptKysRequestItem(talepId: number, input: any) {
   await ensureKysSchema();
-  const pool = await cosmoPool;
+  const { ensureKysPurchaseSchema, resolveKysSupplier } = await import("@/lib/kysPurchaseWorkflow");
+  await ensureKysPurchaseSchema();
+  const basePool = await cosmoPool;
+  const pool = await basePool.transaction();
+  await pool.begin();
+  try {
+  await pool.request().input("ID", talepId).query(hasMysqlConfig() ? "SELECT ID FROM KysTalep WHERE ID=@ID FOR UPDATE" : "SELECT ID FROM KysTalep WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID");
   const kalemId = Number(input.kalemId);
   const gelenMiktar = numberValue(input.gelenMiktar);
   if (!kalemId || gelenMiktar <= 0) throw new Error("Kalem ve gelen miktar zorunludur.");
 
-  const detail = await getKysRequestDetail(talepId);
+  const detail = await getKysRequestDetail(talepId, false, pool);
   const item = detail?.kalemler.find((k: any) => k.id === kalemId);
   if (!item) throw new Error("Talep kalemi bulunamadı.");
+  requireRequestAcceptance(detail!.talep.durum, item.durum, item.kabulMiktari, item.miktar, gelenMiktar);
+  if(input.hedefBirimId&&!(await pool.request().input("ID",Number(input.hedefBirimId)).query("SELECT ID FROM KysLaboratuvarBirim WHERE ID=@ID AND Durum='Aktif'")).recordset.length)throw new Error("Hedef birim bulunamadı.");
+  for(const key of ["birimFiyat","toplamTutar"]){if(input[key]!==""&&input[key]!=null&&(!Number.isFinite(numberValue(input[key],NaN))||numberValue(input[key],NaN)<0))throw new Error("Fiyat ve tutar negatif olamaz; geçerli sayı girin.");}
+  const supplier = input.satinAlanId ? await resolveKysSupplier(pool, input.tedarikciId) : null;
 
   let stokId = item.stokId ? Number(item.stokId) : 0;
   if (!stokId) {
@@ -1114,7 +1146,7 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
       malzemeTuru: detail?.talep.talepTuru === "Cihaz" ? "Cihaz" : "Sarf",
       ozellik: item.ozellik,
       birim: item.birim,
-    });
+    }, pool);
     await pool.request().input("KalemID", kalemId).input("StokID", stokId).query(`
       UPDATE KysTalepKalem SET StokID = @StokID WHERE ID = @KalemID
     `);
@@ -1132,9 +1164,9 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
     aciklama: `Talep kabul: ${detail?.talep.talepNo || talepId}`,
     kullaniciId: input.degerlendirenId,
     kullaniciAd: input.degerlendirenAd,
-  });
+  }, pool);
 
-  await pool.request()
+  const kabulId = await pool.request()
     .input("TalepID", talepId)
     .input("KalemID", kalemId)
     .input("GelenMiktar", gelenMiktar)
@@ -1148,11 +1180,12 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
     .input("DegerlendirenAd", nullableText(input.degerlendirenAd))
     .input("StokID", stokId)
     .input("HareketID", hareketId)
-    .input("Tedarikci", nullableText(input.tedarikci))
+    .input("Tedarikci", supplier?.ad || null)
+    .input("TedarikciID", supplier?.id || null)
     .input("SatinAlmaTarihi", dateValue(input.satinAlmaTarihi))
     .input("BirimFiyat", input.birimFiyat === "" || input.birimFiyat == null ? null : numberValue(input.birimFiyat))
     .input("ParaBirimi", nullableText(input.paraBirimi))
-    .input("ToplamTutar", input.toplamTutar === "" || input.toplamTutar == null ? null : numberValue(input.toplamTutar))
+    .input("ToplamTutar", input.toplamTutar === "" || input.toplamTutar == null ? (input.birimFiyat === "" || input.birimFiyat == null ? null : numberValue(input.birimFiyat) * gelenMiktar) : numberValue(input.toplamTutar))
     .input("FaturaNo", nullableText(input.faturaNo))
     .input("SatinAlanID", nullableText(input.satinAlanId))
     .input("SatinAlanAd", nullableText(input.satinAlanAd))
@@ -1160,12 +1193,13 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
       INSERT INTO KysTalepKabul
         (TalepID, KalemID, GelenMiktar, IstenilenMiktardaGeldi, MarkaOzellikUygun, SktUygun, SertifikaGerekli,
          GenelDegerlendirme, KabulTarihi, DegerlendirenID, DegerlendirenAd, StokID, HareketID,
-         Tedarikci, SatinAlmaTarihi, BirimFiyat, ParaBirimi, ToplamTutar, FaturaNo, SatinAlanID, SatinAlanAd)
+         Tedarikci, TedarikciID, SatinAlmaTarihi, BirimFiyat, ParaBirimi, ToplamTutar, FaturaNo, SatinAlanID, SatinAlanAd)
+      OUTPUT INSERTED.ID
       VALUES
         (@TalepID, @KalemID, @GelenMiktar, @IstenilenMiktardaGeldi, @MarkaOzellikUygun, @SktUygun, @SertifikaGerekli,
          @GenelDegerlendirme, @KabulTarihi, @DegerlendirenID, @DegerlendirenAd, @StokID, @HareketID,
-         @Tedarikci, @SatinAlmaTarihi, @BirimFiyat, @ParaBirimi, @ToplamTutar, @FaturaNo, @SatinAlanID, @SatinAlanAd)
-    `);
+         @Tedarikci, @TedarikciID, @SatinAlmaTarihi, @BirimFiyat, @ParaBirimi, @ToplamTutar, @FaturaNo, @SatinAlanID, @SatinAlanAd)
+    `).then(r => Number(r.recordset[0]?.ID || r.recordset[0]?.id));
 
   await pool.request()
     .input("KalemID", kalemId)
@@ -1187,7 +1221,13 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
     WHERE ID = @TalepID
   `);
 
-  return { stokId, hareketId };
+  if (input.belge) {
+    const { saveKysAcceptanceFile } = await import("@/lib/kysPurchaseWorkflow");
+    await saveKysAcceptanceFile(pool, talepId, kabulId, input.belge, input.degerlendirenId);
+  }
+  await pool.commit();
+  return { stokId, hareketId, kabulId };
+  } catch (e) { await pool.rollback(); throw e; }
 }
 
 export async function listKysPurchases(params: { search?: string; page?: number; limit?: number }) {

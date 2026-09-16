@@ -241,10 +241,16 @@ export function applyRaporEdit<T extends { header: RaporHeader; hizmetler: Hizme
   const headerEdit = kilitli ? payload.header : sanitizeHeaderEdit(payload.header);
   return {
     ...data,
-    header: headerEdit ? { ...data.header, ...headerEdit } : data.header,
+    header: headerEdit ? { ...data.header, ...headerEdit, Revno: data.header.Revno } : data.header,
     hizmetler: Array.isArray(payload.hizmetler)
       ? applyEditedServicesInDbOrder(data.hizmetler, payload.hizmetler)
       : data.hizmetler,
-    meta: payload.meta ? { ...data.meta, ...payload.meta } : data.meta,
+    meta: payload.meta ? {
+      ...data.meta,
+      ...payload.meta,
+      // Revizyon kimliği eski snapshot'tan değil güncel onay/NKR kaydından gelir.
+      revNo: data.meta.revNo,
+      revizeNot: data.meta.revizeNot,
+    } : data.meta,
   };
 }

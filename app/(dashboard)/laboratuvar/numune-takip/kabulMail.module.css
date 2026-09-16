@@ -1,0 +1,15 @@
+.overlay { position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.dialog { background: var(--color-bg); color: var(--color-text-primary); border-radius: 14px; width: 100%; max-width: 560px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.25); max-height: 90vh; overflow: auto; box-sizing: border-box; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
+.header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+.close { border: none; background: transparent; color: var(--color-text-tertiary); font-size: 24px; line-height: 1; padding: 0; cursor: pointer; }
+.dialog label { display: block; font-size: .74rem; font-weight: 600; color: var(--color-text-secondary); }
+.dialog label input, .dialog label textarea { display: block; margin-top: 4px; }
+.notice { font-size: .74rem; color: var(--color-text-tertiary); padding: 8px 10px; background: var(--color-surface-2); border-radius: 7px; }
+.preview { margin-top: 16px; border: 1px solid var(--color-border); border-radius: 7px; overflow: hidden; }
+.preview summary { padding: 10px; font-size: .8rem; font-weight: 600; cursor: pointer; }
+.preview table { min-width: 480px; }
+.actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+.actions button { padding: 8px 14px; border-radius: 7px; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-secondary); font-size: .85rem; font-weight: 600; cursor: pointer; }
+.actions .send { border: none; background: var(--color-accent); color: white; font-weight: 700; }
+.actions button:disabled { opacity: .55; cursor: default; }

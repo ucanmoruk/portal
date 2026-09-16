@@ -680,9 +680,10 @@ export default function ChallengeReport({
                 </>
               ) : null}
             <br></br>Test sonuçları müşteri spesifikasyonuna göre değerlendirilmiştir.
-            {revizeNot && (
+            {(parseInt(revNo, 10) || 0) > 0 && (
               <div style={{ marginTop: 8, fontWeight: "bold" }}>
-                <br />Revizyon Açıklaması: {revizeNot}
+                Revizyon No: {revNo}
+                {revizeNot && <><br />Revizyon Açıklaması: {revizeNot}</>}
               </div>
             )}
           </div>

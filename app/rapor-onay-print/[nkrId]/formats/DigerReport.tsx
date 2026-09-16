@@ -730,9 +730,10 @@ export default function DigerReport({
               </>
             ) : null}
             <br />Müşteri talebi doğrultusunda yapılan testler &apos;TİTCK Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz&apos;a göre değerlendirilmiştir.
-            {revizeNot && (
+            {(parseInt(revNo, 10) || 0) > 0 && (
               <div style={{ marginTop: 8, fontWeight: "bold" }}>
-                <br />Revizyon Açıklaması: {revizeNot}
+                Revizyon No: {revNo}
+                {revizeNot && <><br />Revizyon Açıklaması: {revizeNot}</>}
               </div>
             )}
           </div>

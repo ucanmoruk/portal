@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import styles from "@/app/styles/table.module.css";
 import { printBarcodes, type BarcodeNumune } from "../yeni-numune/printBarcode";
 import EvrakDetayModal from "./EvrakDetayModal";
+import KabulMailModal from "./KabulMailModal";
 
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 
@@ -140,6 +141,7 @@ export default function NumuneKabulTable() {
   const [deleting, setDeleting]   = useState(false);
 
   const [selectedIds, setSelectedIds]       = useState<Set<number>>(new Set());
+  const [mailIds, setMailIds] = useState<number[] | null>(null);
   const [printMenuEvrak, setPrintMenuEvrak] = useState<string | null>(null);
   const [invoiceGroup, setInvoiceGroup] = useState<EvrakGroup | null>(null);
   const [invoiceNkrIds, setInvoiceNkrIds] = useState<number[]>([]);
@@ -514,6 +516,10 @@ export default function NumuneKabulTable() {
           <span className={styles.totalCount}>{total} evrak, {totalSamples} numune</span>
           {selectedVisibleCount > 0 && (
             <>
+              <button className={styles.addBtn} style={{ padding: "7px 12px", fontSize: 12 }}
+                onClick={() => setMailIds(groups.flatMap(g => g.numuneler.filter(n => selectedIds.has(n.ID)).map(n => n.ID)))}>
+                Bilgi Maili Gönder ({selectedVisibleCount})
+              </button>
               <button
                 className={styles.addBtn}
                 onClick={exportSelectedToExcel}
@@ -532,12 +538,9 @@ export default function NumuneKabulTable() {
               </button>
             </>
           )}
+          {mailIds && <KabulMailModal ids={mailIds} onClose={() => setMailIds(null)} />}
         </div>
         <div className={styles.toolbarRight} style={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <select className={styles.pageSizeSelect} value={limit}
-            onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
-            {[10, 20, 50].map(n => <option key={n} value={n}>{n} / sayfa</option>)}
-          </select>
           <button className={styles.addBtn}
             onClick={() => router.push("/laboratuvar/yeni-numune")} >
             Çoklu Giriş
@@ -596,6 +599,10 @@ export default function NumuneKabulTable() {
             Filtreleri temizle ✕
           </button>
         )}
+        <select aria-label="Sayfa başına numune sayısı" className={styles.pageSizeSelect} style={{ marginLeft: "auto" }} value={limit}
+          onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
+          {[10, 20, 50].map(n => <option key={n} value={n}>{n} / sayfa</option>)}
+        </select>
       </div>
 
       {/* ── Accordion listesi ── */}

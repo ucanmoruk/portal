@@ -234,7 +234,8 @@ export async function GET(request: NextRequest) {
           INNER JOIN ProformaBaslik pb2 ON pb2.ID = pn2.ProformaID AND pb2.SilindiMi = 0
           INNER JOIN Fatura ft2 ON ft2.Durum = 'Aktif' AND (ft2.ProformaNo = pb2.EvrakNo OR ft2.ProformaNo = pb2.ProformaNo)
           INNER JOIN Odeme fo ON fo.Fatura_ID = ft2.ID
-          WHERE pn2.EvrakNo = CAST(n.Evrak_No AS NVARCHAR(40))
+          WHERE pn2.NkrID = n.ID
+            AND fo.Evrak_No = CAST(n.Evrak_No AS NVARCHAR(40))
             AND ISNULL(fo.Odeme_Durumu, N'') <> N'Proforma'
           ORDER BY fo.ID DESC
         ),

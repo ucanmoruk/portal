@@ -118,7 +118,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
   const [loadErr, setLoadErr]       = useState("");
   const [saving, setSaving]         = useState(false);
   const [saveErr, setSaveErr]       = useState("");
-  const [editLock, setEditLock] = useState<{ locked: boolean; durum: string | null; raporFormati: string | null }>({
+  const [editLock, setEditLock] = useState<{ locked: boolean; durum: string | null; raporFormati: string | null; disRaporKodu?: string | null }>({
     locked: false,
     durum: null,
     raporFormati: null,
@@ -127,6 +127,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
   const [revizeSebep, setRevizeSebep] = useState("");
   const [revizeBusy, setRevizeBusy] = useState(false);
   const [revizeError, setRevizeError] = useState("");
+  const [revisionFormat, setRevisionFormat] = useState<string | null>(null);
   const savingRef = useRef(false);
   // Yeni kayıtta ilk kaydet sonrası tab kilidi kalkar
   const [tab1Saved, setTab1Saved]   = useState(false);
@@ -344,7 +345,8 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
   const handleRevizeSubmit = async () => {
     if (!effectiveId || !editLock.raporFormati || revizeBusy) return;
     const sebep = revizeSebep.trim();
-    const raporKodu = form.RaporNo || String(effectiveId);
+    if (!sebep) { setRevizeError("Revizyon sebebi girilmelidir."); return; }
+    const raporKodu = editLock.disRaporKodu || form.RaporNo || String(effectiveId);
     const aciklama = sebep ? buildRevizeCumle(raporKodu, parseRev(form.Revno), sebep) : "";
     setRevizeBusy(true);
     setRevizeError("");
@@ -352,10 +354,12 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
       const res = await fetch(`/api/rapor-takip/${effectiveId}/revize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format: editLock.raporFormati, aciklama }),
+        body: JSON.stringify({ format: editLock.raporFormati, aciklama, sebep }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Rapor düzenlemeye açılamadı");
+      setRevisionFormat(editLock.raporFormati);
+      setForm(f => ({ ...f, Revno: String(json.yeniRev ?? f.Revno) }));
       setEditLock({ locked: false, durum: null, raporFormati: null });
       setRevizeOpen(false);
       setSaveErr(
@@ -406,6 +410,26 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
           )}
           Bu numune {editLock.raporFormati ? <strong>{editLock.raporFormati}</strong> : "rapor"} formatında <strong>{editLock.durum || "Onaylandı"}</strong> olduğu için pasif.
           Düzenleme için Rapor Takip ekranında <strong>Revize Et</strong> ile kaydı tekrar açın.
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12 }}>
+            <label htmlFor="locked-evrak-no">Evrak No</label>
+            <input id="locked-evrak-no" value={form.Evrak_No} onChange={e => patchForm({ Evrak_No: e.target.value })} inputMode="numeric" />
+            <button type="button" className={nf.lockedNoticeBtn} disabled={saving} onClick={async () => {
+              setSaving(true);
+              setSaveErr("");
+              try {
+                const res = await fetch(`/api/numune-form/${effectiveId}`, {
+                  method: "PATCH", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ evrakNo: form.Evrak_No }),
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.error || "Evrak No güncellenemedi");
+                setForm(f => ({ ...f, Evrak_No: json.evrakNo }));
+                router.refresh();
+              } catch (error: unknown) {
+                setSaveErr(error instanceof Error ? error.message : "Evrak No güncellenemedi");
+              } finally { setSaving(false); }
+            }}>Evrak No Güncelle</button>
+          </div>
         </div>
       )}
 
@@ -451,6 +475,12 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
         {tab === 2 && <Tab4Gecmis recordId={recordId ?? null} />}
       </div>
       </fieldset>
+      {revisionFormat && effectiveId && (
+        <section style={{ marginTop: 20 }}>
+          <h2>Son rapor üzerinden revizyon — Rev.{form.Revno}</h2>
+          <iframe title="Rapor revizyon editörü" src={`/rapor-onay-print/${effectiveId}/duzenle?format=${encodeURIComponent(revisionFormat)}`} style={{ width: "100%", height: "80vh", border: "1px solid var(--color-border)" }} />
+        </section>
+      )}
 
       <footer className={nf.saveBar}>
         {isEdit && effectiveId != null && (
@@ -501,7 +531,9 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
               borderRadius: 14,
               padding: 22,
               width: "100%",
-              maxWidth: 560,
+              maxWidth: 1000,
+              maxHeight: "90vh",
+              overflowY: "auto",
               boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
             }}
           >
@@ -514,14 +546,16 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
               >×</button>
             </div>
             <p style={{ margin: "0 0 14px", fontSize: "0.82rem", color: "var(--color-text-secondary)" }}>
-              Rapor <strong>{form.RaporNo || effectiveId}</strong> · {editLock.raporFormati}
-              {revizeSebep.trim()
-                ? <> — Rev.{parseRev(form.Revno)} → <strong>Rev.{parseRev(form.Revno) + 1}</strong>. TR/EN bağlı formatlar birlikte açılır.</>
-                : <> — Açıklama boş bırakılırsa Rev.{parseRev(form.Revno)} korunur; rapor onay alanına geri döner ve numune formu düzenlemeye açılır. TR/EN bağlı formatlar birlikte açılır.</>}
+              Rapor <strong>{editLock.disRaporKodu || form.RaporNo || effectiveId}</strong> · {editLock.raporFormati}
+              <> — Rev.{parseRev(form.Revno)} → <strong>Rev.{parseRev(form.Revno) + 1}</strong>. Son rapor içeriği korunur; TR/EN bağlı formatlar birlikte açılır.</>
             </p>
 
+            {effectiveId && editLock.raporFormati && (
+              <iframe title="Son onaylı rapor" src={`/rapor-onay-print/${effectiveId}?format=${encodeURIComponent(editLock.raporFormati)}`} style={{ width: "100%", height: 300, border: "1px solid var(--color-border)", marginBottom: 14 }} />
+            )}
+
             <label style={{ fontSize: "0.8rem", fontWeight: 600, display: "block", marginBottom: 6 }}>
-              Revize Sebebi <span style={{ color: "var(--color-text-tertiary)", fontWeight: 500 }}>(boş bırakılırsa sadece düzenlemeye açılır)</span>
+              Revize Sebebi (zorunlu)
             </label>
             <textarea
               value={revizeSebep}
@@ -537,8 +571,8 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
             </div>
             <div style={{ fontSize: "0.82rem", lineHeight: 1.5, padding: "10px 12px", background: "var(--color-surface-2)", borderRadius: 8, color: "var(--color-text-primary)" }}>
               {revizeSebep.trim()
-                ? buildRevizeCumle(form.RaporNo || String(effectiveId), parseRev(form.Revno), revizeSebep)
-                : "Revizyon numarası ve revizyon açıklaması değişmeden, rapor onay alanına geri alınacak."}
+                ? buildRevizeCumle(editLock.disRaporKodu || form.RaporNo || String(effectiveId), parseRev(form.Revno), revizeSebep)
+                : buildRevizeCumle(editLock.disRaporKodu || form.RaporNo || String(effectiveId), parseRev(form.Revno), "......")}
             </div>
 
             {revizeError && (
@@ -569,7 +603,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
                   cursor: revizeBusy ? "wait" : "pointer",
                 }}
               >
-                {revizeBusy ? "İşleniyor..." : (revizeSebep.trim() ? "Revize Et" : "Düzenlemeye Aç")}
+                {revizeBusy ? "İşleniyor..." : "Revize Et"}
               </button>
             </div>
           </div>

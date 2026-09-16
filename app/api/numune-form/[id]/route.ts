@@ -7,6 +7,42 @@ import { loadLabUgdrTexts, saveLabUgdrTexts } from "@/lib/labUgdrStorage";
 import { ensureDisRaporKodlari } from "@/lib/disKod";
 import { getNkrEditLock } from "@/lib/nkrEditLock";
 import { syncNkrCommercialReferences } from "@/lib/nkrCommercialReferenceSync";
+import { getPortalUser } from "@/lib/portalYetki";
+
+// Onaylı raporda yalnız ticari evrak referansı değiştirilebilir; içerik kilidi korunur.
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getPortalUser();
+  if (!user) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
+  if (!user.can("laboratuvar.numune-takip") && !user.can("laboratuvar.numune-takip-lab")) {
+    return Response.json({ error: "Numune güncelleme yetkiniz yok." }, { status: 403 });
+  }
+  const { id } = await params;
+  const nkrId = Number(id);
+  const body = await request.json().catch(() => null);
+  const evrakNo = String(body?.evrakNo ?? "").trim();
+  if (!Number.isSafeInteger(nkrId) || nkrId <= 0 || !/^\d+$/.test(evrakNo) || Object.keys(body || {}).some(key => key !== "evrakNo")) {
+    return Response.json({ error: "Yalnız geçerli Evrak No gönderilmelidir." }, { status: 400 });
+  }
+  const pool = await cosmoPool;
+  const tx = await pool.transaction();
+  await tx.begin();
+  try {
+    const previous = (await tx.request().input("id", nkrId).query(`SELECT Evrak_No, RaporNo FROM NKR WHERE ID = @id AND Durum = 'Aktif'`)).recordset[0];
+    if (!previous) {
+      await tx.rollback();
+      return Response.json({ error: "Numune bulunamadı." }, { status: 404 });
+    }
+    await tx.request().input("id", nkrId).input("evrakNo", evrakNo).query(`UPDATE NKR SET Evrak_No = @evrakNo WHERE ID = @id`);
+    await syncNkrCommercialReferences(tx, nkrId,
+      { evrakNo: previous.Evrak_No, raporNo: previous.RaporNo },
+      { evrakNo, raporNo: previous.RaporNo });
+    await tx.commit();
+    return Response.json({ ok: true, evrakNo });
+  } catch (error: unknown) {
+    await tx.rollback();
+    return Response.json({ error: error instanceof Error ? error.message : "Evrak No güncellenemedi." }, { status: 500 });
+  }
+}
 
 // Limit ve LOQ değerine göre Sonuç ve SonucEn otomatik hesapla
 function computeSonucAuto(

@@ -897,9 +897,10 @@ export default function DetayRaporReport({
               </>
             ) : null}
             <br />{text.explanation}
-            {revizeNot && (
+            {(parseInt(revNo, 10) || 0) > 0 && (
               <div style={{ marginTop: 8, fontWeight: "bold" }}>
-                <br />{text.revisionNote} {revizeNot}
+                {isEnglish ? "Revision No:" : "Revizyon No:"} {revNo}
+                {revizeNot && <><br />{text.revisionNote} {revizeNot}</>}
               </div>
             )}
           </div>

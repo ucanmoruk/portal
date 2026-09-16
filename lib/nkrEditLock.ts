@@ -2,9 +2,10 @@ export interface NkrEditLock {
   locked: boolean;
   durum: string | null;
   raporFormati: string | null;
+  disRaporKodu?: string | null;
 }
 
-const LOCKED_RAPOR_DURUMLARI = ["Onaylandı", "Yayınlandı", "Arşiv"] as const;
+const LOCKED_RAPOR_DURUMLARI = ["Onaylandı", "Ödeme bekliyor", "Yayınlandı", "Arşiv"] as const;
 
 export async function getNkrEditLock(pool: any, nkrId: number): Promise<NkrEditLock> {
   const tableCheck = await pool.request().query(`
@@ -18,10 +19,10 @@ export async function getNkrEditLock(pool: any, nkrId: number): Promise<NkrEditL
   const result = await pool.request()
     .input("nkrId", nkrId)
     .query(`
-      SELECT TOP 1 RaporFormati, Durum
+      SELECT TOP 1 RaporFormati, Durum, DisRaporKodu
       FROM NKR_RaporOnay
       WHERE NkrID = @nkrId
-        AND Durum IN (N'Onaylandı', N'Yayınlandı', N'Arşiv')
+        AND Durum IN (N'Onaylandı', N'Ödeme bekliyor', N'Yayınlandı', N'Arşiv')
       ORDER BY
         CASE Durum
           WHEN N'Yayınlandı' THEN 1
@@ -39,5 +40,6 @@ export async function getNkrEditLock(pool: any, nkrId: number): Promise<NkrEditL
     locked: durum ? LOCKED_RAPOR_DURUMLARI.includes(durum as (typeof LOCKED_RAPOR_DURUMLARI)[number]) : false,
     durum,
     raporFormati: row.RaporFormati ?? null,
+    disRaporKodu: row.DisRaporKodu ?? null,
   };
 }
