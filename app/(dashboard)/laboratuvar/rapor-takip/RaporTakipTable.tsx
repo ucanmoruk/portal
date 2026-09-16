@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import type { BilesenSonuc } from "@/lib/altParametre";
 import { useRouter } from "next/navigation";
+import ChallengeImportPanel from "./ChallengeImportPanel";
+import { isChallengeFormat } from "@/lib/challengeImport";
 import styles from "@/app/styles/table.module.css";
 
 // ── Tipler ──────────────────────────────────────────────────────────────────
@@ -1058,6 +1060,7 @@ export default function RaporTakipTable({
         {!loading && rows.map((row, gi) => {
           const key    = rowKey(row);
           const isOpen = openKeys.has(key);
+          const challengeEntry = (phase === "lab" || phase === "returned") && isChallengeFormat(row.RaporFormati);
           const hizmetler = hizmetMap[key] ?? [];
           const edits     = editMap[key] ?? {};
           const isSaving  = savingKey === key;
@@ -1401,6 +1404,14 @@ export default function RaporTakipTable({
                   borderTop: "1px solid var(--color-border-light)",
                   padding: "0 0 12px",
                 }}>
+                  {challengeEntry && <ChallengeImportPanel nkrId={row.NkrID} format={row.RaporFormati} onSaved={data => {
+                    const now = new Date().toISOString();
+                    setHizmetMap(prev => ({ ...prev, [key]: (prev[key] || []).map(h => ({ ...h, Sonuc: "Bkz. Ek-1", SonucEn: "See Annex-1", Degerlendirme: data.assessment, SonucKayitTarihi: now })) }));
+                    setEditMap(prev => ({ ...prev, [key]: Object.fromEntries(Object.entries(prev[key] || {}).map(([id, edit]) => [id, { ...edit, sonuc: "Bkz. Ek-1", sonucEn: "See Annex-1", degerlendirme: data.assessment }])) }));
+                    hizmetler.forEach(h => markSaved(h.X1ID));
+                    void fetchData(page, search, limit, year, raporDurumu, raporTuru, terminDate, { clearFirst: false });
+                    onRefresh?.();
+                  }} />}
                   {isLoading && (
                     <div style={{ padding: "16px 48px", display: "flex", gap: 12 }}>
                       {Array.from({ length: 5 }).map((_, i) => (
@@ -1415,7 +1426,7 @@ export default function RaporTakipTable({
                     </div>
                   )}
 
-                  {!isLoading && hizmetler.length > 0 && (
+                  {!challengeEntry && !isLoading && hizmetler.length > 0 && (
                     <>
                       <table style={{
                         width: "100%", borderCollapse: "collapse",

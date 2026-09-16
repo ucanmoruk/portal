@@ -1,3 +1,4 @@
+import { CHALLENGE_ORGANISMS } from "@/lib/challengeImport";
 import { JetBrains_Mono } from "next/font/google";
 import { ttInterphases } from "@/app/fonts/reportFonts";
 import OnayToolbar from "../OnayToolbar";
@@ -268,6 +269,9 @@ export default function DetayRaporReport({
     sirketAdi,
   } = meta;
   const isEnglish = isEnglishFormat(format);
+  const assessment = meta.challengeVeri?.assessment ?? hizmetler.find(h => h.Degerlendirme)?.Degerlendirme ?? null;
+  const assessmentLabel = degerlendirmeLabel(assessment, isEnglish);
+  const challengeRows = meta.challengeVeri?.rows ?? CHALLENGE_ORGANISMS.map(organism => ({ organism, inoculation: "-", counts: ["-", "-", "-", "-"], reductions: ["-", "-", "-"] }));
   const text: ChallengeText = isEnglish
     ? {
         reportTitle: "TEST REPORT",
@@ -880,7 +884,7 @@ export default function DetayRaporReport({
                   <td style={{ paddingRight: 10 }}>{text.preservativeTest}</td>
                   <td className="center" style={{ paddingLeft: 5 }}>ISO 11930:2019/Amd 1:2022</td>
                   <td className="center">{text.seeAnnex}</td>
-                  <td className="deg-gecer" style={{ textAlign: "center" }}>{degerlendirmeLabel("Uygun", isEnglish).text}</td>
+                  <td className={assessmentLabel.cls} style={{ textAlign: "center" }}>{assessmentLabel.text}</td>
                 </tr>
    
               </tbody>
@@ -954,72 +958,19 @@ export default function DetayRaporReport({
                   <th colSpan={3} style={{ textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #ccc", padding: "7px 5px", borderRight : "none", }}>{text.reduction}</th>
                 </tr>
                 <tr>
-                  <th style={{ width: "11%", textAlign: "center", verticalAlign: "middle", padding: "2px" }}>0. Gün<br />N0</th>
+                  <th style={{ width: "11%", textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px" }}>0. Gün<br />N0</th>
                   <th style={{ width: "7%", textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px" }}>7. Gün<br />N7</th>
                   <th style={{ width: "7%", textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px" }}>14. Gün<br />N14</th>
                   <th style={{ width: "7%", textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px" }}>28. Gün<br />N28</th>
-                  <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle",  padding: "2px" }}>7. Gün<br />N7</th>
+                  <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px" }}>7. Gün<br />N7</th>
                   <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #000", padding: "2px" }}>14. Gün<br />N14</th>
-                  <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle", borderRight : "none", padding: "2px" }}>28. Gün<br />N28</th>
+                  <th style={{ width: "8%", textAlign: "center", verticalAlign: "middle", borderBottom: "1px solid #000",borderRight : "none", padding: "2px" }}>28. Gün<br />N28</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr style={{textAlign: "center"}}>
-                  <td style={{ border: "1px solid #ccc", padding: "5px 5px",  borderLeft: "none" , textAlign: "left" }}>Pseudomonas aeruginosa</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,7 x 10^7</td>
-                  <td style={{ borderTop: "1px solid #000000", padding: "2px 5px" }}>1,7 x 10^7</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderLeft: "1px solid #ccc", borderTop: "1px solid #000",  padding: "2px 5px" }}>&gt;4,24</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;4,24</td>
-                  <td style={{ borderRight: "none", borderTop: "1px solid #000", padding: "2px 5px" }}>&gt;4,24</td>
-                </tr>
-                <tr style={{textAlign: "center"}}>
-                  <td style={{ border: "1px solid #ccc", padding: "5px 5px" ,  borderLeft: "none", textAlign: "left"}}>Escherichia coli</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,9 x 10^7</td>
-                  <td style={{ borderTop: "1px solid #ccc", padding: "2px 5px" }}>1,9 x 10^7</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderLeft: "1px solid #ccc", borderTop: "1px solid #ccc", padding: "2px 5px" }}>&gt;4,28</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;4,28</td>
-                  <td style={{ borderRight: "none", borderTop: "1px solid #ccc",  padding: "2px 5px" }}>&gt;4,28</td>
-                </tr>
-                <tr style={{textAlign: "center"}}>
-                  <td style={{ border: "1px solid #ccc", padding: "5px 5px",  borderLeft: "none", textAlign: "left" }}>Staphylococcus aureus</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,5 x 10^7</td>
-                  <td style={{ borderTop: "1px solid #ccc", padding: "2px 5px" }}>1,5 x 10^7</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderLeft: "1px solid #ccc", borderTop: "1px solid #ccc", padding: "2px 5px" }}>&gt;4,18</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;4,18</td>
-                  <td style={{ borderRight: "none",borderTop: "1px solid #ccc", padding: "2px 5px" }}>&gt;4,18</td>
-                </tr>
-                <tr style={{textAlign: "center"}}>
-                  <td style={{ border: "1px solid #ccc", padding: "5px 5px",  borderLeft: "none", textAlign: "left" }}>Candida albicans</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,8 x 10^6</td>
-                  <td style={{ borderTop: "1px solid #ccc", padding: "2px 5px" }}>1,8 x 10^7</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderLeft: "1px solid #ccc", borderTop: "1px solid #ccc", borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;3,26</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;3,26</td>
-                  <td style={{ borderRight: "none", borderTop: "1px solid #ccc", borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;3,26</td>
-                </tr>
-                <tr style={{textAlign: "center"}}>
-                  <td style={{ border: "1px solid #ccc", padding: "5px 5px" ,  borderLeft: "none", textAlign: "left"}}>Aspergillus brasiliensis</td>
-                  <td style={{ border: "1px solid #ccc", padding: "2px 5px" }}>1,4 x 10^6</td>
-                  <td style={{ borderBottom: "1px solid #ccc",  borderTop: "1px solid #ccc", padding: "2px 5px" }}>1,4 x 10^7</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>-</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&lt;10</td>
-                  <td style={{ borderLeft: "1px solid #ccc", borderBottom: "1px solid #ccc", padding: "2px 5px" }}>-</td>
-                  <td style={{ borderBottom: "1px solid #ccc", padding: "2px 5px" }}>&gt;3,15</td>
-                  <td style={{ borderBottom: "1px solid #ccc",  borderRight: "none", padding: "2px 5px" }}>&gt;3,15</td>
-                </tr>
-              </tbody>
+              <tbody>{challengeRows.map(row => <tr key={row.organism} style={{ textAlign: "center" }}>
+                  <td style={{ borderBottom: "1px solid #ccc", padding: "5px", textAlign: "left" }}>{row.organism}</td>
+                  {[row.inoculation, ...row.counts, ...row.reductions].map((value, index) => <td key={index} style={{ borderBottom: "1px solid #ccc", borderLeft: "1px solid #ccc", padding: "2px 5px" }}>{value}</td>)}
+                </tr>)}</tbody>
             </table>
           </div>
 
@@ -1079,7 +1030,7 @@ export default function DetayRaporReport({
           </div>
 
                <div className="results-title" style={{ marginTop: "25px"}}>{text.evaluation}</div>
-            <p>{text.finalEvaluation} <b>{degerlendirmeLabel("Uygun", isEnglish).text}</b> </p>
+            <p>{assessment === "Uygun" ? text.finalEvaluation : assessment === "Uygun Değil" ? (isEnglish ? "The tested sample does not meet the preservative efficacy requirements of ISO 11930:2019/Amd 1:2022. Test result:" : "Test edilen numune, ISO 11930:2019/Amd 1:2022 standardının koruyucu etkinlik gerekliliklerini sağlamamaktadır. Test sonucu:") : (isEnglish ? "The test results could not be evaluated. Test result:" : "Test sonuçları değerlendirilememiştir. Test sonucu:")} <b>{assessmentLabel.text}</b></p>
 
           {/* ───── İMZA BLOĞU (2 hücre: Raporu Hazırlayan · Onaylayan) ─────  */}
           <div className="endof">{text.end}</div>

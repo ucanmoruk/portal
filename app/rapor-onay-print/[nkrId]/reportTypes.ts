@@ -1,3 +1,4 @@
+import type { ChallengeData } from "@/lib/challengeImport";
 export interface AltParametreRow {
   AltParametreID?: number | null;
   BilesenAdi: string;
@@ -94,6 +95,7 @@ export interface ReportMeta {
   revizeNot?: string | null;
   /** Stabilite formatı için kayıtlı matris verisi (NKR_StabiliteVeri.VeriJson parse edilmiş). */
   stabiliteVeri?: unknown;
+  challengeVeri?: ChallengeData | null;
 }
 
 export interface KarekodInfo {

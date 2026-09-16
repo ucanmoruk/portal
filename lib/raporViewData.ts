@@ -1,3 +1,4 @@
+import type { ChallengeData } from "@/lib/challengeImport";
 import { cosmoPool } from "@/lib/db";
 import QRCode from "qrcode";
 import type { HizmetRow, RaporHeader, OnayInfo, KarekodInfo } from "@/app/rapor-onay-print/[nkrId]/reportTypes";
@@ -5,6 +6,8 @@ import { imzaColumnExists, imzalaVeKaydet } from "@/lib/raporImzaData";
 import { loadBilesenSonuclar } from "@/lib/altParametre";
 import { applyRaporEdit, loadRaporEdit } from "@/lib/raporDuzenleme";
 import { baseReportFormat } from "@/lib/raporFormatLanguage";
+import { loadChallengeData } from "@/lib/challengeData";
+import { isChallengeFormat } from "@/lib/challengeImport";
 import { getStabiliteVeriJson } from "@/lib/stabiliteData";
 import { applyManualServiceOrder } from "@/lib/raporServiceOrder";
 
@@ -27,6 +30,7 @@ export interface RaporMeta {
   revizeNot?: string | null;
   /** Stabilite formatı için kayıtlı matris verisi (NKR_StabiliteVeri parse'lı). */
   stabiliteVeri?: unknown;
+  challengeVeri?: ChallengeData | null;
 }
 
 export interface RaporViewData {
@@ -351,6 +355,8 @@ export async function loadRaporViewData(nkrIdNum: number, format: string, editFo
       console.warn("[raporViewData] Stabilite verisi yüklenemedi:", e);
     }
   }
+
+  if (isChallengeFormat(format)) meta.challengeVeri = await loadChallengeData(pool, nkrIdNum);
 
   const data = { header, hizmetler, testBaslangic, testBitis, onay, meta, karekod };
   try {
