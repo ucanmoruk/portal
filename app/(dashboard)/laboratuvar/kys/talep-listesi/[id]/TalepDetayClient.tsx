@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import Link from "next/link";
+import { Pencil, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import styles from "@/app/styles/table.module.css";
 import kys from "../../kys.module.css";
@@ -127,8 +128,19 @@ export default function TalepDetayClient({ id }: { id: number }) {
       tedarikci:k.tedarikci||"",tedarikciId:k.tedarikciId?String(k.tedarikciId):"",satinAlmaTarihi:k.satinAlmaTarihi||today(),birimFiyat:k.birimFiyat==null?"":String(k.birimFiyat),paraBirimi:k.paraBirimi||"TRY",toplamTutar:k.toplamTutar==null?"":String(k.toplamTutar),faturaNo:k.faturaNo||""}));
   }
   async function deleteRequest(){
-    if(!confirm("Talep listeden kaldırılacak. Kabul edilmiş stok ve satın alma geçmişi korunacaktır. Devam edilsin mi?"))return;
+    if(!confirm("Talep listeden kaldırılacak. Bağlı kabul ve satın alma kayıtları silinecek, kabul edilen miktarlar stoktan düşülecek. Devam edilsin mi?"))return;
     setSaving(true);try{const r=await fetch(`/api/kys/talepler/${id}`,{method:"DELETE"});const j=await r.json();if(!r.ok)throw new Error(j.error);router.push("/laboratuvar/kys/talep-listesi");}catch(e:any){setError(e.message);}finally{setSaving(false);}
+  }
+
+  async function deleteAcceptance(k: any) {
+    if (saving || !confirm("Bu kabul ve bağlı satın alma kaydı silinecek, gelen miktar stoktan geri alınacak. Devam edilsin mi?")) return;
+    setSaving(true); setError("");
+    try {
+      const res = await fetch(`/api/kys/talepler/${id}/kabul`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kabulId: k.id }) });
+      const json = await res.json(); if (!res.ok) throw new Error(json.error || "Kabul silinemedi.");
+      await fetchDetail();
+    } catch (e) { setError(e instanceof Error ? e.message : "Kabul silinemedi."); }
+    finally { setSaving(false); }
   }
 
   async function accept() {
@@ -167,7 +179,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
           <span className={kys.pill}>{detail.talep.durum}</span>
         </div>
         <div className={styles.toolbarRight}>
-          <button className={styles.cancelBtn} onClick={() => window.print()}>Yazdır</button>
+          <Link className={styles.cancelBtn} href={`/kys-talep-yazdir/${id}`} target="_blank">Yazdır</Link>
           {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("Onaylandı")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#e7f7ed",color:"#16713b",borderColor:"#a0d6b4"}} onClick={() => setStatus("Onaylandı")}>Onayla</button>}
           {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("İşleme Alındı")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#e8f0ff",color:"#235ac0",borderColor:"#a7c1ee"}} onClick={() => setStatus("İşleme Alındı")}>İşleme al</button>}
           {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("İptal")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#fff0ee",color:"#b42318",borderColor:"#efb2ab"}} onClick={() => setStatus("İptal")}>İptal</button>}
@@ -219,7 +231,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
             <tbody>
               {detail.kabuller.length === 0 ? <tr><td colSpan={detail.satinAlmaYetkisi ? 8 : 6}><div className={styles.empty}>Kabul kaydı yok.</div></td></tr> : detail.kabuller.map(k => {
                 const item = detail.kalemler.find(i => i.id === k.kalemId);
-                return <tr key={k.id}><td>{dateFmt(k.kabulTarihi)}</td><td>{item?.malzemeAdi || k.kalemId}</td><td>{k.gelenMiktar} {item?.birim}</td>{detail.satinAlmaYetkisi && <><td>{k.tedarikci || "-"}</td><td>{k.toplamTutar == null ? "Fiyat girilmedi" : `${Number(k.toplamTutar).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ${k.paraBirimi || "TRY"}`}</td></>}<td>{k.degerlendirenAd || "-"}</td><td>{k.genelDegerlendirme || "-"}</td><td>{detail.belgeler?.filter(b=>Number(b.KabulID)===k.id).map(b=><a key={b.ID} href={`/api/kys/talepler/${id}/belgeler/${b.ID}`} target="_blank" rel="noopener noreferrer" style={{display:"block"}}>{b.DosyaAdi}</a>)}<button className={styles.editBtn} onClick={()=>openCorrect(k)}>Düzelt</button></td></tr>;
+                return <tr key={k.id}><td>{dateFmt(k.kabulTarihi)}</td><td>{item?.malzemeAdi || k.kalemId}</td><td>{k.gelenMiktar} {item?.birim}</td>{detail.satinAlmaYetkisi && <><td>{k.tedarikci || "-"}</td><td>{k.toplamTutar == null ? "Fiyat girilmedi" : `${Number(k.toplamTutar).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ${k.paraBirimi || "TRY"}`}</td></>}<td>{k.degerlendirenAd || "-"}</td><td>{k.genelDegerlendirme || "-"}</td><td>{detail.belgeler?.filter(b=>Number(b.KabulID)===k.id).map(b=><a key={b.ID} href={`/api/kys/talepler/${id}/belgeler/${b.ID}`} target="_blank" rel="noopener noreferrer" style={{display:"block"}}>{b.DosyaAdi}</a>)}<button className={`${styles.editBtn} ${kys.iconButton}`} title="Düzelt" aria-label={`${item?.malzemeAdi || k.kalemId} kabulünü düzelt`} onClick={()=>openCorrect(k)}><Pencil size={16} aria-hidden="true" /></button><button disabled={saving} className={`${styles.deleteBtn} ${kys.iconButton}`} title="Kabulü sil" aria-label={`${item?.malzemeAdi || k.kalemId} kabulünü sil`} onClick={() => deleteAcceptance(k)}><Trash2 size={15} aria-hidden="true" /></button></td></tr>;
               })}
             </tbody>
           </table>
@@ -233,7 +245,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
             <div className={styles.modalBody}>
               {formError && <div className={styles.formError}>{formError}</div>}
               <div className={styles.formGrid3}>
-                <div className={styles.formGroup}><label>Gelen miktar ({acceptItem.birim} — stok kartı birimi)</label><input inputMode="decimal" value={form.gelenMiktar} onChange={e => setForm(f => ({ ...f, gelenMiktar: e.target.value,toplamTutar:"" }))} /><span className={kys.muted}>Birim: {acceptItem.birim} (sabit)</span></div>
+                <div className={kys.quantityWithUnit}><div className={styles.formGroup}><label htmlFor="accept-quantity">Gelen miktar</label><input id="accept-quantity" inputMode="decimal" value={form.gelenMiktar} onChange={e => setForm(f => ({ ...f, gelenMiktar: e.target.value,toplamTutar:"" }))} /></div><div className={styles.formGroup}><label htmlFor="accept-unit">Birim</label><input id="accept-unit" readOnly value={acceptItem.birim || "Adet"} aria-label="Stok kartı birimi (sabit)" /></div></div>
                 <div className={styles.formGroup}><label>Kabul tarihi</label><input type="date" value={form.kabulTarihi} onChange={e => setForm(f => ({ ...f, kabulTarihi: e.target.value }))} /></div>
                 <div className={styles.formGroup}><label>Depoya/Birime işle</label><select value={form.hedefBirimId} onChange={e => setForm(f => ({ ...f, hedefBirimId: e.target.value }))}><option value="">Seçiniz</option>{birimler.map(b => <option key={b.id} value={b.id}>{b.ad}</option>)}</select></div>
                 <div className={styles.formGroup}><label>Marka</label><input value={form.marka} onChange={e => setForm(f => ({ ...f, marka: e.target.value }))} /></div>
@@ -264,8 +276,8 @@ export default function TalepDetayClient({ id }: { id: number }) {
                   </label>
                 ))}
                 <div className={`${styles.formGroup} ${styles.colSpan3}`}><label>Genel değerlendirme</label><textarea rows={3} value={form.genelDegerlendirme} onChange={e => setForm(f => ({ ...f, genelDegerlendirme: e.target.value }))} /></div>
-                <div className={`${styles.formGroup} ${styles.colSpan3}`}><label>Belge yükle (isteğe bağlı, en fazla 10 MB)</label><input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" onChange={e=>setBelge(e.target.files?.[0]||null)}/></div>
-                {correcting&&<div className={`${styles.formGroup} ${styles.colSpan3}`}><label>Düzeltme açıklaması *</label><textarea required value={duzeltmeAciklamasi} onChange={e=>setDuzeltmeAciklamasi(e.target.value)}/><p>Stok miktarına yalnızca eski ve yeni miktar arasındaki fark yansıtılır.</p></div>}
+                <div className={`${styles.formGroup} ${styles.colSpan3}`}><label>Belge yükle (isteğe bağlı, en fazla 10 MB)</label><input className={kys.fileInput} aria-label="Kabul belgesi seç" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" onChange={e=>setBelge(e.target.files?.[0]||null)}/></div>
+                {correcting&&<div className={`${styles.formGroup} ${styles.colSpan3}`}><label>Düzeltme açıklaması *</label><textarea required value={duzeltmeAciklamasi} onChange={e=>setDuzeltmeAciklamasi(e.target.value)}/><small className={kys.formHint}>Stok miktarına yalnızca eski ve yeni miktar arasındaki fark yansıtılır.</small></div>}
               </div>
             </div>
             <div className={styles.modalFooter}><button disabled={saving} className={styles.cancelBtn} onClick={() => setAcceptItem(null)}>Vazgeç</button><button className={styles.saveBtn} disabled={saving||(!!correcting&&!duzeltmeAciklamasi.trim())} onClick={accept}>{saving ? "Kaydediliyor..." : correcting?"Düzeltmeyi kaydet":"Kabulü kaydet"}</button></div>

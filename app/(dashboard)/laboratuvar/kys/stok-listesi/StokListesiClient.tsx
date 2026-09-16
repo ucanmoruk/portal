@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Info, Printer } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "@/app/styles/table.module.css";
 import kys from "../kys.module.css";
@@ -149,28 +150,6 @@ export default function StokListesiClient() {
     setModalOpen(true);
   }
 
-  function openEdit(row: StockRow) {
-    setMode("edit");
-    setEditId(row.id);
-    setForm({
-      barkod: row.barkod || "",
-      malzemeTuru: row.malzemeTuru || "Sarf",
-      kod: row.kod || "",
-      ad: row.ad || "",
-      name: row.name || "",
-      casNo: row.casNo || "",
-      ozellik: row.ozellik || "",
-      ambalaj: row.ambalaj || "",
-      saklamaKosullari: row.saklamaKosullari || "",
-      kritikLimit: String(row.kritikLimit || 0),
-      stokDurumu: row.stokDurumu || "Aktif",
-      birim: row.birim || "Adet",
-    });
-    setImageFile(null);
-    setFormError("");
-    setModalOpen(true);
-  }
-
   async function uploadImage(stockId: number) {
     if (!imageFile) return;
     const fd = new FormData();
@@ -260,51 +239,46 @@ export default function StokListesiClient() {
             <thead>
               <tr>
                 <th>Barkod</th>
-                <th>Malzeme türü</th>
+                <th>Tür</th>
                 <th>Kod</th>
                 <th>Ad</th>
-                <th>Name</th>
                 <th>Cas No</th>
-                <th>Özellik</th>
                 <th>Ambalaj</th>
                 <th>Saklama</th>
                 <th>Kritik limit</th>
                 <th>Birim</th>
-                <th>İşlem</th>
                 <th>Stok durumu</th>
+                <th>İşlem</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={i}><td colSpan={13}><div className={styles.skeleton} /></td></tr>
+                  <tr key={i}><td colSpan={11}><div className={styles.skeleton} /></td></tr>
                 ))
               ) : rows.length === 0 ? (
-                <tr><td colSpan={13}><div className={styles.empty}>Stok kaydı bulunamadı.</div></td></tr>
+                <tr><td colSpan={11}><div className={styles.empty}>Stok kaydı bulunamadı.</div></td></tr>
               ) : rows.map(row => (
                 <tr key={row.id}>
-                  <td className={styles.tdMono}>{row.barkod || "-"}</td>
+                  <td className={`${styles.tdMono} ${kys.barcodeText}`}>{row.barkod || "-"}</td>
                   <td><span className={kys.pill}>{row.malzemeTuru}</span></td>
                   <td className={styles.tdMono}>{row.kod}</td>
                   <td className={styles.tdName}>{row.ad}</td>
-                  <td className={styles.tdSecondary}>{row.name || "-"}</td>
                   <td className={styles.tdMono}>{row.casNo || "-"}</td>
-                  <td className={styles.tdAdres}>{row.ozellik || "-"}</td>
                   <td>{row.ambalaj || "-"}</td>
-                  <td className={styles.tdAdres}>{row.saklamaKosullari || "-"}</td>
+                  <td>{row.saklamaKosullari || "-"}</td>
                   <td className={styles.tdMono}>{fmt(row.kritikLimit)}</td>
                   <td>{row.birim}</td>
-                  <td>
-                    <div className={`${styles.actionBtns} ${kys.stockActions}`}>
-                      <Link className={styles.editBtn} title="Detay" href={`/laboratuvar/kys/stok-listesi/${row.id}`}>i</Link>
-                      <Link className={styles.editBtn} title="Yazdır" href={`/laboratuvar/kys/stok-karti-yazdir/${row.id}`}>⎙</Link>
-                      <button className={styles.editBtn} title="Düzenle" onClick={() => openEdit(row)}>✎</button>
-                    </div>
-                  </td>
                   <td>
                     <span className={`${kys.pill} ${row.kritikMi ? kys.pillDanger : kys.pillOk}`}>
                       <span className={row.kritikMi ? kys.lowStock : ""}>{fmt(row.stokMiktari)}</span> {row.birim}
                     </span>
+                  </td>
+                  <td>
+                    <div className={`${styles.actionBtns} ${kys.stockActions}`}>
+                      <Link className={`${styles.editBtn} ${kys.stockActionButton}`} title="Detay" aria-label={`${row.ad} stok detayını aç`} href={`/laboratuvar/kys/stok-listesi/${row.id}`}><Info size={14} aria-hidden="true" /></Link>
+                      <Link className={`${styles.editBtn} ${kys.stockActionButton}`} title="Yazdır" aria-label={`${row.ad} stok kartını yazdır`} href={`/laboratuvar/kys/stok-karti-yazdir/${row.id}`}><Printer size={14} aria-hidden="true" /></Link>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -248,19 +248,57 @@ export async function deleteKysRequest(id: number, userId: string) {
         )
     ).recordset[0];
     if (!row || row.Durum === "Silindi") throw new Error("Talep bulunamadı.");
-    await tx
-      .request()
-      .input("ID", id)
-      .query(
-        "UPDATE KysTalep SET Durum='Silindi',UpdatedAt=GETDATE() WHERE ID=@ID",
-      );
+    const accepted = (await tx.request().input("ID", id).query(`
+      SELECT k.ID, k.StokID, k.HareketID, k.GelenMiktar,
+             h.Miktar, h.HareketTipi, h.HedefBirimID, h.KaynakBirimID
+      FROM KysTalepKabul k LEFT JOIN KysStokHareket h ON h.ID=k.HareketID
+      WHERE k.TalepID=@ID ORDER BY k.StokID, k.HareketID
+    `)).recordset;
+    const stockTotals = new Map<number, number>();
+    const seenMovements = new Set<number>();
+    for (const acceptance of accepted) {
+      const stockId = Number(acceptance.StokID);
+      const quantity = Number(acceptance.GelenMiktar);
+      if (!stockId || !acceptance.HareketID || seenMovements.has(Number(acceptance.HareketID)) ||
+          acceptance.HareketTipi !== "Kabul" || !Number.isFinite(quantity) || quantity <= 0 ||
+          Math.abs(Number(acceptance.Miktar) - quantity) > 0.00001) {
+        throw new Error("Kabul ve stok hareketi eşleşmiyor. Talep silinmeden önce kayıtları kontrol edin.");
+      }
+      seenMovements.add(Number(acceptance.HareketID));
+      stockTotals.set(stockId, (stockTotals.get(stockId) || 0) + quantity);
+    }
+    for (const [stockId, quantity] of stockTotals) {
+      const stock = (await tx.request().input("ID", stockId).query(hasMysqlConfig()
+        ? "SELECT StokMiktari FROM KysStokKart WHERE ID=@ID FOR UPDATE"
+        : "SELECT StokMiktari FROM KysStokKart WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
+      if (!stock || Number(stock.StokMiktari) - quantity < -0.00001) {
+        throw new Error("Kabul edilen stok kullanılmış. Talebin silinmesi stok miktarını negatife düşüreceği için işlem yapılamadı.");
+      }
+      await tx.request().input("ID", stockId).input("D", -quantity)
+        .query("UPDATE KysStokKart SET StokMiktari=StokMiktari+@D,UpdatedAt=GETDATE() WHERE ID=@ID");
+    }
+    for (const acceptance of accepted) {
+      await balance(tx, Number(acceptance.StokID), acceptance.HedefBirimID == null
+        ? (acceptance.KaynakBirimID == null ? null : Number(acceptance.KaynakBirimID))
+        : Number(acceptance.HedefBirimID), -Number(acceptance.GelenMiktar));
+    }
+    // Purchases are stored on acceptances. Remove their files/movements first.
+    for (const statement of [
+      "DELETE FROM KysTalepBelge WHERE TalepID=@ID",
+      "DELETE FROM KysStokSertifika WHERE HareketID IN (SELECT HareketID FROM KysTalepKabul WHERE TalepID=@ID)",
+      "DELETE FROM KysStokHareket WHERE ID IN (SELECT HareketID FROM KysTalepKabul WHERE TalepID=@ID)",
+      "DELETE FROM KysTalepKabul WHERE TalepID=@ID",
+      "DELETE FROM KysTalepKalem WHERE TalepID=@ID",
+      "DELETE FROM KysTalepDuzeltmeLog WHERE TalepID=@ID",
+      "DELETE FROM KysTalep WHERE ID=@ID",
+    ]) await tx.request().input("ID", id).query(statement);
     await log(
       tx,
       id,
       null,
       row,
-      { ...row, Durum: "Silindi" },
-      { degerlendirenId: userId },
+      { silindi: true, kabulKayitSayisi: accepted.length },
+      { degerlendirenId: userId, duzeltmeAciklamasi: "Talep ve bağlı kabul/satın alma kayıtları silindi; kabul miktarları stoktan geri alındı." },
     );
     await tx.commit();
   } catch (e) {
@@ -364,6 +402,49 @@ async function balance(
       : "INSERT INTO KysStokBirimMiktar (StokID,BirimID,Miktar) VALUES (@S,@U,@D)",
   );
 }
+export async function deleteKysAcceptance(talepId: number, kabulId: number, userId: string) {
+  await ensureKysPurchaseSchema();
+  if (!Number.isSafeInteger(kabulId) || kabulId <= 0) throw new Error("Geçerli kabul kaydı seçin.");
+  const base = await cosmoPool;
+  const tx = await base.transaction();
+  await tx.begin();
+  try {
+    const parent = (await tx.request().input("ID", talepId).query(hasMysqlConfig()
+      ? "SELECT * FROM KysTalep WHERE ID=@ID FOR UPDATE"
+      : "SELECT * FROM KysTalep WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
+    if (!parent || parent.Durum === "Silindi") throw new Error("Talep bulunamadı.");
+    const before = (await tx.request().input("ID", kabulId).input("TalepID", talepId)
+      .query("SELECT * FROM KysTalepKabul WHERE ID=@ID AND TalepID=@TalepID")).recordset[0];
+    if (!before) throw new Error("Kabul kaydı bulunamadı.");
+    const movement = (await tx.request().input("ID", before.HareketID)
+      .query("SELECT * FROM KysStokHareket WHERE ID=@ID")).recordset[0];
+    const item = (await tx.request().input("ID", before.KalemID).input("TalepID", talepId)
+      .query("SELECT * FROM KysTalepKalem WHERE ID=@ID AND TalepID=@TalepID")).recordset[0];
+    const quantity = Number(before.GelenMiktar);
+    if (!movement || !item || movement.HareketTipi !== "Kabul" || Number(movement.StokID) !== Number(before.StokID) ||
+        !Number.isFinite(quantity) || quantity <= 0 || Math.abs(Number(movement.Miktar) - quantity) > 0.00001 ||
+        Number(item.KabulMiktari) - quantity < -0.00001) throw new Error("Kabul ve stok kayıtları eşleşmiyor.");
+    const stock = (await tx.request().input("ID", before.StokID).query(hasMysqlConfig()
+      ? "SELECT * FROM KysStokKart WHERE ID=@ID FOR UPDATE"
+      : "SELECT * FROM KysStokKart WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
+    if (!stock || Number(stock.StokMiktari) - quantity < -0.00001) throw new Error("Kabul edilen stok kullanılmış; silme işlemi stok miktarını negatife düşüremez.");
+    await tx.request().input("ID", before.StokID).input("D", -quantity)
+      .query("UPDATE KysStokKart SET StokMiktari=StokMiktari+@D,UpdatedAt=GETDATE() WHERE ID=@ID");
+    await balance(tx, Number(before.StokID), movement.HedefBirimID == null
+      ? (movement.KaynakBirimID == null ? null : Number(movement.KaynakBirimID)) : Number(movement.HedefBirimID), -quantity);
+    await tx.request().input("ID", kabulId).query("DELETE FROM KysTalepBelge WHERE KabulID=@ID");
+    await tx.request().input("ID", before.HareketID).query("DELETE FROM KysStokSertifika WHERE HareketID=@ID");
+    await tx.request().input("ID", before.HareketID).query("DELETE FROM KysStokHareket WHERE ID=@ID");
+    await tx.request().input("ID", kabulId).input("TalepID", talepId).query("DELETE FROM KysTalepKabul WHERE ID=@ID AND TalepID=@TalepID");
+    await tx.request().input("ID", before.KalemID).input("Q", Math.max(0, Number(item.KabulMiktari) - quantity))
+      .query("UPDATE KysTalepKalem SET KabulMiktari=@Q,Durum=CASE WHEN @Q=0 THEN 'Bekliyor' WHEN @Q>=Miktar THEN 'Tamamlandı' ELSE 'Kısmi Kabul' END WHERE ID=@ID");
+    if (parent.Durum !== "İptal") await tx.request().input("ID", talepId).query("UPDATE KysTalep SET Durum=CASE WHEN NOT EXISTS(SELECT 1 FROM KysTalepKalem WHERE TalepID=@ID AND KabulMiktari>0) THEN 'Onaylandı' WHEN NOT EXISTS(SELECT 1 FROM KysTalepKalem WHERE TalepID=@ID AND Durum<>'Tamamlandı') THEN 'Tamamlandı' ELSE 'Kısmi Kabul' END,UpdatedAt=GETDATE() WHERE ID=@ID");
+    await log(tx, talepId, kabulId, before, { silindi: true }, { degerlendirenId: userId, duzeltmeAciklamasi: "Hatalı stok kabulü silindi; stok miktarı geri alındı." });
+    await tx.commit();
+    return { ok: true };
+  } catch (e) { await tx.rollback(); throw e; }
+}
+
 export async function correctKysAcceptance(
   talepId: number,
   input: any,

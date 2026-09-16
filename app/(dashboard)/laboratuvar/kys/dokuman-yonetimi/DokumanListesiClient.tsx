@@ -356,12 +356,12 @@ export default function DokumanListesiClient() {
                 ) : rows.map(doc => (
                   <tr key={doc.id} className={styles.documentTableRow}>
                     <td className={tableStyles.tdMono}>
-                      <Link href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}`} className={styles.documentCodeLink}>
+                      <Link href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}${yetki.duzenle || yetki.kontrol || yetki.onayla ? "" : "/onizleme"}`} className={styles.documentCodeLink}>
                         {doc.kod}
                       </Link>
                     </td>
                     <td className={tableStyles.tdName}>
-                      <Link href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}`} className={styles.documentTitleLink}>
+                      <Link href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}${yetki.duzenle || yetki.kontrol || yetki.onayla ? "" : "/onizleme"}`} className={styles.documentTitleLink}>
                         {doc.baslik}
                       </Link>
                       {doc.onaylayanAd && (

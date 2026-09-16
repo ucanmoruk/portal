@@ -4,6 +4,7 @@ import { acceptKysRequestItem } from "@/lib/kysStore";
 import { getPortalUser } from "@/lib/portalYetki";
 import {
   correctKysAcceptance,
+  deleteKysAcceptance,
   readKysAcceptanceInput,
 } from "@/lib/kysPurchaseWorkflow";
 
@@ -76,4 +77,15 @@ export async function PATCH(
       { status: 400 },
     );
   }
+}
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getPortalUser();
+  if (!user) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
+  if (!user.can("laboratuvar.kys.talep-listesi")) return Response.json({ error: "Yetkiniz yok." }, { status: 403 });
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    return Response.json(await deleteKysAcceptance(Number(id), Number(body.kabulId), user.userId));
+  } catch (e) { return Response.json({ error: e instanceof Error ? e.message : "Kabul silinemedi." }, { status: 400 }); }
 }

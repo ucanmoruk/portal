@@ -1,3 +1,5 @@
+export const KYS_REQUEST_TYPES = ["Stok Malzeme", "Cihaz", "Eğitim", "Kalibrasyon", "Yeterlilik Testi"] as const;
+
 export const REQUEST_TRANSITIONS: Record<string, string[]> = {
   "Onay Bekliyor": ["Onaylandı", "İptal"],
   Onaylandı: ["İşleme Alındı", "İptal"],

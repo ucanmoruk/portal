@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { KabulMailData } from "@/lib/numuneKabulMail";
+import { buildKabulMail, type KabulMailData } from "@/lib/numuneKabulMailTemplate";
+import type { LaboratoryMailBrand } from "@/lib/laboratuvarMailTemplate";
 import styles from "./kabulMail.module.css";
 
 export default function KabulMailModal({ ids, onClose }: { ids: number[]; onClose: () => void }) {
-  const [data, setData] = useState<KabulMailData | null>(null);
+  const [data, setData] = useState<(KabulMailData & { brand: LaboratoryMailBrand }) | null>(null);
   const [to, setTo] = useState("");
   const [cc, setCc] = useState("");
   const [konu, setKonu] = useState("");
@@ -61,15 +62,9 @@ export default function KabulMailModal({ ids, onClose }: { ids: number[]; onClos
           <label>Konu<input maxLength={250} value={konu} onChange={e => setKonu(e.target.value)} style={fieldStyle} /></label>
           <label>Mesaj<textarea maxLength={5000} rows={3} value={mesaj} onChange={e => setMesaj(e.target.value)} style={fieldStyle} /></label>
         </fieldset>
-        <details className={styles.preview}><summary>Mail içeriğini ve numune tablosunu önizle</summary><div style={{ padding: 16, background: "white", color: "#242424", overflowX: "auto" }}>
-          <h2 style={{ color: "#17495b" }}>UNIQUE Analyse</h2><p>Sayın {data.firmaAd} Yetkilisi,</p><p style={{ whiteSpace: "pre-wrap" }}>{mesaj}</p>
-          <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead><tr>{["Evrak No", "Kabul Tarihi", "Ürün Adı", "Yapılacak Test", "Planlanan Termin Tarihi"].map(h => <th key={h} style={{ border: "1px solid #d9e1e5", background: "#edf3f5", padding: 8, textAlign: "left" }}>{h}</th>)}</tr></thead>
-            <tbody>{data.rows.map((r, i) => <tr key={`${r.id}-${i}`}>{[r.evrakNo,r.kabulTarihi,r.urunAdi,r.test,r.termin].map((v,j) => <td key={j} style={{ border: "1px solid #d9e1e5", padding: 8, verticalAlign: "top", overflowWrap: "anywhere" }}>{v}</td>)}</tr>)}</tbody>
-          </table></div>
-          <p>Termin tarihleri analizlerin tamamlanması için planlanan tarihlerdir. Süreyi etkileyebilecek bir durum oluşması hâlinde tarafınıza ayrıca bilgi verilecektir.</p>
-          <p>Sorularınız için bu e-postaya yanıt vererek bizimle iletişime geçebilirsiniz.</p><p>Saygılarımızla,<br /><strong>UNIQUE Analyse</strong></p>
-        </div></details>
+        <details className={styles.preview}><summary>Mail içeriğini ve numune tablosunu önizle</summary>
+<iframe title="Bilgi maili önizlemesi" sandbox="" srcDoc={buildKabulMail(data, mesaj, data.brand, "/unique-logo.png").html} style={{ width: "100%", height: 560, border: 0, background: "white" }} />
+</details>
       </> : !error && <p role="status">Mail önizlemesi hazırlanıyor…</p>}
       <div className={styles.actions}><button onClick={onClose} disabled={busy}>{sent ? "Kapat" : "Vazgeç"}</button>{!sent && <button className={styles.send} disabled={!data || busy || !to.trim() || !konu.trim()} onClick={send}>{busy ? "Gönderiliyor…" : "Gönder"}</button>}</div>
     </section>

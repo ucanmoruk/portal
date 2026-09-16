@@ -11,6 +11,7 @@ import { getRaporPdfBaseUrl } from "@/lib/raporPdfBaseUrl";
 import { getAllSettings } from "@/lib/settings";
 import { baseReportFormat, isEnglishReportFormat } from "@/lib/raporFormatLanguage";
 import nodemailer from "nodemailer";
+import { laboratoryMailBrand, renderLaboratoryMail } from "@/lib/laboratuvarMailTemplate";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
@@ -50,9 +51,6 @@ export async function POST(request: Request) {
     // SMTP ayarları
     const cfg = await getAllSettings();
     const sirketAdi   = cfg.SIRKET_ADI   || process.env.SIRKET_ADI   || "UNIQUE Analiz";
-    const sirketWeb   = cfg.SIRKET_WEB   || process.env.SIRKET_WEB   || "";
-    const sirketEmail = cfg.SIRKET_EMAIL || process.env.SIRKET_EMAIL || "";
-    const sirketAdres = cfg.SIRKET_ADRES || process.env.SIRKET_ADRES || "";
     // Host/user'da gizli boşluk veya yanlışlıkla yapıştırılan protokol öneki
     // (https://, smtp://) getaddrinfo'yu bozar → temizle.
     const mailHost    = (cfg.MAIL_HOST || process.env.MAIL_HOST || "")
@@ -116,47 +114,12 @@ export async function POST(request: Request) {
       return Response.json({ error: "Onaylı rapor bulunamadı veya PDF üretilemedi." }, { status: 404 });
     }
 
-    // Mail gövdesi
-    const esc = (s: string) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
-    const mesajHtml = mesaj
-      ? `<p style="margin:0 0 16px 0;color:#1d1d1f;line-height:1.6;white-space:pre-wrap;">${esc(mesaj)}</p>`
-      : "";
-    const raporListHtml = raporOzetler.map(r => `
-      <tr>
-        <td style="padding:6px 10px;border-bottom:1px solid #eaeaea;color:#1d1d1f;font-weight:600;">${esc(r.raporNo)}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eaeaea;color:#1d1d1f;">${esc(r.numune)}</td>
-      </tr>`).join("");
-
-    const html = `<!doctype html>
-<html lang="tr"><head><meta charset="utf-8"><title>${esc(sirketAdi)} — Analiz Raporu</title></head>
-<body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;">
-  <div style="max-width:640px;margin:24px auto;background:#fff;border-radius:14px;overflow:hidden;">
-    <div style="padding:24px 28px;border-bottom:1px solid #eaeaea;">
-      <img src="cid:unique-logo" alt="${esc(sirketAdi)}" style="height:32px;display:block;"/>
-    </div>
-    <div style="padding:28px;">
-      <h2 style="margin:0 0 16px 0;font-size:18px;color:#1d1d1f;font-weight:700;">Analiz Raporunuz</h2>
-      ${mesajHtml}
-      <p style="margin:0 0 12px 0;color:#86868b;font-size:14px;">Ekteki PDF'lerde aşağıdaki rapor(lar) yer almaktadır:</p>
-      <table style="width:100%;border-collapse:collapse;border:1px solid #eaeaea;border-radius:8px;overflow:hidden;font-size:13px;">
-        <thead>
-          <tr style="background:#ffffff;">
-            <th style="padding:8px 10px;text-align:left;color:#6e6e73;font-weight:600;border-bottom:1px solid #eaeaea;">Rapor No</th>
-            <th style="padding:8px 10px;text-align:left;color:#6e6e73;font-weight:600;border-bottom:1px solid #eaeaea;">Numune</th>
-          </tr>
-        </thead>
-        <tbody>${raporListHtml}</tbody>
-      </table>
-      <p style="margin:18px 0 0 0;font-size:12px;color:#86868b;">Bu raporlar dijital olarak imzalanmıştır. Doğrulama için PDF üzerindeki QR kodu veya <a href="https://dogrulama.uniqueanalyse.com" style="color:#0071e3;text-decoration:none;">dogrulama.uniqueanalyse.com</a> kullanılabilir.</p>
-    </div>
-    <div style="padding:18px 28px;background:#ffffff;border-top:1px solid #eaeaea;font-size:12px;color:#86868b;">
-      <strong style="color:#1d1d1f;">${esc(sirketAdi)}</strong><br/>
-      ${sirketAdres ? esc(sirketAdres) + "<br/>" : ""}
-      ${sirketEmail ? `<a href="mailto:${esc(sirketEmail)}" style="color:#0071e3;text-decoration:none;">${esc(sirketEmail)}</a>` : ""}
-      ${sirketWeb ? ` · <a href="${esc(sirketWeb)}" style="color:#0071e3;text-decoration:none;">${esc(sirketWeb)}</a>` : ""}
-    </div>
-  </div>
-</body></html>`;
+    const html = renderLaboratoryMail({
+      brand: laboratoryMailBrand(cfg), title: "Analiz Raporunuz", message: mesaj,
+      intro: "Ekteki PDF'lerde aşağıdaki rapor(lar) yer almaktadır:",
+      headings: ["Rapor No", "Numune"], rows: raporOzetler.map(r => [r.raporNo, r.numune]),
+      note: 'Bu raporlar dijital olarak imzalanmıştır. Doğrulama için PDF üzerindeki QR kodu veya <a href="https://dogrulama.uniqueanalyse.com" style="color:#0071e3;text-decoration:none;">dogrulama.uniqueanalyse.com</a> kullanılabilir.',
+    });
 
     // Logo eklentisi (cid)
     const logoPath = path.join(process.cwd(), "public", "unique-logo.png");

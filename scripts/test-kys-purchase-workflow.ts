@@ -128,24 +128,16 @@ async function main() {
     );
     await workflow.deleteKysRequest(requestId, "test");
     assert.equal(await store.getKysRequestDetail(requestId, true), null);
-    await workflow.restoreKysRequest(requestId, "test");
+    assert.equal((await workflow.getKysRequestFiles(requestId)).length, 0);
     assert.equal(
-      (await store.getKysRequestDetail(requestId, true))?.talep.durum,
-      "Kısmi Kabul",
+      Number((await outer.request().input("ID", stockId).query("SELECT StokMiktari FROM KysStokKart WHERE ID=@ID")).recordset[0].StokMiktari),
+      0,
     );
     assert.equal(
-      Number(
-        (
-          await outer
-            .request()
-            .input("ID", stockId)
-            .query("SELECT StokMiktari FROM KysStokKart WHERE ID=@ID")
-        ).recordset[0].StokMiktari,
-      ),
-      8,
-    );
-    console.log(
-      "PASS: durum ilerleme, stok birimi, tekrar kabul engeli, farkla düzeltme, toplam hesaplama, belge, pasif tedarikçi, arşivleme.",
+      Number((await outer.request().input("ID", requestId).query("SELECT COUNT(*) AS total FROM KysTalepKabul WHERE TalepID=@ID")).recordset[0].total),
+      0,
+    );    console.log(
+      "PASS: durum ilerleme, stok birimi, tekrar kabul engeli, farkla düzeltme, toplam hesaplama, belge, pasif tedarikçi, talep ve kabul/satın alma silme, stok geri alma.",
     );
   } finally {
     (cosmoPool as any).then = originalThen;

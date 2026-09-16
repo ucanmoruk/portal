@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { ensureKysRequestNumbers, nextKysRequestNumber } from "@/lib/kysRequestNumbers";
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { requireRequestAcceptance, requireRequestTransition } from "@/lib/kysRequestRules";
@@ -927,6 +928,7 @@ export async function listKysExpiry(params: { search?: string; days?: number; pa
 
 export async function listKysRequests(params: { search?: string; durum?: string; tur?: string; page?: number; limit?: number }) {
   await ensureKysSchema();
+  await ensureKysRequestNumbers(await cosmoPool);
   const pool = await cosmoPool;
   const page = Math.max(1, Number(params.page || 1));
   const limit = Math.min(100, Math.max(5, Number(params.limit || 20)));
@@ -981,13 +983,14 @@ function mapRequest(r: AnyRow) {
 
 export async function createKysRequest(input: KysRequestInput) {
   await ensureKysSchema();
+  await ensureKysRequestNumbers(await cosmoPool);
   if(!Array.isArray(input.kalemler)||!input.kalemler.length||input.kalemler.length>100)throw new Error("1–100 talep kalemi ekleyin.");
   if(input.kalemler.some(k=>!text(k.malzemeAdi)||numberValue(k.miktar,NaN)<=0||!Number.isFinite(numberValue(k.miktar,NaN))))throw new Error("Her kalemin adı ve pozitif miktarı zorunludur.");
   const basePool = await cosmoPool;
   const pool=await basePool.transaction();await pool.begin();
   try {
-  const talepNo = `KYS-${new Date().getFullYear()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
-  const talepTuru = text(input.talepTuru) || "Sarf";
+  const talepNo = await nextKysRequestNumber(pool);
+  const talepTuru = text(input.talepTuru) || "Stok Malzeme";
   const res = await pool.request()
     .input("TalepNo", talepNo)
     .input("TalepTuru", talepTuru)
@@ -1030,6 +1033,7 @@ export async function createKysRequest(input: KysRequestInput) {
 
 export async function getKysRequestDetail(id: number, includePurchaseDetails = false, executor?: any) {
   await ensureKysSchema();
+  await ensureKysRequestNumbers(await cosmoPool);
   const pool = executor || await cosmoPool;
   const reqRes = await pool.request().input("ID", id).query(`SELECT * FROM KysTalep WHERE ID = @ID`);
   const talep = reqRes.recordset[0];

@@ -21,15 +21,11 @@ export type DokumanYetkiOzeti = {
   isAdmin: boolean;
 };
 
-/**
- * Yazma yetkileri (oluştur/düzenle) modül erişimine de düşer: modüle erişimi olan
- * kullanıcı taslak hazırlayabilir. Onay yetkileri (kontrol/yayın) ise SADECE ilgili
- * sanal anahtar atanmışsa verilir — görev ayrılığı korunur.
- */
+/** Görüntüleme erişimi yazma yetkisi vermez; görevler ayrı atanır. */
 export function dokumanYetkileri(user: PortalUser): DokumanYetkiOzeti {
   const goruntule = user.can(DOKUMAN_YETKI.goruntule);
-  const olustur = user.can(DOKUMAN_YETKI.olustur) || goruntule;
-  const duzenle = user.can(DOKUMAN_YETKI.duzenle) || goruntule;
+  const olustur = user.can(DOKUMAN_YETKI.olustur);
+  const duzenle = user.can(DOKUMAN_YETKI.duzenle);
   return {
     goruntule,
     olustur,

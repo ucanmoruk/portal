@@ -1,7 +1,7 @@
 import { cosmoPool } from "@/lib/db";
-
-export const KABUL_MAIL_MESAJ = "Laboratuvarımıza ilettiğiniz numunelerin kabul işlemleri tamamlanmıştır. Numuneleriniz ve gerçekleştirilecek analizlere ilişkin bilgiler aşağıda yer almaktadır.";
-const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+import type { KabulMailData, KabulMailRow } from "@/lib/numuneKabulMailTemplate";
+export { buildKabulMail, KABUL_MAIL_MESAJ } from "@/lib/numuneKabulMailTemplate";
+export type { KabulMailData, KabulMailRow } from "@/lib/numuneKabulMailTemplate";
 export function kabulMailDate(value: unknown): string {
   if (!value || String(value).startsWith("0000-")) return "Belirtilmedi";
   const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -9,8 +9,6 @@ export function kabulMailDate(value: unknown): string {
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? "Belirtilmedi" : date.toLocaleDateString("tr-TR", { timeZone: "Europe/Istanbul" });
 }
-export interface KabulMailRow { id: number; evrakNo: string; kabulTarihi: string; urunAdi: string; test: string; termin: string }
-export interface KabulMailData { firmaAd: string; email: string; konu: string; rows: KabulMailRow[] }
 export async function loadKabulMailData(ids: number[]): Promise<KabulMailData> {
   const pool = await cosmoPool;
   const req = pool.request();
@@ -37,12 +35,4 @@ export async function loadKabulMailData(ids: number[]): Promise<KabulMailData> {
     }
   }
   return { firmaAd: samples[0].Firma_Adi || "Müşterimiz", email: samples[0].Mail || "", konu: `Numune Kabul Bilgilendirmesi – Evrak No: ${[...new Set(samples.map(n => n.Evrak_No))].join(", ")}`, rows };
-}
-export function buildKabulMail(data: KabulMailData, mesaj = KABUL_MAIL_MESAJ) {
-  const headings = ["Evrak No", "Kabul Tarihi", "Ürün Adı", "Yapılacak Test", "Planlanan Termin Tarihi"];
-  const cells = data.rows.map(r => [r.evrakNo, r.kabulTarihi, r.urunAdi, r.test, r.termin]);
-  const footer = "Termin tarihleri analizlerin tamamlanması için planlanan tarihlerdir. Süreyi etkileyebilecek bir durum oluşması hâlinde tarafınıza ayrıca bilgi verilecektir.";
-  const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#242424;max-width:1000px;margin:auto"><h2 style="color:#17495b">UNIQUE Analyse</h2><p>Sayın ${escapeHtml(data.firmaAd)} Yetkilisi,</p><p>${escapeHtml(mesaj).replace(/\n/g,"<br>")}</p><table style="width:100%;border-collapse:collapse;table-layout:fixed"><thead><tr>${headings.map(h => `<th style="border:1px solid #d9e1e5;background:#edf3f5;padding:10px;text-align:left">${h}</th>`).join("")}</tr></thead><tbody>${cells.map(row => `<tr>${row.map(c => `<td style="border:1px solid #d9e1e5;padding:9px;vertical-align:top;overflow-wrap:anywhere">${escapeHtml(c)}</td>`).join("")}</tr>`).join("")}</tbody></table><p>${footer}</p><p>Sorularınız için bu e-postaya yanıt vererek bizimle iletişime geçebilirsiniz.</p><p>Saygılarımızla,<br><strong>UNIQUE Analyse</strong></p></div>`;
-  const text = `Sayın ${data.firmaAd} Yetkilisi,\n\n${mesaj}\n\n${headings.join(" | ")}\n${cells.map(r=>r.join(" | ")).join("\n")}\n\n${footer}\n\nSaygılarımızla,\nUNIQUE Analyse`;
-  return { html, text };
 }

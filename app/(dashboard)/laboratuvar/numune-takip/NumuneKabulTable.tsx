@@ -518,7 +518,7 @@ export default function NumuneKabulTable() {
             <>
               <button className={styles.addBtn} style={{ padding: "7px 12px", fontSize: 12 }}
                 onClick={() => setMailIds(groups.flatMap(g => g.numuneler.filter(n => selectedIds.has(n.ID)).map(n => n.ID)))}>
-                Bilgi Maili Gönder ({selectedVisibleCount})
+                Bilgi
               </button>
               <button
                 className={styles.addBtn}

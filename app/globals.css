@@ -1,4 +1,11 @@
-@import "tailwindcss";
+/* Scan application sources only; build backups and exports can be very large. */
+@import "tailwindcss" source(none);
+@source "./";
+@source "../components";
+@source "../lib";
+@source "../data";
+@source "../types";
+@source "../public";
 
 *, *::before, *::after {
   box-sizing: border-box;

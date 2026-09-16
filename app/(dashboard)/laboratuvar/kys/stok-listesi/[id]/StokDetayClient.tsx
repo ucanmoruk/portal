@@ -18,6 +18,7 @@ type Detail = {
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
+const stockEditFields = [["kod", "Kod"], ["ad", "Ürün adı"], ["name", "İngilizce adı"], ["barkod", "Barkod"], ["malzemeTuru", "Tür"], ["casNo", "CAS No"], ["ambalaj", "Ambalaj"], ["saklamaKosullari", "Saklama koşulları"], ["kritikLimit", "Kritik limit"], ["birim", "Birim"], ["stokDurumu", "Stok durumu"], ["ozellik", "Özellik"]] as const;
 
 function fmt(value: number) {
   return Number(value || 0).toLocaleString("tr-TR", { maximumFractionDigits: 4 });
@@ -52,6 +53,26 @@ export default function StokDetayClient({ id }: { id: number }) {
   });
   const [uploading, setUploading] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
+
+  function openEdit() {
+    setEditForm(Object.fromEntries(stockEditFields.map(([key]) => [key, String(detail?.stock[key] ?? "")])));
+    setFormError("");
+    setEditOpen(true);
+  }
+
+  async function saveStock() {
+    if (saving) return;
+    setSaving(true); setFormError("");
+    try {
+      const r = await fetch(`/api/kys/stoklar/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editForm) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Stok kartı kaydedilemedi.");
+      setEditOpen(false); await fetchDetail();
+    } catch (e: any) { setFormError(e.message); }
+    finally { setSaving(false); }
+  }
 
   const fetchDetail = useCallback(async () => {
     setLoading(true);
@@ -150,6 +171,7 @@ export default function StokDetayClient({ id }: { id: number }) {
           </span>
         </div>
         <div className={styles.toolbarRight}>
+          <button className={styles.cancelBtn} onClick={openEdit}>Stok kartını düzenle</button>
           <Link href={`/laboratuvar/kys/stok-karti-yazdir/${id}`} className={styles.addBtn}>Stok kartı yazdır</Link>
         </div>
       </div>
@@ -168,7 +190,7 @@ export default function StokDetayClient({ id }: { id: number }) {
         </div>
 
         {tab === "bilgi" && (
-          <div className={kys.detailGrid}>
+          <div className={kys.stockInfoGrid}>
             <div className={kys.stockVisualPanel}>
               <div className={kys.stockVisualBox}>
                 {s.hasImage ? (
@@ -188,26 +210,26 @@ export default function StokDetayClient({ id }: { id: number }) {
                 <div className={kys.detailLabel}>Ürün görseli</div>
                 <div className={kys.formHint}>Stok kartında ürüne ait fotoğrafı saklayabilirsiniz. JPG, PNG veya WebP gibi görseller desteklenir.</div>
                 <div className={kys.inlineActions}>
-                  <input type="file" accept="image/*" onChange={e => uploadImage(e.target.files?.[0])} disabled={imageUploading} />
+                  <input className={kys.fileInput} aria-label="Ürün görseli seç" type="file" accept="image/*" onChange={e => uploadImage(e.target.files?.[0])} disabled={imageUploading} />
                   <span className={kys.formHint}>{imageUploading ? "Yükleniyor..." : s.gorselDosyaAdi || "Görsel seçin"}</span>
                 </div>
               </div>
             </div>
             {[
+              ["Ürün adı", s.ad],
+              ["İngilizce adı", s.name],
+              ["Özellik", s.ozellik],
               ["Barkod", s.barkod],
               ["Malzeme türü", s.malzemeTuru],
               ["Kod", s.kod],
-              ["Ad", s.ad],
-              ["Name", s.name],
               ["Cas No", s.casNo],
               ["Ambalaj", s.ambalaj],
               ["Saklama Koşulları", s.saklamaKosullari],
               ["Kritik Limit", `${fmt(s.kritikLimit)} ${s.birim}`],
               ["Stok Durumu", s.stokDurumu],
               ["Birim", s.birim],
-              ["Özellik", s.ozellik],
             ].map(([label, value]) => (
-              <div className={kys.detailItem} key={label}>
+              <div className={`${kys.detailItem} ${label === "Özellik" ? kys.stockInfoFull : ["Ürün adı", "İngilizce adı", "Saklama Koşulları"].includes(label) ? kys.stockInfoWide : ""}`} key={label}>
                 <div className={kys.detailLabel}>{label}</div>
                 <div className={kys.detailValue}>{value || "-"}</div>
               </div>
@@ -253,7 +275,7 @@ export default function StokDetayClient({ id }: { id: number }) {
         {tab === "sertifika" && (
           <div style={{ display: "grid", gap: 14 }}>
             <div className={kys.inlineActions}>
-              <input type="file" onChange={e => uploadCert(e.target.files?.[0])} disabled={uploading} />
+              <input className={kys.fileInput} aria-label="Stok sertifikası seç" type="file" onChange={e => uploadCert(e.target.files?.[0])} disabled={uploading} />
               <span className={kys.formHint}>{uploading ? "Yükleniyor..." : "Ürünle gelen sertifikaları buraya yükleyebilirsiniz."}</span>
             </div>
             <table className={kys.miniTable}>
@@ -273,6 +295,25 @@ export default function StokDetayClient({ id }: { id: number }) {
         )}
       </div>
 
+      {editOpen && (
+        <div className={styles.modalOverlay}>
+          <form className={styles.modal} style={{ maxWidth: 820 }} role="dialog" aria-modal="true" aria-labelledby="stock-edit-title" onSubmit={e => { e.preventDefault(); void saveStock(); }}>
+            <div className={styles.modalHeader}><h2 id="stock-edit-title">Stok kartını düzenle</h2><button type="button" disabled={saving} className={styles.modalClose} aria-label="Kapat" onClick={() => setEditOpen(false)}>×</button></div>
+            <div className={styles.modalBody}>
+              {formError && <div role="alert" className={styles.formError}>{formError}</div>}
+              <div className={`${styles.formGrid} ${kys.supplierGrid}`}>
+                {stockEditFields.map(([key, label]) => <div key={key} className={`${styles.formGroup} ${["ad", "name", "ozellik", "saklamaKosullari"].includes(key) ? kys.supplierFullWidth : ""}`}>
+                  <label htmlFor={`stock-edit-${key}`}>{label}{["ad", "kod"].includes(key) && <span className={styles.required}> *</span>}</label>
+                  {key === "stokDurumu" ? <select id={`stock-edit-${key}`} disabled={saving} value={editForm[key] || "Aktif"} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}><option>Aktif</option><option>Pasif</option></select>
+                    : key === "ozellik" ? <textarea id={`stock-edit-${key}`} rows={3} disabled={saving} value={editForm[key] || ""} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} />
+                    : <input id={`stock-edit-${key}`} required={["ad", "kod"].includes(key)} disabled={saving} inputMode={key === "kritikLimit" ? "decimal" : undefined} value={editForm[key] || ""} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} />}
+                </div>)}
+              </div>
+            </div>
+            <div className={styles.modalFooter}><button type="button" disabled={saving} className={styles.cancelBtn} onClick={() => setEditOpen(false)}>Vazgeç</button><button type="submit" className={styles.saveBtn} disabled={saving}>{saving ? "Kaydediliyor…" : "Kaydet"}</button></div>
+          </form>
+        </div>
+      )}
       {moveOpen && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 760 }}>
