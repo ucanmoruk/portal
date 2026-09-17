@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
+import { withUgdTransaction, saveUgdFormulaRows } from "@/lib/ugdPersistence";
 import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 import { type NextRequest } from "next/server";
 
@@ -18,25 +19,7 @@ export async function POST(request: NextRequest) {
 
     const pool = await poolPromise;
 
-    // Önce bu ürüne ait eski formül satırlarını sil
-    await pool.request()
-      .input("urunId", urunId)
-      .query("DELETE FROM rUGDFormul WHERE UrunID = @urunId");
-
-    // Yeni satırları ekle
-    for (const row of rows) {
-      await pool.request()
-        .input("urunId", urunId)
-        .input("hammaddeId", row.cosingId ?? null)
-        .input("inciName", row.INCIName ?? row.inputName ?? "")
-        .input("miktar", String(row.inputAmount ?? row.miktar ?? "0"))
-        .input("dap", row.dap ?? 100)
-        .input("noael", row.noael ? String(row.noael) : null)
-        .query(`
-          INSERT INTO rUGDFormul (UrunID, HammaddeID, INCIName, Miktar, DaP, Noael)
-          VALUES (@urunId, @hammaddeId, @inciName, @miktar, @dap, @noael)
-        `);
-    }
+    await withUgdTransaction(pool, transaction => saveUgdFormulaRows(transaction, Number(urunId), rows));
 
     return Response.json({ message: "Formül kaydedildi", count: rows.length });
   } catch (e: any) {

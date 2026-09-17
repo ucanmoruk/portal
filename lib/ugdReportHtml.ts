@@ -1,3 +1,4 @@
+import { calcSED, fmtSED, parseUgdNumber } from "@/lib/ugdCalculations";
 import { LAB_UGDR_REPORT_CONTENT_OVERRIDES } from "@/lib/reportContent/labUgdrReportContent";
 import { UGD_REPORT_CONTENT_OVERRIDES } from "@/lib/reportContent/ugdReportContent";
 import { toPublicAssetDataUri } from "@/lib/publicAssetDataUri";
@@ -214,20 +215,13 @@ function mergeReportCopy(language: ReportLanguage, profile: ReportProfile) {
   };
 }
 
-function calcSED(a: number, c: number, dap: number) {
-  return a * (c / 100) * (dap / 100);
-}
 
 function calcMOS(noael: string | undefined, sed: number) {
-  const n = parseFloat(text(noael));
+  const n = parseUgdNumber(noael);
   if (!n || !sed) return null;
   return n / sed;
 }
 
-function fmtSED(value: number) {
-  if (!value) return empty;
-  return value < 0.0001 ? value.toExponential(3) : value.toFixed(5);
-}
 
 function fmtMOS(value: number | null) {
   if (value === null) return empty;
@@ -288,8 +282,8 @@ function formulaRows(rows: IngredientRow[], a: number, copy: typeof reportCopy[R
   }
 
   return rows.map((row) => {
-    const concentration = parseFloat(text(row.inputAmount, "0").replace(",", ".")) || 0;
-    const dap = typeof row.dap === "number" ? row.dap : parseFloat(text(row.dap, "100")) || 100;
+    const concentration = parseUgdNumber(row.inputAmount);
+    const dap = parseUgdNumber(row.dap, 100);
     const sed = calcSED(a, concentration, dap);
     const mos = calcMOS(row.noael, sed);
     const ok = mos === null || mos >= 100;
@@ -316,8 +310,8 @@ function preservativeRows(rows: IngredientRow[], copy: typeof reportCopy[ReportL
   if (!source.length) return `<tr><td colspan="7" class="muted">${esc(copy.preservativeEmpty)}</td></tr>`;
 
   return source.map((row) => {
-    const concentration = parseFloat(text(row.inputAmount, "0").replace(",", ".")) || 0;
-    const dap = typeof row.dap === "number" ? row.dap : 100;
+    const concentration = parseUgdNumber(row.inputAmount);
+    const dap = parseUgdNumber(row.dap, 100);
     const sed = calcSED(269, concentration, dap);
     const mos = calcMOS(row.noael, sed);
     return `<tr>
@@ -337,8 +331,8 @@ function allergenRows(rows: IngredientRow[], a: number, copy: typeof reportCopy[
   if (!source.length) return `<tr><td colspan="8" class="muted">${esc(copy.allergenEmpty)}</td></tr>`;
 
   return source.map((row) => {
-    const concentration = parseFloat(text(row.inputAmount, "0").replace(",", ".")) || 0;
-    const dap = typeof row.dap === "number" ? row.dap : 100;
+    const concentration = parseUgdNumber(row.inputAmount);
+    const dap = parseUgdNumber(row.dap, 100);
     const sed = calcSED(a, concentration, dap);
     const mos = calcMOS(row.noael, sed);
     return `<tr>
@@ -392,7 +386,7 @@ export function renderUgdReportHtml(input: UGDReportInput) {
   const language = pickLanguage(input.language);
   const profile: ReportProfile = input.profile === "lab" ? "lab" : "ugd";
   const copy = mergeReportCopy(language, profile);
-  const a = parseFloat(text(f.A, "0").replace(",", ".")) || 0;
+  const a = parseUgdNumber(f.A);
   const maruziyet = localizedField(f, "MaruziyetAciklama", language);
   const productName = localizedField(f, "Urun", language, empty);
   const useText = localizedField(f, "Kullanim", language, empty);

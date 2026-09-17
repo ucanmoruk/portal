@@ -1,5 +1,5 @@
 import mssql from "mssql";
-import { createPool } from "@vercel/postgres";
+import { createPool, type VercelPoolClient } from "@vercel/postgres";
 import { installSocketGuard } from "./socketGuard";
 import { MysqlCompatPool, hasMysqlConfig } from "./mysqlCompat";
 
@@ -503,6 +503,7 @@ const translateSql = async (rawSql: string, inputs: Record<string, InputValue>) 
 };
 
 class PgCompatRequest {
+  constructor(private connection?: VercelPoolClient) {}
   private inputs: Record<string, InputValue> = {};
 
   input(name: string, value: InputValue) {
@@ -518,7 +519,7 @@ class PgCompatRequest {
       console.log("PG SQL:", translated.sql, translated.values);
     }
 
-    const result = await getPgPool().query(translated.sql, translated.values);
+    const result = await (this.connection || getPgPool()).query(translated.sql, translated.values);
     const recordset = result.rows.map((row) => {
       const next: Record<string, unknown> = { ...row };
       for (const alias of translated.aliases) {
@@ -566,11 +567,28 @@ class PgCompatPool {
   }
 
   transaction() {
+    let connection: VercelPoolClient | undefined;
+    const finish = async (statement: "COMMIT" | "ROLLBACK") => {
+      if (!connection) throw new Error("Transaction has not begun.");
+      const current = connection;
+      connection = undefined;
+      try { await current.query(statement); }
+      catch (error) { current.release(true); throw error; }
+      current.release();
+    };
     return {
-      begin: async () => undefined,
-      commit: async () => undefined,
-      rollback: async () => undefined,
-      request: () => new PgCompatRequest(),
+      begin: async () => {
+        if (connection) throw new Error("Transaction already begun.");
+        connection = await getPgPool().connect();
+        try { await connection.query("BEGIN"); }
+        catch (error) { connection.release(true); connection = undefined; throw error; }
+      },
+      commit: () => finish("COMMIT"),
+      rollback: () => finish("ROLLBACK"),
+      request: () => {
+        if (!connection) throw new Error("Transaction has not begun.");
+        return new PgCompatRequest(connection);
+      },
     };
   }
 }

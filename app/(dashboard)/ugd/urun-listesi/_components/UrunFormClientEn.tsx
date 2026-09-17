@@ -1,5 +1,8 @@
 "use client";
 
+import { calcSED, fmtSED, parseUgdNumber } from "@/lib/ugdCalculations";
+
+
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import styles from '@/app/styles/table.module.css';
@@ -9,6 +12,7 @@ import * as XLSX from "xlsx";
 interface MatchedIngredient {
   inputName: string; inputAmount: string; matched: boolean;
   cosingId?: number | null;
+  Kategori?: string | null;
   INCIName: string | null; Cas: string | null; Ec: string | null;
   Functions: string | null; Regulation: string | null;
   YonetmelikNo?: string | null; YonetmelikUrunTipi?: string | null;
@@ -43,17 +47,10 @@ const DEFAULTS = {
 };
 
 // ── Hesaplama yardımcıları (SED = A × C/100 × DaP/100) ───────────────────────
-function calcSED(a: number, c: number, dap: number): number {
-  return a * (c / 100) * (dap / 100);
-}
 function calcMOS(noael: string, sed: number): number | null {
-  const n = parseFloat(noael);
+  const n = parseUgdNumber(noael);
   if (!n || !sed) return null;
   return n / sed;
-}
-function fmtSED(v: number): string {
-  if (!v) return "—";
-  return v < 0.0001 ? v.toExponential(3) : v.toFixed(5);
 }
 function fmtMOS(v: number | null): string {
   if (v === null) return "—";
@@ -430,6 +427,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 
   const [activeTab, setActiveTab] = useState('genel');
   const [saving, setSaving] = useState(false);
+  const [editLoadError, setEditLoadError] = useState("");
   const [savedId, setSavedId] = useState<string | null>(editId ?? null);
   const [globalError, setGlobalError] = useState("");
   const [savedOk, setSavedOk] = useState(false);
@@ -528,8 +526,8 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 
     // Ürün bilgileri + formül satırları paralel yükle
     Promise.all([
-      fetch(isLabSource ? `/api/laboratuvar/ugdr/${editId}` : `/api/urunler/${editId}`).then(r => r.ok ? r.json() : null),
-      fetch(isLabSource ? `/api/laboratuvar/ugdr/${editId}/formul` : `/api/urunler/formul?urunId=${editId}`).then(r => r.ok ? r.json() : []),
+      fetch(isLabSource ? `/api/laboratuvar/ugdr/${editId}` : `/api/urunler/${editId}`).then(async r => { if (!r.ok) throw new Error("Ürün bilgileri yüklenemedi. Lütfen yeniden deneyin."); return r.json(); }),
+      fetch(isLabSource ? `/api/laboratuvar/ugdr/${editId}/formul` : `/api/urunler/formul?urunId=${editId}`).then(async r => { if (!r.ok) throw new Error("Ürün formülü yüklenemedi. Verilerin korunması için sayfayı yeniden yükleyin."); return r.json(); }),
     ])
       .then(([data, formulData]) => {
         if (data) {
@@ -632,6 +630,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
             Cas: r.Cas || null,
             Ec: r.EC || null,
             Functions: r.Functions || null,
+            Kategori: r.Kategori || null,
             Regulation: r.Regulation || null,
             YonetmelikNo: r.YonetmelikNo || null,
             YonetmelikUrunTipi: r.YonetmelikUrunTipi || null,
@@ -648,7 +647,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
           setFormulFromDB(true);
         }
       })
-      .catch(() => {})
+      .catch(error => setEditLoadError(error.message))
       .finally(() => setLoadingEdit(false));
   }, [editId, isLabSource]);
 
@@ -828,24 +827,19 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
           const res = await fetch("/api/urunler", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              Tarih: form.Tarih, RaporNo: form.RaporNo, Versiyon: form.Versiyon,
-              FirmaID: form.FirmaID, Barkod: form.Barkod, Urun: form.Urun,
-              UrunEn: form.UrunEn, Miktar: form.Miktar, Tip1: form.Tip1,
-              Tip2: form.Tip2, Uygulama: form.Uygulama, Hedef: form.Hedef,
-              A: form.A, RaporDurum: "Tamamlandı",
-            }),
+            body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı", formulRows: formulResults }),
           });
           if (!res.ok) throw new Error((await res.json()).error || "Kayıt başarısız");
           const data = await res.json();
-          if (data.id) setSavedId(String(data.id));
+          if (!Number.isInteger(Number(data.id)) || Number(data.id) <= 0) throw new Error("Ürün kaydı doğrulanamadı. Lütfen yeniden deneyin.");
+          setSavedId(String(data.id));
         } else {
           const targetId = savedId || editId;
           if (!targetId) throw new Error("Guncellenecek kayit bulunamadi.");
           const res = await fetch(isLabSource ? `/api/laboratuvar/ugdr/${targetId}` : `/api/urunler/${targetId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
+            body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı", ...(!isLabSource ? { formulRows: formulResults } : {}) }),
           });
           if (!res.ok) throw new Error((await res.json()).error || "Guncelleme basarisiz");
         }
@@ -875,11 +869,12 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         const res = await fetch("/api/urunler", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
+          body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı", ...(!isLabSource ? { formulRows: formulResults } : {}) }),
         });
         if (!res.ok) throw new Error((await res.json()).error || "Kayıt başarısız");
         const data = await res.json();
-        if (data.id) setSavedId(String(data.id));
+        if (!Number.isInteger(Number(data.id)) || Number(data.id) <= 0) throw new Error("Ürün kaydı doğrulanamadı. Lütfen yeniden deneyin.");
+        setSavedId(String(data.id));
         // Yeni kayıt → listeye git
         router.push(returnHref);
         router.refresh();
@@ -889,11 +884,11 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         const res = await fetch(isLabSource ? `/api/laboratuvar/ugdr/${targetId}` : `/api/urunler/${targetId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı" }),
+          body: JSON.stringify({ ...form, RaporDurum: "Tamamlandı", ...(!isLabSource ? { formulRows: formulResults } : {}) }),
         });
         if (!res.ok) throw new Error((await res.json()).error || "Güncelleme başarısız");
         // Formül satırlarını da kaydet
-        if (formulResults.length > 0) {
+        if (isLabSource) {
           await saveFormulToDB(targetId, formulResults);
         }
         // Güncelleme → sayfada kal, rapor indirilebilsin
@@ -958,7 +953,11 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
   };
 
   const tabIndex = TABS.findIndex(t => t.id === activeTab);
-  const aVal = parseFloat(form.A) || 0;
+  const aVal = parseUgdNumber(form.A);
+
+  if (editLoadError) {
+    return <div role="alert" style={{ padding: 32 }}>{editLoadError} <button type="button" className={styles.saveBtn} onClick={() => window.location.reload()}>Yeniden yükle</button></div>;
+  }
 
   if (loadingEdit) {
     return <div style={{ padding: 48, textAlign: 'center', color: 'var(--color-text-secondary)' }}>Yükleniyor…</div>;
@@ -1126,7 +1125,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
               </div>
             </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginBottom: 16 }}>
-              Excel'den <strong>"INCI İsmi"</strong> ve <strong>"Üst Değer(%)"</strong> sütunlarını seçip yapıştırın veya dosyayı yükleyin.
+              Excel&apos;den <strong>&quot;INCI İsmi&quot;</strong> ve <strong>&quot;Üst Değer(%)&quot;</strong> sütunlarını seçip yapıştırın veya dosyayı yükleyin.
             </p>
             <textarea className={styles.searchInput} style={{ width: '100%', minHeight: 140, padding: 16, fontFamily: 'monospace' }} placeholder="Kopyalayıp buraya yapıştırın (Excel stili)..." value={formulInput} onChange={e => setFormulInput(e.target.value)} disabled={formulLoading} />
             <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
@@ -1189,7 +1188,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
                   </thead>
                   <tbody>
                     {formulResults.map((row, i) => {
-                      const c = parseFloat(row.inputAmount) || 0;
+                      const c = parseUgdNumber(row.inputAmount);
                       const sed = calcSED(aVal, c, row.dap);
                       const mos = calcMOS(row.noael, sed);
                       const isUygun = mos !== null && mos >= 100;

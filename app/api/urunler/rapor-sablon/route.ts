@@ -12,6 +12,7 @@ import HTMLtoDOCX from "html-to-docx";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise, { cosmoPool } from "@/lib/db";
+import { refreshUgdReportHtml } from "@/lib/ugdReportRefresh";
 import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 import { renderUgdReportHtml } from "@/lib/ugdReportHtml";
 import { renderUgdReportHtmlEn } from "@/lib/ugdReportHtmlEn";
@@ -319,7 +320,7 @@ async function getFirmaDetails(firmaId: unknown, profile: ReportProfile) {
     const firmaRes = await pool.request().input("id", firmaId).query(
       profile === "lab"
         ? "SELECT TOP 1 Firma_Adi AS Ad, Adres, Telefon, Mail AS Email FROM Firma WHERE ID = @id"
-        : "SELECT TOP 1 Ad, Adres, Telefon, Mail AS Email FROM RootTedarikci WHERE ID = @id",
+        : "SELECT TOP 1 Ad, Adres, Telefon, Email FROM RootTedarikci WHERE ID = @id",
     );
     const firma = firmaRes.recordset[0] ?? {};
 
@@ -329,8 +330,9 @@ async function getFirmaDetails(firmaId: unknown, profile: ReportProfile) {
       firmaTelefon: sv(firma.Telefon ?? firma.telefon ?? firma.TELEFON),
       firmaMail: sv(firma.Mail ?? firma.mail ?? firma.Email ?? firma.email),
     };
-  } catch {
-    return { firmaAd: "", firmaAdres: "", firmaTelefon: "", firmaMail: "" };
+  } catch (error) {
+    console.error("[rapor-sablon] Firma bilgileri okunamadı:", error);
+    throw new Error("Firma bilgileri alınamadığı için rapor oluşturulamadı. Lütfen yeniden deneyin.");
   }
 }
 
@@ -499,13 +501,14 @@ export async function POST(request: Request) {
     const language = pickLanguage(searchParams.get("language") || bodyLanguage);
     const profile = pickProfile(searchParams.get("profile") || bodyProfile);
     const firmaDetails = await getFirmaDetails(form.FirmaID, profile);
-    const reportFirmaAd = sv(firmaAd) || firmaDetails.firmaAd;
+    const reportFirmaAd = firmaDetails.firmaAd || sv(firmaAd);
     const enrichedFormulResults = await enrichUgdFormulaRows(formulResults);
-    const html = editedHtml || (language === "cpsr"
+    const generatedHtml = (language === "cpsr"
       ? renderUgdReportHtmlCpsr({ form, formulResults: enrichedFormulResults, ...firmaDetails, firmaAd: reportFirmaAd, language, profile })
       : language === "en"
         ? renderUgdReportHtmlEn({ form, formulResults: enrichedFormulResults, ...firmaDetails, firmaAd: reportFirmaAd, language, profile })
         : renderUgdReportHtml({ form, formulResults: enrichedFormulResults, ...firmaDetails, firmaAd: reportFirmaAd, language, profile }));
+    const html = refreshUgdReportHtml(editedHtml, generatedHtml, language === "cpsr");
     const languageSuffix = language === "cpsr" ? "_CPSR" : language === "en" ? "_EN" : "";
     const safeName = `${safeReportName(form.RaporNo)}${languageSuffix}`;
 

@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
+import { withUgdTransaction, saveUgdFormulaRows } from "@/lib/ugdPersistence";
 
 const RAPOR_TEXT_FIELDS = [
   "NormalKullanim",
@@ -115,34 +116,41 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const body = await request.json();
     const { Tarih, RaporNo, Versiyon, FirmaID, Barkod, Urun, UrunEn, Miktar, Tip1, Tip2, Uygulama, Hedef, A, RaporDurum } = body;
 
-    const pool = await poolPromise;
-    await pool.request()
-      .input("id", id)
-      .input("Tarih", Tarih || null)
-      .input("RaporNo", RaporNo || null)
-      .input("Versiyon", Versiyon || null)
-      .input("FirmaID", FirmaID || null)
-      .input("Barkod", Barkod || null)
-      .input("Urun", Urun || null)
-      .input("UrunEn", UrunEn || null)
-      .input("Miktar", Miktar || null)
-      .input("Tip1", Tip1 || null)
-      .input("Tip2", Tip2 || null)
-      .input("Uygulama", Uygulama || null)
-      .input("Hedef", Hedef || null)
-      .input("A", A || null)
-      .input("RaporDurum", RaporDurum || null)
-      .query(`
-        UPDATE rUGDListe
-        SET Tarih = @Tarih, RaporNo = @RaporNo, Versiyon = @Versiyon, FirmaID = @FirmaID,
-            Barkod = @Barkod, Urun = @Urun, UrunEn = @UrunEn, Miktar = @Miktar, Tip1 = @Tip1,
-            Tip2 = @Tip2, Uygulama = @Uygulama, Hedef = @Hedef, A = @A, RaporDurum = @RaporDurum
-        WHERE ID = @id
-      `);
+    if (!String(Urun ?? "").trim() || !Number.isInteger(Number(FirmaID)) || Number(FirmaID) <= 0) {
+      return Response.json({ error: "Ürün adı ve geçerli firma seçimi zorunludur." }, { status: 400 });
+    }
+    const base = await poolPromise;
+    return await withUgdTransaction(base, async pool => {
+      const result = await pool.request()
+        .input("id", id)
+        .input("Tarih", Tarih || null)
+        .input("RaporNo", RaporNo || null)
+        .input("Versiyon", Versiyon || null)
+        .input("FirmaID", FirmaID || null)
+        .input("Barkod", Barkod || null)
+        .input("Urun", Urun || null)
+        .input("UrunEn", UrunEn || null)
+        .input("Miktar", Miktar || null)
+        .input("Tip1", Tip1 || null)
+        .input("Tip2", Tip2 || null)
+        .input("Uygulama", Uygulama || null)
+        .input("Hedef", Hedef || null)
+        .input("A", A || null)
+        .input("RaporDurum", RaporDurum || null)
+        .query(`
+          UPDATE rUGDListe
+          SET Tarih = @Tarih, RaporNo = @RaporNo, Versiyon = @Versiyon, FirmaID = @FirmaID,
+              Barkod = @Barkod, Urun = @Urun, UrunEn = @UrunEn, Miktar = @Miktar, Tip1 = @Tip1,
+              Tip2 = @Tip2, Uygulama = @Uygulama, Hedef = @Hedef, A = @A, RaporDurum = @RaporDurum
+          WHERE ID = @id
+        `);
 
-    await saveRaporTexts(pool, Number(id), body);
+      if (!result.rowsAffected.some((count: number) => count > 0)) throw new Error("Güncellenecek ürün bulunamadı.");
+      await saveRaporTexts(pool, Number(id), body);
+      if (Array.isArray(body.formulRows)) await saveUgdFormulaRows(pool, Number(id), body.formulRows);
 
-    return Response.json({ message: "Başarıyla güncellendi" });
+      return Response.json({ message: "Başarıyla güncellendi", id: Number(id) });
+    });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

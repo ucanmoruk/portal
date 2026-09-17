@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
+import { withUgdTransaction, saveUgdFormulaRows } from "@/lib/ugdPersistence";
 import { type NextRequest } from "next/server";
 
 const RAPOR_TEXT_FIELDS = [
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const pool = await poolPromise;
-    let whereClauses: string[] = ["l.Durum = 'Aktif'", "l.BirimID = '1005'"];
+    const whereClauses: string[] = ["l.Durum = 'Aktif'", "l.BirimID = '1005'"];
 
     if (search) {
       whereClauses.push(`(
@@ -140,39 +141,46 @@ export async function POST(request: Request) {
       Tip1, Tip2, Uygulama, Hedef, A, RaporDurum 
     } = body;
 
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .input("Tarih", Tarih || null)
-      .input("RaporNo", RaporNo || null)
-      .input("Versiyon", Versiyon || null)
-      .input("FirmaID", FirmaID || null)
-      .input("Barkod", Barkod || null)
-      .input("Urun", Urun || null)
-      .input("UrunEn", UrunEn || null)
-      .input("Miktar", Miktar || null)
-      .input("Tip1", Tip1 || null)
-      .input("Tip2", Tip2 || null)
-      .input("Uygulama", Uygulama || null)
-      .input("Hedef", Hedef || "Yetişkinler")
-      .input("A", A || null)
-      .input("RaporDurum", RaporDurum || "Tamamlandı")
-      .input("Durum", "Aktif")
-      .input("BirimID", "1005")
-      .query(`
-        INSERT INTO rUGDListe (
-          Tarih, RaporNo, Versiyon, FirmaID, Barkod, Urun, UrunEn, Miktar,
-          Tip1, Tip2, Uygulama, Hedef, A, RaporDurum, Durum, BirimID
-        )
-        OUTPUT INSERTED.ID
-        VALUES (
-          @Tarih, @RaporNo, @Versiyon, @FirmaID, @Barkod, @Urun, @UrunEn, @Miktar,
-          @Tip1, @Tip2, @Uygulama, @Hedef, @A, @RaporDurum, @Durum, @BirimID
-        )
-      `);
+    if (!String(Urun ?? "").trim() || !Number.isInteger(Number(FirmaID)) || Number(FirmaID) <= 0) {
+      return Response.json({ error: "Ürün adı ve geçerli firma seçimi zorunludur." }, { status: 400 });
+    }
+    const base = await poolPromise;
+    return await withUgdTransaction(base, async pool => {
+      const result = await pool.request()
+        .input("Tarih", Tarih || null)
+        .input("RaporNo", RaporNo || null)
+        .input("Versiyon", Versiyon || null)
+        .input("FirmaID", FirmaID || null)
+        .input("Barkod", Barkod || null)
+        .input("Urun", Urun || null)
+        .input("UrunEn", UrunEn || null)
+        .input("Miktar", Miktar || null)
+        .input("Tip1", Tip1 || null)
+        .input("Tip2", Tip2 || null)
+        .input("Uygulama", Uygulama || null)
+        .input("Hedef", Hedef || "Yetişkinler")
+        .input("A", A || null)
+        .input("RaporDurum", RaporDurum || "Tamamlandı")
+        .input("Durum", "Aktif")
+        .input("BirimID", "1005")
+        .query(`
+          INSERT INTO rUGDListe (
+            Tarih, RaporNo, Versiyon, FirmaID, Barkod, Urun, UrunEn, Miktar,
+            Tip1, Tip2, Uygulama, Hedef, A, RaporDurum, Durum, BirimID
+          )
+          OUTPUT INSERTED.ID
+          VALUES (
+            @Tarih, @RaporNo, @Versiyon, @FirmaID, @Barkod, @Urun, @UrunEn, @Miktar,
+            @Tip1, @Tip2, @Uygulama, @Hedef, @A, @RaporDurum, @Durum, @BirimID
+          )
+        `);
 
-    const newId = result.recordset[0]?.ID ?? null;
-    if (newId) await saveRaporTexts(pool, Number(newId), body);
-    return Response.json({ message: "Başarıyla eklendi", id: newId });
+      const newId = Number(result.recordset[0]?.ID ?? result.recordset[0]?.id);
+      if (!Number.isInteger(newId) || newId <= 0) throw new Error("Ürün kaydı doğrulanamadı.");
+      await saveRaporTexts(pool, newId, body);
+      if (Array.isArray(body.formulRows)) await saveUgdFormulaRows(pool, newId, body.formulRows);
+      return Response.json({ message: "Başarıyla eklendi", id: newId });
+    });
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

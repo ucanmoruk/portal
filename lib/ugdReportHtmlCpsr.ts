@@ -1,6 +1,6 @@
+import { calcSED, fmtSED, parseUgdNumber } from "@/lib/ugdCalculations";
 import { LAB_UGDR_REPORT_CONTENT_OVERRIDES } from "@/lib/reportContent/labUgdrReportContent";
 import { UGD_REPORT_CONTENT_OVERRIDES } from "@/lib/reportContent/ugdReportContent";
-import { toPublicAssetDataUri } from "@/lib/publicAssetDataUri";
 
 type IngredientRow = {
   inputName?: string;
@@ -227,20 +227,13 @@ function mergeReportCopy(language: ReportLanguage, profile: ReportProfile) {
   };
 }
 
-function calcSED(a: number, c: number, dap: number) {
-  return a * (c / 100) * (dap / 100);
-}
 
 function calcMOS(noael: string | undefined, sed: number) {
-  const n = parseFloat(text(noael));
+  const n = parseUgdNumber(noael);
   if (!n || !sed) return null;
   return n / sed;
 }
 
-function fmtSED(value: number) {
-  if (!value) return empty;
-  return value < 0.0001 ? value.toExponential(3) : value.toFixed(5);
-}
 
 function fmtMOS(value: number | null) {
   if (value === null) return empty;
@@ -306,8 +299,8 @@ function formulaRows(rows: IngredientRow[], a: number, copy: typeof reportCopy[R
   }
 
   return rows.map((row) => {
-    const concentration = parseFloat(text(row.inputAmount, "0").replace(",", ".")) || 0;
-    const dap = typeof row.dap === "number" ? row.dap : parseFloat(text(row.dap, "100")) || 100;
+    const concentration = parseUgdNumber(row.inputAmount);
+    const dap = parseUgdNumber(row.dap, 100);
     const sed = calcSED(a, concentration, dap);
     const mos = calcMOS(row.noael, sed);
     const ok = mos === null || mos >= 100;
@@ -334,8 +327,8 @@ function preservativeRows(rows: IngredientRow[], copy: typeof reportCopy[ReportL
   if (!source.length) return `<tr><td colspan="7" class="muted">${esc(copy.preservativeEmpty)}</td></tr>`;
 
   return source.map((row) => {
-    const concentration = parseFloat(text(row.inputAmount, "0").replace(",", ".")) || 0;
-    const dap = typeof row.dap === "number" ? row.dap : 100;
+    const concentration = parseUgdNumber(row.inputAmount);
+    const dap = parseUgdNumber(row.dap, 100);
     const sed = calcSED(269, concentration, dap);
     const mos = calcMOS(row.noael, sed);
     return `<tr>
@@ -355,8 +348,8 @@ function allergenRows(rows: IngredientRow[], a: number, copy: typeof reportCopy[
   if (!source.length) return `<tr><td colspan="8" class="muted">${esc(copy.allergenEmpty)}</td></tr>`;
 
   return source.map((row) => {
-    const concentration = parseFloat(text(row.inputAmount, "0").replace(",", ".")) || 0;
-    const dap = typeof row.dap === "number" ? row.dap : 100;
+    const concentration = parseUgdNumber(row.inputAmount);
+    const dap = parseUgdNumber(row.dap, 100);
     const sed = calcSED(a, concentration, dap);
     const mos = calcMOS(row.noael, sed);
     return `<tr>
@@ -410,16 +403,13 @@ export function renderUgdReportHtmlCpsr(input: UGDReportInput) {
   const language = pickLanguage(input.language);
   const profile: ReportProfile = input.profile === "lab" ? "lab" : "ugd";
   const copy = mergeReportCopy(language, profile);
-  const a = parseFloat(text(f.A, "0").replace(",", ".")) || 0;
+  const a = parseUgdNumber(f.A);
   const maruziyet = localizedField(f, "MaruziyetAciklama", language);
   const maruziyetTr = text(f.MaruziyetAciklama);
   const maruziyetEn = text(f.MaruziyetAciklamaEn, maruziyet);
   const productName = localizedField(f, "Urun", language, empty);
   const useText = localizedField(f, "Kullanim", language, empty);
   const warningsText = localizedField(f, "Uyarilar", language, empty);
-  const evaluatorName = localizedField(f, "SorumluAd", language, empty);
-  const evaluatorAddress = localizedField(f, "SorumluAdres", language, empty);
-  const evaluatorQualification = localizedField(f, "SorumluKanit", language, empty);
   const productTypeEn = translateEnglishTerms(
     optionalExposureValue(maruziyetEn, "Product type") || f.Tip1,
   );
@@ -438,17 +428,8 @@ export function renderUgdReportHtmlCpsr(input: UGDReportInput) {
   const targetUsersEn = translateEnglishTerms(
     optionalExposureValue(maruziyetEn, "Targeted or exposed person(s)") || f.Hedef,
   );
-  const isLabProfile = profile === "lab";
-  const signatureImageSrc = toPublicAssetDataUri(text(
-    f.SignatureImageUrl || f.ImzaGorselUrl,
-    isLabProfile ? "/imza-oguzhan.png" : "/imza-dilsun.png"
-  ));
-  const evaluatorInfo = isLabProfile
-    ? "Oğuzhan EKER\nROOT KOZMETİK A.Ş.\nYakuplu Mah. Hürriyet Blv. Yakuplu Eval Plaza No.131 D.40 Beylikdüzü İstanbul\n+90 (212) 909 82 08 / info@rootarge.com"
-    : "Dilsun KARABULUT SEFER \n OZECO GROUP ULUSLARARASI DANIŞMANLIK TİCARET LİMİTED ŞİRKETİ \n Şehit Osman Avcı, Malazgirt 1071. Cad. No:49 A İç Kapı No:13, 06820 Eryaman/Ankara +90 (850) 308 33 51 / +90 533 450 69 05";
-  const qualificationInfo = isLabProfile
-    ? "Istanbul University Cerrahpasa Faculty of Science // Organic Chemistry Master's Degree\nSee Annex – Qualification of Safety Assessor"
-    : "Gazi University Faculty Of Engineering And Architecture/ Chemical Engineer (Diploma no: 2267)\n See Annex \n– Qualification of Safety Assessor \n– University Diploma \n–University Diploma Supplement";
+  const evaluatorInfo = "Federica Micheli\nViale A. Diaz 112, Cagliari, 09125 Italy";
+  const qualificationInfo = "Bachelor's degree in Toxicology\nMaster's degree in Advanced Cosmetic Sciences";
   const title = `CPSR_${text(f.RaporNo, "report")}`;
   const reportHeader = `
     <div class="report-header">
@@ -960,7 +941,7 @@ Other documents in the Information File of the product are listed below:
       [copy.evaluator, evaluatorInfo],
       [copy.qualification, qualificationInfo],
       [copy.reportDate, todayByLanguage(language)],
-      [copy.signature, rawHtml(`<div class="signature"><img src="${esc(signatureImageSrc)}" alt="Signature"></div>`)]
+      [copy.signature, rawHtml(`<div class="signature" style="height:60px"></div>`)]
     ])}
     
   </section>
