@@ -104,6 +104,8 @@ async function rejectsUnchanged(pattern) {
       assert.deepEqual(state, before); failDelete = false;
     }
     state = single(); state.parent.Durum = "İptal"; await moduleObject.exports.deleteKysAcceptance(1, 1, "test"); assert.equal(state.parent.Durum, "İptal");
+    state = single(); state.accepted[0].HareketTipi="Çıkış";await moduleObject.exports.deleteKysAcceptance(1,1,"test");assert.equal(state.stocks[4],23);assert.equal(state.units["4:2"],18);
+    state=fixture();state.accepted.forEach(k=>k.HareketTipi="Çıkış");await remove(1,"test");assert.deepEqual(state.stocks,{4:28,5:14});
     state = fixture(); state.accepted = []; await remove(1, "test"); assert.deepEqual(state.stocks, { 4: 20, 5: 12 });
   }
   console.log("PASS: MySQL/MSSQL deletion, multiple acceptances, unit balances, no-acceptance deletion, consumed stock, mismatched movements, missing request and atomic rollback.");

@@ -48,10 +48,12 @@ export async function nextKysRequestNumber(tx: any, year = requestYear(new Date(
 }
 
 // A separate counter key keeps the Spektrotek series independent of year changes.
-export async function nextSpektrotekRequestNumber(tx: any): Promise<string> {
-  const counter = await lockCounter(tx, 0);
+export async function nextSpektrotekRequestNumber(tx: any, type = "Sipariş"): Promise<string> {
+  const key = type === "Sipariş" ? 0 : -1;
+  const prefix = type === "Sipariş" ? "S" : "A";
+  const counter = await lockCounter(tx, key);
   let number = Math.max(1000, Number(counter.SonNo)) + 1;
-  while ((await tx.request().input("No", "S" + number).query("SELECT ID FROM KysTalep WHERE TalepNo=@No")).recordset.length) number += 1;
-  await tx.request().input("Y", 0).input("N", number).query("UPDATE KysTalepSayac SET SonNo=@N,Hazir=1 WHERE Yil=@Y");
-  return "S" + number;
+  while ((await tx.request().input("No", prefix + number).query("SELECT ID FROM KysTalep WHERE TalepNo=@No")).recordset.length) number += 1;
+  await tx.request().input("Y", key).input("N", number).query("UPDATE KysTalepSayac SET SonNo=@N,Hazir=1 WHERE Yil=@Y");
+  return prefix + number;
 }

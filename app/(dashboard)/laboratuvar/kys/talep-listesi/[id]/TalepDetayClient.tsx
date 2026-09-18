@@ -27,6 +27,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
   const [editingNumber, setEditingNumber] = useState(false);
   const [requestNumber, setRequestNumber] = useState("");
   const [numberError, setNumberError] = useState("");
+  const [exporting, setExporting] = useState(false);
   const [suppliers,setSuppliers]=useState<any[]>([]);
   const [correcting,setCorrecting]=useState<any|null>(null);
   const [belge,setBelge]=useState<File|null>(null);
@@ -135,6 +136,21 @@ export default function TalepDetayClient({ id }: { id: number }) {
     finally { setSaving(false); }
   }
 
+  async function exportExcel() {
+    if (exporting || !detail) return;
+    setExporting(true); setError("");
+    try {
+      const res = await fetch(`/api/kys/talepler/${id}/excel`);
+      if (!res.ok) { const json = await res.json(); throw new Error(json.error || "Excel indirilemedi."); }
+      const url = URL.createObjectURL(await res.blob());
+      const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = `Talep-${detail.talep.talepNo.replace(/[\\/:*?"<>|]/g, "-")}.xlsx`;
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) { setError(e instanceof Error ? e.message : "Excel indirilemedi."); }
+    finally { setExporting(false); }
+  }
+
   function openCorrect(k:any){
     const item=detail?.kalemler.find(i=>i.id===k.kalemId);if(!item)return;
     openAccept(item);setCorrecting(k);
@@ -143,7 +159,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
       tedarikci:k.tedarikci||"",tedarikciId:k.tedarikciId?String(k.tedarikciId):"",satinAlmaTarihi:k.satinAlmaTarihi||today(),birimFiyat:k.birimFiyat==null?"":String(k.birimFiyat),paraBirimi:k.paraBirimi||"TRY",toplamTutar:k.toplamTutar==null?"":String(k.toplamTutar),faturaNo:k.faturaNo||""}));
   }
   async function deleteAcceptance(k: any) {
-    if (saving || !confirm("Bu kabul ve bağlı satın alma kaydı silinecek, gelen miktar stoktan geri alınacak. Devam edilsin mi?")) return;
+    if (saving || !confirm(detail?.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? "Sipariş kabulü silinecek, teslim edilen miktar stoğa geri eklenecek. Devam edilsin mi?" : "Bu kabul ve bağlı satın alma kaydı silinecek, gelen miktar stoktan geri alınacak. Devam edilsin mi?")) return;
     setSaving(true); setError("");
     try {
       const res = await fetch(`/api/kys/talepler/${id}/kabul`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kabulId: k.id }) });
@@ -189,6 +205,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
           <span className={kys.pill}>{detail.talep.durum}</span>
         </div>
         <div className={styles.toolbarRight}>
+          <button type="button" className={styles.cancelBtn} disabled={exporting || loading} onClick={exportExcel}>{exporting ? "Hazırlanıyor…" : "Excel’e aktar"}</button>
           {detail.talep.seri === "Spektrotek" && <button type="button" disabled={saving} className={styles.cancelBtn} onClick={() => {setRequestNumber(detail.talep.talepNo);setNumberError("");setEditingNumber(true);}}>Talep no düzenle</button>}
           {detail.talep.durum === "Onay Bekliyor" && !detail.talep.onayTarihi && <button type="button" disabled={saving || loading || editing} className={styles.addBtn} onClick={() => setEditing(true)}><Pencil size={15} aria-hidden="true" /> Talebi düzenle</button>}
           <Link className={styles.cancelBtn} href={`/kys-talep-yazdir/${id}`} target="_blank">Yazdır</Link>
@@ -266,7 +283,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
             <div className={styles.modalBody}>
               {formError && <div className={styles.formError}>{formError}</div>}
               <div className={styles.formGrid3}>
-                <div className={kys.quantityWithUnit}><div className={styles.formGroup}><label htmlFor="accept-quantity">Gelen miktar</label><input id="accept-quantity" inputMode="decimal" value={form.gelenMiktar} onChange={e => setForm(f => ({ ...f, gelenMiktar: e.target.value,toplamTutar:"" }))} /></div><div className={styles.formGroup}><label htmlFor="accept-unit">Birim</label><input id="accept-unit" readOnly value={acceptItem.birim || "Adet"} aria-label="Stok kartı birimi (sabit)" /></div></div>
+                <div className={kys.quantityWithUnit}><div className={styles.formGroup}><label htmlFor="accept-quantity">{detail.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? "Teslim edilen miktar" : "Gelen miktar"}</label><input id="accept-quantity" inputMode="decimal" value={form.gelenMiktar} onChange={e => setForm(f => ({ ...f, gelenMiktar: e.target.value,toplamTutar:"" }))} /></div><div className={styles.formGroup}><label htmlFor="accept-unit">Birim</label><input id="accept-unit" readOnly value={acceptItem.birim || "Adet"} aria-label="Stok kartı birimi (sabit)" /></div></div>
                 <div className={styles.formGroup}><label>Kabul tarihi</label><input type="date" value={form.kabulTarihi} onChange={e => setForm(f => ({ ...f, kabulTarihi: e.target.value }))} /></div>
                 <div className={styles.formGroup}><label>Depoya/Birime işle</label><select value={form.hedefBirimId} onChange={e => setForm(f => ({ ...f, hedefBirimId: e.target.value }))}><option value="">Seçiniz</option>{birimler.map(b => <option key={b.id} value={b.id}>{b.ad}</option>)}</select></div>
                 <div className={styles.formGroup}><label>Marka</label><input value={form.marka} onChange={e => setForm(f => ({ ...f, marka: e.target.value }))} /></div>

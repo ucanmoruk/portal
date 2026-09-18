@@ -49,7 +49,7 @@ const stockFormFields: Array<[string, keyof typeof emptyForm]> = [
   ["Kritik Limit", "kritikLimit"],
   ["Birim", "birim"],
 ];
-const defaultMaterialTypes = ["Sarf", "Cihaz", "Kimyasal", "Referans Standart", "Ambalaj"];
+const defaultMaterialTypes = ["Sarf", "Spektrotek", "Cihaz", "Kimyasal", "Referans Standart", "Ambalaj"];
 
 const pageNums = (page: number, totalPages: number) => {
   const nums: Array<number | "..."> = [];
@@ -207,7 +207,7 @@ export default function StokListesiClient() {
       <div className={kys.filterRow}>
         <select className={kys.select} value={malzemeTuru} onChange={e => { setMalzemeTuru(e.target.value); setPage(1); }}>
           <option value="">Tüm türler</option>
-          <option>Sarf</option>
+          <option>Sarf</option><option>Spektrotek</option>
           <option>Cihaz</option>
           <option>Kimyasal</option>
           <option>Referans Standart</option>

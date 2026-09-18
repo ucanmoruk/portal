@@ -22,6 +22,9 @@ async function run(mysql) {
   assert.equal(await api.nextSpektrotekRequestNumber(base), "S1001");
   assert.equal(await api.nextSpektrotekRequestNumber(base), "S1002");
   assert.equal(await api.nextKysRequestNumber(base, 2026), "2026-1003");
+  assert.equal(await api.nextSpektrotekRequestNumber(base,"Satın Alma"),"A1001");
+  assert.equal(await api.nextSpektrotekRequestNumber(base,"Satın Alma"),"A1002");
+  assert.equal(await api.nextSpektrotekRequestNumber(base,"Sipariş"),"S1003");
   records = []; assert.equal(await api.nextKysRequestNumber(base, 2026), "2026-1004");
   assert.equal(await api.nextKysRequestNumber(base, 2027), "2027-1001");
   assert(locked.includes(mysql ? "FOR UPDATE" : "UPDLOCK,HOLDLOCK"));

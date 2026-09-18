@@ -260,12 +260,12 @@ export async function deleteKysRequest(id: number, userId: string) {
       const stockId = Number(acceptance.StokID);
       const quantity = Number(acceptance.GelenMiktar);
       if (!stockId || !acceptance.HareketID || seenMovements.has(Number(acceptance.HareketID)) ||
-          acceptance.HareketTipi !== "Kabul" || !Number.isFinite(quantity) || quantity <= 0 ||
+          !["Kabul", "Çıkış"].includes(acceptance.HareketTipi) || !Number.isFinite(quantity) || quantity <= 0 ||
           Math.abs(Number(acceptance.Miktar) - quantity) > 0.00001) {
         throw new Error("Kabul ve stok hareketi eşleşmiyor. Talep silinmeden önce kayıtları kontrol edin.");
       }
       seenMovements.add(Number(acceptance.HareketID));
-      stockTotals.set(stockId, (stockTotals.get(stockId) || 0) + quantity);
+      stockTotals.set(stockId, (stockTotals.get(stockId) || 0) + (acceptance.HareketTipi === "Çıkış" ? -quantity : quantity));
     }
     for (const [stockId, quantity] of stockTotals) {
       const stock = (await tx.request().input("ID", stockId).query(hasMysqlConfig()
@@ -280,7 +280,7 @@ export async function deleteKysRequest(id: number, userId: string) {
     for (const acceptance of accepted) {
       await balance(tx, Number(acceptance.StokID), acceptance.HedefBirimID == null
         ? (acceptance.KaynakBirimID == null ? null : Number(acceptance.KaynakBirimID))
-        : Number(acceptance.HedefBirimID), -Number(acceptance.GelenMiktar));
+        : Number(acceptance.HedefBirimID), (acceptance.HareketTipi === "Çıkış" ? 1 : -1) * Number(acceptance.GelenMiktar));
     }
     // Purchases are stored on acceptances. Remove their files/movements first.
     for (const statement of [
@@ -421,17 +421,18 @@ export async function deleteKysAcceptance(talepId: number, kabulId: number, user
     const item = (await tx.request().input("ID", before.KalemID).input("TalepID", talepId)
       .query("SELECT * FROM KysTalepKalem WHERE ID=@ID AND TalepID=@TalepID")).recordset[0];
     const quantity = Number(before.GelenMiktar);
-    if (!movement || !item || movement.HareketTipi !== "Kabul" || Number(movement.StokID) !== Number(before.StokID) ||
+    const reversal = movement?.HareketTipi === "Çıkış" ? quantity : -quantity;
+    if (!movement || !item || !["Kabul", "Çıkış"].includes(movement.HareketTipi) || Number(movement.StokID) !== Number(before.StokID) ||
         !Number.isFinite(quantity) || quantity <= 0 || Math.abs(Number(movement.Miktar) - quantity) > 0.00001 ||
         Number(item.KabulMiktari) - quantity < -0.00001) throw new Error("Kabul ve stok kayıtları eşleşmiyor.");
     const stock = (await tx.request().input("ID", before.StokID).query(hasMysqlConfig()
       ? "SELECT * FROM KysStokKart WHERE ID=@ID FOR UPDATE"
       : "SELECT * FROM KysStokKart WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
-    if (!stock || Number(stock.StokMiktari) - quantity < -0.00001) throw new Error("Kabul edilen stok kullanılmış; silme işlemi stok miktarını negatife düşüremez.");
-    await tx.request().input("ID", before.StokID).input("D", -quantity)
+    if (!stock || Number(stock.StokMiktari) + reversal < -0.00001) throw new Error("Kabul edilen stok kullanılmış; silme işlemi stok miktarını negatife düşüremez.");
+    await tx.request().input("ID", before.StokID).input("D", reversal)
       .query("UPDATE KysStokKart SET StokMiktari=StokMiktari+@D,UpdatedAt=GETDATE() WHERE ID=@ID");
     await balance(tx, Number(before.StokID), movement.HedefBirimID == null
-      ? (movement.KaynakBirimID == null ? null : Number(movement.KaynakBirimID)) : Number(movement.HedefBirimID), -quantity);
+      ? (movement.KaynakBirimID == null ? null : Number(movement.KaynakBirimID)) : Number(movement.HedefBirimID), reversal);
     await tx.request().input("ID", kabulId).query("DELETE FROM KysTalepBelge WHERE KabulID=@ID");
     await tx.request().input("ID", before.HareketID).query("DELETE FROM KysStokSertifika WHERE HareketID=@ID");
     await tx.request().input("ID", before.HareketID).query("DELETE FROM KysStokHareket WHERE ID=@ID");
@@ -494,6 +495,8 @@ export async function correctKysAcceptance(
     if (!movement || !item)
       throw new Error("Stok hareketi veya kalem bulunamadı.");
     const delta = quantity - Number(before.GelenMiktar);
+    const sign = movement.HareketTipi === "Çıkış" ? -1 : 1;
+    const stockDelta = sign * delta;
     if (Number(item.KabulMiktari) + delta > Number(item.Miktar) + 0.00001)
       throw new Error("Düzeltme talep miktarını aşamaz.");
     const stock = (
@@ -506,7 +509,7 @@ export async function correctKysAcceptance(
             : "SELECT * FROM KysStokKart WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID",
         )
     ).recordset[0];
-    if (!stock || Number(stock.StokMiktari) + delta < -0.00001)
+    if (!stock || Number(stock.StokMiktari) + stockDelta < -0.00001)
       throw new Error("Düzeltme stok miktarını negatife düşürüyor.");
     const oldUnit =
       movement.HedefBirimID == null ? null : Number(movement.HedefBirimID);
@@ -523,15 +526,15 @@ export async function correctKysAcceptance(
       ).recordset.length
     )
       throw new Error("Hedef birim bulunamadı.");
-    if (nextUnit === oldUnit) await balance(tx, before.StokID, nextUnit, delta);
+    if (nextUnit === oldUnit) await balance(tx, before.StokID, nextUnit, stockDelta);
     else {
-      await balance(tx, before.StokID, oldUnit, -Number(before.GelenMiktar));
-      await balance(tx, before.StokID, nextUnit, quantity);
+      await balance(tx, before.StokID, oldUnit, -sign * Number(before.GelenMiktar));
+      await balance(tx, before.StokID, nextUnit, sign * quantity);
     }
     await tx
       .request()
       .input("ID", before.StokID)
-      .input("D", delta)
+      .input("D", stockDelta)
       .query(
         "UPDATE KysStokKart SET StokMiktari=StokMiktari+@D,UpdatedAt=GETDATE() WHERE ID=@ID",
       );
@@ -622,7 +625,7 @@ export async function correctKysAcceptance(
       {
         kabul: { ...before, ...changes },
         hareket: { ...movement, Miktar: quantity, HedefBirimID: nextUnit },
-        stokFarki: delta,
+        stokFarki: stockDelta,
       },
       input,
     );

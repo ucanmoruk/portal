@@ -145,7 +145,7 @@ export default function TalepListesiClient() {
     <>
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
-          <div className={styles.searchBox}><input className={styles.searchInput} placeholder="Talep no, oluşturan veya not ara..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
+          <div className={styles.searchBox}><input className={styles.searchInput} placeholder="Talep no, tür, firma, oluşturan veya not ara..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
           <span className={styles.totalCount}>{total} talep</span>
         </div>
         <div className={styles.toolbarRight}><Link className={styles.cancelBtn} href="/laboratuvar/kys/tedarikci-listesi">Tedarikçi listesi</Link><button className={styles.addBtn} onClick={() => { setNewSeries("Unique"); setForm({firmaAdi:"",talepTuru:"Stok Malzeme",notlar:"",teknikSartname:"",kalemler:[{...emptyItem}]}); setModalOpen(true); }}>+ Talep oluştur</button><button className={styles.addBtn} onClick={() => {setNewSeries("Spektrotek");setForm({firmaAdi:"",talepTuru:"Satın Alma",notlar:"",teknikSartname:"",kalemler:[{...emptyItem}]});setModalOpen(true);}}>Spektrotek</button></div>
