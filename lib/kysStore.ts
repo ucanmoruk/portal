@@ -468,6 +468,10 @@ async function createKysSchema() {
     : "IF COL_LENGTH('KysTalep', 'Seri') IS NULL ALTER TABLE KysTalep ADD Seri NVARCHAR(20) NOT NULL DEFAULT 'Unique'");
   await pool.request().query("UPDATE KysTalep SET Seri='Spektrotek' WHERE TalepNo LIKE 'S%' AND Seri='Unique'");
 
+  for (const [name, mysqlType, sqlType] of [["SiparisFaturaNo","VARCHAR(100)","NVARCHAR(100)"],["SiparisFaturaTutari","DECIMAL(18,2)","DECIMAL(18,2)"],["SiparisVade","DATE","DATE"],["OdemeDurumu","VARCHAR(30)","NVARCHAR(30)"]]) await pool.request().query(hasMysqlConfig()
+    ? `ALTER TABLE KysTalep ADD COLUMN IF NOT EXISTS ${name} ${mysqlType} NULL`
+    : `IF COL_LENGTH('KysTalep', '${name}') IS NULL ALTER TABLE KysTalep ADD ${name} ${sqlType} NULL`);
+
   for (const birim of ["Depo", "Mikrobiyoloji", "Kimyasal", "Dış Laboratuvar", "Numune Kabul"]) {
     await pool.request().input("Ad", birim).query(`
       INSERT INTO KysLaboratuvarBirim (Ad, Durum)
@@ -937,7 +941,7 @@ export async function listKysExpiry(params: { search?: string; days?: number; pa
   };
 }
 
-export async function listKysRequests(params: { search?: string; durum?: string; tur?: string; seri?: string; page?: number; limit?: number }) {
+export async function listKysRequests(params: { search?: string; durum?: string; tur?: string; seri?: string; odeme?: string; page?: number; limit?: number }) {
   await ensureKysSchema();
   await ensureKysRequestNumbers(await cosmoPool);
   const pool = await cosmoPool;
@@ -948,19 +952,20 @@ export async function listKysRequests(params: { search?: string; durum?: string;
   const durum = text(params.durum);
   const tur = text(params.tur);
   let where = durum === "Silindi" ? "WHERE 1=1" : "WHERE t.Durum <> 'Silindi'";
-  if (search) where += " AND (t.TalepNo LIKE @search OR t.OlusturanAd LIKE @search OR t.Notlar LIKE @search OR t.TalepTuru LIKE @search OR t.FirmaAdi LIKE @search)";
+  if (search) where += " AND (t.TalepNo LIKE @search OR t.OlusturanAd LIKE @search OR t.Notlar LIKE @search OR t.TalepTuru LIKE @search OR t.FirmaAdi LIKE @search OR t.SiparisFaturaNo LIKE @search)";
   if (durum) where += " AND t.Durum = @durum";
+  if (params.odeme) where += " AND COALESCE(t.OdemeDurumu,'Ödeme Bekliyor')=@odeme";
   if (tur) where += " AND t.TalepTuru = @tur";
   if (params.seri === "Spektrotek") where += " AND t.Seri = 'Spektrotek'";
   if (params.seri === "Unique") where += " AND t.Seri = 'Unique'";
-  const bind = (req: any) => req.input("search", `%${search}%`).input("durum", durum).input("tur", tur);
+  const bind = (req: any) => req.input("search", `%${search}%`).input("durum", durum).input("tur", tur).input("odeme", text(params.odeme));
 
   const countRes = await bind(pool.request()).query(`SELECT COUNT(*) AS total FROM KysTalep t ${where}`);
   const rowsRes = await bind(pool.request())
     .input("offset", offset)
     .input("limit", limit)
     .query(`
-      SELECT t.ID, t.TalepNo, t.Seri, t.FirmaAdi, t.TalepTuru, t.Durum, t.OlusturanAd, t.OlusturmaTarihi,
+      SELECT t.ID, t.TalepNo, t.SiparisFaturaNo, t.SiparisFaturaTutari, t.SiparisVade, t.OdemeDurumu, t.Seri, t.FirmaAdi, t.TalepTuru, t.Durum, t.OlusturanAd, t.OlusturmaTarihi,
              t.OnaylayanAd, t.OnayTarihi, t.IslemeAlanAd, t.IslemeAlmaTarihi,
              (SELECT COUNT(*) FROM KysTalepKalem k WHERE k.TalepID = t.ID) AS KalemSayisi
       FROM KysTalep t
@@ -984,6 +989,10 @@ function mapRequest(r: AnyRow) {
     talepNo: rowString(r, "TalepNo"),
     talepTuru: rowString(r, "TalepTuru"),
     firmaAdi: rowString(r, "FirmaAdi"),
+    faturaNo: rowString(r,"SiparisFaturaNo"),
+    faturaTutari: r.SiparisFaturaTutari == null ? null : Number(r.SiparisFaturaTutari),
+    vade: asDate(r.SiparisVade),
+    odemeDurumu: rowString(r,"OdemeDurumu") || "Ödeme Bekliyor",
     seri: rowString(r, "Seri") || (rowString(r, "TalepNo").startsWith("S") ? "Spektrotek" : "Unique"),
     durum: rowString(r, "Durum"),
     olusturanAd: rowString(r, "OlusturanAd"),
@@ -1407,4 +1416,15 @@ export async function listKysPurchases(params: { search?: string; page?: number;
     limit,
     totalPages: Math.ceil(total / limit) || 1,
   };
+}
+
+export async function updateKysOrderBilling(id:number, body:{faturaNo?:string;faturaTutari?:string;vade?:string;odemeDurumu?:string}) {
+ await ensureKysSchema();
+ const pool=await cosmoPool;
+ const fields:string[]=[];const req=pool.request().input("ID",id);
+ if(body.odemeDurumu!==undefined){if(!["Ödeme Bekliyor","Ödendi","Kısmi Ödeme"].includes(body.odemeDurumu))throw new Error("Ödeme durumu geçersiz.");fields.push("OdemeDurumu=@Odeme");req.input("Odeme",body.odemeDurumu);}
+ if(body.faturaNo!==undefined){if(text(body.faturaNo).length>100)throw new Error("Fatura numarası en fazla 100 karakter.");fields.push("SiparisFaturaNo=@Fatura");req.input("Fatura",nullableText(body.faturaNo));}
+ if(body.faturaTutari!==undefined){const n=body.faturaTutari===""?null:numberValue(body.faturaTutari,NaN);if(n!==null&&(!Number.isFinite(n)||n<0))throw new Error("Fatura tutarı geçersiz.");fields.push("SiparisFaturaTutari=@Tutar");req.input("Tutar",n);}
+ if(body.vade!==undefined){if(body.vade&&!/^\d{4}-\d{2}-\d{2}$/.test(body.vade))throw new Error("Vade geçersiz.");fields.push("SiparisVade=@Vade");req.input("Vade",body.vade||null);}
+ if(!fields.length)throw new Error("Güncellenecek alan yok.");const result=await req.query(`UPDATE KysTalep SET ${fields.join(",")},UpdatedAt=GETDATE() WHERE ID=@ID AND Seri='Spektrotek' AND TalepTuru='Sipariş' AND Durum<>'Silindi'`);if(!result.rowsAffected?.[0])throw new Error("Sipariş bulunamadı.");
 }

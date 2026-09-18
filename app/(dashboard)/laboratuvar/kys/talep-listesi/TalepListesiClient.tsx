@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "@/app/styles/table.module.css";
 import kys from "../kys.module.css";
@@ -13,6 +13,7 @@ type RequestRow = {
   talepNo: string;
   talepTuru: string;
   firmaAdi: string;
+  faturaNo:string; faturaTutari:number|null; vade:string|null; odemeDurumu:string;
   seri: string;
   durum: string;
   olusturanAd: string;
@@ -49,11 +50,14 @@ const pageNums = (page: number, totalPages: number) => {
   return nums;
 };
 
-export default function TalepListesiClient() {
+export default function TalepListesiClient({ordersOnly=false}:{ordersOnly?:boolean}) {
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [search, setSearch] = useState("");
   const [durum, setDurum] = useState("");
   const [seri, setSeri] = useState("");
+  const [odeme,setOdeme]=useState("");
+  const [billing,setBilling]=useState<RequestRow|null>(null);
+  const [billingForm,setBillingForm]=useState({faturaNo:"",faturaTutari:"",vade:""});
   const [newSeries, setNewSeries] = useState("Unique");
   const [tur, setTur] = useState("");
   const [page, setPage] = useState(1);
@@ -72,7 +76,7 @@ export default function TalepListesiClient() {
     setLoading(true);
     setError("");
     try {
-      const qs = new URLSearchParams({ search, durum, tur, seri, page: String(page), limit: String(limit) });
+      const qs = new URLSearchParams({ search, durum, tur:ordersOnly?"Sipariş":tur, seri:ordersOnly?"Spektrotek":seri, odeme, page: String(page), limit: String(limit) });
       const res = await fetch(`/api/kys/talepler?${qs.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Talep listesi alınamadı.");
@@ -84,7 +88,7 @@ export default function TalepListesiClient() {
     } finally {
       setLoading(false);
     }
-  }, [durum, limit, page, search, tur, seri]);
+  }, [durum, limit, page, search, tur, seri, ordersOnly, odeme]);
 
   useEffect(() => { fetchRows(); }, [fetchRows]);
 
@@ -135,6 +139,8 @@ export default function TalepListesiClient() {
     }
   }
 
+
+  async function saveBilling(id:number,body:Record<string,string>){if(saving)return;setSaving(true);setFormError("");setError("");try{const res=await fetch(`/api/kys/talepler/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({...body,islem:"siparis-fatura"})});const json=await res.json();if(!res.ok)throw new Error(json.error||"Sipariş güncellenemedi.");setBilling(null);await fetchRows();}catch(e){const message=errorMessage(e,"Sipariş güncellenemedi.");setFormError(message);setError(message);}finally{setSaving(false);}}
   async function deleteRow(row:RequestRow){
     if(!confirm(`${row.talepNo} listeden kaldırılacak. Bağlı kabul ve satın alma kayıtları silinecek, kabul edilen miktarlar stoktan düşülecek. Devam edilsin mi?`))return;
     try{const r=await fetch(`/api/kys/talepler/${row.id}`,{method:"DELETE"});const j=await r.json();if(!r.ok)throw new Error(j.error);await fetchRows();}catch(e){setError(errorMessage(e,"Talep silinemedi."));}
@@ -146,20 +152,22 @@ export default function TalepListesiClient() {
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
           <div className={styles.searchBox}><input className={styles.searchInput} placeholder="Talep no, tür, firma, oluşturan veya not ara..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
-          <span className={styles.totalCount}>{total} talep</span>
+          <span className={styles.totalCount}>{total} {ordersOnly ? "sipariş" : "talep"}</span>
         </div>
-        <div className={styles.toolbarRight}><Link className={styles.cancelBtn} href="/laboratuvar/kys/tedarikci-listesi">Tedarikçi listesi</Link><button className={styles.addBtn} onClick={() => { setNewSeries("Unique"); setForm({firmaAdi:"",talepTuru:"Stok Malzeme",notlar:"",teknikSartname:"",kalemler:[{...emptyItem}]}); setModalOpen(true); }}>+ Talep oluştur</button><button className={styles.addBtn} onClick={() => {setNewSeries("Spektrotek");setForm({firmaAdi:"",talepTuru:"Satın Alma",notlar:"",teknikSartname:"",kalemler:[{...emptyItem}]});setModalOpen(true);}}>Spektrotek</button></div>
+        {ordersOnly ? <div className={styles.toolbarRight}><button className={styles.addBtn} onClick={()=>{setNewSeries("Spektrotek");setForm({firmaAdi:"",talepTuru:"Sipariş",notlar:"",teknikSartname:"",kalemler:[{...emptyItem}]});setModalOpen(true);}}>+ Yeni sipariş</button></div> : (        <div className={styles.toolbarRight}><Link className={styles.cancelBtn} href="/laboratuvar/kys/tedarikci-listesi">Tedarikçi listesi</Link><button className={styles.addBtn} onClick={() => { setNewSeries("Unique"); setForm({firmaAdi:"",talepTuru:"Stok Malzeme",notlar:"",teknikSartname:"",kalemler:[{...emptyItem}]}); setModalOpen(true); }}>+ Talep oluştur</button><button className={styles.addBtn} onClick={() => {setNewSeries("Spektrotek");setForm({firmaAdi:"",talepTuru:"Satın Alma",notlar:"",teknikSartname:"",kalemler:[{...emptyItem}]});setModalOpen(true);}}>Spektrotek</button></div>)}
       </div>
       <div className={kys.filterRow}>
-        <select aria-label="Talep serisi" className={kys.select} value={seri} onChange={e=>{setSeri(e.target.value);setPage(1);}}><option value="">Tümü</option><option>Unique</option><option>Spektrotek</option></select>
-        <select className={kys.select} value={tur} onChange={e => { setTur(e.target.value); setPage(1); }}><option value="">Tüm türler</option>{KYS_REQUEST_TYPES.map(type => <option key={type}>{type}</option>)}<option value="Sarf">Sarf (eski kayıtlar)</option></select>
+        {!ordersOnly && <select aria-label="Talep serisi" className={kys.select} value={seri} onChange={e=>{setSeri(e.target.value);setPage(1);}}><option value="">Tümü</option><option>Unique</option><option>Spektrotek</option></select>}
+        {!ordersOnly && <select className={kys.select} value={tur} onChange={e => { setTur(e.target.value); setPage(1); }}><option value="">Tüm türler</option>{KYS_REQUEST_TYPES.map(type => <option key={type}>{type}</option>)}<option value="Sarf">Sarf (eski kayıtlar)</option></select>}
         <select className={kys.select} value={durum} onChange={e => { setDurum(e.target.value); setPage(1); }}><option value="">Tüm durumlar</option><option>Onay Bekliyor</option><option>Onaylandı</option><option>İşleme Alındı</option><option>Kısmi Kabul</option><option>Tamamlandı</option><option>İptal</option><option value="Silindi">Silinen talepler</option></select>
+      {ordersOnly && <select aria-label="Ödeme durumu filtresi" className={kys.select} value={odeme} onChange={e=>{setOdeme(e.target.value);setPage(1);}}><option value="">Tüm ödeme durumları</option><option>Ödeme Bekliyor</option><option>Ödendi</option><option>Kısmi Ödeme</option></select>}
         <select className={styles.pageSizeSelect} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>{[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} / sayfa</option>)}</select>
       </div>
+
       <div className={styles.tableCard}>
         {error && <div className={styles.errorBar}>{error}</div>}
         <div className={styles.tableWrapper}>
-          <table className={styles.table}>
+          {ordersOnly ? (          <table className={styles.table}><thead><tr><th>Sipariş Kodu</th><th>Firma Adı</th><th>Sipariş Durumu</th><th>Fatura No</th><th>Fatura Tutarı</th><th>Vade</th><th>Ödeme Durumu</th><th></th></tr></thead><tbody>{loading?<tr><td colSpan={8}>Yükleniyor…</td></tr>:rows.length===0?<tr><td colSpan={8} className={styles.empty}>Sipariş bulunamadı.</td></tr>:rows.map(row=><tr key={row.id}><td><Link className={kys.requestLink} href={`/laboratuvar/kys/talep-listesi/${row.id}`}>{row.talepNo}</Link></td><td>{row.firmaAdi}</td><td>{row.durum}</td><td>{row.faturaNo||"-"}</td><td>{row.faturaTutari==null?"-":row.faturaTutari.toLocaleString("tr-TR",{minimumFractionDigits:2})}</td><td>{dateFmt(row.vade)}</td><td><select aria-label={`${row.talepNo} ödeme durumu`} className={kys.select} disabled={saving} value={row.odemeDurumu} onChange={e=>saveBilling(row.id,{odemeDurumu:e.target.value})}><option>Ödeme Bekliyor</option><option>Ödendi</option><option>Kısmi Ödeme</option></select></td><td><button type="button" className={`${styles.editBtn} ${kys.iconButton}`} title="Düzenle" aria-label={`${row.talepNo} fatura bilgilerini düzenle`} onClick={()=>{setFormError("");setBilling(row);setBillingForm({faturaNo:row.faturaNo||"",faturaTutari:row.faturaTutari==null?"":String(row.faturaTutari),vade:row.vade||""});}}><Pencil size={16} aria-hidden="true" /></button></td></tr>)}</tbody></table>) : (          <table className={styles.table}>
             <thead><tr><th>Talep no</th><th>Tür</th><th>Durum</th><th>Kalem</th><th>Oluşturan</th><th>Onaylayan</th><th>İşleme alan</th><th></th></tr></thead>
             <tbody>
               {loading ? <tr><td colSpan={8}><div className={styles.skeleton} /></td></tr> : rows.length === 0 ? <tr><td colSpan={8}><div className={styles.empty}>Talep bulunamadı.</div></td></tr> : rows.map(row => (
@@ -175,7 +183,7 @@ export default function TalepListesiClient() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>)}
         </div>
         <div className={styles.pagination}>
           <button className={styles.pageBtn} disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</button>
@@ -184,6 +192,7 @@ export default function TalepListesiClient() {
         </div>
       </div>
 
+      {billing && <div className={styles.modalOverlay}><div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="billing-title"><div className={styles.modalHeader}><h2 id="billing-title">Fatura bilgileri · {billing.talepNo}</h2><button disabled={saving} aria-label="Kapat" className={styles.modalClose} onClick={()=>setBilling(null)}>×</button></div><div className={styles.modalBody}>{formError && <div role="alert" className={styles.formError}>{formError}</div>}<div className={styles.formGroup}><label htmlFor="invoice-no">Fatura No</label><input id="invoice-no" maxLength={100} value={billingForm.faturaNo} onChange={e=>setBillingForm(f=>({...f,faturaNo:e.target.value}))}/></div><div className={styles.formGroup}><label htmlFor="invoice-total">Fatura Tutarı</label><input id="invoice-total" inputMode="decimal" value={billingForm.faturaTutari} onChange={e=>setBillingForm(f=>({...f,faturaTutari:e.target.value}))}/></div><div className={styles.formGroup}><label htmlFor="invoice-due">Vade</label><input id="invoice-due" type="date" value={billingForm.vade} onChange={e=>setBillingForm(f=>({...f,vade:e.target.value}))}/></div></div><div className={styles.modalFooter}><button disabled={saving} className={styles.cancelBtn} onClick={()=>setBilling(null)}>Vazgeç</button><button disabled={saving} className={styles.saveBtn} onClick={()=>saveBilling(billing.id,billingForm)}>{saving?"Kaydediliyor…":"Kaydet"}</button></div></div></div>}
       {modalOpen && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 940 }} role="dialog" aria-modal="true" aria-labelledby="request-title">

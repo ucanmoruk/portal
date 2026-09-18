@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { editSpektrotekRequestNumber, editKysRequest, getKysRequestDetail, updateKysRequestStatus } from "@/lib/kysStore";
+import { updateKysOrderBilling, editSpektrotekRequestNumber, editKysRequest, getKysRequestDetail, updateKysRequestStatus } from "@/lib/kysStore";
 import { getPortalUser } from "@/lib/portalYetki";
 import {
   deleteKysRequest,
@@ -53,6 +53,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
+    if (body.islem === "siparis-fatura") { await updateKysOrderBilling(Number(id),body);return Response.json({ok:true}); }
     if (body.islem === "numara-duzenle") {
       await editSpektrotekRequestNumber(Number(id), body.talepNo);
       return Response.json({ ok: true });
