@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
         search: sp.get("search") || "",
         durum: sp.get("durum") || "",
         tur: sp.get("tur") || "",
+        seri: sp.get("seri") || "",
         page: Number(sp.get("page") || 1),
         limit: Number(sp.get("limit") || 20),
       }),

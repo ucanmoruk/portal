@@ -4,7 +4,7 @@ async function run(mysql) {
   let records = [{ ID: 2, OlusturmaTarihi: "2026-01-02", TalepNo: "KYS-OLD2" }, { ID: 1, OlusturmaTarihi: "2026-01-01", TalepNo: "KYS-OLD1" }], counters = {}, locked;
   const request = () => { const p = {}; return { input(k, v) { p[k] = v; return this; }, async query(sql) {
     let rows = [];
-    if (sql.startsWith("SELECT ID,OlusturmaTarihi")) rows = records.slice().sort((a,b) => a.ID-b.ID);
+    if (sql.startsWith("SELECT ID,OlusturmaTarihi")) rows = records.filter(r=>!r.TalepNo.startsWith("S")).sort((a,b) => a.ID-b.ID);
     else if (sql.startsWith("INSERT IGNORE") || sql.startsWith("IF NOT EXISTS")) counters[p.Y] ||= { SonNo: 1000, Hazir: 0 };
     else if (sql.startsWith("SELECT SonNo")) { locked = sql; rows = [counters[p.Y]]; }
     else if (sql.startsWith("UPDATE KysTalepSayac")) counters[p.Y] = { SonNo: p.N, Hazir: 1 };
@@ -15,8 +15,12 @@ async function run(mysql) {
   const mod = { exports: {} }; vm.runInNewContext(source, { module: mod, exports: mod.exports, require: () => ({ hasMysqlConfig: () => mysql }) });
   const api = mod.exports;
   assert.equal(api.requestYear("2025-12-31T22:00:00Z"), 2026);
+  records.push({ ID:3,OlusturmaTarihi:"2026-01-03",TalepNo:"S1001" });
   await api.ensureKysRequestNumbers(base);
   assert.equal(records.find(r=>r.ID===1).TalepNo, "2026-1001"); assert.equal(records.find(r=>r.ID===2).TalepNo, "2026-1002");
+  assert.equal(records.find(r=>r.ID===3).TalepNo,"S1001");
+  assert.equal(await api.nextSpektrotekRequestNumber(base), "S1001");
+  assert.equal(await api.nextSpektrotekRequestNumber(base), "S1002");
   assert.equal(await api.nextKysRequestNumber(base, 2026), "2026-1003");
   records = []; assert.equal(await api.nextKysRequestNumber(base, 2026), "2026-1004");
   assert.equal(await api.nextKysRequestNumber(base, 2027), "2027-1001");

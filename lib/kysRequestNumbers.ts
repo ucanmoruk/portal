@@ -21,14 +21,14 @@ export function ensureKysRequestNumbers(base: any): Promise<void> {
     await base.request().query(hasMysqlConfig()
       ? "CREATE TABLE IF NOT EXISTS KysTalepSayac (Yil INT PRIMARY KEY,SonNo INT NOT NULL,Hazir INT NOT NULL DEFAULT 0)"
       : "IF OBJECT_ID('KysTalepSayac','U') IS NULL CREATE TABLE KysTalepSayac (Yil INT PRIMARY KEY,SonNo INT NOT NULL,Hazir INT NOT NULL DEFAULT 0)");
-    const records = (await base.request().query("SELECT ID,OlusturmaTarihi FROM KysTalep ORDER BY OlusturmaTarihi,ID")).recordset;
+    const records = (await base.request().query("SELECT ID,OlusturmaTarihi FROM KysTalep WHERE TalepNo NOT LIKE 'S%' AND Seri <> 'Spektrotek' ORDER BY OlusturmaTarihi,ID")).recordset;
     const years = [...new Set<number>([requestYear(new Date()), ...records.map((r: any) => requestYear(r.OlusturmaTarihi))])].sort();
     for (const year of years) {
       const tx = await base.transaction(); await tx.begin();
       try {
         const counter = await lockCounter(tx, year);
         if (!Number(counter.Hazir)) {
-          const current = (await tx.request().query("SELECT ID,OlusturmaTarihi FROM KysTalep ORDER BY OlusturmaTarihi,ID")).recordset.filter((r: any) => requestYear(r.OlusturmaTarihi) === year);
+          const current = (await tx.request().query("SELECT ID,OlusturmaTarihi FROM KysTalep WHERE TalepNo NOT LIKE 'S%' AND Seri <> 'Spektrotek' ORDER BY OlusturmaTarihi,ID")).recordset.filter((r: any) => requestYear(r.OlusturmaTarihi) === year);
           for (const row of current) await tx.request().input("ID", row.ID).input("No", "MIG-" + year + "-" + row.ID).query("UPDATE KysTalep SET TalepNo=@No WHERE ID=@ID");
           let number = 1000;
           for (const row of current) await tx.request().input("ID", row.ID).input("No", year + "-" + (++number)).query("UPDATE KysTalep SET TalepNo=@No WHERE ID=@ID");
@@ -45,4 +45,13 @@ export async function nextKysRequestNumber(tx: any, year = requestYear(new Date(
   const number = Math.max(1000, Number(counter.SonNo)) + 1;
   await tx.request().input("Y", year).input("N", number).query("UPDATE KysTalepSayac SET SonNo=@N,Hazir=1 WHERE Yil=@Y");
   return year + "-" + number;
+}
+
+// A separate counter key keeps the Spektrotek series independent of year changes.
+export async function nextSpektrotekRequestNumber(tx: any): Promise<string> {
+  const counter = await lockCounter(tx, 0);
+  let number = Math.max(1000, Number(counter.SonNo)) + 1;
+  while ((await tx.request().input("No", "S" + number).query("SELECT ID FROM KysTalep WHERE TalepNo=@No")).recordset.length) number += 1;
+  await tx.request().input("Y", 0).input("N", number).query("UPDATE KysTalepSayac SET SonNo=@N,Hazir=1 WHERE Yil=@Y");
+  return "S" + number;
 }

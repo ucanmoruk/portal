@@ -13,6 +13,13 @@
 .title span { font-size: 9px; letter-spacing: 1px; color: #6e6e73; }
 .title h1 { font-size: 26px; margin: 8px 0; }
 .title strong { font-size: 13px; color: #0071e3; }
+.orderMeta { margin: 12px 0 0; font-size: 11px; }
+.orderMeta div { display: flex; justify-content: flex-end; gap: 12px; margin-top: 7px; }
+.orderMeta dt { color: #6e6e73; }
+.orderMeta dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; max-width: 220px; }
+.companyDetails { margin-top: 30px; padding-top: 16px; border-top: 1px solid #d2d2d7; font-size: 11px; line-height: 1.7; break-inside: avoid; }
+.companyDetails p { margin: 4px 0; }
+.companyDetails a { color: inherit; text-decoration: none; }
 .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 20px 0; margin: 0; }
 .meta dt { font-size: 10px; color: #6e6e73; margin-bottom: 6px; }
 .meta dd { font-size: 12px; font-weight: 600; margin: 0; overflow-wrap: anywhere; }

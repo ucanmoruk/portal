@@ -2,8 +2,8 @@ export const KYS_REQUEST_TYPES = ["Stok Malzeme", "Cihaz", "Eğitim", "Kalibrasy
 
 export const REQUEST_TRANSITIONS: Record<string, string[]> = {
   "Onay Bekliyor": ["Onaylandı", "İptal"],
-  Onaylandı: ["İşleme Alındı", "İptal"],
-  "İşleme Alındı": ["İptal"],
+  Onaylandı: ["İşleme Alındı", "Onay Bekliyor"],
+  "İşleme Alındı": ["Onay Bekliyor"],
   "Kısmi Kabul": [],
   Tamamlandı: [],
   İptal: [],

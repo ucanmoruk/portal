@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import styles from "@/app/styles/table.module.css";
 import kys from "../../kys.module.css";
 import { REQUEST_TRANSITIONS } from "@/lib/kysRequestRules";
-import { useRouter } from "next/navigation";
+import TalepEditModal from "../TalepEditModal";
 
 type Birim = { id: number; ad: string };
 type Detail = { talep: any; kalemler: any[]; kabuller: any[]; belgeler?: any[]; satinAlmaYetkisi?: boolean };
@@ -23,7 +23,10 @@ function dateFmt(value?: string | null) {
 }
 
 export default function TalepDetayClient({ id }: { id: number }) {
-  const router=useRouter();
+  const [editing, setEditing] = useState(false);
+  const [editingNumber, setEditingNumber] = useState(false);
+  const [requestNumber, setRequestNumber] = useState("");
+  const [numberError, setNumberError] = useState("");
   const [suppliers,setSuppliers]=useState<any[]>([]);
   const [correcting,setCorrecting]=useState<any|null>(null);
   const [belge,setBelge]=useState<File|null>(null);
@@ -120,6 +123,18 @@ export default function TalepDetayClient({ id }: { id: number }) {
     setFormError("");
   }
 
+  async function saveNumber() {
+    if (saving) return;
+    setSaving(true); setNumberError("");
+    try {
+      const res = await fetch(`/api/kys/talepler/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ islem: "numara-duzenle", talepNo: requestNumber }) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Numara güncellenemedi.");
+      await fetchDetail(); setEditingNumber(false);
+    } catch (e) { setNumberError(e instanceof Error ? e.message : "Numara güncellenemedi."); }
+    finally { setSaving(false); }
+  }
+
   function openCorrect(k:any){
     const item=detail?.kalemler.find(i=>i.id===k.kalemId);if(!item)return;
     openAccept(item);setCorrecting(k);
@@ -127,11 +142,6 @@ export default function TalepDetayClient({ id }: { id: number }) {
       istenilenMiktardaGeldi:k.istenilenMiktardaGeldi,markaOzellikUygun:k.markaOzellikUygun,sktUygun:k.sktUygun,sertifikaGerekli:k.sertifikaGerekli,genelDegerlendirme:k.genelDegerlendirme||"",
       tedarikci:k.tedarikci||"",tedarikciId:k.tedarikciId?String(k.tedarikciId):"",satinAlmaTarihi:k.satinAlmaTarihi||today(),birimFiyat:k.birimFiyat==null?"":String(k.birimFiyat),paraBirimi:k.paraBirimi||"TRY",toplamTutar:k.toplamTutar==null?"":String(k.toplamTutar),faturaNo:k.faturaNo||""}));
   }
-  async function deleteRequest(){
-    if(!confirm("Talep listeden kaldırılacak. Bağlı kabul ve satın alma kayıtları silinecek, kabul edilen miktarlar stoktan düşülecek. Devam edilsin mi?"))return;
-    setSaving(true);try{const r=await fetch(`/api/kys/talepler/${id}`,{method:"DELETE"});const j=await r.json();if(!r.ok)throw new Error(j.error);router.push("/laboratuvar/kys/talep-listesi");}catch(e:any){setError(e.message);}finally{setSaving(false);}
-  }
-
   async function deleteAcceptance(k: any) {
     if (saving || !confirm("Bu kabul ve bağlı satın alma kaydı silinecek, gelen miktar stoktan geri alınacak. Devam edilsin mi?")) return;
     setSaving(true); setError("");
@@ -179,17 +189,19 @@ export default function TalepDetayClient({ id }: { id: number }) {
           <span className={kys.pill}>{detail.talep.durum}</span>
         </div>
         <div className={styles.toolbarRight}>
+          {detail.talep.seri === "Spektrotek" && <button type="button" disabled={saving} className={styles.cancelBtn} onClick={() => {setRequestNumber(detail.talep.talepNo);setNumberError("");setEditingNumber(true);}}>Talep no düzenle</button>}
+          {detail.talep.durum === "Onay Bekliyor" && !detail.talep.onayTarihi && <button type="button" disabled={saving || loading || editing} className={styles.addBtn} onClick={() => setEditing(true)}><Pencil size={15} aria-hidden="true" /> Talebi düzenle</button>}
           <Link className={styles.cancelBtn} href={`/kys-talep-yazdir/${id}`} target="_blank">Yazdır</Link>
           {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("Onaylandı")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#e7f7ed",color:"#16713b",borderColor:"#a0d6b4"}} onClick={() => setStatus("Onaylandı")}>Onayla</button>}
           {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("İşleme Alındı")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#e8f0ff",color:"#235ac0",borderColor:"#a7c1ee"}} onClick={() => setStatus("İşleme Alındı")}>İşleme al</button>}
           {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("İptal")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#fff0ee",color:"#b42318",borderColor:"#efb2ab"}} onClick={() => setStatus("İptal")}>İptal</button>}
-          <button disabled={saving} className={styles.cancelBtn} onClick={deleteRequest}>Talebi sil</button>
+          {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("Onay Bekliyor")&&<button type="button" disabled={saving} className={styles.cancelBtn} onClick={() => setStatus("Onay Bekliyor")}>Geri Gönder</button>}
         </div>
       </div>
 
       <div className={styles.tableCard} style={{ padding: 16 }}>
         <div className={kys.detailGrid}>
-          <div className={kys.detailItem}><div className={kys.detailLabel}>Talep türü</div><div className={kys.detailValue}>{detail.talep.talepTuru}</div></div>
+          <div className={kys.detailItem}><div className={kys.detailLabel}>{detail.talep.seri === "Spektrotek" ? "Firma adı" : "Talep türü"}</div><div className={kys.detailValue}>{detail.talep.seri === "Spektrotek" ? detail.talep.firmaAdi : detail.talep.talepTuru}</div></div>
           <div className={kys.detailItem}><div className={kys.detailLabel}>Oluşturan</div><div className={kys.detailValue}>{detail.talep.olusturanAd || "-"}</div></div>
           <div className={kys.detailItem}><div className={kys.detailLabel}>Tarih</div><div className={kys.detailValue}>{dateFmt(detail.talep.olusturmaTarihi)}</div></div>
           <div className={kys.detailItem}><div className={kys.detailLabel}>Not</div><div className={kys.detailValue}>{detail.talep.notlar || "-"}</div></div>
@@ -216,7 +228,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
                   <td>{item.marka || "-"}</td>
                   <td className={styles.tdAdres}>{item.kullaniciNotu || item.ozellik || "-"}</td>
                   <td><span className={kys.pill}>{item.durum}</span></td>
-                  <td>{["İşleme Alındı","Kısmi Kabul"].includes(detail.talep.durum)&&item.durum!=="Tamamlandı"&&<button className={styles.editBtn} onClick={() => openAccept(item)}>Kabul et</button>}{item.durum==="Tamamlandı"&&<span className={kys.muted}>Kabul tamamlandı</span>}</td>
+                  <td>{["İşleme Alındı","Kısmi Kabul"].includes(detail.talep.durum)&&item.durum!=="Tamamlandı"&&<button type="button" className={styles.addBtn} onClick={() => openAccept(item)}>Kabul et</button>}{item.durum==="Tamamlandı"&&<span className={kys.muted}>Kabul tamamlandı</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -226,7 +238,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
 
       <div className={styles.tableCard}>
         <div className={styles.tableWrapper}>
-          <table className={styles.table}>
+          <table className={`${styles.table} ${kys.acceptanceTable}`}>
             <thead><tr><th>Kabul tarihi</th><th>Kalem</th><th>Gelen miktar</th>{detail.satinAlmaYetkisi && <><th>Tedarikçi</th><th>Toplam satın alma tutarı</th></>}<th>Değerlendiren</th><th>Genel değerlendirme</th><th>Belge / Düzeltme</th></tr></thead>
             <tbody>
               {detail.kabuller.length === 0 ? <tr><td colSpan={detail.satinAlmaYetkisi ? 8 : 6}><div className={styles.empty}>Kabul kaydı yok.</div></td></tr> : detail.kabuller.map(k => {
@@ -238,6 +250,15 @@ export default function TalepDetayClient({ id }: { id: number }) {
         </div>
       </div>
 
+      {editing && <TalepEditModal id={id} onClose={() => setEditing(false)} onSaved={fetchDetail} initial={{
+        seri: detail.talep.seri, firmaAdi: detail.talep.firmaAdi, talepTuru: detail.talep.talepTuru, notlar: detail.talep.notlar || "", teknikSartname: detail.talep.teknikSartname || "",
+        kalemler: detail.kalemler.map(item => ({ stokId: item.stokId ? String(item.stokId) : "", kod: item.kod || "", malzemeAdi: item.malzemeAdi, miktar: String(item.miktar), birim: item.birim || "Adet", ozellik: item.ozellik || "", marka: item.marka || "", kullaniciNotu: item.kullaniciNotu || "" })),
+      }} />}
+      {editingNumber && <div className={styles.modalOverlay}><div className={styles.modal} style={{maxWidth:460}} role="dialog" aria-modal="true" aria-labelledby="request-number-title">
+        <div className={styles.modalHeader}><h2 id="request-number-title">Talep numarasını düzenle</h2><button className={styles.modalClose} aria-label="Kapat" disabled={saving} onClick={()=>setEditingNumber(false)}>×</button></div>
+        <div className={styles.modalBody}>{numberError && <div role="alert" className={styles.formError}>{numberError}</div>}<div className={styles.formGroup}><label htmlFor="request-number">Talep numarası</label><input id="request-number" maxLength={40} value={requestNumber} onChange={e=>setRequestNumber(e.target.value)} /></div></div>
+        <div className={styles.modalFooter}><button disabled={saving} className={styles.cancelBtn} onClick={()=>setEditingNumber(false)}>Vazgeç</button><button disabled={saving || !requestNumber.trim()} className={styles.saveBtn} onClick={saveNumber}>{saving ? "Kaydediliyor…" : "Kaydet"}</button></div>
+      </div></div>}
       {acceptItem && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 820 }}>

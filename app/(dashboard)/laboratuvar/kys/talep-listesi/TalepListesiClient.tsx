@@ -12,6 +12,8 @@ type RequestRow = {
   id: number;
   talepNo: string;
   talepTuru: string;
+  firmaAdi: string;
+  seri: string;
   durum: string;
   olusturanAd: string;
   olusturmaTarihi: string | null;
@@ -51,6 +53,8 @@ export default function TalepListesiClient() {
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [search, setSearch] = useState("");
   const [durum, setDurum] = useState("");
+  const [seri, setSeri] = useState("");
+  const [newSeries, setNewSeries] = useState("Unique");
   const [tur, setTur] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -61,14 +65,14 @@ export default function TalepListesiClient() {
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
-  const [form, setForm] = useState({ talepTuru: "Stok Malzeme", notlar: "", teknikSartname: "", kalemler: [{ ...emptyItem }] });
+  const [form, setForm] = useState({ firmaAdi: "", talepTuru: "Stok Malzeme", notlar: "", teknikSartname: "", kalemler: [{ ...emptyItem }] });
   const pages = useMemo(() => pageNums(page, totalPages), [page, totalPages]);
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const qs = new URLSearchParams({ search, durum, tur, page: String(page), limit: String(limit) });
+      const qs = new URLSearchParams({ search, durum, tur, seri, page: String(page), limit: String(limit) });
       const res = await fetch(`/api/kys/talepler?${qs.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Talep listesi alınamadı.");
@@ -80,7 +84,7 @@ export default function TalepListesiClient() {
     } finally {
       setLoading(false);
     }
-  }, [durum, limit, page, search, tur]);
+  }, [durum, limit, page, search, tur, seri]);
 
   useEffect(() => { fetchRows(); }, [fetchRows]);
 
@@ -111,6 +115,7 @@ export default function TalepListesiClient() {
     try {
       const payload = {
         ...form,
+        seri: newSeries,
         kalemler: form.kalemler.map(k => ({ ...k, stokId: k.stokId ? Number(k.stokId) : null })),
       };
       const res = await fetch("/api/kys/talepler", {
@@ -121,7 +126,7 @@ export default function TalepListesiClient() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Talep oluşturulamadı.");
       setModalOpen(false);
-      setForm({ talepTuru: "Stok Malzeme", notlar: "", teknikSartname: "", kalemler: [{ ...emptyItem }] });
+      setForm({ firmaAdi: "", talepTuru: "Stok Malzeme", notlar: "", teknikSartname: "", kalemler: [{ ...emptyItem }] });
       fetchRows();
     } catch (e: unknown) {
       setFormError(errorMessage(e, "Talep oluşturulamadı."));
@@ -143,9 +148,10 @@ export default function TalepListesiClient() {
           <div className={styles.searchBox}><input className={styles.searchInput} placeholder="Talep no, oluşturan veya not ara..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
           <span className={styles.totalCount}>{total} talep</span>
         </div>
-        <div className={styles.toolbarRight}><Link className={styles.cancelBtn} href="/laboratuvar/kys/tedarikci-listesi">Tedarikçi listesi</Link><button className={styles.addBtn} onClick={() => setModalOpen(true)}>+ Talep oluştur</button></div>
+        <div className={styles.toolbarRight}><Link className={styles.cancelBtn} href="/laboratuvar/kys/tedarikci-listesi">Tedarikçi listesi</Link><button className={styles.addBtn} onClick={() => { setNewSeries("Unique"); setForm({firmaAdi:"",talepTuru:"Stok Malzeme",notlar:"",teknikSartname:"",kalemler:[{...emptyItem}]}); setModalOpen(true); }}>+ Talep oluştur</button><button className={styles.addBtn} onClick={() => {setNewSeries("Spektrotek");setForm({firmaAdi:"",talepTuru:"Satın Alma",notlar:"",teknikSartname:"",kalemler:[{...emptyItem}]});setModalOpen(true);}}>Spektrotek</button></div>
       </div>
       <div className={kys.filterRow}>
+        <select aria-label="Talep serisi" className={kys.select} value={seri} onChange={e=>{setSeri(e.target.value);setPage(1);}}><option value="">Tümü</option><option>Unique</option><option>Spektrotek</option></select>
         <select className={kys.select} value={tur} onChange={e => { setTur(e.target.value); setPage(1); }}><option value="">Tüm türler</option>{KYS_REQUEST_TYPES.map(type => <option key={type}>{type}</option>)}<option value="Sarf">Sarf (eski kayıtlar)</option></select>
         <select className={kys.select} value={durum} onChange={e => { setDurum(e.target.value); setPage(1); }}><option value="">Tüm durumlar</option><option>Onay Bekliyor</option><option>Onaylandı</option><option>İşleme Alındı</option><option>Kısmi Kabul</option><option>Tamamlandı</option><option>İptal</option><option value="Silindi">Silinen talepler</option></select>
         <select className={styles.pageSizeSelect} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>{[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} / sayfa</option>)}</select>
@@ -159,7 +165,7 @@ export default function TalepListesiClient() {
               {loading ? <tr><td colSpan={8}><div className={styles.skeleton} /></td></tr> : rows.length === 0 ? <tr><td colSpan={8}><div className={styles.empty}>Talep bulunamadı.</div></td></tr> : rows.map(row => (
                 <tr key={row.id}>
                   <td className={styles.tdMono}><Link className={kys.requestLink} href={`/laboratuvar/kys/talep-listesi/${row.id}`}>{row.talepNo}</Link></td>
-                  <td>{row.talepTuru}</td>
+                  <td>{row.seri === "Spektrotek" ? `${row.talepTuru === "Sipariş" ? "Sipariş" : "Satın Alma"} / ${row.firmaAdi}` : row.talepTuru}</td>
                   <td><span className={`${kys.pill} ${statusClass(row.durum)}`}>{row.durum}</span></td>
                   <td>{row.kalemSayisi}</td>
                   <td>{row.olusturanAd || "-"}<div className={kys.muted}>{dateFmt(row.olusturmaTarihi)}</div></td>
@@ -181,16 +187,16 @@ export default function TalepListesiClient() {
       {modalOpen && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 940 }} role="dialog" aria-modal="true" aria-labelledby="request-title">
-            <div className={styles.modalHeader}><h2 id="request-title">Yeni talep oluştur</h2><button className={styles.modalClose} aria-label="Kapat" disabled={saving} onClick={() => setModalOpen(false)}>×</button></div>
+            <div className={styles.modalHeader}><h2 id="request-title">{newSeries === "Spektrotek" ? "Spektrotek talebi oluştur" : "Yeni talep oluştur"}</h2><button className={styles.modalClose} aria-label="Kapat" disabled={saving} onClick={() => setModalOpen(false)}>×</button></div>
             <div className={styles.modalBody}>
               {formError && <div role="alert" className={styles.formError}>{formError}</div>}
-              <div className={styles.formGroup} style={{ maxWidth: 280, marginBottom: 18 }}><label htmlFor="request-type">Talep türü</label><select id="request-type" value={form.talepTuru} onChange={e => setForm(f => ({ ...f, talepTuru: e.target.value }))}>{KYS_REQUEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></div>
+              {newSeries === "Spektrotek" ? <div className={kys.spektrotekHeader} style={{marginBottom:18}}><div className={styles.formGroup}><label htmlFor="spektrotek-type">Talep türü</label><select id="spektrotek-type" value={form.talepTuru} onChange={e=>setForm(f=>({...f,talepTuru:e.target.value}))}><option>Satın Alma</option><option>Sipariş</option></select></div><div className={styles.formGroup}><label htmlFor="request-company">Firma adı</label><input id="request-company" maxLength={220} value={form.firmaAdi} onChange={e=>setForm(f=>({...f,firmaAdi:e.target.value}))} /></div></div> : (              <div className={styles.formGroup} style={{ maxWidth: 280, marginBottom: 18 }}><label htmlFor="request-type">Talep türü</label><select id="request-type" value={form.talepTuru} onChange={e => setForm(f => ({ ...f, talepTuru: e.target.value }))}>{KYS_REQUEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></div>)}
               <div className={kys.requestItems}>
                 {form.kalemler.map((item, index) => (
                   <details key={index} open={index === form.kalemler.length - 1} className={kys.requestItem}>
                     <summary>Kalem {index + 1} · {item.malzemeAdi || "Yeni kalem"} · {item.miktar} {item.birim}</summary>
                     <div className={kys.requestItemGrid}>
-                      <div className={`${styles.formGroup} ${kys.itemStock}`}><label>Stok kodu / adı ara</label><KysStockPicker value={item.stokId ? `${item.kod} — ${item.malzemeAdi}` : ""} onPick={stock => pickStock(index, stock)} /></div>
+                      {newSeries !== "Spektrotek" && <div className={`${styles.formGroup} ${kys.itemStock}`}><label>Stok kodu / adı ara</label><KysStockPicker value={item.stokId ? `${item.kod} — ${item.malzemeAdi}` : ""} onPick={stock => pickStock(index, stock)} /></div>}
                       <div className={`${styles.formGroup} ${kys.itemCode}`}><label htmlFor={`item-code-${index}`}>Kod</label><input id={`item-code-${index}`} value={item.kod} onChange={e => updateItem(index, "kod", e.target.value)} /></div>
                       <div className={`${styles.formGroup} ${kys.itemName}`}><label htmlFor={`item-name-${index}`}>Malzeme / hizmet adı</label><input id={`item-name-${index}`} value={item.malzemeAdi} onChange={e => updateItem(index, "malzemeAdi", e.target.value)} /></div>
                       <div className={`${styles.formGroup} ${kys.itemQuantity}`}><label htmlFor={`item-quantity-${index}`}>Miktar</label><input id={`item-quantity-${index}`} inputMode="decimal" value={item.miktar} onChange={e => updateItem(index, "miktar", e.target.value)} /></div>

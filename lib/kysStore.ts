@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ensureKysRequestNumbers, nextKysRequestNumber } from "@/lib/kysRequestNumbers";
+import { ensureKysRequestNumbers, nextKysRequestNumber, nextSpektrotekRequestNumber } from "@/lib/kysRequestNumbers";
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { requireRequestAcceptance, requireRequestTransition } from "@/lib/kysRequestRules";
@@ -39,6 +39,8 @@ export type KysMovementInput = {
 };
 
 export type KysRequestInput = {
+  seri?: string;
+  firmaAdi?: string;
   talepTuru?: string;
   notlar?: string;
   teknikSartname?: string;
@@ -456,6 +458,15 @@ async function createKysSchema() {
     await pool.request().query("IF COL_LENGTH('KysTalepKabul', 'SatinAlanID') IS NULL ALTER TABLE KysTalepKabul ADD SatinAlanID NVARCHAR(80) NULL");
     await pool.request().query("IF COL_LENGTH('KysTalepKabul', 'SatinAlanAd') IS NULL ALTER TABLE KysTalepKabul ADD SatinAlanAd NVARCHAR(160) NULL");
   }
+
+  await pool.request().query(hasMysqlConfig()
+    ? "ALTER TABLE KysTalep ADD COLUMN IF NOT EXISTS FirmaAdi VARCHAR(220) NULL"
+    : "IF COL_LENGTH('KysTalep', 'FirmaAdi') IS NULL ALTER TABLE KysTalep ADD FirmaAdi NVARCHAR(220) NULL");
+
+  await pool.request().query(hasMysqlConfig()
+    ? "ALTER TABLE KysTalep ADD COLUMN IF NOT EXISTS Seri VARCHAR(20) NOT NULL DEFAULT 'Unique'"
+    : "IF COL_LENGTH('KysTalep', 'Seri') IS NULL ALTER TABLE KysTalep ADD Seri NVARCHAR(20) NOT NULL DEFAULT 'Unique'");
+  await pool.request().query("UPDATE KysTalep SET Seri='Spektrotek' WHERE TalepNo LIKE 'S%' AND Seri='Unique'");
 
   for (const birim of ["Depo", "Mikrobiyoloji", "Kimyasal", "Dış Laboratuvar", "Numune Kabul"]) {
     await pool.request().input("Ad", birim).query(`
@@ -926,7 +937,7 @@ export async function listKysExpiry(params: { search?: string; days?: number; pa
   };
 }
 
-export async function listKysRequests(params: { search?: string; durum?: string; tur?: string; page?: number; limit?: number }) {
+export async function listKysRequests(params: { search?: string; durum?: string; tur?: string; seri?: string; page?: number; limit?: number }) {
   await ensureKysSchema();
   await ensureKysRequestNumbers(await cosmoPool);
   const pool = await cosmoPool;
@@ -940,6 +951,8 @@ export async function listKysRequests(params: { search?: string; durum?: string;
   if (search) where += " AND (t.TalepNo LIKE @search OR t.OlusturanAd LIKE @search OR t.Notlar LIKE @search)";
   if (durum) where += " AND t.Durum = @durum";
   if (tur) where += " AND t.TalepTuru = @tur";
+  if (params.seri === "Spektrotek") where += " AND t.Seri = 'Spektrotek'";
+  if (params.seri === "Unique") where += " AND t.Seri = 'Unique'";
   const bind = (req: any) => req.input("search", `%${search}%`).input("durum", durum).input("tur", tur);
 
   const countRes = await bind(pool.request()).query(`SELECT COUNT(*) AS total FROM KysTalep t ${where}`);
@@ -947,7 +960,7 @@ export async function listKysRequests(params: { search?: string; durum?: string;
     .input("offset", offset)
     .input("limit", limit)
     .query(`
-      SELECT t.ID, t.TalepNo, t.TalepTuru, t.Durum, t.OlusturanAd, t.OlusturmaTarihi,
+      SELECT t.ID, t.TalepNo, t.Seri, t.FirmaAdi, t.TalepTuru, t.Durum, t.OlusturanAd, t.OlusturmaTarihi,
              t.OnaylayanAd, t.OnayTarihi, t.IslemeAlanAd, t.IslemeAlmaTarihi,
              (SELECT COUNT(*) FROM KysTalepKalem k WHERE k.TalepID = t.ID) AS KalemSayisi
       FROM KysTalep t
@@ -970,6 +983,8 @@ function mapRequest(r: AnyRow) {
     id: rowNumber(r, "ID"),
     talepNo: rowString(r, "TalepNo"),
     talepTuru: rowString(r, "TalepTuru"),
+    firmaAdi: rowString(r, "FirmaAdi"),
+    seri: rowString(r, "Seri") || (rowString(r, "TalepNo").startsWith("S") ? "Spektrotek" : "Unique"),
     durum: rowString(r, "Durum"),
     olusturanAd: rowString(r, "OlusturanAd"),
     olusturmaTarihi: asDateTime(r.OlusturmaTarihi),
@@ -989,19 +1004,25 @@ export async function createKysRequest(input: KysRequestInput) {
   const basePool = await cosmoPool;
   const pool=await basePool.transaction();await pool.begin();
   try {
-  const talepNo = await nextKysRequestNumber(pool);
-  const talepTuru = text(input.talepTuru) || "Stok Malzeme";
+  if (input.seri && !["Unique", "Spektrotek"].includes(input.seri)) throw new Error("Talep serisi geçersiz.");
+  const spektrotek = input.seri === "Spektrotek";
+  if (spektrotek && (!text(input.firmaAdi) || text(input.firmaAdi).length > 220)) throw new Error("Firma adı zorunludur (en fazla 220 karakter).");
+  if (spektrotek && input.kalemler.some(k => k.stokId)) throw new Error("Spektrotek kalemleri manuel girilmelidir.");
+  const talepNo = spektrotek ? await nextSpektrotekRequestNumber(pool) : await nextKysRequestNumber(pool);
+  const talepTuru = spektrotek ? (text(input.talepTuru) === "Sipariş" ? "Sipariş" : "Satın Alma") : text(input.talepTuru) || "Stok Malzeme";
   const res = await pool.request()
     .input("TalepNo", talepNo)
+    .input("Seri", spektrotek ? "Spektrotek" : "Unique")
+    .input("FirmaAdi", spektrotek ? text(input.firmaAdi) : null)
     .input("TalepTuru", talepTuru)
     .input("OlusturanID", nullableText(input.olusturanId))
     .input("OlusturanAd", nullableText(input.olusturanAd))
     .input("Notlar", nullableText(input.notlar))
     .input("TeknikSartname", nullableText(input.teknikSartname))
     .query(`
-      INSERT INTO KysTalep (TalepNo, TalepTuru, Durum, OlusturanID, OlusturanAd, Notlar, TeknikSartname)
+      INSERT INTO KysTalep (TalepNo, Seri, FirmaAdi, TalepTuru, Durum, OlusturanID, OlusturanAd, Notlar, TeknikSartname)
       OUTPUT INSERTED.ID
-      VALUES (@TalepNo, @TalepTuru, 'Onay Bekliyor', @OlusturanID, @OlusturanAd, @Notlar, @TeknikSartname)
+      VALUES (@TalepNo, @Seri, @FirmaAdi, @TalepTuru, 'Onay Bekliyor', @OlusturanID, @OlusturanAd, @Notlar, @TeknikSartname)
     `);
   const id = Number(res.recordset[0]?.ID || res.recordset[0]?.id || 0);
   for (const item of input.kalemler || []) {
@@ -1029,6 +1050,70 @@ export async function createKysRequest(input: KysRequestInput) {
   }
   await pool.commit();return id;
   }catch(e){await pool.rollback();throw e;}
+}
+
+export async function editSpektrotekRequestNumber(id: number, value: unknown) {
+  await ensureKysSchema();
+  const number = text(value);
+  if (!number || number.length > 40 || /[\r\n\t]/.test(number)) throw new Error("Talep numarası 1–40 karakter olmalıdır.");
+  const pool = await (await cosmoPool).transaction();
+  await pool.begin();
+  try {
+    const row = (await pool.request().input("ID", id).query(hasMysqlConfig()
+      ? "SELECT * FROM KysTalep WHERE ID=@ID FOR UPDATE"
+      : "SELECT * FROM KysTalep WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
+    if (!row || row.Durum === "Silindi") throw new Error("Talep bulunamadı.");
+    if (row.Seri !== "Spektrotek") throw new Error("Yalnızca Spektrotek talep numarası değiştirilebilir.");
+    const duplicate = (await pool.request().input("ID", id).input("No", number)
+      .query("SELECT ID FROM KysTalep WHERE TalepNo=@No AND ID<>@ID")).recordset;
+    if (duplicate.length) throw new Error("Bu talep numarası başka bir kayıtta kullanılıyor.");
+    await pool.request().input("ID", id).input("No", number)
+      .query("UPDATE KysTalep SET TalepNo=@No,UpdatedAt=GETDATE() WHERE ID=@ID");
+    await pool.commit();
+  } catch (e) { await pool.rollback(); throw e; }
+}
+
+export async function editKysRequest(id: number, input: KysRequestInput) {
+  await ensureKysSchema();
+  if (!Array.isArray(input.kalemler) || !input.kalemler.length || input.kalemler.length > 100)
+    throw new Error("1–100 talep kalemi ekleyin.");
+  if (input.kalemler.some(k => !text(k.malzemeAdi) || !Number.isFinite(numberValue(k.miktar, NaN)) || numberValue(k.miktar) <= 0))
+    throw new Error("Her kalemin adı ve pozitif miktarı zorunludur.");
+  const pool = await (await cosmoPool).transaction();
+  await pool.begin();
+  try {
+    const current = (await pool.request().input("ID", id).query(hasMysqlConfig()
+      ? "SELECT * FROM KysTalep WHERE ID=@ID FOR UPDATE"
+      : "SELECT * FROM KysTalep WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
+    if (!current) throw new Error("Talep bulunamadı.");
+    if (current.Durum !== "Onay Bekliyor" || current.OnayTarihi)
+      throw new Error("Yalnızca onaylanmamış talepler düzenlenebilir. Sayfayı yenileyin.");
+    const spektrotek = current.Seri === "Spektrotek" || String(current.TalepNo).startsWith("S");
+    if (spektrotek && (!text(input.firmaAdi) || text(input.firmaAdi).length > 220)) throw new Error("Firma adı zorunludur (en fazla 220 karakter).");
+    if (spektrotek && input.kalemler.some(k => k.stokId)) throw new Error("Spektrotek kalemleri manuel girilmelidir.");
+    const accepted = await pool.request().input("ID", id).query("SELECT ID FROM KysTalepKabul WHERE TalepID=@ID");
+    if (accepted.recordset.length) throw new Error("Kabul kaydı bulunan talep düzenlenemez.");
+    await pool.request().input("ID", id).input("Tur", spektrotek ? (text(input.talepTuru) === "Sipariş" ? "Sipariş" : "Satın Alma") : text(input.talepTuru) || "Stok Malzeme")
+      .input("Firma", spektrotek ? text(input.firmaAdi) : null)
+      .input("Not", nullableText(input.notlar)).input("Spec", nullableText(input.teknikSartname))
+      .query("UPDATE KysTalep SET FirmaAdi=@Firma,TalepTuru=@Tur,Notlar=@Not,TeknikSartname=@Spec,UpdatedAt=GETDATE() WHERE ID=@ID");
+    await pool.request().input("ID", id).query("DELETE FROM KysTalepKalem WHERE TalepID=@ID");
+    for (const item of input.kalemler) {
+      let unit = text(item.birim) || "Adet";
+      if (item.stokId) {
+        const stock = (await pool.request().input("ID", Number(item.stokId)).query("SELECT ID,Birim FROM KysStokKart WHERE ID=@ID")).recordset[0];
+        if (!stock) throw new Error("Seçili stok kartı bulunamadı.");
+        unit = stock.Birim || "Adet";
+      }
+      await pool.request().input("ID", id).input("Stock", item.stokId ? Number(item.stokId) : null)
+        .input("Code", nullableText(item.kod)).input("Name", text(item.malzemeAdi))
+        .input("Qty", numberValue(item.miktar)).input("Unit", unit).input("Feature", nullableText(item.ozellik))
+        .input("Brand", nullableText(item.marka)).input("Note", nullableText(item.kullaniciNotu))
+        .query(`INSERT INTO KysTalepKalem (TalepID,StokID,Kod,MalzemeAdi,Miktar,Birim,Ozellik,Marka,KullaniciNotu)
+          VALUES (@ID,@Stock,@Code,@Name,@Qty,@Unit,@Feature,@Brand,@Note)`);
+    }
+    await pool.commit();
+  } catch (e) { await pool.rollback(); throw e; }
 }
 
 export async function getKysRequestDetail(id: number, includePurchaseDetails = false, executor?: any) {
@@ -1098,14 +1183,24 @@ export async function getKysRequestDetail(id: number, includePurchaseDetails = f
 
 export async function updateKysRequestStatus(id: number, input: { durum?: string; userId?: string | null; userName?: string | null }) {
   await ensureKysSchema();
-  const pool = await cosmoPool;
   const durum = text(input.durum);
   if (!durum) throw new Error("Durum zorunludur.");
-  const current = (await pool.request().input("ID", id).query("SELECT Durum FROM KysTalep WHERE ID=@ID")).recordset[0];
+  const pool = await (await cosmoPool).transaction();
+  await pool.begin();
+  try {
+  const current = (await pool.request().input("ID", id).query(hasMysqlConfig()
+    ? "SELECT Durum FROM KysTalep WHERE ID=@ID FOR UPDATE"
+    : "SELECT Durum FROM KysTalep WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
   if (!current) throw new Error("Talep bulunamadı.");
   requireRequestTransition(current.Durum, durum);
+  if (durum === "Onay Bekliyor") {
+    const accepted = (await pool.request().input("ID", id).query("SELECT ID FROM KysTalepKabul WHERE TalepID=@ID")).recordset;
+    if (accepted.length) throw new Error("Kabul kaydı bulunan talep geri gönderilemez.");
+  }
   const dateFields =
-    durum === "Onaylandı"
+    durum === "Onay Bekliyor"
+      ? ", OnaylayanID = NULL, OnaylayanAd = NULL, OnayTarihi = NULL, IslemeAlanID = NULL, IslemeAlanAd = NULL, IslemeAlmaTarihi = NULL"
+      : durum === "Onaylandı"
       ? ", OnaylayanID = @UserID, OnaylayanAd = @UserName, OnayTarihi = GETDATE()"
       : durum === "İşleme Alındı"
         ? ", IslemeAlanID = @UserID, IslemeAlanAd = @UserName, IslemeAlmaTarihi = GETDATE()"
@@ -1118,6 +1213,8 @@ export async function updateKysRequestStatus(id: number, input: { durum?: string
     .input("UserName", nullableText(input.userName))
     .query(`UPDATE KysTalep SET Durum = @Durum${dateFields}, UpdatedAt = GETDATE() WHERE ID = @ID AND Durum=@Current`)
     .then(result => { if (!result.rowsAffected?.[0]) throw new Error("Talep durumu değişmiş. Sayfayı yenileyin."); });
+  await pool.commit();
+  } catch (e) { await pool.rollback(); throw e; }
 }
 
 export async function acceptKysRequestItem(talepId: number, input: any) {
