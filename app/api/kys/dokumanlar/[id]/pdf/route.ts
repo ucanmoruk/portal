@@ -51,8 +51,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       displayHeaderFooter: true,
       headerTemplate: `
         <div style="width:100%;padding:0 14mm 2.5mm;font-family:Arial,sans-serif;color:#111827;box-sizing:border-box;">
-          <div style="display:grid;grid-template-columns:22mm minmax(0,1fr) max-content;align-items:center;gap:4mm;min-height:29mm;border-bottom:1px solid #9ca3af;">
-            <img src="${logoData}" style="display:block;width:18mm;height:18mm;object-fit:cover;object-position:left;" />
+          <div style="display:grid;grid-template-columns:50mm minmax(0,1fr) max-content;align-items:center;gap:4mm;min-height:29mm;border-bottom:1px solid #9ca3af;">
+            <img src="${logoData}" style="display:block;width:48mm;height:auto;object-fit:contain;" />
             <strong style="text-align:center;font-size:17px;line-height:1.22;">${escapeHtml(doc.baslik)}</strong>
             <table style="width:max-content;border-collapse:collapse;font-size:8pt;line-height:1.2;"><tbody>
               <tr><th style="white-space:nowrap;border:1px solid #9ca3af;padding:2px 5px;text-align:left;vertical-align:middle;background:#f4f6f8;">Doküman No</th><td style="border:1px solid #9ca3af;padding:2px 5px;white-space:nowrap;text-align:left;vertical-align:middle;">${escapeHtml(doc.kod)}</td></tr>

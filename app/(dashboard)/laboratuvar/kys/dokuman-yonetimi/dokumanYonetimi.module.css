@@ -861,7 +861,7 @@
   width: min(880px, 100%);
   min-height: 820px;
   margin: 0 auto;
-  padding: 34px 42px;
+  padding: 34px 64px 34px 40px;
   background: #fff;
   color: #111827;
   box-shadow: 0 12px 36px rgba(15, 23, 42, 0.12);
@@ -900,8 +900,8 @@
 .modalActions { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px 20px; border-top: 1px solid var(--color-border-light); }
 @media (max-width: 600px) { .manualRevisionForm { grid-template-columns: 1fr; } .manualRevisionItemHeader { display: none; } .manualRevisionItem { grid-template-columns: 1fr 34px; } .manualRevisionItem textarea { grid-column: 1; } .revisionDetailRows > div { grid-template-columns: 1fr; } }
 
-.previewDocumentHeader { display: grid; grid-template-columns: 82px minmax(0,1fr) 220px; align-items: center; gap: 20px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid #cfd5dd; }
-.previewDocumentHeader img { width: 68px; height: 68px; object-fit: cover; object-position: left; }
+.previewDocumentHeader { display: grid; grid-template-columns: 190px minmax(0,1fr) 220px; align-items: center; gap: 20px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid #cfd5dd; }
+.previewDocumentHeader img { width: 180px; height: auto; object-fit: contain; }
 .previewDocumentHeader > strong { text-align: center; font-size: 1.24rem; font-weight: 800; line-height: 1.25; }
 .previewDocumentHeader table { width: 100%; border-collapse: collapse; font-size: .72rem; }
 .previewDocumentHeader th,.previewDocumentHeader td { border: 1px solid #bfc6cf; padding: 3px 5px; text-align: left; }
