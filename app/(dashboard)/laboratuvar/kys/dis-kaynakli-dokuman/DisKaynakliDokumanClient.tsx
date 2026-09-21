@@ -8,7 +8,7 @@ import styles from "../dokuman-yonetimi/dokumanYonetimi.module.css";
 
 type Row = {
   id: number;
-  akreditasyon: boolean;
+  birim: string;
   dokumanKodu: string;
   dokumanAdi: string;
   yayincisi: string;
@@ -23,7 +23,7 @@ type Row = {
 };
 
 const emptyForm = {
-  akreditasyon: "0",
+  birim: "Kalite",
   dokumanKodu: "",
   dokumanAdi: "",
   yayincisi: "",
@@ -49,7 +49,7 @@ export default function DisKaynakliDokumanClient() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [akreditasyon, setAkreditasyon] = useState("");
+  const [birim, setBirim] = useState("");
   const [kontrol, setKontrol] = useState("");
   const [sort, setSort] = useState("guncel");
   const [page, setPage] = useState(1);
@@ -75,7 +75,7 @@ export default function DisKaynakliDokumanClient() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  useEffect(() => { setPage(1); }, [debouncedSearch, akreditasyon, kontrol, sort, limit]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, birim, kontrol, sort, limit]);
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
@@ -83,7 +83,7 @@ export default function DisKaynakliDokumanClient() {
     try {
       const params = new URLSearchParams({
         search: debouncedSearch,
-        akreditasyon,
+        birim,
         kontrol,
         sort,
         page: String(page),
@@ -103,7 +103,7 @@ export default function DisKaynakliDokumanClient() {
     } finally {
       setLoading(false);
     }
-  }, [akreditasyon, kontrol, debouncedSearch, limit, page, sort]);
+  }, [birim, kontrol, debouncedSearch, limit, page, sort]);
 
   useEffect(() => { void fetchRows(); }, [fetchRows]);
 
@@ -121,7 +121,7 @@ export default function DisKaynakliDokumanClient() {
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const visibleIds = useMemo(() => rows.map(row => row.id), [rows]);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedSet.has(id));
-  const filtreAktif = Boolean(debouncedSearch || akreditasyon || kontrol);
+  const filtreAktif = Boolean(debouncedSearch || birim || kontrol);
 
   function toggleSelected(id: number) {
     setSelected(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
@@ -149,7 +149,7 @@ export default function DisKaynakliDokumanClient() {
     setEditId(row.id);
     setEditCurrentPdf(row.pdfPath ? { path: row.pdfPath, name: row.pdfOriginalName || "Mevcut PDF" } : null);
     setForm({
-      akreditasyon: row.akreditasyon ? "1" : "0",
+      birim: row.birim || "Kalite",
       dokumanKodu: row.dokumanKodu,
       dokumanAdi: row.dokumanAdi,
       yayincisi: row.yayincisi,
@@ -250,7 +250,7 @@ export default function DisKaynakliDokumanClient() {
             </div>
             <span className={tableStyles.totalCount}>{total} kayıt</span>
             {filtreAktif && (
-              <button type="button" className={tableStyles.filterBadge} onClick={() => { setSearch(""); setAkreditasyon(""); setKontrol(""); }}>
+              <button type="button" className={tableStyles.filterBadge} onClick={() => { setSearch(""); setBirim(""); setKontrol(""); }}>
                 Filtreleri temizle
               </button>
             )}
@@ -274,10 +274,12 @@ export default function DisKaynakliDokumanClient() {
         </div>
 
         <div className={kys.filterRow}>
-          <select className={kys.select} value={akreditasyon} onChange={event => setAkreditasyon(event.target.value)}>
-            <option value="">Akreditasyon: Tümü</option>
-            <option value="var">Var</option>
-            <option value="yok">Yok</option>
+          <select className={kys.select} value={birim} onChange={event => setBirim(event.target.value)}>
+            <option value="">Birim: Tümü</option>
+            <option value="Kalite">Kalite</option>
+            <option value="Kimyasal Analiz Lab.">Kimyasal Analiz Lab.</option>
+            <option value="Mikrobiyoloji Analiz Lab.">Mikrobiyoloji Analiz Lab.</option>
+            <option value="Diğer">Diğer</option>
           </select>
           <select className={kys.select} value={kontrol} onChange={event => setKontrol(event.target.value)}>
             <option value="">Kontrol: Tümü</option>
@@ -304,7 +306,7 @@ export default function DisKaynakliDokumanClient() {
                   <th style={{ width: 42 }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Tümünü seç" />
                   </th>
-                  <th style={{ width: 56, textAlign: "center" }} title="Akreditasyon">*</th>
+                  <th style={{ width: 170 }}>Birim</th>
                   <th style={{ width: 150 }}>Doküman Kodu</th>
                   <th>Doküman Adı</th>
                   <th style={{ width: 170 }}>Yayıncısı</th>
@@ -337,9 +339,7 @@ export default function DisKaynakliDokumanClient() {
                         aria-label={`${row.dokumanKodu} seç`}
                       />
                     </td>
-                    <td style={{ textAlign: "center" }}>
-                      {row.akreditasyon ? <span className={tableStyles.required} title="Akreditasyon var">*</span> : "-"}
-                    </td>
+                    <td>{row.birim || "-"}</td>
                     <td className={tableStyles.tdMono}>{row.dokumanKodu}</td>
                     <td className={tableStyles.tdName}>
                       <span className={styles.documentTitleLink}>{row.dokumanAdi}</span>
@@ -415,10 +415,12 @@ export default function DisKaynakliDokumanClient() {
               {formError && <div className={tableStyles.formError}>{formError}</div>}
               <div className={tableStyles.formGrid}>
                 <div className={tableStyles.formGroup}>
-                  <label>Akreditasyon</label>
-                  <select value={form.akreditasyon} onChange={event => setForm(f => ({ ...f, akreditasyon: event.target.value }))}>
-                    <option value="0">Yok</option>
-                    <option value="1">Var</option>
+                  <label>Birim</label>
+                  <select value={form.birim} onChange={event => setForm(f => ({ ...f, birim: event.target.value }))}>
+                    <option value="Kalite">Kalite</option>
+                    <option value="Kimyasal Analiz Lab.">Kimyasal Analiz Lab.</option>
+                    <option value="Mikrobiyoloji Analiz Lab.">Mikrobiyoloji Analiz Lab.</option>
+                    <option value="Diğer">Diğer</option>
                   </select>
                 </div>
                 <div className={tableStyles.formGroup}>

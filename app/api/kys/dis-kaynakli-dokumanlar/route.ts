@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   try {
     const result = await listDisKaynakliDokumanlar({
       search: url.searchParams.get("search") || "",
-      akreditasyon: url.searchParams.get("akreditasyon") || "",
+      birim: url.searchParams.get("birim") || "",
       kontrol: url.searchParams.get("kontrol") || "",
       sort: url.searchParams.get("sort") || "",
       page: Number(url.searchParams.get("page") || 1),
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     });
 
     const created = await createDisKaynakliDokuman({
-      akreditasyon: formData.get("akreditasyon") === "1",
+      birim: String(formData.get("birim") || ""),
       dokumanKodu: String(formData.get("dokumanKodu") || ""),
       dokumanAdi: String(formData.get("dokumanAdi") || ""),
       yayincisi: String(formData.get("yayincisi") || ""),

@@ -459,7 +459,8 @@ export async function getKysDokuman(id: number) {
   const pool = await cosmoPool;
 
   const revRes = await pool.request().input("ID", id).query(`
-    SELECT ID, Revizyon, MaddeNo, Aciklama, YayinTarihi, HazirlayanAd, OnaylayanAd, OlusturanAd, CreatedAt
+    SELECT ID, Revizyon, MaddeNo, Aciklama, YayinTarihi, HazirlayanAd, OnaylayanAd, OlusturanAd, CreatedAt,
+           CASE WHEN Icerik IS NULL OR Icerik = '' THEN 0 ELSE 1 END AS HasIcerik
     FROM KysDokumanRevizyon WHERE DokumanID = @ID ORDER BY Revizyon DESC, ID DESC
   `);
   const logRes = await pool.request().input("ID", id).query(`
@@ -479,6 +480,7 @@ export async function getKysDokuman(id: number) {
       hazirlayanAd: rowString(r, "HazirlayanAd"),
       onaylayanAd: rowString(r, "OnaylayanAd"),
       olusturanAd: rowString(r, "OlusturanAd"),
+      hasIcerik: Boolean(r.HasIcerik),
       createdAt: asDateTime(r.CreatedAt),
     })),
     loglar: (logRes.recordset as AnyRow[]).map(r => ({
@@ -681,6 +683,48 @@ export async function deleteKysDokuman(id: number, user: DokumanKullanici) {
   await pool.request().input("ID", id).query("DELETE FROM KysDokuman WHERE ID = @ID");
   void user;
   return { ok: true };
+}
+
+export async function addKysDokumanManualRevizyon(dokumanId: number, input: {
+  revizyon?: unknown; maddeNo?: unknown; aciklama?: unknown; yayinTarihi?: unknown;
+  hazirlayanAd?: unknown; onaylayanAd?: unknown;
+}, user: { userId: string; userName: string }) {
+  await ensureKysDokumanSchema();
+  const revizyon = Number(input.revizyon);
+  const maddeNo = text(input.maddeNo);
+  const aciklama = text(input.aciklama);
+  const yayinTarihi = dateValue(input.yayinTarihi);
+  if (!Number.isInteger(revizyon) || revizyon < 0 || revizyon > 999) throw new Error("Revizyon numarası 0–999 arasında tam sayı olmalıdır.");
+  if (!maddeNo || maddeNo.length > 100) throw new Error("Değişen madde alanı zorunludur ve en fazla 100 karakter olabilir.");
+  if (!aciklama || aciklama.length > 2000) throw new Error("Revizyon açıklaması zorunludur ve en fazla 2000 karakter olabilir.");
+  if (!yayinTarihi) throw new Error("Yayın tarihi zorunludur.");
+  const base = await cosmoPool;
+  const tx = await base.transaction(); await tx.begin();
+  try {
+    const doc = (await tx.request().input("ID", dokumanId).query(hasMysqlConfig()
+      ? "SELECT ID,Durum FROM KysDokuman WHERE ID=@ID FOR UPDATE"
+      : "SELECT ID,Durum FROM KysDokuman WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
+    if (!doc || doc.Durum === "Silindi") throw new Error("Doküman bulunamadı.");
+    const duplicate = (await tx.request().input("ID", dokumanId).input("Rev", revizyon)
+      .query("SELECT ID FROM KysDokumanRevizyon WHERE DokumanID=@ID AND Revizyon=@Rev")).recordset;
+    if (duplicate.length) throw new Error("Bu revizyon numarası geçmişte zaten kayıtlı.");
+    await tx.request().input("ID", dokumanId).input("Rev", revizyon).input("Madde", maddeNo)
+      .input("Aciklama", aciklama).input("Tarih", yayinTarihi)
+      .input("Hazirlayan", nullableText(input.hazirlayanAd)).input("Onaylayan", nullableText(input.onaylayanAd))
+      .input("UserID", user.userId).input("UserName", user.userName).query(`
+        INSERT INTO KysDokumanRevizyon
+          (DokumanID,Revizyon,MaddeNo,Aciklama,Icerik,YayinTarihi,HazirlayanAd,OnaylayanAd,OlusturanID,OlusturanAd)
+        VALUES (@ID,@Rev,@Madde,@Aciklama,NULL,@Tarih,@Hazirlayan,@Onaylayan,@UserID,@UserName)`);
+    await tx.request().input("ID", dokumanId).input("Rev", revizyon).query(`
+      UPDATE KysDokuman
+      SET Revizyon = CASE WHEN Revizyon < @Rev THEN @Rev ELSE Revizyon END, UpdatedAt = GETDATE()
+      WHERE ID = @ID`);
+    await tx.request().input("ID", dokumanId).input("Rev", revizyon).input("Aciklama", aciklama)
+      .input("UserID", user.userId).input("UserName", user.userName).query(`
+        INSERT INTO KysDokumanLog (DokumanID,Islem,Revizyon,Aciklama,KullaniciID,KullaniciAd)
+        VALUES (@ID,'Geçmiş revizyon eklendi',@Rev,@Aciklama,@UserID,@UserName)`);
+    await tx.commit();
+  } catch (e) { await tx.rollback(); throw e; }
 }
 
 export async function saveKysDokumanDosya(

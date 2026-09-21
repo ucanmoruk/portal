@@ -79,6 +79,7 @@ export type DokumanRevizyon = {
   hazirlayanAd: string;
   onaylayanAd: string;
   olusturanAd: string;
+  hasIcerik: boolean;
   createdAt: string | null;
 };
 

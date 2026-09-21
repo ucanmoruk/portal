@@ -56,7 +56,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     const result = await updateDisKaynakliDokuman(docId, {
-      akreditasyon: formData.get("akreditasyon") === "1",
+      birim: String(formData.get("birim") || ""),
       dokumanKodu: String(formData.get("dokumanKodu") || ""),
       dokumanAdi: String(formData.get("dokumanAdi") || ""),
       yayincisi: String(formData.get("yayincisi") || ""),

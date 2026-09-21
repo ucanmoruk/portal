@@ -26,6 +26,7 @@ import {
   Save,
   Send,
   Table2,
+  Trash2,
   Underline,
   Undo2,
   ExternalLink,
@@ -215,6 +216,10 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
   const [revizyonOnizleme, setRevizyonOnizleme] = useState<{ etiket: string; icerik: string; aciklama: string } | null>(null);
+  const [manualRevizyonOpen, setManualRevizyonOpen] = useState(false);
+  const [manualRevizyonBusy, setManualRevizyonBusy] = useState(false);
+  const [manualRevizyonHata, setManualRevizyonHata] = useState("");
+  const [manualRevizyon, setManualRevizyon] = useState({ revizyon: "", maddeNo: "", aciklama: "", yayinTarihi: "", hazirlayanAd: "", onaylayanAd: "" });
   const [tableMenuOpen, setTableMenuOpen] = useState(false);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -353,6 +358,11 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   function refreshSections() {
     const editor = editorRef.current;
     if (!editor) return;
+    // contenteditable/formatBlock bazı tarayıcılarda boş bir başlık bırakabiliyor.
+    // Bu düğümler içindekiler listesinde "Başlık 10" gibi hayalet kayıtlar üretmesin.
+    editor.querySelectorAll("h2, h3, h4").forEach(heading => {
+      if (!heading.textContent?.trim()) heading.remove();
+    });
     const headings = Array.from(editor.querySelectorAll("h2, h3, h4"));
     headings.forEach((heading, index) => {
       const title = heading.textContent?.trim() || `Başlık ${index + 1}`;
@@ -504,15 +514,20 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     const number = nextHeadingNumber(level);
     const selectedRange = currentSelectionInsideEditor() || savedRangeRef.current;
     if (selectedRange && !selectedRange.collapsed && editor.contains(selectedRange.commonAncestorContainer)) {
-      restoreEditorSelection();
-      document.execCommand("formatBlock", false, `h${level}`);
-      const selection = window.getSelection();
-      const block = topLevelBlockFromNode(editor, selection?.anchorNode || null);
+      const block = topLevelBlockFromNode(editor, selectedRange.startContainer);
       if (block) {
-        const currentText = block.textContent?.trim() || "";
-        if (!/^\d+(?:\.\d+)*\.?\s/.test(currentText)) block.textContent = `${number} ${currentText}`;
+        const heading = block.tagName === `H${level}` ? block : document.createElement(`h${level}`);
+        if (heading !== block) {
+          heading.innerHTML = block.innerHTML;
+          block.replaceWith(heading);
+        }
+        const currentText = heading.textContent?.trim() || "";
+        if (!/^\d+(?:\.\d+)*\.?\s/.test(currentText)) heading.insertBefore(document.createTextNode(`${number} `), heading.firstChild);
         headingSeqRef.current += 1;
-        block.id = slugifyHeading(block.textContent || currentText, headingSeqRef.current);
+        heading.id = slugifyHeading(heading.textContent || currentText, headingSeqRef.current);
+        savedRangeRef.current = null;
+        activeBlockRef.current = heading;
+        placeCaretAtEnd(heading);
       }
       markDirty();
       refreshSections();
@@ -699,25 +714,49 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
 
   function createPublishedDocumentLink(targetId: string) {
     if (!ensureEditing()) return;
+    const editor = editorRef.current;
+    if (!editor) return;
     const range = currentSelectionInsideEditor() || savedRangeRef.current;
-    if (!range || range.collapsed) {
-      window.alert("Önce bağlantı verilecek metni seçin.");
-      return;
-    }
     const target = yayinDokumanlari.find(item => String(item.id) === targetId);
     if (!target) return;
     const url = target.hasDosya
       ? `/api/kys/dokumanlar/${target.id}/dosya`
       : `/laboratuvar/kys/dokuman-yonetimi/${target.id}/onizleme`;
-    restoreEditorSelection();
-    document.execCommand("createLink", false, url);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    if (range && editor.contains(range.commonAncestorContainer)) {
+      if (range.collapsed) anchor.textContent = `${target.kod} — ${target.baslik}`;
+      else anchor.append(range.extractContents());
+      range.insertNode(anchor);
+    } else {
+      anchor.textContent = `${target.kod} — ${target.baslik}`;
+      const paragraph = document.createElement("p");
+      paragraph.append(anchor);
+      editor.append(paragraph);
+    }
+    const caret = document.createRange();
+    caret.setStartAfter(anchor);
+    caret.collapse(true);
     const selection = window.getSelection();
-    const anchor = (selection?.anchorNode instanceof HTMLElement ? selection.anchorNode : selection?.anchorNode?.parentElement)?.closest("a");
-    anchor?.setAttribute("target", "_blank");
-    anchor?.setAttribute("rel", "noopener noreferrer");
+    selection?.removeAllRanges();
+    selection?.addRange(caret);
+    savedRangeRef.current = caret.cloneRange();
     markDirty();
     setLinkModalOpen(false);
     setLinkSearch("");
+  }
+
+  function removeHeading(id: string) {
+    if (!ensureEditing()) return;
+    const editor = editorRef.current;
+    const heading = editor?.querySelector(`#${CSS.escape(id)}`);
+    if (!(heading instanceof HTMLHeadingElement)) return;
+    heading.remove();
+    savedRangeRef.current = null;
+    markDirty();
+    refreshSections();
   }
 
   function handleDocumentLinkClick(event: React.MouseEvent<HTMLElement>) {
@@ -856,6 +895,20 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       return;
     }
     window.open(`/kys-dokuman-yazdir/${doc?.id}?print=1`, "_blank", "noopener,noreferrer");
+  }
+
+  async function saveManualRevizyon() {
+    if (manualRevizyonBusy) return;
+    setManualRevizyonBusy(true); setManualRevizyonHata("");
+    try {
+      const res = await fetch(`/api/kys/dokumanlar/${documentId}/revizyonlar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(manualRevizyon) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Geçmiş revizyon eklenemedi.");
+      await fetchDoc();
+      setManualRevizyonOpen(false);
+      setManualRevizyon({ revizyon: "", maddeNo: "", aciklama: "", yayinTarihi: "", hazirlayanAd: "", onaylayanAd: "" });
+    } catch (e) { setManualRevizyonHata(errorMessage(e, "Geçmiş revizyon eklenemedi.")); }
+    finally { setManualRevizyonBusy(false); }
   }
 
   function openPreviewInNewTab() {
@@ -1016,9 +1069,10 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 {sections.length === 0
                   ? <span className={styles.sideEmpty}>Henüz başlık yok</span>
                   : sections.map(section => (
-                      <button key={section.id} type="button" onClick={() => scrollToSection(section.id)}>
-                        {section.title}
-                      </button>
+                      <div key={section.id} className={styles.sectionNavRow}>
+                        <button type="button" onClick={() => scrollToSection(section.id)}>{section.title}</button>
+                        {canEdit && <button type="button" className={styles.sectionDelete} title="Başlığı sil" aria-label={`${section.title} başlığını sil`} onClick={() => removeHeading(section.id)}><Trash2 size={13} aria-hidden="true" /></button>}
+                      </div>
                     ))}
               </aside>
             </div>
@@ -1072,7 +1126,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                   type="button"
                   className={styles.documentLinkButton}
                   disabled={!canEdit || yayinDokumanlari.length === 0}
-                  onMouseDown={rememberEditorSelection}
+                  onMouseDown={event => { event.preventDefault(); rememberEditorSelection(); }}
                   onClick={() => { setLinkSearch(""); setLinkModalOpen(true); }}
                 >
                   <Link2 size={14} />
@@ -1301,6 +1355,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
 
         {activeTab === "revizyon" && (
           <div className={styles.revisionList}>
+            {yetki.duzenle && <div className={styles.revisionActions}><button type="button" className={styles.publishButton} onClick={() => { setManualRevizyonHata(""); setManualRevizyonOpen(true); }}>+ Geçmiş revizyon ekle</button></div>}
             {doc.revizyonlar.length === 0 ? (
               <div className={styles.emptyState}>
                 <History size={24} />
@@ -1316,14 +1371,30 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                     Hazırlayan: {rev.hazirlayanAd || "-"} · Onay: {rev.onaylayanAd || "-"}
                   </small>
                 </div>
-                <button type="button" className={styles.ghostButton} onClick={() => void openRevizyon(rev.id, rev.revizyonEtiket)}>
+                {rev.hasIcerik && <button type="button" className={styles.ghostButton} onClick={() => void openRevizyon(rev.id, rev.revizyonEtiket)}>
                   <Eye size={15} />
                   Sürümü gör
-                </button>
+                </button>}
               </div>
             ))}
           </div>
         )}
+
+        {manualRevizyonOpen && <div className={styles.previewBackdrop} role="dialog" aria-modal="true" aria-labelledby="manual-revision-title" onClick={() => !manualRevizyonBusy && setManualRevizyonOpen(false)}>
+          <div className={styles.manualRevisionModal} onClick={event => event.stopPropagation()}>
+            <div className={styles.previewHeader}><div><div className={styles.kicker}>Revizyon geçmişi</div><h2 id="manual-revision-title">Geçmiş revizyon ekle</h2></div><button type="button" className={styles.iconButton} aria-label="Kapat" disabled={manualRevizyonBusy} onClick={() => setManualRevizyonOpen(false)}>×</button></div>
+            <div className={styles.manualRevisionForm}>
+              {manualRevizyonHata && <div role="alert" className={styles.manualRevisionError}>{manualRevizyonHata}</div>}
+              <label>Revizyon no<input type="number" min="0" max="999" required value={manualRevizyon.revizyon} onChange={e => setManualRevizyon(f => ({...f, revizyon:e.target.value}))} /></label>
+              <label>Yayın tarihi<input type="date" required value={manualRevizyon.yayinTarihi} onChange={e => setManualRevizyon(f => ({...f, yayinTarihi:e.target.value}))} /></label>
+              <label>Değişen madde<input maxLength={100} required value={manualRevizyon.maddeNo} onChange={e => setManualRevizyon(f => ({...f, maddeNo:e.target.value}))} /></label>
+              <label>Açıklama<textarea rows={4} maxLength={2000} required value={manualRevizyon.aciklama} onChange={e => setManualRevizyon(f => ({...f, aciklama:e.target.value}))} /></label>
+              <label>Hazırlayan<input maxLength={160} value={manualRevizyon.hazirlayanAd} onChange={e => setManualRevizyon(f => ({...f, hazirlayanAd:e.target.value}))} /></label>
+              <label>Onaylayan<input maxLength={160} value={manualRevizyon.onaylayanAd} onChange={e => setManualRevizyon(f => ({...f, onaylayanAd:e.target.value}))} /></label>
+            </div>
+            <div className={styles.modalActions}><button type="button" className={styles.ghostButton} disabled={manualRevizyonBusy} onClick={() => setManualRevizyonOpen(false)}>Vazgeç</button><button type="button" className={styles.publishButton} disabled={manualRevizyonBusy || !manualRevizyon.revizyon || !manualRevizyon.maddeNo.trim() || !manualRevizyon.aciklama.trim() || !manualRevizyon.yayinTarihi} onClick={() => void saveManualRevizyon()}>{manualRevizyonBusy ? "Kaydediliyor…" : "Geçmişe ekle"}</button></div>
+          </div>
+        </div>}
 
         {activeTab === "gecmis" && (
           <div className={styles.logList}>
@@ -1405,7 +1476,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       )}
 
       {linkModalOpen && (
-        <div className={tableStyles.modalOverlay} role="dialog" aria-modal="true" aria-label="Yayındaki dokümana bağlantı ver" onMouseDown={rememberEditorSelection}>
+        <div className={tableStyles.modalOverlay} role="dialog" aria-modal="true" aria-label="Yayındaki dokümana bağlantı ver">
           <div className={`${tableStyles.modal} ${styles.documentLinkModal}`} onClick={event => event.stopPropagation()}>
             <div className={tableStyles.modalHeader}>
               <div><h2>Yayındaki dokümana bağla</h2><p className={styles.modalHint}>Seçili metin, seçeceğiniz dokümana yeni sekmede açılan bir bağlantı olur.</p></div>

@@ -8,7 +8,7 @@ type AnyRow = Record<string, any>;
 let schemaReady: Promise<void> | null = null;
 
 export type DisKaynakliDokumanInput = {
-  akreditasyon?: boolean;
+  birim?: string;
   dokumanKodu?: string;
   dokumanAdi?: string;
   yayincisi?: string;
@@ -58,6 +58,14 @@ function cleanUrl(value: unknown): string | null {
   return `https://${url}`;
 }
 
+export const DIS_KAYNAKLI_BIRIMLER = ["Kalite", "Kimyasal Analiz Lab.", "Mikrobiyoloji Analiz Lab.", "Diğer"] as const;
+
+function validateBirim(value: unknown): string {
+  const birim = text(value) || "Kalite";
+  if (!(DIS_KAYNAKLI_BIRIMLER as readonly string[]).includes(birim)) throw new Error("Geçerli bir birim seçin.");
+  return birim;
+}
+
 export async function ensureKysDisKaynakliDokumanSchema() {
   if (!schemaReady) {
     schemaReady = createSchema().catch(err => {
@@ -76,6 +84,7 @@ async function createSchema() {
       CREATE TABLE IF NOT EXISTS KysDisKaynakliDokuman (
         ID INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
         Akreditasyon TINYINT(1) NOT NULL DEFAULT 0,
+        Birim VARCHAR(80) NOT NULL DEFAULT 'Kalite',
         DokumanKodu VARCHAR(80) NOT NULL,
         DokumanAdi VARCHAR(260) NOT NULL,
         Yayincisi VARCHAR(180) NULL,
@@ -93,12 +102,14 @@ async function createSchema() {
         KEY IX_KysDisKaynakliDokuman_Kontrol (KontrolEdildi, KontrolTarihi)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci
     `);
+    await pool.request().query("ALTER TABLE KysDisKaynakliDokuman ADD COLUMN IF NOT EXISTS Birim VARCHAR(80) NOT NULL DEFAULT 'Kalite'");
   } else {
     await pool.request().query(`
       IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'KysDisKaynakliDokuman')
       CREATE TABLE KysDisKaynakliDokuman (
         ID INT IDENTITY(1,1) PRIMARY KEY,
         Akreditasyon BIT NOT NULL DEFAULT 0,
+        Birim NVARCHAR(80) NOT NULL DEFAULT 'Kalite',
         DokumanKodu NVARCHAR(80) NOT NULL,
         DokumanAdi NVARCHAR(260) NOT NULL,
         Yayincisi NVARCHAR(180) NULL,
@@ -114,13 +125,14 @@ async function createSchema() {
         UpdatedAt DATETIME NOT NULL DEFAULT GETDATE()
       )
     `);
+    await pool.request().query("IF COL_LENGTH('KysDisKaynakliDokuman', 'Birim') IS NULL ALTER TABLE KysDisKaynakliDokuman ADD Birim NVARCHAR(80) NOT NULL CONSTRAINT DF_KysDisKaynakliDokuman_Birim DEFAULT 'Kalite'");
   }
 }
 
 function mapRow(row: AnyRow) {
   return {
     id: rowNumber(row, "ID"),
-    akreditasyon: rowBool(row, "Akreditasyon"),
+    birim: rowString(row, "Birim") || (rowBool(row, "Akreditasyon") ? "Kalite" : "Diğer"),
     dokumanKodu: rowString(row, "DokumanKodu"),
     dokumanAdi: rowString(row, "DokumanAdi"),
     yayincisi: rowString(row, "Yayincisi"),
@@ -140,7 +152,7 @@ export type DisKaynakliDokumanRow = ReturnType<typeof mapRow>;
 
 export async function listDisKaynakliDokumanlar(params: {
   search?: string;
-  akreditasyon?: string;
+  birim?: string;
   kontrol?: string;
   sort?: string;
   page?: number;
@@ -152,13 +164,12 @@ export async function listDisKaynakliDokumanlar(params: {
   const limit = Math.min(200, Math.max(5, Number(params.limit || 25)));
   const offset = (page - 1) * limit;
   const search = text(params.search);
-  const akreditasyon = text(params.akreditasyon);
+  const birim = text(params.birim);
   const kontrol = text(params.kontrol);
 
   let where = "WHERE 1=1";
   if (search) where += " AND (DokumanKodu LIKE @search OR DokumanAdi LIKE @search OR Yayincisi LIKE @search)";
-  if (akreditasyon === "var") where += " AND Akreditasyon = 1";
-  if (akreditasyon === "yok") where += " AND Akreditasyon = 0";
+  if (birim) where += " AND Birim = @birim";
   if (kontrol === "edildi") where += " AND KontrolEdildi = 1";
   if (kontrol === "bekliyor") where += " AND KontrolEdildi = 0";
 
@@ -170,12 +181,13 @@ export async function listDisKaynakliDokumanlar(params: {
 
   const bind = (req: any) => req
     .input("search", `%${search}%`)
+    .input("birim", birim)
     .input("offset", offset)
     .input("limit", limit);
 
   const countRes = await bind(pool.request()).query(`SELECT COUNT(*) AS total FROM KysDisKaynakliDokuman ${where}`);
   const dataRes = await bind(pool.request()).query(`
-    SELECT ID, Akreditasyon, DokumanKodu, DokumanAdi, Yayincisi, YayinTarihi, YayinLinki,
+    SELECT ID, Akreditasyon, Birim, DokumanKodu, DokumanAdi, Yayincisi, YayinTarihi, YayinLinki,
            PdfPath, PdfOriginalName, KontrolEdildi, KontrolTarihi, KontrolEdenAd, CreatedAt, UpdatedAt
     FROM KysDisKaynakliDokuman
     ${where}
@@ -185,7 +197,6 @@ export async function listDisKaynakliDokumanlar(params: {
   const statsRes = await pool.request().query(`
     SELECT
       COUNT(*) AS Toplam,
-      SUM(CASE WHEN Akreditasyon = 1 THEN 1 ELSE 0 END) AS Akreditasyonlu,
       SUM(CASE WHEN KontrolEdildi = 1 THEN 1 ELSE 0 END) AS KontrolEdilen
     FROM KysDisKaynakliDokuman
   `);
@@ -202,7 +213,6 @@ export async function listDisKaynakliDokumanlar(params: {
     totalPages: Math.ceil(total / limit) || 1,
     stats: {
       toplam,
-      akreditasyonlu: rowNumber(statsRow, "Akreditasyonlu"),
       kontrolEdilen,
       kontrolBekleyen: Math.max(toplam - kontrolEdilen, 0),
     },
@@ -217,9 +227,10 @@ export async function createDisKaynakliDokuman(input: DisKaynakliDokumanInput) {
   if (!dokumanAdi) throw new Error("Doküman adı zorunludur.");
   if (!input.pdfPath) throw new Error("PDF dosyası zorunludur.");
 
+  const birim = validateBirim(input.birim);
   const pool = await cosmoPool;
   const res = await pool.request()
-    .input("Akreditasyon", input.akreditasyon ? 1 : 0)
+    .input("Birim", birim)
     .input("DokumanKodu", dokumanKodu)
     .input("DokumanAdi", dokumanAdi)
     .input("Yayincisi", nullableText(input.yayincisi))
@@ -229,9 +240,9 @@ export async function createDisKaynakliDokuman(input: DisKaynakliDokumanInput) {
     .input("PdfOriginalName", nullableText(input.pdfOriginalName))
     .query(`
       INSERT INTO KysDisKaynakliDokuman
-        (Akreditasyon, DokumanKodu, DokumanAdi, Yayincisi, YayinTarihi, YayinLinki, PdfPath, PdfOriginalName)
+        (Birim, DokumanKodu, DokumanAdi, Yayincisi, YayinTarihi, YayinLinki, PdfPath, PdfOriginalName)
       OUTPUT INSERTED.ID
-      VALUES (@Akreditasyon, @DokumanKodu, @DokumanAdi, @Yayincisi, @YayinTarihi, @YayinLinki, @PdfPath, @PdfOriginalName)
+      VALUES (@Birim, @DokumanKodu, @DokumanAdi, @Yayincisi, @YayinTarihi, @YayinLinki, @PdfPath, @PdfOriginalName)
     `);
 
   return {
@@ -243,7 +254,7 @@ export async function getDisKaynakliDokuman(id: number) {
   await ensureKysDisKaynakliDokumanSchema();
   const pool = await cosmoPool;
   const res = await pool.request().input("ID", id).query(`
-    SELECT ID, Akreditasyon, DokumanKodu, DokumanAdi, Yayincisi, YayinTarihi, YayinLinki,
+    SELECT ID, Akreditasyon, Birim, DokumanKodu, DokumanAdi, Yayincisi, YayinTarihi, YayinLinki,
            PdfPath, PdfOriginalName, KontrolEdildi, KontrolTarihi, KontrolEdenAd, CreatedAt, UpdatedAt
     FROM KysDisKaynakliDokuman WHERE ID = @ID
   `);
@@ -275,10 +286,11 @@ export async function updateDisKaynakliDokuman(id: number, input: DisKaynakliDok
   const pdfReplaced = Boolean(input.pdfPath);
   const nextPdfPath = pdfReplaced ? input.pdfPath! : previousPdfPath;
   const nextPdfOriginalName = pdfReplaced ? nullableText(input.pdfOriginalName) : rowString(existing, "PdfOriginalName");
+  const birim = validateBirim(input.birim);
 
   await pool.request()
     .input("ID", id)
-    .input("Akreditasyon", input.akreditasyon ? 1 : 0)
+    .input("Birim", birim)
     .input("DokumanKodu", dokumanKodu)
     .input("DokumanAdi", dokumanAdi)
     .input("Yayincisi", nullableText(input.yayincisi))
@@ -288,7 +300,7 @@ export async function updateDisKaynakliDokuman(id: number, input: DisKaynakliDok
     .input("PdfOriginalName", nextPdfOriginalName)
     .query(`
       UPDATE KysDisKaynakliDokuman SET
-        Akreditasyon = @Akreditasyon, DokumanKodu = @DokumanKodu, DokumanAdi = @DokumanAdi,
+        Birim = @Birim, DokumanKodu = @DokumanKodu, DokumanAdi = @DokumanAdi,
         Yayincisi = @Yayincisi, YayinTarihi = @YayinTarihi, YayinLinki = @YayinLinki,
         PdfPath = @PdfPath, PdfOriginalName = @PdfOriginalName, UpdatedAt = GETDATE()
       WHERE ID = @ID
