@@ -1,4 +1,4 @@
-import { CHALLENGE_ORGANISMS } from "@/lib/challengeImport";
+import type { ChallengeRow } from "@/lib/challengeImport";
 import { JetBrains_Mono } from "next/font/google";
 import { ttInterphases } from "@/app/fonts/reportFonts";
 import OnayToolbar from "../OnayToolbar";
@@ -12,6 +12,42 @@ const jetbrains = JetBrains_Mono({
   display: "swap",
   variable: "--font-rapor",
 });
+
+// Excel içe aktarma akışından önceki Challenge raporlarında kullanılan
+// sabit sonuç tablosu. Yeni kayıtlarda NKR_ChallengeVeri varsa bu fallback
+// devreye girmez; içe aktarılan gerçek sonuçlar aynen gösterilir.
+const LEGACY_CHALLENGE_ROWS: ChallengeRow[] = [
+  {
+    organism: "Pseudomonas aeruginosa",
+    inoculation: "1,7 x 10^7",
+    counts: ["1,7 x 10^7", "<10", "<10", "<10"],
+    reductions: [">4,24", ">4,24", ">4,24"],
+  },
+  {
+    organism: "Escherichia coli",
+    inoculation: "1,9 x 10^7",
+    counts: ["1,9 x 10^7", "<10", "<10", "<10"],
+    reductions: [">4,28", ">4,28", ">4,28"],
+  },
+  {
+    organism: "Staphylococcus aureus",
+    inoculation: "1,5 x 10^7",
+    counts: ["1,5 x 10^7", "<10", "<10", "<10"],
+    reductions: [">4,18", ">4,18", ">4,18"],
+  },
+  {
+    organism: "Candida albicans",
+    inoculation: "1,8 x 10^6",
+    counts: ["1,8 x 10^7", "<10", "<10", "<10"],
+    reductions: [">3,26", ">3,26", ">3,26"],
+  },
+  {
+    organism: "Aspergillus brasiliensis",
+    inoculation: "1,4 x 10^6",
+    counts: ["1,4 x 10^7", "-", "<10", "<10"],
+    reductions: ["-", ">3,15", ">3,15"],
+  },
+];
 
 function fmtTarih(s: string | null | undefined): string {
   if (!s) return "—";
@@ -271,7 +307,7 @@ export default function DetayRaporReport({
   const isEnglish = isEnglishFormat(format);
   const assessment = meta.challengeVeri?.assessment ?? hizmetler.find(h => h.Degerlendirme)?.Degerlendirme ?? null;
   const assessmentLabel = degerlendirmeLabel(assessment, isEnglish);
-  const challengeRows = meta.challengeVeri?.rows ?? CHALLENGE_ORGANISMS.map(organism => ({ organism, inoculation: "-", counts: ["-", "-", "-", "-"], reductions: ["-", "-", "-"] }));
+  const challengeRows = meta.challengeVeri?.rows ?? LEGACY_CHALLENGE_ROWS;
   const text: ChallengeText = isEnglish
     ? {
         reportTitle: "TEST REPORT",

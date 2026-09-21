@@ -4,6 +4,7 @@ import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 import { hasProformaFaturaFirmaCol } from "@/lib/proformaSchema";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
+import { ensureFaturaTrackingSchema, isFaturaKaynagi } from "@/lib/faturaSchema";
 
 // Fatura Takip — cosmo `Fatura` (başlık) + `Odeme` (ödeme durumu aşamaları) tabloları.
 // Proforma "Faturaya çevir" akışı: Fatura kaydı oluşturur, Odeme'ye 'Ödeme Bekliyor'
@@ -21,6 +22,13 @@ function toNumber(value: any, fallback = 0) {
 function cleanOptionalText(value: any): string | null {
   const text = String(value ?? "").trim();
   return text || null;
+}
+
+function defaultDueDate(invoiceDate: string) {
+  const date = new Date(`${invoiceDate}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setUTCDate(date.getUTCDate() + 30);
+  return date.toISOString().slice(0, 10);
 }
 
 function isMultiEvrakLabel(value: unknown): boolean {
@@ -78,6 +86,8 @@ export async function GET(request: NextRequest) {
   const yil = (sp.get("yil") || "").trim();           // "" = tümü, yoksa "2026" gibi
   const odeme = (sp.get("odeme") || "").trim();        // "" = tümü, yoksa ödeme durumu
   const ay = (sp.get("ay") || "").trim();
+  const kaynak = (sp.get("kaynak") || "").trim();
+  const vade = (sp.get("vade") || "").trim();
   const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
   const limit = Math.min(100, Math.max(5, parseInt(sp.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
@@ -101,12 +111,25 @@ export async function GET(request: NextRequest) {
   if (yil) where += ` AND ${yilExpr} = @yil`;
   if (ay) where += ` AND DATE_FORMAT(${tarihExpr}, '%m') = @ay`;
   if (odeme) where += ` AND ${sonOdeme} = @odeme`;
+  if (kaynak) where += ` AND f.Kaynak = @kaynak`;
+  if (vade === "gecmis") where += " AND f.VadeTarihi < @bugun";
+  if (vade === "bugun") where += " AND f.VadeTarihi = @bugun";
+  if (vade === "7gun" || vade === "30gun") where += " AND f.VadeTarihi BETWEEN @bugun AND @vadeSinir";
+  if (vade === "yok") where += " AND f.VadeTarihi IS NULL";
+
+  const bugun = new Date();
+  const vadeSinir = new Date(bugun);
+  vadeSinir.setUTCDate(vadeSinir.getUTCDate() + (vade === "7gun" ? 7 : 30));
+  const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 
   const bindFilters = (r: any) => {
     r.input("search", `%${search}%`);
     r.input("yil", yil);
     r.input("ay", ay);
     r.input("odeme", odeme);
+    r.input("kaynak", kaynak);
+    r.input("bugun", isoDate(bugun));
+    r.input("vadeSinir", isoDate(vadeSinir));
     return r;
   };
 
@@ -135,7 +158,7 @@ export async function GET(request: NextRequest) {
           f.ID, f.Fatura_No AS FaturaNo, f.ProformaNo,
           ${tarihExpr} AS Tarih,
           f.Toplam, f.Tutar, f.KDV, f.Odenen_Tutar AS OdenenTutar,
-          f.FaturaFirmaID, f.Aciklama,
+          f.FaturaFirmaID, f.Aciklama, f.Kaynak, f.VadeTarihi,
           ISNULL(fr.Firma_Adi, '') AS FirmaAd,
           ${sonOdeme} AS OdemeDurumu
         FROM Fatura f
@@ -182,7 +205,11 @@ export async function POST(request: NextRequest) {
     if (!faturaTarihi) return Response.json({ error: "Fatura tarihi zorunludur." }, { status: 400 });
 
     const pool = await cosmoPool;
+    await ensureFaturaTrackingSchema(pool);
     await ensureProformaNkrTable(pool);
+    const kaynak = String(body.kaynak || "Unique").trim();
+    const vadeTarihi = String(body.vadeTarihi || "").trim() || defaultDueDate(faturaTarihi);
+    if (!isFaturaKaynagi(kaynak)) return Response.json({ error: "Geçersiz fatura kaynağı." }, { status: 400 });
     if (!proformaId) {
       const evrakNo = cleanOptionalText(body.evrakNo);
       const toplam = toNumber(body.toplam);
@@ -202,10 +229,12 @@ export async function POST(request: NextRequest) {
         .input("FaturaFirmaID", faturaFirmaId)
         .input("Tarih", faturaTarihi)
         .input("Aciklama", aciklama)
+        .input("Kaynak", kaynak)
+        .input("VadeTarihi", vadeTarihi)
         .query(`
-          INSERT INTO Fatura (Fatura_No, ProformaNo, Toplam, Tutar, KDV, Odenen_Tutar, FaturaFirmaID, Tarih, Durum, Aciklama)
+          INSERT INTO Fatura (Fatura_No, ProformaNo, Toplam, Tutar, KDV, Odenen_Tutar, FaturaFirmaID, Tarih, Durum, Aciklama, Kaynak, VadeTarihi)
           OUTPUT INSERTED.ID
-          VALUES (@FaturaNo, @ProformaNo, @Toplam, @Tutar, @KDV, @OdenenTutar, @FaturaFirmaID, @Tarih, 'Aktif', @Aciklama)
+          VALUES (@FaturaNo, @ProformaNo, @Toplam, @Tutar, @KDV, @OdenenTutar, @FaturaFirmaID, @Tarih, 'Aktif', @Aciklama, @Kaynak, @VadeTarihi)
         `);
       const faturaId = Number(insRes.recordset[0]?.ID);
 
@@ -259,10 +288,12 @@ export async function POST(request: NextRequest) {
       .input("FaturaFirmaID", faturaFirmaId)
       .input("Tarih", faturaTarihi)
       .input("Aciklama", aciklama)
+      .input("Kaynak", kaynak)
+      .input("VadeTarihi", vadeTarihi)
       .query(`
-        INSERT INTO Fatura (Fatura_No, ProformaNo, Toplam, Tutar, KDV, Odenen_Tutar, FaturaFirmaID, Tarih, Durum, Aciklama)
+        INSERT INTO Fatura (Fatura_No, ProformaNo, Toplam, Tutar, KDV, Odenen_Tutar, FaturaFirmaID, Tarih, Durum, Aciklama, Kaynak, VadeTarihi)
         OUTPUT INSERTED.ID
-        VALUES (@FaturaNo, @ProformaNo, @Toplam, @Tutar, @KDV, @OdenenTutar, @FaturaFirmaID, @Tarih, 'Aktif', @Aciklama)
+        VALUES (@FaturaNo, @ProformaNo, @Toplam, @Tutar, @KDV, @OdenenTutar, @FaturaFirmaID, @Tarih, 'Aktif', @Aciklama, @Kaynak, @VadeTarihi)
       `);
     const faturaId = Number(insRes.recordset[0]?.ID);
 

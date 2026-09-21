@@ -3,3 +3,5 @@
 // aynı tablodan beslenir. Proforma faturalaşınca 'Ödeme Bekliyor' yazılır, ödeme alınınca
 // 'Ödendi'. Değerler DB'deki gerçek (legacy) yazımlarla birebir aynı olmalı.
 export const ODEME_DURUMLARI = ["Ödeme Bekliyor", "Kısmen Ödendi", "Ödendi", "İptal"];
+
+export const FATURA_KAYNAKLARI = ["Unique", "Spektrotek", "Root"] as const;

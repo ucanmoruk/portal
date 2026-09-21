@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "@/app/styles/table.module.css";
-import { ODEME_DURUMLARI } from "@/lib/faturaConstants";
+import localStyles from "./fatura.module.css";
+import { FATURA_KAYNAKLARI, ODEME_DURUMLARI } from "@/lib/faturaConstants";
 
 interface FaturaRow {
   ID: number;
   ProformaNo: string | null;
   FaturaNo: string;
   Tarih: string | null;
+  VadeTarihi: string | null;
+  Kaynak: string | null;
   FirmaAd: string;
   Toplam: number | string;
   Tutar: number | string | null;
@@ -41,6 +44,14 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function addDaysIso(value: string, days: number) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function fmtMoney(value: number | string | null | undefined) {
   const n = Number(value || 0);
   return n.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -48,6 +59,10 @@ function fmtMoney(value: number | string | null | undefined) {
 
 function upperTr(value?: string | null) {
   return value ? value.toLocaleUpperCase("tr-TR") : "";
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 // Efektif tarih 'YYYY-MM-DD HH:MM:SS' (veya null) gelir → dd.MM.yyyy. Geçersizse "-".
@@ -168,6 +183,8 @@ export default function FaturaTable() {
   const [yil, setYil] = useState(String(new Date().getFullYear()));
   const [ay, setAy] = useState("");
   const [odeme, setOdeme] = useState("");
+  const [kaynak, setKaynak] = useState("");
+  const [vade, setVade] = useState("");
   const [years, setYears] = useState<string[]>([]);
   const [summary, setSummary] = useState<Summary>({ adet: 0, toplam: 0, odenen: 0 });
   const [page, setPage] = useState(1);
@@ -183,6 +200,8 @@ export default function FaturaTable() {
   const [manualForm, setManualForm] = useState({
     faturaNo: "",
     faturaTarihi: todayIso(),
+    vadeTarihi: addDaysIso(todayIso(), 30),
+    kaynak: "Unique",
     evrakNo: "",
     toplam: "",
     kdvOran: "20",
@@ -193,7 +212,7 @@ export default function FaturaTable() {
     setLoading(true);
     setError("");
     try {
-      const qs = new URLSearchParams({ search, yil, ay, odeme, page: String(page), limit: String(limit) });
+      const qs = new URLSearchParams({ search, yil, ay, odeme, kaynak, vade, page: String(page), limit: String(limit) });
       const res = await fetch(`/api/faturalar?${qs.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Fatura listesi alınamadı.");
@@ -202,12 +221,12 @@ export default function FaturaTable() {
       setTotalPages(json.totalPages || 1);
       setSummary(json.summary || { adet: 0, toplam: 0, odenen: 0 });
       if (Array.isArray(json.years) && json.years.length) setYears(json.years);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (error: unknown) {
+      setError(errorMessage(error, "Fatura listesi alınamadı."));
     } finally {
       setLoading(false);
     }
-  }, [search, yil, ay, odeme, page, limit]);
+  }, [search, yil, ay, odeme, kaynak, vade, page, limit]);
 
   useEffect(() => { fetchRows(); }, [fetchRows]);
 
@@ -233,6 +252,8 @@ export default function FaturaTable() {
     setManualForm({
       faturaNo: "",
       faturaTarihi: todayIso(),
+      vadeTarihi: addDaysIso(todayIso(), 30),
+      kaynak: "Unique",
       evrakNo: "",
       toplam: "",
       kdvOran: "20",
@@ -249,6 +270,8 @@ export default function FaturaTable() {
     setManualForm({
       faturaNo: row.FaturaNo || "",
       faturaTarihi: dateInput(row.Tarih),
+      vadeTarihi: dateInput(row.VadeTarihi),
+      kaynak: row.Kaynak || "Unique",
       evrakNo: row.ProformaNo || "",
       toplam: row.Toplam != null ? String(row.Toplam) : "",
       kdvOran: kdvRateOf(row),
@@ -261,6 +284,7 @@ export default function FaturaTable() {
     setManualError("");
     if (!manualForm.faturaNo.trim()) { setManualError("Fatura no zorunludur."); return; }
     if (!manualForm.faturaTarihi.trim()) { setManualError("Fatura tarihi zorunludur."); return; }
+    if (!manualForm.vadeTarihi.trim()) { setManualError("Vade tarihi zorunludur."); return; }
     setManualSaving(true);
     try {
       const url = manualMode === "edit" && manualEditRow
@@ -272,6 +296,8 @@ export default function FaturaTable() {
         body: JSON.stringify({
           faturaNo: manualForm.faturaNo,
           faturaTarihi: manualForm.faturaTarihi,
+          vadeTarihi: manualForm.vadeTarihi,
+          kaynak: manualForm.kaynak,
           evrakNo: manualForm.evrakNo,
           toplam: manualForm.toplam,
           kdvOran: manualForm.kdvOran,
@@ -285,8 +311,8 @@ export default function FaturaTable() {
       setManualEditRow(null);
       setPage(1);
       fetchRows();
-    } catch (e: any) {
-      setManualError(e.message || (manualMode === "edit" ? "Fatura güncellenemedi." : "Fatura oluşturulamadı."));
+    } catch (error: unknown) {
+      setManualError(errorMessage(error, manualMode === "edit" ? "Fatura güncellenemedi." : "Fatura oluşturulamadı."));
     } finally {
       setManualSaving(false);
     }
@@ -332,6 +358,18 @@ export default function FaturaTable() {
             <option value="">Tüm ödeme durumları</option>
             {ODEME_DURUMLARI.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
+          <select className={styles.pageSizeSelect} value={kaynak} onChange={e => { setKaynak(e.target.value); setPage(1); }}>
+            <option value="">Tüm kaynaklar</option>
+            {FATURA_KAYNAKLARI.map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <select className={styles.pageSizeSelect} value={vade} onChange={e => { setVade(e.target.value); setPage(1); }}>
+            <option value="">Tüm vadeler</option>
+            <option value="gecmis">Vadesi geçenler</option>
+            <option value="bugun">Bugün vadesi dolanlar</option>
+            <option value="7gun">7 gün içinde</option>
+            <option value="30gun">30 gün içinde</option>
+            <option value="yok">Vade tarihi olmayanlar</option>
+          </select>
           <span className={styles.totalCount}>{total} kayıt</span>
         </div>
         <div className={styles.toolbarRight}>
@@ -344,12 +382,14 @@ export default function FaturaTable() {
 
       <div className={styles.tableCard}>
         {error && <div className={styles.errorBar}>{error}</div>}
-        <table className={styles.table}>
+        <table className={`${styles.table} ${localStyles.compactTable}`}>
           <thead>
             <tr>
               <th>Evrak / Proforma No</th>
               <th>Fatura No</th>
+              <th>Kaynak</th>
               <th>Tarih</th>
+              <th>Vade</th>
               <th>Firma</th>
               <th style={{ textAlign: "right" }}>Tutar (KDV Dahil)</th>
               <th>Ödeme Durumu</th>
@@ -358,9 +398,9 @@ export default function FaturaTable() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className={styles.empty}>Yükleniyor...</td></tr>
+              <tr><td colSpan={9} className={styles.empty}>Yükleniyor...</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={7} className={styles.empty}>Kayıt bulunamadı.</td></tr>
+              <tr><td colSpan={9} className={styles.empty}>Kayıt bulunamadı.</td></tr>
             ) : rows.map(row => {
               // Mevcut (legacy) durum listede yoksa seçeneğe ekle ki select doğru görünsün.
               const opts = row.OdemeDurumu && !ODEME_DURUMLARI.includes(row.OdemeDurumu)
@@ -368,10 +408,12 @@ export default function FaturaTable() {
                 : ODEME_DURUMLARI;
               return (
                 <tr key={row.ID}>
-                  <td>{row.ProformaNo || "-"}</td>
-                  <td className={styles.primaryCell}>{row.FaturaNo}</td>
+                  <td className={localStyles.ellipsisCell} title={row.ProformaNo || "-"}>{row.ProformaNo || "-"}</td>
+                  <td className={`${styles.primaryCell} ${localStyles.ellipsisCell}`} title={row.FaturaNo}>{row.FaturaNo}</td>
+                  <td><span className={localStyles.sourceBadge}>{row.Kaynak || "Unique"}</span></td>
                   <td>{fmtTarih(row.Tarih)}</td>
-                  <td>{upperTr(row.FirmaAd) || "-"}</td>
+                  <td>{fmtTarih(row.VadeTarihi)}</td>
+                  <td className={localStyles.ellipsisCell} title={upperTr(row.FirmaAd) || "-"}>{upperTr(row.FirmaAd) || "-"}</td>
                   <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
                     {fmtMoney(row.Toplam)} TL
                   </td>
@@ -379,7 +421,7 @@ export default function FaturaTable() {
                     <select
                       value={row.OdemeDurumu || ""}
                       onChange={e => updateOdeme(row, e.target.value)}
-                      className={styles.pageSizeSelect}
+                      className={`${styles.pageSizeSelect} ${localStyles.compactSelect}`}
                       style={odemeStyle(row.OdemeDurumu)}
                     >
                       {!row.OdemeDurumu && <option value="">Fatura Kesilmedi</option>}
@@ -398,7 +440,7 @@ export default function FaturaTable() {
           {!loading && rows.length > 0 && (
             <tfoot>
               <tr style={{ borderTop: "2px solid var(--color-border)", fontWeight: 700 }}>
-                <td colSpan={4} style={{ padding: "12px 12px", color: "var(--color-text-secondary)" }}>
+                <td colSpan={6} style={{ padding: "12px 8px", color: "var(--color-text-secondary)" }}>
                   {summary.adet} fatura · Kalan: <span style={{ color: kalan > 0 ? "#c06800" : "#1a7f4b" }}>{fmtMoney(kalan)} TL</span>
                 </td>
                 <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", padding: "12px 12px" }}>
@@ -431,7 +473,7 @@ export default function FaturaTable() {
 
       {manualOpen && (
         <div className={styles.modalOverlay}>
-          <div className={styles.modal} style={{ maxWidth: 620 }}>
+          <div className={`${styles.modal} ${localStyles.invoiceModal}`}>
             <div className={styles.modalHeader}>
               <h2>{manualMode === "edit" ? "Fatura Detaylarını Düzenle" : "Manuel Fatura Ekle"}</h2>
               <button className={styles.modalClose} onClick={() => !manualSaving && setManualOpen(false)}>×</button>
@@ -439,6 +481,16 @@ export default function FaturaTable() {
             <div className={styles.modalBody}>
               {manualError && <div className={styles.errorBar} style={{ marginBottom: 12 }}>{manualError}</div>}
               <div className={styles.formGrid}>
+                <label>
+                  <span>Kaynak *</span>
+                  <select
+                    value={manualForm.kaynak}
+                    onChange={e => setManualForm(f => ({ ...f, kaynak: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--color-border)", borderRadius: 8, background: "var(--color-surface)" }}
+                  >
+                    {FATURA_KAYNAKLARI.map(k => <option key={k} value={k}>{k}</option>)}
+                  </select>
+                </label>
                 <label>
                   <span>Fatura No *</span>
                   <input
@@ -452,20 +504,16 @@ export default function FaturaTable() {
                   <input
                     type="date"
                     value={manualForm.faturaTarihi}
-                    onChange={e => setManualForm(f => ({ ...f, faturaTarihi: e.target.value }))}
+                    onChange={e => setManualForm(f => ({ ...f, faturaTarihi: e.target.value, vadeTarihi: addDaysIso(e.target.value, 30) }))}
                     style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--color-border)", borderRadius: 8 }}
                   />
                 </label>
                 <label>
-                  <span>Firma</span>
-                  <FirmaPicker value={manualFirma} onChange={setManualFirma} />
-                </label>
-                <label>
-                  <span>Evrak No</span>
+                  <span>Vade Tarihi *</span>
                   <input
-                    value={manualForm.evrakNo}
-                    onChange={e => setManualForm(f => ({ ...f, evrakNo: e.target.value }))}
-                    placeholder="Boş bırakılabilir"
+                    type="date"
+                    value={manualForm.vadeTarihi}
+                    onChange={e => setManualForm(f => ({ ...f, vadeTarihi: e.target.value }))}
                     style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--color-border)", borderRadius: 8 }}
                   />
                 </label>
@@ -498,6 +546,21 @@ export default function FaturaTable() {
                   style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--color-border)", borderRadius: 8, resize: "vertical" }}
                 />
               </label>
+              <div className={`${styles.formGrid} ${localStyles.secondaryFields}`}>
+                <label>
+                  <span>Firma</span>
+                  <FirmaPicker value={manualFirma} onChange={setManualFirma} />
+                </label>
+                <label>
+                  <span>Evrak No</span>
+                  <input
+                    value={manualForm.evrakNo}
+                    onChange={e => setManualForm(f => ({ ...f, evrakNo: e.target.value }))}
+                    placeholder="Boş bırakılabilir"
+                    style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--color-border)", borderRadius: 8 }}
+                  />
+                </label>
+              </div>
             </div>
             <div className={styles.modalFooter}>
               <button className={styles.cancelBtn} onClick={() => setManualOpen(false)} disabled={manualSaving}>İptal</button>

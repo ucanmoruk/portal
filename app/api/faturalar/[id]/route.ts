@@ -4,6 +4,7 @@ import { cosmoPool } from "@/lib/db";
 import { ODEME_DURUMLARI } from "@/lib/faturaConstants";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { hasProformaFaturaFirmaCol } from "@/lib/proformaSchema";
+import { ensureFaturaTrackingSchema, isFaturaKaynagi } from "@/lib/faturaSchema";
 
 function toNumber(value: any, fallback = 0) {
   const raw = String(value ?? "").trim();
@@ -65,7 +66,7 @@ export async function PATCH(
     const odemeDurumu = hasOdemeDurumu ? String(body.odemeDurumu).trim() : "";
     const hasEvrakNo = hasOwn(body, "evrakNo");
     const requestedEvrakNo = hasEvrakNo ? String(body.evrakNo ?? "").trim() : "";
-    const hasFaturaFields = ["faturaNo", "faturaTarihi", "toplam", "kdvOran", "faturaFirmaId", "aciklama"]
+    const hasFaturaFields = ["faturaNo", "faturaTarihi", "toplam", "kdvOran", "faturaFirmaId", "aciklama", "kaynak", "vadeTarihi"]
       .some((key) => hasOwn(body, key));
 
     if (hasOdemeDurumu && !ODEME_DURUMLARI.includes(odemeDurumu)) {
@@ -76,6 +77,7 @@ export async function PATCH(
     }
 
     const pool = await cosmoPool;
+    await ensureFaturaTrackingSchema(pool);
     const hasFaturaFirmaCol = await hasProformaFaturaFirmaCol(pool);
     await ensureProformaNkrTable(pool);
     const fatRes = await pool.request()
@@ -110,6 +112,18 @@ export async function PATCH(
         const aciklama = String(body.aciklama ?? "").trim() || null;
         updateReq.input("Aciklama", aciklama);
         setParts.push("Aciklama = @Aciklama");
+      }
+      if (hasOwn(body, "kaynak")) {
+        const kaynak = String(body.kaynak || "").trim();
+        if (!isFaturaKaynagi(kaynak)) return Response.json({ error: "Geçersiz fatura kaynağı." }, { status: 400 });
+        updateReq.input("Kaynak", kaynak);
+        setParts.push("Kaynak = @Kaynak");
+      }
+      if (hasOwn(body, "vadeTarihi")) {
+        const vadeTarihi = String(body.vadeTarihi || "").trim();
+        if (!vadeTarihi) return Response.json({ error: "Vade tarihi zorunludur." }, { status: 400 });
+        updateReq.input("VadeTarihi", vadeTarihi);
+        setParts.push("VadeTarihi = @VadeTarihi");
       }
       if (hasOwn(body, "toplam") || hasOwn(body, "kdvOran")) {
         const toplam = hasOwn(body, "toplam") ? toNumber(body.toplam) : Number(fatura.Toplam || 0);

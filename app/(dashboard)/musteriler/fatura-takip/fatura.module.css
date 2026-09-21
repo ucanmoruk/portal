@@ -1,0 +1,90 @@
+.compactTable {
+  table-layout: fixed;
+  font-size: 0.69rem;
+}
+
+.compactTable thead th {
+  padding: 8px 5px;
+  font-size: 0.59rem;
+  letter-spacing: 0.035em;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.compactTable tbody td,
+.compactTable tfoot td {
+  padding: 8px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compactTable th:nth-child(1) { width: 12%; }
+.compactTable th:nth-child(2) { width: 11%; }
+.compactTable th:nth-child(3) { width: 7%; }
+.compactTable th:nth-child(4) { width: 8%; }
+.compactTable th:nth-child(5) { width: 8%; }
+.compactTable th:nth-child(6) { width: 25%; }
+.compactTable th:nth-child(7) { width: 12%; }
+.compactTable th:nth-child(8) { width: 12%; }
+.compactTable th:nth-child(9) { width: 5%; }
+
+.ellipsisCell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compactSelect {
+  width: 100%;
+  min-width: 0 !important;
+  padding: 4px 5px !important;
+  font-size: 0.64rem !important;
+}
+
+.sourceBadge {
+  display: inline-block;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  font-weight: 700;
+}
+
+.invoiceModal {
+  max-width: 570px !important;
+}
+
+.invoiceModal h2 {
+  font-size: 0.88rem;
+}
+
+.invoiceModal label > span {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.invoiceModal input,
+.invoiceModal select,
+.invoiceModal textarea {
+  padding: 6px 8px !important;
+  font-size: 0.74rem !important;
+  font-family: inherit;
+}
+
+.invoiceModal textarea {
+  min-height: 54px;
+}
+
+.invoiceModal button {
+  font-size: 0.75rem;
+}
+
+.secondaryFields {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-light);
+}
