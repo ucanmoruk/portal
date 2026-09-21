@@ -231,6 +231,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   const activeBlockRef = useRef<HTMLElement | null>(null);
   const activeCellRef = useRef<HTMLTableCellElement | null>(null);
   const loadedKeyRef = useRef("");
+  const initialTabSetRef = useRef(false);
   // Sekme değiştiğinde editör DOM'dan kalkar; kaydedilmemiş içerik burada tutulur
   const draftRef = useRef<string | null>(null);
   const tableMenuRef = useRef<HTMLDivElement | null>(null);
@@ -273,7 +274,10 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     }
     setDirty(false);
     setEditing(false);
-    if (doc.hasDosya) setActiveTab("kunye");
+    if (!initialTabSetRef.current) {
+      if (doc.hasDosya) setActiveTab("kunye");
+      initialTabSetRef.current = true;
+    }
     setKunye({
       kod: doc.kod,
       baslik: doc.baslik,
@@ -310,7 +314,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   }, []);
 
   useEffect(() => {
-    fetch("/api/kys/dokumanlar?durum=Yayında&limit=200&sort=kod-asc")
+    fetch("/api/kys/dokumanlar?limit=200&sort=kod-asc")
       .then(r => r.json())
       .then(j => setYayinDokumanlari(j.data || []))
       .catch(() => setYayinDokumanlari([]));
@@ -1386,19 +1390,21 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 <History size={24} />
                 <p>Bu doküman henüz yayınlanmadı. İlk yayın onayından sonra revizyon geçmişi burada listelenecek.</p>
               </div>
-            ) : doc.revizyonlar.map(rev => (
-              <div key={rev.id} className={styles.revisionItem}>
-                <div>
-                  <strong>Rev. {rev.revizyonEtiket}</strong>
-                  <div className={styles.revisionDetailRows}>{rev.maddeler.map((item, index) => <div key={`${rev.id}-${index}`}><small>{item.maddeNo || "-"}</small><span>{item.aciklama || "Açıklama girilmedi."}</span></div>)}</div>
-                  <small>{formatDate(rev.yayinTarihi)} · Revizyonu yapan: {rev.olusturanAd || "-"}</small>
+            ) : <div className={styles.revisionTable}>
+              <div className={styles.revisionTableHeader}><span>Rev. No</span><span>Tarih</span><span>Madde</span><span>Açıklama</span><span>Revizyonu Yapan</span><span /></div>
+              {doc.revizyonlar.map(rev => <div key={rev.id} className={styles.revisionGroup}>
+                <strong>Rev. {rev.revizyonEtiket}</strong>
+                <span>{formatDate(rev.yayinTarihi)}</span>
+                <div className={styles.revisionGroupDetails}>{rev.maddeler.map((item, index) => <div key={`${rev.id}-${index}`}>
+                  <small>{item.maddeNo || "-"}</small><span>{item.aciklama || "Açıklama girilmedi."}</span>
+                </div>)}</div>
+                <span>{rev.olusturanAd || "-"}</span>
+                <div className={styles.revisionRowActions}>
+                  {rev.hasIcerik && <button type="button" className={styles.revisionIconButton} title="Sürümü gör" aria-label={`Revizyon ${rev.revizyonEtiket} sürümünü gör`} onClick={() => void openRevizyon(rev.id, rev.revizyonEtiket)}><Eye size={15} /></button>}
+                  {yetki.duzenle && <button type="button" className={styles.revisionIconButton} title="Düzenle" aria-label={`Revizyon ${rev.revizyonEtiket} düzenle`} onClick={() => openManualRevizyon(rev)}><PenLine size={15} /></button>}
                 </div>
-                <div className={styles.revisionItemActions}>
-                  {yetki.duzenle && <button type="button" className={styles.ghostButton} onClick={() => openManualRevizyon(rev)}><PenLine size={15} /> Düzenle</button>}
-                  {rev.hasIcerik && <button type="button" className={styles.ghostButton} onClick={() => void openRevizyon(rev.id, rev.revizyonEtiket)}><Eye size={15} /> Sürümü gör</button>}
-                </div>
-              </div>
-            ))}
+              </div>)}
+            </div>}
           </div>
         )}
 
@@ -1507,7 +1513,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
         <div className={tableStyles.modalOverlay} role="dialog" aria-modal="true" aria-label="Yayındaki dokümana bağlantı ver">
           <div className={`${tableStyles.modal} ${styles.documentLinkModal}`} onClick={event => event.stopPropagation()}>
             <div className={tableStyles.modalHeader}>
-              <div><h2>Yayındaki dokümana bağla</h2><p className={styles.modalHint}>Seçili metin, seçeceğiniz dokümana yeni sekmede açılan bir bağlantı olur.</p></div>
+              <div><h2>Dokümana bağla</h2><p className={styles.modalHint}>Seçili metin, seçeceğiniz dokümana yeni sekmede açılan bir bağlantı olur.</p></div>
               <button type="button" className={tableStyles.modalClose} onClick={() => setLinkModalOpen(false)} aria-label="Kapat">×</button>
             </div>
             <div className={tableStyles.modalBody}>
@@ -1516,6 +1522,11 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 <input autoFocus value={linkSearch} onChange={event => setLinkSearch(event.target.value)} placeholder="Örn. PR-01 veya Numune Kabul" />
               </label>
               <div className={styles.documentLinkResults}>
+                {yayinDokumanlari
+                  .filter(item => item.id !== doc.id)
+                  .filter(item => `${item.kod} ${item.baslik}`.toLocaleLowerCase("tr-TR").includes(linkSearch.trim().toLocaleLowerCase("tr-TR"))).length === 0 && (
+                    <span className={styles.sideEmpty}>Aramanıza uygun başka bir doküman bulunamadı.</span>
+                  )}
                 {yayinDokumanlari
                   .filter(item => item.id !== doc.id)
                   .sort((a, b) => a.kod.localeCompare(b.kod, "tr", { numeric: true }))

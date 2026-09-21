@@ -1166,6 +1166,24 @@
   font-size: 0.73rem;
 }
 
+.revisionList .revisionTable { display: grid; gap: 0; overflow-x: auto; border: 1px solid var(--color-border-light); border-radius: var(--radius-md); padding: 0; }
+.revisionList .revisionTableHeader,
+.revisionList .revisionGroup { display: grid; grid-template-columns: 82px 110px minmax(95px, .65fr) minmax(260px, 1.8fr) 160px 78px; gap: 0; align-items: stretch; min-width: 850px; border: 0; border-radius: 0; padding: 0; }
+.revisionList .revisionTableHeader { background: var(--color-surface-muted); color: var(--color-text-tertiary); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+.revisionList .revisionTableHeader > span { padding: 9px 10px; border-right: 1px solid var(--color-border-light); }
+.revisionList .revisionGroup { border-top: 1px solid var(--color-border-light); background: var(--color-surface); }
+.revisionList .revisionGroup > strong,
+.revisionList .revisionGroup > span { display: flex; align-items: flex-start; margin: 0; padding: 12px 10px; border-right: 1px solid var(--color-border-light); font-size: .78rem; }
+.revisionList .revisionGroupDetails { display: grid; grid-column: 3 / 5; gap: 0; border: 0; border-right: 1px solid var(--color-border-light); border-radius: 0; padding: 0; }
+.revisionList .revisionGroupDetails > div { display: grid; grid-template-columns: minmax(95px, .65fr) minmax(260px, 1.8fr); gap: 0; border: 0; border-radius: 0; border-top: 1px solid var(--color-border-light); padding: 0; }
+.revisionList .revisionGroupDetails > div:first-child { border-top: 0; }
+.revisionList .revisionGroupDetails small,
+.revisionList .revisionGroupDetails span { margin: 0; padding: 10px; font-size: .78rem; line-height: 1.4; }
+.revisionList .revisionGroupDetails small { border-right: 1px solid var(--color-border-light); color: var(--color-text-primary); font-family: var(--font-mono); }
+.revisionList .revisionRowActions { display: flex; justify-content: flex-end; align-items: flex-start; gap: 5px; border: 0; border-radius: 0; padding: 8px; }
+.revisionIconButton { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; }
+.revisionIconButton:hover { border-color: var(--color-accent-border); color: var(--color-accent); }
+
 .logList {
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
