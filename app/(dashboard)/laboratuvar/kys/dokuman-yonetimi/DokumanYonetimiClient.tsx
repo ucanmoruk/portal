@@ -1486,7 +1486,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
             <div className={styles.previewPaper}>
               <div className={styles.previewPaperInner}>
                 <div className={styles.previewDocumentHeader}>
-                  <img src="/unique-logo-wide.png" alt="UNIQUE Analyse" />
+                  <img src="/kys-document-logo.png" alt="UNIQUE Analyse" />
                   <strong>{doc.baslik}</strong>
                   <table><tbody>
                     <tr><th>Doküman No</th><td>{doc.kod}</td></tr>
@@ -1606,7 +1606,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
 
       {/* Yazdırma üst/alt bilgileri — her sayfada sabitlenir */}
       <div className={styles.printHeader} aria-hidden="true">
-        <img src="/unique-logo-wide.png" alt="UNIQUE Analyse" />
+        <img src="/kys-document-logo.png" alt="UNIQUE Analyse" />
         <strong>{doc.baslik}</strong>
         <table><tbody>
           <tr><th>Doküman No</th><td>{doc.kod}</td></tr>

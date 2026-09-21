@@ -581,7 +581,7 @@ export default function DokumanListesiClient() {
                 {previewDoc && (
                   <>
                     <div className={styles.previewDocumentHeader}>
-                      <img src="/unique-logo-wide.png" alt="UNIQUE Analyse" />
+                      <img src="/kys-document-logo.png" alt="UNIQUE Analyse" />
                       <strong>{previewDoc.baslik}</strong>
                       <table><tbody>
                         <tr><th>Doküman No</th><td>{previewDoc.kod}</td></tr>

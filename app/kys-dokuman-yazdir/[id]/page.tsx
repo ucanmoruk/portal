@@ -32,7 +32,7 @@ export default async function KysDokumanYazdirPage({ params, searchParams }: { p
     <main className={styles.screen}>
       <div className={`${styles.document} ${pdfMode ? styles.pdfMode : ""}`}>
         <header className={styles.header}>
-          <Image src="/unique-logo-wide.png" alt="UNIQUE Analyse" width={500} height={71} preload unoptimized />
+          <Image src="/kys-document-logo.png" alt="UNIQUE Analyse" width={374} height={374} preload unoptimized />
           <h1>{doc.baslik}</h1>
           <table><tbody>
             <tr><th>Doküman No</th><td>{doc.kod}</td></tr>
