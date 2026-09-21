@@ -19,7 +19,14 @@ function prepareContent(html: string) {
   const headings: Array<{ id: string; title: string; level: number }> = [];
   let index = 0;
   const content = html.replace(/<h([2-4])([^>]*)>([\s\S]*?)<\/h\1>/gi, (_full, level, attrs, inner) => {
-    const title = String(inner).replace(/<[^>]+>/g, "").trim() || `Başlık ${index + 1}`;
+    const title = String(inner)
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;|&#160;|&#x0*a0;/gi, " ")
+      .replace(/\u00a0/g, " ")
+      .trim();
+    // Metni silinmiş bir başlıktan kalan "4.5 &nbsp;" gibi hayalet
+    // kayıtları hem içerikten hem de başlık menüsünden çıkar.
+    if (!title || /^\d+(?:\.\d+)*\.?$/.test(title)) return "";
     const currentId = String(attrs).match(/\bid=["']([^"']+)["']/i)?.[1];
     const id = currentId || slug(title, index);
     headings.push({ id, title, level: Number(level) });

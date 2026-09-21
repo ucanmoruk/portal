@@ -364,7 +364,8 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     // contenteditable/formatBlock bazı tarayıcılarda boş bir başlık bırakabiliyor.
     // Bu düğümler içindekiler listesinde "Başlık 10" gibi hayalet kayıtlar üretmesin.
     editor.querySelectorAll("h2, h3, h4").forEach(heading => {
-      if (!heading.textContent?.trim()) heading.remove();
+      const title = heading.textContent?.replace(/\u00a0/g, " ").trim() || "";
+      if (!title || /^\d+(?:\.\d+)*\.?$/.test(title)) heading.remove();
     });
     const headings = Array.from(editor.querySelectorAll("h2, h3, h4"));
     headings.forEach((heading, index) => {
