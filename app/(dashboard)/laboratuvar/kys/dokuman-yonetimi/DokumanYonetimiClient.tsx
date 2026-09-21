@@ -221,7 +221,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   const [manualRevizyonBusy, setManualRevizyonBusy] = useState(false);
   const [manualRevizyonHata, setManualRevizyonHata] = useState("");
   const [manualRevizyonId, setManualRevizyonId] = useState<number | null>(null);
-  const [manualRevizyon, setManualRevizyon] = useState({ revizyon: "", yayinTarihi: "", maddeler: [{ maddeNo: "", aciklama: "" }] });
+  const [manualRevizyon, setManualRevizyon] = useState({ revizyon: "", yayinTarihi: "", revizyonuYapan: "", maddeler: [{ maddeNo: "", aciklama: "" }] });
   const [tableMenuOpen, setTableMenuOpen] = useState(false);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -915,7 +915,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       await fetchDoc();
       setManualRevizyonOpen(false);
       setManualRevizyonId(null);
-      setManualRevizyon({ revizyon: "", yayinTarihi: "", maddeler: [{ maddeNo: "", aciklama: "" }] });
+      setManualRevizyon({ revizyon: "", yayinTarihi: "", revizyonuYapan: "", maddeler: [{ maddeNo: "", aciklama: "" }] });
     } catch (e) { setManualRevizyonHata(errorMessage(e, "Geçmiş revizyon eklenemedi.")); }
     finally { setManualRevizyonBusy(false); }
   }
@@ -926,6 +926,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     setManualRevizyon({
       revizyon: rev ? String(rev.revizyon) : "",
       yayinTarihi: rev?.yayinTarihi || "",
+      revizyonuYapan: rev?.olusturanAd || "",
       maddeler: rev?.maddeler?.length ? rev.maddeler.map(item => ({ ...item })) : [{ maddeNo: "", aciklama: "" }],
     });
     setManualRevizyonOpen(true);
@@ -1408,17 +1409,18 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
               {manualRevizyonHata && <div role="alert" className={styles.manualRevisionError}>{manualRevizyonHata}</div>}
               <label>Revizyon no<input type="number" min="0" max="999" required value={manualRevizyon.revizyon} onChange={e => setManualRevizyon(f => ({...f, revizyon:e.target.value}))} /></label>
               <label>Yayın tarihi<input type="date" required value={manualRevizyon.yayinTarihi} onChange={e => setManualRevizyon(f => ({...f, yayinTarihi:e.target.value}))} /></label>
+              <label>Revizyonu yapan<input maxLength={160} required value={manualRevizyon.revizyonuYapan} onChange={e => setManualRevizyon(f => ({...f, revizyonuYapan:e.target.value}))} /></label>
               <div className={styles.manualRevisionItems}>
                 <div className={styles.manualRevisionItemHeader}><span>Değişen madde</span><span>Açıklama</span></div>
                 {manualRevizyon.maddeler.map((item, index) => <div className={styles.manualRevisionItem} key={index}>
                   <input aria-label={`Değişen madde ${index + 1}`} maxLength={100} required value={item.maddeNo} onChange={e => updateRevizyonMaddesi(index, "maddeNo", e.target.value)} placeholder="Örn. 4.2" />
-                  <textarea aria-label={`Açıklama ${index + 1}`} rows={3} maxLength={2000} required value={item.aciklama} onChange={e => updateRevizyonMaddesi(index, "aciklama", e.target.value)} placeholder="Yapılan değişikliği açıklayın" />
+                  <textarea aria-label={`Açıklama ${index + 1}`} rows={1} maxLength={2000} required value={item.aciklama} onChange={e => updateRevizyonMaddesi(index, "aciklama", e.target.value)} placeholder="Yapılan değişikliği açıklayın" />
                   {manualRevizyon.maddeler.length > 1 && <button type="button" className={styles.revisionRowDelete} title="Satırı kaldır" onClick={() => setManualRevizyon(current => ({ ...current, maddeler: current.maddeler.filter((_, i) => i !== index) }))}><Trash2 size={15} /></button>}
                 </div>)}
                 <button type="button" className={styles.addRevisionRow} onClick={() => setManualRevizyon(current => ({ ...current, maddeler: [...current.maddeler, { maddeNo: "", aciklama: "" }] }))}>+ Madde ekle</button>
               </div>
             </div>
-            <div className={styles.modalActions}><button type="button" className={styles.ghostButton} disabled={manualRevizyonBusy} onClick={() => setManualRevizyonOpen(false)}>Vazgeç</button><button type="button" className={styles.publishButton} disabled={manualRevizyonBusy || !manualRevizyon.revizyon || !manualRevizyon.yayinTarihi || manualRevizyon.maddeler.some(item => !item.maddeNo.trim() || !item.aciklama.trim())} onClick={() => void saveManualRevizyon()}>{manualRevizyonBusy ? "Kaydediliyor…" : manualRevizyonId ? "Kaydet" : "Geçmişe ekle"}</button></div>
+            <div className={styles.modalActions}><button type="button" className={styles.ghostButton} disabled={manualRevizyonBusy} onClick={() => setManualRevizyonOpen(false)}>Vazgeç</button><button type="button" className={styles.publishButton} disabled={manualRevizyonBusy || !manualRevizyon.revizyon || !manualRevizyon.yayinTarihi || !manualRevizyon.revizyonuYapan.trim() || manualRevizyon.maddeler.some(item => !item.maddeNo.trim() || !item.aciklama.trim())} onClick={() => void saveManualRevizyon()}>{manualRevizyonBusy ? "Kaydediliyor…" : manualRevizyonId ? "Kaydet" : "Geçmişe ekle"}</button></div>
           </div>
         </div>}
 

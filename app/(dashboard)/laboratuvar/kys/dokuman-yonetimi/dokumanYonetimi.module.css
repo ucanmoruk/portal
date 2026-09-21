@@ -880,15 +880,15 @@
 
 .revisionActions { display: flex !important; justify-content: flex-end; margin-bottom: 4px; }
 .manualRevisionModal { width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-xl); }
-.manualRevisionForm { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 20px; }
+.manualRevisionForm { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 20px; }
 .manualRevisionForm label { display: grid; gap: 6px; font-size: .8rem; font-weight: 700; color: var(--color-text-primary); }
 .manualRevisionForm input, .manualRevisionForm textarea { width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text-primary); padding: 9px 10px; font: inherit; }
 .manualRevisionForm textarea { resize: vertical; }
 .manualRevisionItems { grid-column: 1 / -1; display: grid; gap: 10px; }
-.manualRevisionItemHeader, .manualRevisionItem { display: grid; grid-template-columns: minmax(110px, .32fr) minmax(260px, 1fr) 34px; gap: 10px; align-items: start; }
+.manualRevisionItemHeader, .manualRevisionItem { display: grid; grid-template-columns: minmax(110px, .28fr) minmax(0, 1fr) 34px; gap: 10px; align-items: start; }
 .manualRevisionItemHeader { color: var(--color-text-secondary); font-size: .76rem; font-weight: 800; }
 .manualRevisionItemHeader span:last-child { grid-column: 2; }
-.manualRevisionItem textarea { min-height: 76px; }
+.manualRevisionItem textarea { min-height: 38px; }
 .revisionRowDelete { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid #fecaca; border-radius: var(--radius-sm); background: #fff; color: #b91c1c; cursor: pointer; }
 .addRevisionRow { justify-self: start; border: 1px dashed var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-primary); padding: 7px 11px; font-weight: 700; cursor: pointer; }
 .revisionDetailRows { display: grid; gap: 5px; margin: 6px 0; }
