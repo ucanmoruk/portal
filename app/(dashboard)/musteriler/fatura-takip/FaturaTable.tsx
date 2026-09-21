@@ -18,6 +18,7 @@ interface FaturaRow {
   KDV: number | string | null;
   OdenenTutar: number | string | null;
   FaturaFirmaID: number | null;
+  FirmaAdManuel: string | null;
   Aciklama: string | null;
   OdemeDurumu: string | null;
 }
@@ -101,19 +102,21 @@ function odemeStyle(durum: string | null): React.CSSProperties {
 
 function FirmaPicker({
   value,
+  manualValue,
   onChange,
 }: {
   value: FirmaOpt | null;
-  onChange: (firma: FirmaOpt | null) => void;
+  manualValue: string;
+  onChange: (firma: FirmaOpt | null, manualValue: string) => void;
 }) {
-  const [q, setQ] = useState(value?.Ad || "");
+  const [q, setQ] = useState(value?.Ad || manualValue);
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<FirmaOpt[]>([]);
   const [loading, setLoading] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setQ(value?.Ad || ""), [value]);
+  useEffect(() => setQ(value?.Ad || manualValue), [value, manualValue]);
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -145,13 +148,13 @@ function FirmaPicker({
     <div ref={boxRef} style={{ position: "relative" }}>
       <input
         value={q}
-        onChange={e => { setQ(e.target.value); onChange(null); setOpen(true); }}
+        onChange={e => { setQ(e.target.value); onChange(null, e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
-        placeholder="Firma ara..."
+        placeholder="Firma ara veya manuel yaz..."
         style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--color-border)", borderRadius: 8, background: "var(--color-surface)", fontFamily: "inherit" }}
       />
-      {value && (
-        <button type="button" onClick={() => { onChange(null); setQ(""); }} style={{ position: "absolute", right: 8, top: 7, border: "none", background: "transparent", cursor: "pointer", color: "var(--color-text-tertiary)" }}>×</button>
+      {(value || manualValue) && (
+        <button type="button" onClick={() => { onChange(null, ""); setQ(""); }} style={{ position: "absolute", right: 8, top: 7, border: "none", background: "transparent", cursor: "pointer", color: "var(--color-text-tertiary)" }}>×</button>
       )}
       {open && (
         <div style={{ position: "absolute", zIndex: 80, top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, boxShadow: "0 10px 24px rgba(0,0,0,.14)", maxHeight: 240, overflowY: "auto" }}>
@@ -163,7 +166,7 @@ function FirmaPicker({
             <button
               key={f.ID}
               type="button"
-              onClick={() => { onChange(f); setQ(f.Ad); setOpen(false); }}
+              onClick={() => { onChange(f, ""); setQ(f.Ad); setOpen(false); }}
               style={{ display: "block", width: "100%", padding: "8px 10px", border: "none", background: "transparent", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}
             >
               {upperTr(f.Ad)}
@@ -206,6 +209,7 @@ export default function FaturaTable() {
     toplam: "",
     kdvOran: "20",
     aciklama: "",
+    firmaAdManuel: "",
   });
 
   const fetchRows = useCallback(async () => {
@@ -258,6 +262,7 @@ export default function FaturaTable() {
       toplam: "",
       kdvOran: "20",
       aciklama: "",
+      firmaAdManuel: "",
     });
     setManualOpen(true);
   }
@@ -276,6 +281,7 @@ export default function FaturaTable() {
       toplam: row.Toplam != null ? String(row.Toplam) : "",
       kdvOran: kdvRateOf(row),
       aciklama: row.Aciklama || "",
+      firmaAdManuel: row.FirmaAdManuel || "",
     });
     setManualOpen(true);
   }
@@ -302,6 +308,7 @@ export default function FaturaTable() {
           toplam: manualForm.toplam,
           kdvOran: manualForm.kdvOran,
           faturaFirmaId: manualFirma?.ID ?? null,
+          firmaAdManuel: manualFirma ? null : manualForm.firmaAdManuel,
           aciklama: manualForm.aciklama,
         }),
       });
@@ -410,7 +417,7 @@ export default function FaturaTable() {
                 <tr key={row.ID}>
                   <td className={localStyles.ellipsisCell} title={row.ProformaNo || "-"}>{row.ProformaNo || "-"}</td>
                   <td className={`${styles.primaryCell} ${localStyles.ellipsisCell}`} title={row.FaturaNo}>{row.FaturaNo}</td>
-                  <td><span className={localStyles.sourceBadge}>{row.Kaynak || "Unique"}</span></td>
+                  <td><span className={`${localStyles.sourceBadge} ${row.Kaynak === "Spektrotek" ? localStyles.sourceSpektrotek : row.Kaynak === "Root" ? localStyles.sourceRoot : localStyles.sourceUnique}`}>{row.Kaynak || "Unique"}</span></td>
                   <td>{fmtTarih(row.Tarih)}</td>
                   <td>{fmtTarih(row.VadeTarihi)}</td>
                   <td className={localStyles.ellipsisCell} title={upperTr(row.FirmaAd) || "-"}>{upperTr(row.FirmaAd) || "-"}</td>
@@ -549,7 +556,7 @@ export default function FaturaTable() {
               <div className={`${styles.formGrid} ${localStyles.secondaryFields}`}>
                 <label>
                   <span>Firma</span>
-                  <FirmaPicker value={manualFirma} onChange={setManualFirma} />
+                  <FirmaPicker value={manualFirma} manualValue={manualForm.firmaAdManuel} onChange={(firma, firmaAdManuel) => { setManualFirma(firma); setManualForm(f => ({ ...f, firmaAdManuel })); }} />
                 </label>
                 <label>
                   <span>Evrak No</span>

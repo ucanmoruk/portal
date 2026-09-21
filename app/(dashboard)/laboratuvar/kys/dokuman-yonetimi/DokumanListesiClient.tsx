@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Download, Eye, FilePlus2, Printer, RotateCw, Search, Trash2, Upload, X } from "lucide-react";
+import { ArrowUpRight, Download, Eye, FilePlus2, Network, Printer, RotateCw, Search, Trash2, Upload, X } from "lucide-react";
 import tableStyles from "@/app/styles/table.module.css";
 import kys from "../kys.module.css";
 import styles from "./dokumanYonetimi.module.css";
@@ -20,6 +20,8 @@ import {
 } from "./dokumanTypes";
 
 type Kullanici = { ID: number | string; Ad: string };
+type AtifDokuman = { id: number; kod: string; baslik: string; tur: string; durum: string };
+type DokumanAtif = AtifDokuman & { atifSayisi: number; kaynaklar: AtifDokuman[] };
 
 type Stats = {
   toplam: number;
@@ -78,6 +80,12 @@ export default function DokumanListesiClient() {
   const [previewDoc, setPreviewDoc] = useState<DokumanDetay | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
+  const [relationOpen, setRelationOpen] = useState(false);
+  const [references, setReferences] = useState<DokumanAtif[]>([]);
+  const [referenceSummary, setReferenceSummary] = useState({ toplamAtif: 0, atifAlanDokuman: 0 });
+  const [relationSearch, setRelationSearch] = useState("");
+  const [relationLoading, setRelationLoading] = useState(false);
+  const [relationError, setRelationError] = useState("");
 
   // Arama girişini yavaşlat — her tuşta istek atma
   useEffect(() => {
@@ -220,6 +228,22 @@ export default function DokumanListesiClient() {
     }
   }
 
+  const fetchRelations = useCallback(async () => {
+    setRelationLoading(true);
+    setRelationError("");
+    try {
+      const response = await fetch("/api/kys/dokuman-atiflari");
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Doküman atıfları alınamadı.");
+      setReferences(json.data || []);
+      setReferenceSummary({ toplamAtif: json.toplamAtif || 0, atifAlanDokuman: json.atifAlanDokuman || 0 });
+    } catch (e: unknown) {
+      setRelationError(errorMessage(e, "Doküman ilişkileri alınamadı."));
+    } finally {
+      setRelationLoading(false);
+    }
+  }, []);
+
   function printPreview(id: number) {
     window.open(`/kys-dokuman-yazdir/${id}?print=1`, "_blank", "noopener,noreferrer");
   }
@@ -229,6 +253,13 @@ export default function DokumanListesiClient() {
     () => kullanicilar.map(k => ({ id: String(k.ID), ad: k.Ad })),
     [kullanicilar],
   );
+  const filteredRelations = useMemo(() => {
+    const query = relationSearch.trim().toLocaleLowerCase("tr-TR");
+    const cited = references.filter(item => item.atifSayisi > 0);
+    if (!query) return [];
+    return cited.filter(item => [item.kod, item.baslik, ...item.kaynaklar.flatMap(source => [source.kod, source.baslik])]
+      .some(value => value.toLocaleLowerCase("tr-TR").includes(query)));
+  }, [references, relationSearch]);
 
   function setKisi(alan: "hazirlayan" | "onaylayan", id: string) {
     const kisi = kisiSecenekleri.find(k => k.id === id);
@@ -287,6 +318,14 @@ export default function DokumanListesiClient() {
             )}
           </div>
           <div className={tableStyles.toolbarRight}>
+            <button type="button" className={relationOpen ? styles.relationButtonActive : styles.ghostButton} onClick={() => {
+              const next = !relationOpen;
+              setRelationOpen(next);
+              if (next && references.length === 0) void fetchRelations();
+            }}>
+              <Network size={15} />
+              Atıf kullanımı
+            </button>
             <button type="button" className={styles.ghostButton} onClick={() => void fetchRows()} title="Yenile">
               <RotateCw size={15} />
               Yenile
@@ -299,6 +338,50 @@ export default function DokumanListesiClient() {
             )}
           </div>
         </div>
+
+        {relationOpen && (
+          <section className={styles.relationWorkspace} aria-labelledby="relation-title">
+            <div className={styles.relationIntro}>
+              <div>
+                <span className={styles.relationEyebrow}>OTOMATİK ATIF ANALİZİ</span>
+                <h2 id="relation-title">Hangi doküman, kaç yerde kullanılıyor?</h2>
+                <p>Doküman içeriklerindeki bağlı atıflar otomatik taranır. Manuel bağlantı oluşturmanız gerekmez.</p>
+              </div>
+              <div className={styles.referenceMetrics}>
+                <div className={styles.relationMetric}><strong>{referenceSummary.atifAlanDokuman}</strong><span>atıf alan doküman</span></div>
+                <div className={styles.relationMetric}><strong>{referenceSummary.toplamAtif}</strong><span>doküman içi kullanım</span></div>
+              </div>
+            </div>
+
+            {relationError && <div className={tableStyles.formError} role="alert">{relationError}</div>}
+
+            <div className={styles.relationListHeader}>
+              <div className={tableStyles.searchBox}>
+                <Search size={15} className={tableStyles.searchIcon} />
+                <input className={tableStyles.searchInput} placeholder="Doküman veya prosedür ara..." value={relationSearch} onChange={event => setRelationSearch(event.target.value)} />
+              </div>
+              <span>{filteredRelations.length} atıf alan doküman gösteriliyor</span>
+            </div>
+
+            <div className={styles.relationList}>
+              {relationLoading && references.length === 0 ? <div className={tableStyles.skeleton} /> : !relationSearch.trim() ? (
+                <div className={styles.relationEmpty}><Search size={24} /><strong>Doküman kodu veya adıyla arayın</strong><span>Sonuçlar yalnızca arama yaptıktan sonra gösterilir.</span></div>
+              ) : filteredRelations.length === 0 ? (
+                <div className={styles.relationEmpty}><Network size={24} /><strong>Bu dokümana bağlı atıf bulunamadı</strong><span>Yalnızca doküman editöründe oluşturulan bağlantılar sayılır.</span></div>
+              ) : filteredRelations.map(item => (
+                <article className={styles.referenceRow} key={item.id}>
+                  <Link href={`/laboratuvar/kys/dokuman-yonetimi/${item.id}/onizleme`} target="_blank" className={styles.relationDocument}>
+                    <span>{item.tur}</span><strong>{item.kod}</strong><small>{item.baslik}</small>
+                  </Link>
+                  <div className={styles.referenceCount}><strong>{item.atifSayisi}</strong><span>dokümanda kullanılıyor</span></div>
+                  <div className={styles.referenceSources}>
+                    {item.kaynaklar.map(source => <Link key={source.id} href={`/laboratuvar/kys/dokuman-yonetimi/${source.id}/onizleme`} target="_blank"><strong>{source.kod}</strong><span>{source.baslik}</span></Link>)}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className={kys.filterRow}>
           <select className={kys.select} value={tur} onChange={event => setTur(event.target.value)}>

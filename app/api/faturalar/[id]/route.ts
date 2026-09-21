@@ -66,7 +66,7 @@ export async function PATCH(
     const odemeDurumu = hasOdemeDurumu ? String(body.odemeDurumu).trim() : "";
     const hasEvrakNo = hasOwn(body, "evrakNo");
     const requestedEvrakNo = hasEvrakNo ? String(body.evrakNo ?? "").trim() : "";
-    const hasFaturaFields = ["faturaNo", "faturaTarihi", "toplam", "kdvOran", "faturaFirmaId", "aciklama", "kaynak", "vadeTarihi"]
+    const hasFaturaFields = ["faturaNo", "faturaTarihi", "toplam", "kdvOran", "faturaFirmaId", "firmaAdManuel", "aciklama", "kaynak", "vadeTarihi"]
       .some((key) => hasOwn(body, key));
 
     if (hasOdemeDurumu && !ODEME_DURUMLARI.includes(odemeDurumu)) {
@@ -107,6 +107,13 @@ export async function PATCH(
         const firmaId = body.faturaFirmaId ? Number(body.faturaFirmaId) : null;
         updateReq.input("FaturaFirmaID", firmaId);
         setParts.push("FaturaFirmaID = @FaturaFirmaID");
+        if (firmaId) setParts.push("FirmaAdManuel = NULL");
+      }
+      if (hasOwn(body, "firmaAdManuel") && !body.faturaFirmaId) {
+        const firmaAdManuel = String(body.firmaAdManuel ?? "").trim() || null;
+        if (firmaAdManuel && firmaAdManuel.length > 220) return Response.json({ error: "Firma adı en fazla 220 karakter olabilir." }, { status: 400 });
+        updateReq.input("FirmaAdManuel", firmaAdManuel);
+        setParts.push("FirmaAdManuel = @FirmaAdManuel");
       }
       if (hasOwn(body, "aciklama")) {
         const aciklama = String(body.aciklama ?? "").trim() || null;

@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
 
   // Ortak WHERE (search/yil/odeme). Parametreler her request'e ayrıca eklenir.
   let where = "WHERE f.Durum = 'Aktif'";
-  if (search) where += ` AND (ISNULL(f.Fatura_No,'') LIKE @search OR ISNULL(f.ProformaNo,'') LIKE @search OR ISNULL(fr.Firma_Adi,'') LIKE @search)`;
+  if (search) where += ` AND (ISNULL(f.Fatura_No,'') LIKE @search OR ISNULL(f.ProformaNo,'') LIKE @search OR ISNULL(fr.Firma_Adi,'') LIKE @search OR ISNULL(f.FirmaAdManuel,'') LIKE @search)`;
   if (yil) where += ` AND ${yilExpr} = @yil`;
   if (ay) where += ` AND DATE_FORMAT(${tarihExpr}, '%m') = @ay`;
   if (odeme) where += ` AND ${sonOdeme} = @odeme`;
@@ -158,8 +158,8 @@ export async function GET(request: NextRequest) {
           f.ID, f.Fatura_No AS FaturaNo, f.ProformaNo,
           ${tarihExpr} AS Tarih,
           f.Toplam, f.Tutar, f.KDV, f.Odenen_Tutar AS OdenenTutar,
-          f.FaturaFirmaID, f.Aciklama, f.Kaynak, f.VadeTarihi,
-          ISNULL(fr.Firma_Adi, '') AS FirmaAd,
+          f.FaturaFirmaID, f.FirmaAdManuel, f.Aciklama, f.Kaynak, f.VadeTarihi,
+          COALESCE(NULLIF(fr.Firma_Adi, ''), NULLIF(f.FirmaAdManuel, ''), '') AS FirmaAd,
           ${sonOdeme} AS OdemeDurumu
         FROM Fatura f
         LEFT JOIN Firma fr ON fr.ID = f.FaturaFirmaID
@@ -217,6 +217,10 @@ export async function POST(request: NextRequest) {
       const net = toplam / (1 + kdvOran / 100);
       const kdv = toplam - net;
       const faturaFirmaId = body.faturaFirmaId ? Number(body.faturaFirmaId) : null;
+      const firmaAdManuel = faturaFirmaId ? null : cleanOptionalText(body.firmaAdManuel);
+      if (firmaAdManuel && firmaAdManuel.length > 220) {
+        return Response.json({ error: "Firma adı en fazla 220 karakter olabilir." }, { status: 400 });
+      }
       const aciklama = cleanOptionalText(body.aciklama);
 
       const insRes = await pool.request()
@@ -227,14 +231,15 @@ export async function POST(request: NextRequest) {
         .input("KDV", Number(kdv.toFixed(2)))
         .input("OdenenTutar", 0)
         .input("FaturaFirmaID", faturaFirmaId)
+        .input("FirmaAdManuel", firmaAdManuel)
         .input("Tarih", faturaTarihi)
         .input("Aciklama", aciklama)
         .input("Kaynak", kaynak)
         .input("VadeTarihi", vadeTarihi)
         .query(`
-          INSERT INTO Fatura (Fatura_No, ProformaNo, Toplam, Tutar, KDV, Odenen_Tutar, FaturaFirmaID, Tarih, Durum, Aciklama, Kaynak, VadeTarihi)
+          INSERT INTO Fatura (Fatura_No, ProformaNo, Toplam, Tutar, KDV, Odenen_Tutar, FaturaFirmaID, FirmaAdManuel, Tarih, Durum, Aciklama, Kaynak, VadeTarihi)
           OUTPUT INSERTED.ID
-          VALUES (@FaturaNo, @ProformaNo, @Toplam, @Tutar, @KDV, @OdenenTutar, @FaturaFirmaID, @Tarih, 'Aktif', @Aciklama, @Kaynak, @VadeTarihi)
+          VALUES (@FaturaNo, @ProformaNo, @Toplam, @Tutar, @KDV, @OdenenTutar, @FaturaFirmaID, @FirmaAdManuel, @Tarih, 'Aktif', @Aciklama, @Kaynak, @VadeTarihi)
         `);
       const faturaId = Number(insRes.recordset[0]?.ID);
 

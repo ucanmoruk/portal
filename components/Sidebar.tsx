@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import styles from "./Sidebar.module.css";
@@ -206,7 +206,7 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
 
   // null = admin (kısıtlama yok), [] = hiçbir şey, [...] = sadece listedekiler
   const allowed = allowedKeys !== null ? new Set(allowedKeys) : null;
-  const canSee  = (key: string) => allowed === null || allowed.has(key);
+  const canSee  = (key: string) => allowed === null || allowed.has(key) || (key === "laboratuvar.kys" && Array.from(allowed).some(item => item.startsWith("laboratuvar.kys.")));
 
   const toggleGroup = (id: string) =>
     setOpenGroups(prev => (prev.length === 1 && prev[0] === id ? [] : [id]));
@@ -271,7 +271,8 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
           const active  = isGroupActive(group);
 
           return (
-            <div key={group.id} className={styles.navGroup}>
+            <Fragment key={group.id}>
+            <div className={styles.navGroup}>
               <button
                 className={`${styles.navGroupHeader} ${active ? styles.navGroupHeaderActive : ""}`}
                 onClick={() => toggleGroup(group.id)}
@@ -305,6 +306,13 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
               )}
 
             </div>
+            {group.id === "kys" && canSee("laboratuvar.kys") && (
+              <Link href="/laboratuvar/kys/iletisim" className={`${styles.navLink} ${pathname.startsWith("/laboratuvar/kys/iletisim") ? styles.navLinkActive : ""}`}>
+                <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" aria-hidden><path d="M2 4.75A2.75 2.75 0 0 1 4.75 2h10.5A2.75 2.75 0 0 1 18 4.75v6.5A2.75 2.75 0 0 1 15.25 14H9l-3.6 3a.75.75 0 0 1-1.23-.576V14.4A2.75 2.75 0 0 1 2 11.75v-7Z"/></svg>
+                <span>İletişim</span>
+              </Link>
+            )}
+            </Fragment>
           );
         })}
 

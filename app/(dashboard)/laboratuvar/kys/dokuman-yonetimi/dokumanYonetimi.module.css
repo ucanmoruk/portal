@@ -9,6 +9,9 @@
   display: block;
 }
 
+/* Hallmark · relationship workspace · modern-minimal · existing portal blue
+ * hierarchy: used document → usage note → procedure/instruction · contrast/mobile/tokens: pass
+ */
 .listShell {
   display: grid;
   gap: 14px;
@@ -1214,10 +1217,96 @@
 }
 .printFooter,.printAppendix { display: none; }
 
+/* Hallmark · pre-emit critique: P5 H4 E4 S5 R5 V4
+ * component: relationship workspace · genre: modern-minimal · theme: existing portal
+ * states: default · hover · focus · active · disabled · loading · error · success
+ */
+.relationButtonActive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: var(--color-surface);
+  padding: 8px 13px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.relationButtonActive:hover { background: var(--color-accent-hover); }
+.relationButtonActive:active { transform: translateY(1px); }
+.relationButtonActive:focus-visible,
+.relationDocument:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+.relationWorkspace {
+  display: grid;
+  gap: 18px;
+  margin: 0 16px 18px;
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.relationIntro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--color-border-light);
+  padding-bottom: 16px;
+}
+
+.relationIntro h2 { margin: 3px 0 5px; font-size: 1.1rem; font-style: normal; }
+.relationIntro p { margin: 0; max-width: 680px; color: var(--color-text-secondary); font-size: 0.8rem; }
+.relationEyebrow { color: var(--color-accent); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.12em; }
+.relationMetric { display: grid; min-width: 112px; text-align: right; }
+.relationMetric strong { color: var(--color-accent); font-size: 1.55rem; line-height: 1; }
+.relationMetric span { margin-top: 4px; color: var(--color-text-tertiary); font-size: 0.7rem; }
+.referenceMetrics { display: flex; gap: 24px; }
+
+.relationListHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.relationListHeader > div { max-width: 380px; }
+.relationListHeader > span { color: var(--color-text-tertiary); font-size: 0.72rem; }
+.relationList { display: grid; overflow: hidden; border: 1px solid var(--color-border-light); border-radius: var(--radius-md); }
+.referenceRow {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.8fr) 110px minmax(0, 1.7fr);
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  border-top: 1px solid var(--color-border-light);
+  padding: 12px;
+}
+.referenceRow:first-child { border-top: none; }
+.referenceRow:hover { background: var(--color-accent-light); }
+.relationDocument { display: grid; min-width: 0; gap: 2px; border-radius: var(--radius-sm); }
+.relationDocument > span { color: var(--color-text-tertiary); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; }
+.relationDocument > strong { color: var(--color-accent); font-size: 0.78rem; font-family: var(--font-mono, monospace); }
+.relationDocument > small { overflow: hidden; color: var(--color-text-primary); font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
+.relationDocument:hover > small { text-decoration: underline; text-underline-offset: 2px; }
+.referenceCount { display: grid; justify-items: center; gap: 2px; text-align: center; }
+.referenceCount strong { color: var(--color-accent); font-size: 1.25rem; line-height: 1; }
+.referenceCount span { color: var(--color-text-tertiary); font-size: 0.65rem; }
+.referenceSources { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px; }
+.referenceSources a { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 260px; border: 1px solid var(--color-border-light); border-radius: var(--radius-full); background: var(--color-surface); padding: 5px 9px; white-space: nowrap; }
+.referenceSources a:hover { border-color: var(--color-accent-border); background: var(--color-accent-light); }
+.referenceSources a:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.referenceSources strong { color: var(--color-accent); font-size: 0.68rem; font-family: var(--font-mono, monospace); }
+.referenceSources span { overflow: hidden; color: var(--color-text-secondary); font-size: 0.68rem; text-overflow: ellipsis; }
+.relationEmpty { display: grid; justify-items: center; gap: 5px; padding: 34px 18px; color: var(--color-text-tertiary); text-align: center; }
+.relationEmpty strong { color: var(--color-text-secondary); font-size: 0.82rem; }
+.relationEmpty span { font-size: 0.74rem; }
+
 @media (max-width: 1100px) {
   .summaryStrip {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+
 }
 
 @media (max-width: 760px) {
@@ -1228,4 +1317,13 @@
   .revisionItem {
     flex-direction: column;
   }
+
+  .relationWorkspace { margin: 0 10px 14px; padding: 15px; }
+  .relationIntro { display: grid; gap: 12px; }
+  .relationMetric { text-align: left; }
+  .referenceMetrics { gap: 18px; }
+  .relationListHeader { align-items: stretch; flex-direction: column; }
+  .relationListHeader > div { max-width: none; }
+  .referenceRow { grid-template-columns: minmax(0, 1fr) 90px; gap: 12px; }
+  .referenceSources { grid-column: 1 / 3; }
 }

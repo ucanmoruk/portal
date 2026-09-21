@@ -81,6 +81,7 @@ export const MENU_TREE: MenuItem[] = [
       { key: "laboratuvar.kys.satin-alma-gecmisi", label: "Satın Alma Geçmişi", href: "/laboratuvar/kys/satin-alma-gecmisi" },
     ],
   },
+  { key: "laboratuvar.kys.iletisim", label: "İletişim", href: "/laboratuvar/kys/iletisim" },
   {
     key: "eurolab",
     label: "Eurolab",

@@ -1,12 +1,20 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
+import Link from "next/link";
+import { Bell } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import styles from "./Header.module.css";
 import { useSidebar } from "./SidebarProvider";
 
 export default function Header() {
   const { data: session } = useSession();
   const { toggle } = useSidebar();
+  const [notifications,setNotifications]=useState<{count:number;items:Array<{id:number;etiket:string;baslik:string;olusturanAd:string}>}>({count:0,items:[]});
+  const [notificationsOpen,setNotificationsOpen]=useState(false);
+  const loadNotifications=useCallback(async()=>{try{const response=await fetch("/api/kys/iletisim/bildirimler");if(response.ok)setNotifications(await response.json());}catch{/* Bildirim hatası üst menüyü engellemez. */}},[]);
+  const markNotification=useCallback(async(id?:number)=>{await fetch("/api/kys/iletisim",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(id?{islem:"okundu",id}:{islem:"tumunu-okundu"})});await loadNotifications();},[loadNotifications]);
+  useEffect(()=>{if(!session?.user)return;const initial=setTimeout(()=>void loadNotifications(),0);const timer=setInterval(()=>void loadNotifications(),30000);return()=>{clearTimeout(initial);clearInterval(timer);};},[session?.user,loadNotifications]);
 
   return (
     <header className={styles.header} data-dashboard-header>
@@ -18,6 +26,12 @@ export default function Header() {
       <div className={styles.right}>
         {session?.user ? (
           <div className={styles.userArea}>
+            <div className={styles.notificationWrap}>
+              <button className={styles.notificationButton} aria-label={`${notifications.count} okunmamış bildirim`} onClick={()=>setNotificationsOpen(value=>!value)}>
+                <Bell size={17}/>{notifications.count>0&&<span>{notifications.count>99?"99+":notifications.count}</span>}
+              </button>
+              {notificationsOpen&&<div className={styles.notificationPanel}><header><strong>Bildirimler</strong>{notifications.count>0&&<button onClick={()=>void markNotification()}>Tümünü okundu yap</button>}</header>{notifications.items.length===0?<p>Yeni bildiriminiz yok.</p>:notifications.items.map(item=><div className={styles.notificationItem} key={`${item.etiket}-${item.id}`}><Link href="/laboratuvar/kys/iletisim" onClick={()=>setNotificationsOpen(false)}><small>{item.etiket}</small><strong>{item.baslik}</strong><span>{item.olusturanAd}</span></Link><button onClick={()=>void markNotification(item.id)} title="Okundu işaretle">✓</button></div>)}<Link className={styles.notificationAll} href="/laboratuvar/kys/iletisim" onClick={()=>setNotificationsOpen(false)}>Tümünü görüntüle</Link></div>}
+            </div>
             <div className={styles.userAvatar}>
               {(session.user.name || "K").charAt(0).toUpperCase()}
             </div>

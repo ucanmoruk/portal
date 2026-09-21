@@ -2,18 +2,19 @@
 
 import Link from "next/link";
 import { Pencil, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "@/app/styles/table.module.css";
 import kys from "../kys.module.css";
 import KysStockPicker from "./KysStockPicker";
 import { KYS_REQUEST_TYPES } from "@/lib/kysRequestRules";
+import { ODEME_DURUMLARI } from "@/lib/faturaConstants";
 
 type RequestRow = {
   id: number;
   talepNo: string;
   talepTuru: string;
   firmaAdi: string;
-  faturaNo:string; faturaTutari:number|null; vade:string|null; odemeDurumu:string;
+  faturaId:number|null; faturaNo:string; faturaTutari:number|null; vade:string|null; odemeDurumu:string;
   seri: string;
   durum: string;
   olusturanAd: string;
@@ -25,9 +26,20 @@ type RequestRow = {
   kalemSayisi: number;
 };
 type Stock = { id: number; kod: string; ad: string; birim: string; ozellik: string };
+type InvoiceOpt = { ID:number; FaturaNo:string; FirmaAd:string; Toplam:number|string; VadeTarihi:string|null; OdemeDurumu:string|null };
 const errorMessage = (e: unknown, fallback: string) => e instanceof Error ? e.message : fallback;
 
 const emptyItem = { stokId: "", kod: "", malzemeAdi: "", miktar: "1", birim: "Adet", ozellik: "" };
+
+function InvoicePicker({value,onChange}:{value:InvoiceOpt|null;onChange:(invoice:InvoiceOpt|null)=>void}){
+  const [query,setQuery]=useState(value?.FaturaNo||"");
+  const [options,setOptions]=useState<InvoiceOpt[]>([]);
+  const [open,setOpen]=useState(false);
+  const box=useRef<HTMLDivElement>(null);
+  useEffect(()=>{const timer=setTimeout(async()=>{if(!open)return;try{const qs=new URLSearchParams({search:query,yil:"",page:"1",limit:"50"});const res=await fetch(`/api/faturalar?${qs}`);const json=await res.json();setOptions(res.ok&&Array.isArray(json.data)?json.data:[]);}catch{setOptions([]);}},200);return()=>clearTimeout(timer);},[query,open]);
+  useEffect(()=>{const close=(event:MouseEvent)=>{if(box.current&&!box.current.contains(event.target as Node))setOpen(false);};document.addEventListener("mousedown",close);return()=>document.removeEventListener("mousedown",close);},[]);
+  return <div ref={box} style={{position:"relative"}}><input value={query} placeholder="Fatura no veya firma ara..." onFocus={()=>setOpen(true)} onChange={event=>{setQuery(event.target.value);onChange(null);setOpen(true);}} />{open&&<div style={{position:"absolute",zIndex:20,left:0,right:0,top:"calc(100% + 4px)",maxHeight:260,overflowY:"auto",background:"var(--color-surface)",border:"1px solid var(--color-border)",borderRadius:8,boxShadow:"0 12px 28px rgba(0,0,0,.14)"}}>{options.length===0?<div style={{padding:10,fontSize:12,color:"var(--color-text-tertiary)"}}>Fatura bulunamadı.</div>:options.map(invoice=><button key={invoice.ID} type="button" onClick={()=>{onChange(invoice);setQuery(invoice.FaturaNo);setOpen(false);}} style={{display:"block",width:"100%",padding:"9px 10px",border:0,borderBottom:"1px solid var(--color-border-light)",background:"transparent",textAlign:"left",cursor:"pointer"}}><strong>{invoice.FaturaNo}</strong><span style={{display:"block",fontSize:11,color:"var(--color-text-tertiary)"}}>{invoice.FirmaAd||"Firmasız"} · {Number(invoice.Toplam||0).toLocaleString("tr-TR",{minimumFractionDigits:2})} TL</span></button>)}</div>}</div>;
+}
 
 function dateFmt(value?: string | null) {
   if (!value) return "-";
@@ -57,7 +69,7 @@ export default function TalepListesiClient({ordersOnly=false}:{ordersOnly?:boole
   const [seri, setSeri] = useState("");
   const [odeme,setOdeme]=useState("");
   const [billing,setBilling]=useState<RequestRow|null>(null);
-  const [billingForm,setBillingForm]=useState({faturaNo:"",faturaTutari:"",vade:""});
+  const [billingInvoice,setBillingInvoice]=useState<InvoiceOpt|null>(null);
   const [newSeries, setNewSeries] = useState("Unique");
   const [tur, setTur] = useState("");
   const [page, setPage] = useState(1);
@@ -140,7 +152,7 @@ export default function TalepListesiClient({ordersOnly=false}:{ordersOnly?:boole
   }
 
 
-  async function saveBilling(id:number,body:Record<string,string>){if(saving)return;setSaving(true);setFormError("");setError("");try{const res=await fetch(`/api/kys/talepler/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({...body,islem:"siparis-fatura"})});const json=await res.json();if(!res.ok)throw new Error(json.error||"Sipariş güncellenemedi.");setBilling(null);await fetchRows();}catch(e){const message=errorMessage(e,"Sipariş güncellenemedi.");setFormError(message);setError(message);}finally{setSaving(false);}}
+  async function saveBilling(id:number,body:Record<string,unknown>){if(saving)return;setSaving(true);setFormError("");setError("");try{const res=await fetch(`/api/kys/talepler/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({...body,islem:"siparis-fatura"})});const json=await res.json();if(!res.ok)throw new Error(json.error||"Sipariş güncellenemedi.");setBilling(null);setBillingInvoice(null);await fetchRows();}catch(e){const message=errorMessage(e,"Sipariş güncellenemedi.");setFormError(message);setError(message);}finally{setSaving(false);}}
   async function deleteRow(row:RequestRow){
     if(!confirm(`${row.talepNo} listeden kaldırılacak. Bağlı kabul ve satın alma kayıtları silinecek, kabul edilen miktarlar stoktan düşülecek. Devam edilsin mi?`))return;
     try{const r=await fetch(`/api/kys/talepler/${row.id}`,{method:"DELETE"});const j=await r.json();if(!r.ok)throw new Error(j.error);await fetchRows();}catch(e){setError(errorMessage(e,"Talep silinemedi."));}
@@ -160,14 +172,14 @@ export default function TalepListesiClient({ordersOnly=false}:{ordersOnly?:boole
         {!ordersOnly && <select aria-label="Talep serisi" className={kys.select} value={seri} onChange={e=>{setSeri(e.target.value);setPage(1);}}><option value="">Tümü</option><option>Unique</option><option>Spektrotek</option></select>}
         {!ordersOnly && <select className={kys.select} value={tur} onChange={e => { setTur(e.target.value); setPage(1); }}><option value="">Tüm türler</option>{KYS_REQUEST_TYPES.map(type => <option key={type}>{type}</option>)}<option value="Sarf">Sarf (eski kayıtlar)</option></select>}
         <select className={kys.select} value={durum} onChange={e => { setDurum(e.target.value); setPage(1); }}><option value="">Tüm durumlar</option><option>Onay Bekliyor</option><option>Onaylandı</option><option>İşleme Alındı</option><option>Kısmi Kabul</option><option>Tamamlandı</option><option>İptal</option><option value="Silindi">Silinen talepler</option></select>
-      {ordersOnly && <select aria-label="Ödeme durumu filtresi" className={kys.select} value={odeme} onChange={e=>{setOdeme(e.target.value);setPage(1);}}><option value="">Tüm ödeme durumları</option><option>Ödeme Bekliyor</option><option>Ödendi</option><option>Kısmi Ödeme</option></select>}
+      {ordersOnly && <select aria-label="Ödeme durumu filtresi" className={kys.select} value={odeme} onChange={e=>{setOdeme(e.target.value);setPage(1);}}><option value="">Tüm ödeme durumları</option>{ODEME_DURUMLARI.map(value=><option key={value}>{value}</option>)}</select>}
         <select className={styles.pageSizeSelect} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>{[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} / sayfa</option>)}</select>
       </div>
 
       <div className={styles.tableCard}>
         {error && <div className={styles.errorBar}>{error}</div>}
         <div className={styles.tableWrapper}>
-          {ordersOnly ? (          <table className={styles.table}><thead><tr><th>Sipariş Kodu</th><th>Firma Adı</th><th>Sipariş Durumu</th><th>Fatura No</th><th>Fatura Tutarı</th><th>Vade</th><th>Ödeme Durumu</th><th></th></tr></thead><tbody>{loading?<tr><td colSpan={8}>Yükleniyor…</td></tr>:rows.length===0?<tr><td colSpan={8} className={styles.empty}>Sipariş bulunamadı.</td></tr>:rows.map(row=><tr key={row.id}><td><Link className={kys.requestLink} href={`/laboratuvar/kys/talep-listesi/${row.id}`}>{row.talepNo}</Link></td><td>{row.firmaAdi}</td><td>{row.durum}</td><td>{row.faturaNo||"-"}</td><td>{row.faturaTutari==null?"-":row.faturaTutari.toLocaleString("tr-TR",{minimumFractionDigits:2})}</td><td>{dateFmt(row.vade)}</td><td><select aria-label={`${row.talepNo} ödeme durumu`} className={kys.select} disabled={saving} value={row.odemeDurumu} onChange={e=>saveBilling(row.id,{odemeDurumu:e.target.value})}><option>Ödeme Bekliyor</option><option>Ödendi</option><option>Kısmi Ödeme</option></select></td><td><button type="button" className={`${styles.editBtn} ${kys.iconButton}`} title="Düzenle" aria-label={`${row.talepNo} fatura bilgilerini düzenle`} onClick={()=>{setFormError("");setBilling(row);setBillingForm({faturaNo:row.faturaNo||"",faturaTutari:row.faturaTutari==null?"":String(row.faturaTutari),vade:row.vade||""});}}><Pencil size={16} aria-hidden="true" /></button></td></tr>)}</tbody></table>) : (          <table className={styles.table}>
+          {ordersOnly ? (          <table className={styles.table}><thead><tr><th>Sipariş Kodu</th><th>Firma Adı</th><th>Sipariş Durumu</th><th>Fatura No</th><th>Fatura Tutarı</th><th>Vade</th><th>Ödeme Durumu</th><th></th></tr></thead><tbody>{loading?<tr><td colSpan={8}>Yükleniyor…</td></tr>:rows.length===0?<tr><td colSpan={8} className={styles.empty}>Sipariş bulunamadı.</td></tr>:rows.map(row=><tr key={row.id}><td><Link className={kys.requestLink} href={`/laboratuvar/kys/talep-listesi/${row.id}`}>{row.talepNo}</Link></td><td>{row.firmaAdi}</td><td>{row.durum}</td><td>{row.faturaNo||"-"}</td><td>{row.faturaTutari==null?"-":row.faturaTutari.toLocaleString("tr-TR",{minimumFractionDigits:2})}</td><td>{dateFmt(row.vade)}</td><td><span className={`${kys.pill} ${row.odemeDurumu==="Ödendi"?kys.pillOk:row.odemeDurumu==="Kısmen Ödendi"?kys.pillWarn:""}`}>{row.faturaId?row.odemeDurumu:"-"}</span></td><td><button type="button" className={`${styles.editBtn} ${kys.iconButton}`} title="Fatura seç" aria-label={`${row.talepNo} için fatura seç`} onClick={()=>{setFormError("");setBilling(row);setBillingInvoice(row.faturaId?{ID:row.faturaId,FaturaNo:row.faturaNo,FirmaAd:"",Toplam:row.faturaTutari||0,VadeTarihi:row.vade,OdemeDurumu:row.odemeDurumu}:null);}}><Pencil size={16} aria-hidden="true" /></button></td></tr>)}</tbody></table>) : (          <table className={styles.table}>
             <thead><tr><th>Talep no</th><th>Tür</th><th>Durum</th><th>Kalem</th><th>Oluşturan</th><th>Onaylayan</th><th>İşleme alan</th><th></th></tr></thead>
             <tbody>
               {loading ? <tr><td colSpan={8}><div className={styles.skeleton} /></td></tr> : rows.length === 0 ? <tr><td colSpan={8}><div className={styles.empty}>Talep bulunamadı.</div></td></tr> : rows.map(row => (
@@ -192,7 +204,7 @@ export default function TalepListesiClient({ordersOnly=false}:{ordersOnly?:boole
         </div>
       </div>
 
-      {billing && <div className={styles.modalOverlay}><div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="billing-title"><div className={styles.modalHeader}><h2 id="billing-title">Fatura bilgileri · {billing.talepNo}</h2><button disabled={saving} aria-label="Kapat" className={styles.modalClose} onClick={()=>setBilling(null)}>×</button></div><div className={styles.modalBody}>{formError && <div role="alert" className={styles.formError}>{formError}</div>}<div className={styles.formGroup}><label htmlFor="invoice-no">Fatura No</label><input id="invoice-no" maxLength={100} value={billingForm.faturaNo} onChange={e=>setBillingForm(f=>({...f,faturaNo:e.target.value}))}/></div><div className={styles.formGroup}><label htmlFor="invoice-total">Fatura Tutarı</label><input id="invoice-total" inputMode="decimal" value={billingForm.faturaTutari} onChange={e=>setBillingForm(f=>({...f,faturaTutari:e.target.value}))}/></div><div className={styles.formGroup}><label htmlFor="invoice-due">Vade</label><input id="invoice-due" type="date" value={billingForm.vade} onChange={e=>setBillingForm(f=>({...f,vade:e.target.value}))}/></div></div><div className={styles.modalFooter}><button disabled={saving} className={styles.cancelBtn} onClick={()=>setBilling(null)}>Vazgeç</button><button disabled={saving} className={styles.saveBtn} onClick={()=>saveBilling(billing.id,billingForm)}>{saving?"Kaydediliyor…":"Kaydet"}</button></div></div></div>}
+      {billing && <div className={styles.modalOverlay}><div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="billing-title"><div className={styles.modalHeader}><h2 id="billing-title">Fatura seç · {billing.talepNo}</h2><button disabled={saving} aria-label="Kapat" className={styles.modalClose} onClick={()=>{setBilling(null);setBillingInvoice(null);}}>×</button></div><div className={styles.modalBody}>{formError && <div role="alert" className={styles.formError}>{formError}</div>}<div className={styles.formGroup}><label>Fatura No</label><InvoicePicker value={billingInvoice} onChange={setBillingInvoice}/></div>{billingInvoice&&<div className={styles.formGrid} style={{marginTop:16}}><div className={styles.formGroup}><label>Fatura Tutarı</label><input readOnly value={`${Number(billingInvoice.Toplam||0).toLocaleString("tr-TR",{minimumFractionDigits:2})} TL`}/></div><div className={styles.formGroup}><label>Vade</label><input readOnly value={dateFmt(billingInvoice.VadeTarihi)}/></div><div className={styles.formGroup}><label>Ödeme Durumu</label><input readOnly value={billingInvoice.OdemeDurumu||"Ödeme Bekliyor"}/></div></div>}</div><div className={styles.modalFooter}><button disabled={saving} className={styles.cancelBtn} onClick={()=>{setBilling(null);setBillingInvoice(null);}}>Vazgeç</button>{billing.faturaId&&<button disabled={saving} className={styles.cancelBtn} onClick={()=>saveBilling(billing.id,{faturaId:null})}>Bağlantıyı kaldır</button>}<button disabled={saving||!billingInvoice} className={styles.saveBtn} onClick={()=>saveBilling(billing.id,{faturaId:billingInvoice?.ID??null})}>{saving?"Kaydediliyor…":"Kaydet"}</button></div></div></div>}
       {modalOpen && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 940 }} role="dialog" aria-modal="true" aria-labelledby="request-title">

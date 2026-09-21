@@ -700,6 +700,47 @@ export async function deleteKysDokuman(id: number, user: DokumanKullanici) {
   return { ok: true };
 }
 
+export async function listKysDokumanAtiflari() {
+  await ensureKysDokumanSchema();
+  const pool = await cosmoPool;
+  const result = await pool.request().query(`SELECT ID, Kod, Baslik, Tur, Durum, Icerik FROM KysDokuman ORDER BY Kod ASC`);
+  const documents = result.recordset.map((row: AnyRow) => ({
+    id: rowNumber(row, "ID"), kod: rowString(row, "Kod"), baslik: rowString(row, "Baslik"),
+    tur: rowString(row, "Tur"), durum: rowString(row, "Durum"), icerik: rowString(row, "Icerik"),
+  }));
+  const byId = new Map(documents.map(document => [document.id, document]));
+  const sourcesByTarget = new Map<number, Set<number>>();
+  const linkPattern = /(?:\/api\/kys\/dokumanlar\/(\d+)\/dosya|\/laboratuvar\/kys\/dokuman-yonetimi\/(\d+)(?:\/onizleme)?)/gi;
+  for (const source of documents) {
+    const referencedIds = new Set<number>();
+    for (const match of source.icerik.matchAll(linkPattern)) {
+      const targetId = Number(match[1] || match[2]);
+      if (targetId > 0 && targetId !== source.id && byId.has(targetId)) referencedIds.add(targetId);
+    }
+    for (const targetId of referencedIds) {
+      const sources = sourcesByTarget.get(targetId) || new Set<number>();
+      sources.add(source.id);
+      sourcesByTarget.set(targetId, sources);
+    }
+  }
+  const summarize = (document: (typeof documents)[number]) => ({
+    id: document.id, kod: document.kod, baslik: document.baslik,
+    tur: document.tur, durum: document.durum,
+  });
+  const data = documents.map(document => {
+    const kaynaklar = Array.from(sourcesByTarget.get(document.id) || [])
+      .map(sourceId => byId.get(sourceId))
+      .filter((source): source is (typeof documents)[number] => Boolean(source))
+      .map(summarize);
+    return { ...summarize(document), atifSayisi: kaynaklar.length, kaynaklar };
+  });
+  return {
+    data,
+    toplamAtif: data.reduce((sum, document) => sum + document.atifSayisi, 0),
+    atifAlanDokuman: data.filter(document => document.atifSayisi > 0).length,
+  };
+}
+
 export async function addKysDokumanManualRevizyon(dokumanId: number, input: {
   revizyon?: unknown; maddeler?: unknown; yayinTarihi?: unknown; revizyonuYapan?: unknown;
 }, user: { userId: string; userName: string }) {

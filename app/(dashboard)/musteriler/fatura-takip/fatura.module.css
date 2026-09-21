@@ -24,9 +24,9 @@
 .compactTable th:nth-child(3) { width: 7%; }
 .compactTable th:nth-child(4) { width: 8%; }
 .compactTable th:nth-child(5) { width: 8%; }
-.compactTable th:nth-child(6) { width: 25%; }
+.compactTable th:nth-child(6) { width: 27%; }
 .compactTable th:nth-child(7) { width: 12%; }
-.compactTable th:nth-child(8) { width: 12%; }
+.compactTable th:nth-child(8) { width: 10%; }
 .compactTable th:nth-child(9) { width: 5%; }
 
 .ellipsisCell {
@@ -49,6 +49,21 @@
   background: var(--color-surface-2);
   color: var(--color-text-secondary);
   font-weight: 700;
+}
+
+.sourceUnique {
+  background: #e8f1ff;
+  color: #075db7;
+}
+
+.sourceSpektrotek {
+  background: #fff2d9;
+  color: #9a5a00;
+}
+
+.sourceRoot {
+  background: #eee7ff;
+  color: #6941c6;
 }
 
 .invoiceModal {
