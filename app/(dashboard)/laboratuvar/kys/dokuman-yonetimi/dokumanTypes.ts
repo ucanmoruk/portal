@@ -74,6 +74,7 @@ export type DokumanRevizyon = {
   revizyon: number;
   revizyonEtiket: string;
   aciklama: string;
+  maddeler: Array<{ maddeNo: string; aciklama: string }>;
   maddeNo: string;
   yayinTarihi: string | null;
   hazirlayanAd: string;

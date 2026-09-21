@@ -61,6 +61,7 @@ export type DokumanAksiyon =
 export type DokumanKullanici = { userId: string; userName: string };
 
 export type DokumanInput = {
+  revizyon?: number | string;
   kod?: string;
   baslik?: string;
   tur?: string;
@@ -470,19 +471,30 @@ export async function getKysDokuman(id: number) {
 
   return {
     ...mapDokuman(row, true),
-    revizyonlar: (revRes.recordset as AnyRow[]).map(r => ({
+    revizyonlar: (revRes.recordset as AnyRow[]).map(r => {
+      const maddeNo = rowString(r, "MaddeNo");
+      const aciklama = rowString(r, "Aciklama");
+      let maddeler = [{ maddeNo, aciklama }];
+      if (aciklama.startsWith("__REV_DETAILS__")) {
+        try {
+          const parsed = JSON.parse(aciklama.slice(15));
+          if (Array.isArray(parsed)) maddeler = parsed.map(item => ({ maddeNo: text(item?.maddeNo), aciklama: text(item?.aciklama) })).filter(item => item.maddeNo || item.aciklama);
+        } catch { /* Eski/bozuk kayıt tek satır olarak gösterilir. */ }
+      }
+      return {
       id: rowNumber(r, "ID"),
       revizyon: rowNumber(r, "Revizyon"),
       revizyonEtiket: String(rowNumber(r, "Revizyon")).padStart(2, "0"),
-      maddeNo: rowString(r, "MaddeNo"),
-      aciklama: rowString(r, "Aciklama"),
+      maddeNo: maddeler.map(item => item.maddeNo).filter(Boolean).join(", "),
+      aciklama: maddeler.map(item => item.aciklama).filter(Boolean).join(" · "),
+      maddeler,
       yayinTarihi: asDate(r.YayinTarihi),
       hazirlayanAd: rowString(r, "HazirlayanAd"),
       onaylayanAd: rowString(r, "OnaylayanAd"),
       olusturanAd: rowString(r, "OlusturanAd"),
       hasIcerik: Boolean(r.HasIcerik),
       createdAt: asDateTime(r.CreatedAt),
-    })),
+    }; }),
     loglar: (logRes.recordset as AnyRow[]).map(r => ({
       id: rowNumber(r, "ID"),
       islem: rowString(r, "Islem"),
@@ -623,6 +635,8 @@ export async function updateKysDokuman(id: number, input: DokumanInput, user: Do
   const baslik = text(input.baslik) || rowString(row, "Baslik");
   const tur = input.tur ? normalizeTur(input.tur) : rowString(row, "Tur");
   const kod = text(input.kod) || rowString(row, "Kod");
+  const revizyon = input.revizyon === undefined ? rowNumber(row, "Revizyon") : Number(input.revizyon);
+  if (!Number.isInteger(revizyon) || revizyon < 0 || revizyon > 999) throw new Error("Revizyon numarası 0–999 arasında tam sayı olmalıdır.");
 
   if (kod !== rowString(row, "Kod")) {
     const dup = await pool.request().input("Kod", kod).input("ID", id)
@@ -640,6 +654,7 @@ export async function updateKysDokuman(id: number, input: DokumanInput, user: Do
     .input("Kod", kod)
     .input("Baslik", baslik)
     .input("Tur", tur)
+    .input("Revizyon", revizyon)
     .input("BirimID", input.birimId === undefined ? (row.BirimID ?? null) : (input.birimId ? Number(input.birimId) : null))
     .input("HazirlayanID", input.hazirlayanId === undefined ? rowString(row, "HazirlayanID") || null : nullableText(input.hazirlayanId))
     .input("HazirlayanAd", input.hazirlayanAd === undefined ? rowString(row, "HazirlayanAd") || null : nullableText(input.hazirlayanAd))
@@ -651,7 +666,7 @@ export async function updateKysDokuman(id: number, input: DokumanInput, user: Do
     .input("DuzMetin", htmlToPlainText(icerik).slice(0, 60000))
     .query(`
       UPDATE KysDokuman SET
-        Kod = @Kod, Baslik = @Baslik, Tur = @Tur, BirimID = @BirimID,
+        Kod = @Kod, Baslik = @Baslik, Tur = @Tur, Revizyon = @Revizyon, BirimID = @BirimID,
         HazirlayanID = @HazirlayanID, HazirlayanAd = @HazirlayanAd,
         OnaylayanID = @OnaylayanID, OnaylayanAd = @OnaylayanAd,
         YururlukTarihi = @YururlukTarihi, Ozet = @Ozet, Icerik = @Icerik, DuzMetin = @DuzMetin,
@@ -686,17 +701,15 @@ export async function deleteKysDokuman(id: number, user: DokumanKullanici) {
 }
 
 export async function addKysDokumanManualRevizyon(dokumanId: number, input: {
-  revizyon?: unknown; maddeNo?: unknown; aciklama?: unknown; yayinTarihi?: unknown;
-  hazirlayanAd?: unknown; onaylayanAd?: unknown;
+  revizyon?: unknown; maddeler?: unknown; yayinTarihi?: unknown;
 }, user: { userId: string; userName: string }) {
   await ensureKysDokumanSchema();
   const revizyon = Number(input.revizyon);
-  const maddeNo = text(input.maddeNo);
-  const aciklama = text(input.aciklama);
+  const maddeler = normalizeRevizyonMaddeleri(input.maddeler);
+  const maddeNo = maddeler.map(item => item.maddeNo).join(", ").slice(0, 100);
+  const aciklama = `__REV_DETAILS__${JSON.stringify(maddeler)}`;
   const yayinTarihi = dateValue(input.yayinTarihi);
   if (!Number.isInteger(revizyon) || revizyon < 0 || revizyon > 999) throw new Error("Revizyon numarası 0–999 arasında tam sayı olmalıdır.");
-  if (!maddeNo || maddeNo.length > 100) throw new Error("Değişen madde alanı zorunludur ve en fazla 100 karakter olabilir.");
-  if (!aciklama || aciklama.length > 2000) throw new Error("Revizyon açıklaması zorunludur ve en fazla 2000 karakter olabilir.");
   if (!yayinTarihi) throw new Error("Yayın tarihi zorunludur.");
   const base = await cosmoPool;
   const tx = await base.transaction(); await tx.begin();
@@ -710,11 +723,10 @@ export async function addKysDokumanManualRevizyon(dokumanId: number, input: {
     if (duplicate.length) throw new Error("Bu revizyon numarası geçmişte zaten kayıtlı.");
     await tx.request().input("ID", dokumanId).input("Rev", revizyon).input("Madde", maddeNo)
       .input("Aciklama", aciklama).input("Tarih", yayinTarihi)
-      .input("Hazirlayan", nullableText(input.hazirlayanAd)).input("Onaylayan", nullableText(input.onaylayanAd))
       .input("UserID", user.userId).input("UserName", user.userName).query(`
         INSERT INTO KysDokumanRevizyon
-          (DokumanID,Revizyon,MaddeNo,Aciklama,Icerik,YayinTarihi,HazirlayanAd,OnaylayanAd,OlusturanID,OlusturanAd)
-        VALUES (@ID,@Rev,@Madde,@Aciklama,NULL,@Tarih,@Hazirlayan,@Onaylayan,@UserID,@UserName)`);
+          (DokumanID,Revizyon,MaddeNo,Aciklama,Icerik,YayinTarihi,OlusturanID,OlusturanAd)
+        VALUES (@ID,@Rev,@Madde,@Aciklama,NULL,@Tarih,@UserID,@UserName)`);
     await tx.request().input("ID", dokumanId).input("Rev", revizyon).query(`
       UPDATE KysDokuman
       SET Revizyon = CASE WHEN Revizyon < @Rev THEN @Rev ELSE Revizyon END, UpdatedAt = GETDATE()
@@ -725,6 +737,39 @@ export async function addKysDokumanManualRevizyon(dokumanId: number, input: {
         VALUES (@ID,'Geçmiş revizyon eklendi',@Rev,@Aciklama,@UserID,@UserName)`);
     await tx.commit();
   } catch (e) { await tx.rollback(); throw e; }
+}
+
+function normalizeRevizyonMaddeleri(value: unknown) {
+  if (!Array.isArray(value)) throw new Error("En az bir değişen madde ekleyin.");
+  const rows = value.map(item => ({ maddeNo: text(item?.maddeNo), aciklama: text(item?.aciklama) })).filter(item => item.maddeNo || item.aciklama);
+  if (!rows.length) throw new Error("En az bir değişen madde ekleyin.");
+  if (rows.some(item => !item.maddeNo || !item.aciklama)) throw new Error("Her satırda değişen madde ve açıklama zorunludur.");
+  if (rows.some(item => item.maddeNo.length > 100 || item.aciklama.length > 2000)) throw new Error("Madde en fazla 100, açıklama en fazla 2000 karakter olabilir.");
+  return rows;
+}
+
+export async function updateKysDokumanRevizyon(dokumanId: number, revizyonId: number, input: { revizyon?: unknown; yayinTarihi?: unknown; maddeler?: unknown }, user: DokumanKullanici) {
+  await ensureKysDokumanSchema();
+  const revizyon = Number(input.revizyon);
+  const yayinTarihi = dateValue(input.yayinTarihi);
+  const maddeler = normalizeRevizyonMaddeleri(input.maddeler);
+  if (!Number.isInteger(revizyon) || revizyon < 0 || revizyon > 999) throw new Error("Geçerli bir revizyon numarası girin.");
+  if (!yayinTarihi) throw new Error("Yayın tarihi zorunludur.");
+  const maddeNo = maddeler.map(item => item.maddeNo).join(", ").slice(0, 100);
+  const aciklama = `__REV_DETAILS__${JSON.stringify(maddeler)}`;
+  const pool = await cosmoPool;
+  const duplicate = await pool.request().input("DokumanID", dokumanId).input("ID", revizyonId).input("Revizyon", revizyon)
+    .query("SELECT ID FROM KysDokumanRevizyon WHERE DokumanID=@DokumanID AND Revizyon=@Revizyon AND ID<>@ID");
+  if (duplicate.recordset[0]) throw new Error("Bu revizyon numarası geçmişte zaten kayıtlı.");
+  const result = await pool.request().input("ID", revizyonId).input("DokumanID", dokumanId).input("Revizyon", revizyon)
+    .input("MaddeNo", maddeNo).input("Aciklama", aciklama).input("YayinTarihi", yayinTarihi)
+    .input("UserID", user.userId).input("UserName", user.userName).query(`
+      UPDATE KysDokumanRevizyon SET Revizyon=@Revizyon, MaddeNo=@MaddeNo, Aciklama=@Aciklama,
+        YayinTarihi=@YayinTarihi, OlusturanID=@UserID, OlusturanAd=@UserName WHERE ID=@ID AND DokumanID=@DokumanID`);
+  if (!result.rowsAffected?.[0]) throw new Error("Revizyon kaydı bulunamadı.");
+  await pool.request().input("ID", dokumanId).input("Revizyon", revizyon).query(`
+    UPDATE KysDokuman SET Revizyon=CASE WHEN Revizyon < @Revizyon THEN @Revizyon ELSE Revizyon END, UpdatedAt=GETDATE() WHERE ID=@ID`);
+  return { ok: true };
 }
 
 export async function saveKysDokumanDosya(
