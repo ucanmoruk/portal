@@ -188,6 +188,38 @@ export async function GET(request: Request) {
       ? "x.Sonuc IS NOT NULL AND x.Sonuc != ''"
       : "1 = 0";
 
+    // Numune Takip ile aynı evrak bazlı ödeme kaynağı. Öncelik sırası:
+    // doğrudan evrak kaydı → bağlı faturanın ödeme kaydı → son legacy kayıt.
+    const effectiveOdemeExpr = `
+      COALESCE(
+        (
+          SELECT TOP 1 o.Odeme_Durumu
+          FROM Odeme o
+          WHERE o.Evrak_No = n.Evrak_No
+            AND ISNULL(o.Odeme_Durumu, N'') <> N'Proforma'
+          ORDER BY o.ID DESC
+        ),
+        (
+          SELECT TOP 1 fo.Odeme_Durumu
+          FROM ProformaNkr pn2
+          INNER JOIN ProformaBaslik pb2 ON pb2.ID = pn2.ProformaID AND pb2.SilindiMi = 0
+          INNER JOIN Fatura ft2 ON ft2.Durum = 'Aktif'
+            AND (ft2.ProformaNo = pb2.EvrakNo OR ft2.ProformaNo = pb2.ProformaNo)
+          INNER JOIN Odeme fo ON fo.Fatura_ID = ft2.ID
+          WHERE pn2.NkrID = n.ID
+            AND fo.Evrak_No = CAST(n.Evrak_No AS NVARCHAR(40))
+            AND ISNULL(fo.Odeme_Durumu, N'') <> N'Proforma'
+          ORDER BY fo.ID DESC
+        ),
+        (
+          SELECT TOP 1 o.Odeme_Durumu
+          FROM Odeme o
+          WHERE o.Evrak_No = n.Evrak_No
+          ORDER BY o.ID DESC
+        )
+      )
+    `;
+
     // PERFORMANCE: SQL Server CTE'leri inline ediyor; tek dev sorguda
     // fonksiyon-bazlı join + filtre kombinasyonu kötü plan üretip 19sn sürüyordu.
     // Çözüm: ara sonuçları #temp tablolara materialize et (≈50× hız: 19s → 0.4s).
@@ -211,7 +243,8 @@ export async function GET(request: Request) {
         p.Ad                                    AS ProjeAd,
         ${raporTuruExpr} AS RaporFormati,
         ${raporTuruNormExpr} AS NormFmt,
-        CONVERT(varchar(10), n.Tarih, 23) AS KabulTarihi
+        CONVERT(varchar(10), n.Tarih, 23) AS KabulTarihi,
+        ISNULL(${effectiveOdemeExpr}, N'Fatura Kesilmedi') AS OdemeDurumu
       INTO #Rap
       FROM NKR n
       LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f  ON f.ID = n.Firma_ID

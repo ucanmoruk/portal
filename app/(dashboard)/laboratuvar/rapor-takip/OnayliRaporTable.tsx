@@ -43,6 +43,7 @@ interface RaporRow {
   YayinUrl?: string | null;
   TrYayinlandi?: number | null;
   EnYayinlandi?: number | null;
+  OdemeDurumu?: string | null;
 }
 
 // Sunucu Onaylandı/Yayınlandı/Arşiv döner. UI: Onaylandı | Gönderildi | Arşiv.
@@ -102,19 +103,31 @@ function FormatBadge({ format }: { format: string }) {
   );
 }
 
-// Fatura durumu — şu an statik placeholder. İleride Evrak_No → fatura tablosu eşlemesi ile gelecek.
-function FaturaBadge({ durum }: { durum: "Fatura kesilmedi" | "Ödeme bekliyor" | "Ödendi" }) {
+const normalizeFaturaDurumu = (durum?: string | null) => {
+  const value = String(durum || "").trim();
+  if (!value) return "Fatura Kesilmedi";
+  if (value.toLocaleLowerCase("tr-TR") === "fatura kesilmedi") return "Fatura Kesilmedi";
+  if (value.toLocaleLowerCase("tr-TR") === "ödeme bekliyor") return "Ödeme Bekliyor";
+  return value;
+};
+
+function FaturaBadge({ durum }: { durum: string | null | undefined }) {
+  const label = normalizeFaturaDurumu(durum);
   const map: Record<string, { bg: string; fg: string }> = {
-    "Fatura kesilmedi": { bg: "#8e8e9318", fg: "#636366" },
-    "Ödeme bekliyor":   { bg: "#ff950018", fg: "#c06800" },
+    "Fatura Kesilmedi": { bg: "#8e8e9318", fg: "#636366" },
+    "Ödeme Bekliyor":   { bg: "#ff950018", fg: "#c06800" },
+    "Kısmen Ödendi":    { bg: "#ff950018", fg: "#c06800" },
     "Ödendi":           { bg: "#34c75918", fg: "#248a3d" },
+    "Proforma Onaylandı": { bg: "#0071e318", fg: "#0055a8" },
+    "Proforma Reddedildi": { bg: "#ff3b3018", fg: "#c5221f" },
+    "İptal":            { bg: "#ff3b3018", fg: "#c5221f" },
   };
-  const c = map[durum];
+  const c = map[label] ?? { bg: "#8e8e9318", fg: "#636366" };
   return (
     <span style={{
       display: "inline-block", padding: "2px 9px", borderRadius: 10,
       fontSize: "0.72rem", fontWeight: 600, background: c.bg, color: c.fg, whiteSpace: "nowrap",
-    }}>{durum}</span>
+    }}>{label}</span>
   );
 }
 
@@ -199,7 +212,7 @@ export default function OnayliRaporTable() {
   // İlk girişte sadece "Onaylandı" görünür. Tüm / Gönderildi / Arşiv kullanıcı seçimiyle açılır.
   const [durum, setDurum]     = useState<"" | "Onaylandı" | "Ödeme bekliyor" | "Yayınlandı" | "Arşiv">("Onaylandı");
   const [raporTuru, setRaporTuru] = useState("");
-  const [faturaDurumu, setFaturaDurumu] = useState<"" | "Fatura kesilmedi" | "Ödeme bekliyor" | "Ödendi">("");
+  const [faturaDurumu, setFaturaDurumu] = useState("");
   const [loading, setLoading] = useState(true);
   const [transitioning, setTrans] = useState(false);
   const [error, setError]     = useState("");
@@ -408,9 +421,9 @@ export default function OnayliRaporTable() {
     return nums;
   };
 
-  // Fatura durumu client-side filtre (server'da kolon yok)
+  // API, Numune Takip ile aynı evrak bazlı ödeme durumunu döndürür.
   const visibleRows = faturaDurumu
-    ? rows.filter(() => faturaDurumu === "Fatura kesilmedi") // placeholder: hepsi "Fatura kesilmedi" şu an
+    ? rows.filter(row => normalizeFaturaDurumu(row.OdemeDurumu) === faturaDurumu)
     : rows;
 
   // Grid: [✓] [Kabul] [Termin] [Evrak] [Rapor No] [Firma/Proje·Numune — geniş] [Rapor Türü] [Durum] [Fatura] [PDF ikon] [Mail ikon]
@@ -833,12 +846,16 @@ export default function OnayliRaporTable() {
           </select>
 
           {/* Fatura */}
-          <select value={faturaDurumu} onChange={e => setFaturaDurumu(e.target.value as any)}
+          <select value={faturaDurumu} onChange={e => setFaturaDurumu(e.target.value)}
             style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--color-border)", background: "var(--color-bg)", fontSize: "0.75rem", cursor: "pointer" }}>
             <option value="">Tüm Fatura Durumları</option>
-            <option value="Fatura kesilmedi">Fatura kesilmedi</option>
-            <option value="Ödeme bekliyor">Ödeme bekliyor</option>
+            <option value="Fatura Kesilmedi">Fatura Kesilmedi</option>
+            <option value="Ödeme Bekliyor">Ödeme Bekliyor</option>
+            <option value="Kısmen Ödendi">Kısmen Ödendi</option>
             <option value="Ödendi">Ödendi</option>
+            <option value="Proforma Onaylandı">Proforma Onaylandı</option>
+            <option value="Proforma Reddedildi">Proforma Reddedildi</option>
+            <option value="İptal">İptal</option>
           </select>
 
           {/* Sayfa boyutu */}
@@ -1003,7 +1020,7 @@ export default function OnayliRaporTable() {
               </div>
               {/* Fatura — sağa hizalı */}
               <div style={{ display: "flex", justifyContent: "flex-end", paddingRight: 6 }}>
-                <FaturaBadge durum="Fatura kesilmedi" />
+                <FaturaBadge durum={row.OdemeDurumu} />
               </div>
               {/* PDF İndir — ikon buton */}
               <div style={{ display: "flex", justifyContent: "center" }}>

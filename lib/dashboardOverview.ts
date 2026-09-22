@@ -1,4 +1,5 @@
 import { cosmoPool } from "@/lib/db";
+import { ensureFaturaTrackingSchema } from "@/lib/faturaSchema";
 
 export interface DashboardMetric {
   label: string;
@@ -101,7 +102,9 @@ function mapRank(
 export async function getDashboardOverview(selectedRevenueMonth?: string, selectedSampleYear = 2026): Promise<DashboardOverview> {
   try {
     const pool = await cosmoPool;
+    await ensureFaturaTrackingSchema(pool);
     const invoiceDate = `COALESCE(NULLIF(f.Tarih, '0000-00-00 00:00:00'), (SELECT MAX(fd.Tarih) FROM FaturaDetay fd WHERE fd.ProformaNo = f.ProformaNo))`;
+    const uniqueInvoiceFilter = `(f.Kaynak = 'Unique' OR f.Kaynak IS NULL OR TRIM(f.Kaynak) = '')`;
 
     // Tahsilat: Fatura.Odenen_Tutar (fatura-takip ozet satiriyla ayni kaynak).
     // Birkac kayitta Odenen_Tutar > Toplam oldugu icin clamp'lenir; boylece
@@ -146,6 +149,7 @@ export async function getDashboardOverview(selectedRevenueMonth?: string, select
                  THEN ${unpaidFlag} ELSE 0 END) AS ThisMonthUnpaidCount
       FROM Fatura f
       WHERE f.Durum = 'Aktif'
+        AND ${uniqueInvoiceFilter}
     `);
 
     const sampleStatsRes = await pool.request().query(`
@@ -219,6 +223,7 @@ export async function getDashboardOverview(selectedRevenueMonth?: string, select
         SUM(${unpaidFlag}) AS AcikFaturaAdet
       FROM Fatura f
       WHERE f.Durum = 'Aktif'
+        AND ${uniqueInvoiceFilter}
         AND ${invoiceDate} >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 11 MONTH)
         AND ${invoiceDate} < DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
       GROUP BY DATE_FORMAT(${invoiceDate}, '%Y-%m'), DATE_FORMAT(${invoiceDate}, '%m.%Y')
@@ -252,6 +257,7 @@ export async function getDashboardOverview(selectedRevenueMonth?: string, select
       FROM Fatura f
       LEFT JOIN Firma fr ON fr.ID = f.FaturaFirmaID
       WHERE f.Durum = 'Aktif'
+        AND ${uniqueInvoiceFilter}
         ${revenueMonthFilter}
       GROUP BY fr.ID, fr.Firma_Adi
       ORDER BY Ciro DESC
