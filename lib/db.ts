@@ -633,15 +633,25 @@ export const legacyCosmoPool: PromiseLike<mssql.ConnectionPool> = {
     Promise.resolve(new ResilientPool(MSSQL_COSMO_DB) as unknown as mssql.ConnectionPool).then(onfulfilled, onrejected),
 };
 
-/** RootKullanici lookup (personel adı) → Postgres mirror (login ile aynı kaynak).
- *  RootKullanici MySQL'e taşınmadı; Neon Postgres mirror'da yaşıyor. MySQL moduna
- *  geçtiğimizde bile bu havuz Postgres'e gider — fallback MSSQL massgrup_root. */
-export const rootPool: PromiseLike<mssql.ConnectionPool> = {
+/** Eski RootKullanici kaynağı; yalnız ilk MySQL veri taşımasında kullanılır. */
+export const legacyRootPool: PromiseLike<mssql.ConnectionPool> = {
   then: (onfulfilled, onrejected) =>
     Promise.resolve(
       (usePostgres
         ? new PgCompatPool()
         : new ResilientPool(MSSQL_ROOT_DB)) as unknown as mssql.ConnectionPool,
+    ).then(onfulfilled, onrejected),
+};
+
+/** Portal kullanıcıları ve personel lookup'ları → MySQL; yerelde eski kaynağa düşer. */
+export const rootPool: PromiseLike<mssql.ConnectionPool> = {
+  then: (onfulfilled, onrejected) =>
+    Promise.resolve(
+      (hasMysqlConfig()
+        ? new MysqlCompatPool()
+        : usePostgres
+          ? new PgCompatPool()
+          : new ResilientPool(MSSQL_ROOT_DB)) as unknown as mssql.ConnectionPool,
     ).then(onfulfilled, onrejected),
 };
 

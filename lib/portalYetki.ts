@@ -14,6 +14,8 @@ export type PortalUser = {
   userName: string;
   isAdmin: boolean;
   keys: string[];
+  firmalar: string[];
+  laboratuvarBirimId: number | null;
   can: (key: string) => boolean;
 };
 
@@ -25,6 +27,9 @@ export async function getPortalUser(): Promise<PortalUser | null> {
   const userId = String(session.user?.userId ?? "");
   const userName = String(session.user?.name ?? "").trim() || "Bilinmeyen kullanıcı";
   const isAdmin = ADMIN_USER_IDS.has(userId);
+  const firmalar = isAdmin
+    ? ["Unique", "Spektrotek", "Root", "Ozeco"]
+    : session.user?.firmalar?.length ? session.user.firmalar : ["Unique"];
 
   let keys: string[] = [];
   if (!isAdmin && userId) {
@@ -45,6 +50,8 @@ export async function getPortalUser(): Promise<PortalUser | null> {
     userName,
     isAdmin,
     keys,
+    firmalar,
+    laboratuvarBirimId: session.user?.laboratuvarBirimId || null,
     can: (key: string) => isAdmin || keys.includes(key),
   };
 }

@@ -11,15 +11,14 @@ interface Kullanici {
   Gorev: string | null;
   Email: string | null;
   Telefon: string | null;
-  BirimID: number | null;
+  LaboratuvarBirimID: number | null;
+  Firmalar: string[];
   Durum: string;
 }
 
 interface Birim {
-  ID: number;
-  Birim: string;
-  FirmaID: number | null;
-  Durum: string;
+  id: number;
+  ad: string;
 }
 
 interface FormState {
@@ -30,7 +29,8 @@ interface FormState {
   Email: string;
   Telefon: string;
   Parola: string;
-  BirimID: string;
+  LaboratuvarBirimID: string;
+  Firmalar: string[];
 }
 
 const emptyForm: FormState = {
@@ -41,8 +41,11 @@ const emptyForm: FormState = {
   Email: "",
   Telefon: "",
   Parola: "",
-  BirimID: "",
+  LaboratuvarBirimID: "",
+  Firmalar: ["Unique"],
 };
+
+const FIRMA_OPTIONS = ["Unique", "Spektrotek", "Root", "Ozeco"];
 
 export default function KullaniciTable() {
   const [users, setUsers] = useState<Kullanici[]>([]);
@@ -50,6 +53,7 @@ export default function KullaniciTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [firmaFilter, setFirmaFilter] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
@@ -63,19 +67,20 @@ export default function KullaniciTable() {
 
   const birimMap = useMemo(() => {
     const map = new Map<number, string>();
-    for (const birim of birimler) map.set(birim.ID, birim.Birim);
+    for (const birim of birimler) map.set(birim.id, birim.ad);
     return map;
   }, [birimler]);
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((user) =>
-      [user.Kadi, user.Ad, user.Soyad, user.Gorev, user.Email, user.Telefon, user.BirimID ? birimMap.get(user.BirimID) : ""]
+    return users.filter((user) => {
+      if (firmaFilter && !user.Firmalar.includes(firmaFilter)) return false;
+      if (!q) return true;
+      return [user.Kadi, user.Ad, user.Soyad, user.Gorev, user.Email, user.Telefon, user.Firmalar.join(" "), user.LaboratuvarBirimID ? birimMap.get(user.LaboratuvarBirimID) : ""]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q))
-    );
-  }, [users, search, birimMap]);
+        .some((value) => String(value).toLowerCase().includes(q));
+    });
+  }, [users, search, firmaFilter, birimMap]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -83,18 +88,14 @@ export default function KullaniciTable() {
     try {
       const [usersRes, birimlerRes] = await Promise.all([
         fetch("/api/admin/kullanicilar"),
-        fetch("/api/admin/birimler"),
+        fetch("/api/kys/birimler"),
       ]);
       if (!usersRes.ok) throw new Error((await usersRes.json()).error || "Kullanıcı listesi alınamadı");
       if (!birimlerRes.ok) throw new Error((await birimlerRes.json()).error || "Birim listesi alınamadı");
       setUsers(await usersRes.json());
-      // Hizmet form'una eklenen 3 lab birimi Admin kullanıcı formunda görünmesin
-      // (kullanıcı isteği). Lab birimleri Hizmet form'unda whitelist'le filtreli.
-      const HIDE_FROM_USER_FORM = new Set(["Mikrobiyoloji", "Kimyasal", "Dış Laboratuvar"]);
-      const allBirimler = (await birimlerRes.json()) as Birim[];
-      setBirimler(allBirimler.filter(b => !HIDE_FROM_USER_FORM.has(b.Birim)));
-    } catch (e: any) {
-      setError(e.message);
+      setBirimler(((await birimlerRes.json()).data || []) as Birim[]);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Kullanıcı listesi alınamadı");
     } finally {
       setLoading(false);
     }
@@ -123,7 +124,8 @@ export default function KullaniciTable() {
       Email: user.Email || "",
       Telefon: user.Telefon || "",
       Parola: "",
-      BirimID: user.BirimID ? String(user.BirimID) : "",
+      LaboratuvarBirimID: user.LaboratuvarBirimID ? String(user.LaboratuvarBirimID) : "",
+      Firmalar: user.Firmalar?.length ? user.Firmalar : ["Unique"],
     });
     setFormError("");
     setModalOpen(true);
@@ -140,13 +142,13 @@ export default function KullaniciTable() {
       const res = await fetch(modalMode === "add" ? "/api/admin/kullanicilar" : `/api/admin/kullanicilar/${editId}`, {
         method: modalMode === "add" ? "POST" : "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, BirimID: form.BirimID ? Number(form.BirimID) : null }),
+        body: JSON.stringify({ ...form, LaboratuvarBirimID: form.LaboratuvarBirimID ? Number(form.LaboratuvarBirimID) : null }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Kayıt başarısız");
       setModalOpen(false);
       await fetchData();
-    } catch (e: any) {
-      setFormError(e.message);
+    } catch (e: unknown) {
+      setFormError(e instanceof Error ? e.message : "Kayıt başarısız");
     } finally {
       setSaving(false);
     }
@@ -160,8 +162,8 @@ export default function KullaniciTable() {
       if (!res.ok) throw new Error((await res.json()).error || "Silme işlemi başarısız");
       setDeleteTarget(null);
       await fetchData();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Silme işlemi başarısız");
     } finally {
       setDeleting(false);
     }
@@ -187,6 +189,10 @@ export default function KullaniciTable() {
             />
           </div>
           <span className={styles.totalCount}>{filteredUsers.length} kullanıcı</span>
+          <select value={firmaFilter} onChange={(event) => setFirmaFilter(event.target.value)} aria-label="Firmaya göre filtrele">
+            <option value="">Tüm firmalar</option>
+            {FIRMA_OPTIONS.map((firma) => <option key={firma}>{firma}</option>)}
+          </select>
         </div>
         <div className={styles.toolbarRight}>
           <button className={styles.addBtn} onClick={openAdd}>
@@ -209,7 +215,8 @@ export default function KullaniciTable() {
                 <th>Ad Soyad</th>
                 <th>Görev</th>
                 <th>İletişim</th>
-                <th>Birim</th>
+                <th>Firma</th>
+                <th>Laboratuvar Birimi</th>
                 <th style={{ width: 80 }}></th>
               </tr>
             </thead>
@@ -217,11 +224,11 @@ export default function KullaniciTable() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, index) => (
                   <tr key={index}>
-                    <td colSpan={7}><div className={styles.skeleton} /></td>
+                    <td colSpan={8}><div className={styles.skeleton} /></td>
                   </tr>
                 ))
               ) : filteredUsers.length === 0 ? (
-                <tr><td colSpan={7}><div className={styles.empty}>Kayıt bulunamadı.</div></td></tr>
+                <tr><td colSpan={8}><div className={styles.empty}>Kayıt bulunamadı.</div></td></tr>
               ) : (
                 filteredUsers.map((user, index) => (
                   <tr key={user.ID}>
@@ -235,7 +242,8 @@ export default function KullaniciTable() {
                         {user.Telefon && <span className={styles.contactItem}>{user.Telefon}</span>}
                       </div>
                     </td>
-                    <td>{user.BirimID ? birimMap.get(user.BirimID) || `Birim #${user.BirimID}` : "-"}</td>
+                    <td>{user.Firmalar?.join(", ") || "Unique"}</td>
+                    <td>{user.LaboratuvarBirimID ? birimMap.get(user.LaboratuvarBirimID) || `Birim #${user.LaboratuvarBirimID}` : "-"}</td>
                     <td>
                       <div className={styles.actionBtns}>
                         <button className={styles.editBtn} onClick={() => openEdit(user)} title="Düzenle">
@@ -294,13 +302,33 @@ export default function KullaniciTable() {
                   <input value={form.Gorev} onChange={(e) => setField("Gorev", e.target.value)} />
                 </div>
                 <div className={styles.formGroup}>
-                  <label>Birim</label>
-                  <select value={form.BirimID} onChange={(e) => setField("BirimID", e.target.value)}>
+                  <label>Laboratuvar Birimi</label>
+                  <select value={form.LaboratuvarBirimID} onChange={(e) => setField("LaboratuvarBirimID", e.target.value)}>
                     <option value="">Seçilmedi</option>
                     {birimler.map((birim) => (
-                      <option key={birim.ID} value={birim.ID}>{birim.Birim}</option>
+                      <option key={birim.id} value={birim.id}>{birim.ad}</option>
                     ))}
                   </select>
+                </div>
+                <div className={`${styles.formGroup} ${styles.colSpan2}`}>
+                  <label>Firma</label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, paddingTop: 6 }}>
+                    {FIRMA_OPTIONS.map((firma) => (
+                      <label key={firma} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <input
+                          type="checkbox"
+                          checked={form.Firmalar.includes(firma)}
+                          onChange={(event) => setForm((current) => ({
+                            ...current,
+                            Firmalar: event.target.checked
+                              ? [...current.Firmalar, firma]
+                              : current.Firmalar.filter((item) => item !== firma),
+                          }))}
+                        />
+                        {firma}
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div className={styles.formGroup}>
                   <label>E-posta</label>

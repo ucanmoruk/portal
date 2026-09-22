@@ -49,7 +49,7 @@ export function randomDisKodTeklif(year: number): string {
 /** ÜGAM/RR26/XXXX — RR rapor formatından türetilir. */
 export function randomDisKodRapor(year: number, raporFormati: string): string {
   const rr = raporFormatToRR(raporFormati);
-  return `ÜGAM/${rr}${year2(year)}/${random4()}`;
+  return `UGAM/${rr}${year2(year)}/${random4()}`;
 }
 
 // ── Format mapping (StokAnalizListesi.RaporFormati → RR) ──────────────────

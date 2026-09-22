@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { getUserPool } from "@/lib/userStore";
 
 export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
 
     try {
-        const pool = await poolPromise;
+        const pool = await getUserPool();
         const result = await pool.request().query(`
-            SELECT ID, Kadi, Ad, Soyad, Gorev, Email, BirimID
+            SELECT ID, Kadi, Ad, Soyad, Gorev, Email, LaboratuvarBirimID
             FROM RootKullanici
             WHERE Durum = 'Aktif'
             ORDER BY Ad, Soyad
@@ -22,7 +22,7 @@ export async function GET() {
             name: [row.Ad, row.Soyad].filter(Boolean).join(" ").trim() || row.Kadi || `Kullanıcı #${row.ID}`,
             role: row.Gorev || "",
             email: row.Email || "",
-            unitId: row.BirimID ?? null,
+            unitId: row.LaboratuvarBirimID ?? null,
         })));
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });

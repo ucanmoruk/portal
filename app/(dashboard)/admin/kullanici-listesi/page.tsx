@@ -9,7 +9,7 @@ export default function KullaniciListesiPage() {
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Kullanıcı Listesi</h1>
-          <p className={styles.pageSubtitle}>Portal kullanıcılarını ve çalıştıkları birimi yönetin.</p>
+          <p className={styles.pageSubtitle}>Portal kullanıcılarını, firmalarını ve laboratuvar birimlerini yönetin.</p>
         </div>
       </div>
       <KullaniciTable />

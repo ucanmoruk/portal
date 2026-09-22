@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { getUserPool, replaceUserFirmalari } from "@/lib/userStore";
 
 export async function PUT(
   request: Request,
@@ -16,12 +16,12 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { Kadi, Ad, Soyad, Gorev, Email, Telefon, Parola, BirimID } = body;
+    const { Kadi, Ad, Soyad, Gorev, Email, Telefon, Parola, LaboratuvarBirimID, Firmalar } = body;
 
     if (!Kadi?.trim()) return Response.json({ error: "Kullanıcı adı zorunludur." }, { status: 400 });
     if (!Ad?.trim()) return Response.json({ error: "Ad zorunludur." }, { status: 400 });
 
-    const pool = await poolPromise;
+    const pool = await getUserPool();
     const requestDb = pool.request()
       .input("ID", Number(id))
       .input("Kadi", Kadi.trim())
@@ -30,7 +30,7 @@ export async function PUT(
       .input("Gorev", Gorev || null)
       .input("Email", Email || null)
       .input("Telefon", Telefon || null)
-      .input("BirimID", BirimID ? Number(BirimID) : null);
+      .input("LaboratuvarBirimID", LaboratuvarBirimID ? Number(LaboratuvarBirimID) : null);
 
     const passwordSet = Parola?.trim() ? ", Parola = @Parola" : "";
     if (Parola?.trim()) requestDb.input("Parola", Parola);
@@ -43,10 +43,11 @@ export async function PUT(
           Gorev = @Gorev,
           Email = @Email,
           Telefon = @Telefon,
-          BirimID = @BirimID
+          LaboratuvarBirimID = @LaboratuvarBirimID
           ${passwordSet}
       WHERE ID = @ID
     `);
+    await replaceUserFirmalari(pool, Number(id), Firmalar);
 
     return Response.json({ success: true });
   } catch (e: any) {
@@ -67,7 +68,7 @@ export async function DELETE(
   }
 
   try {
-    const pool = await poolPromise;
+    const pool = await getUserPool();
     await pool.request()
       .input("ID", Number(id))
       .query("UPDATE RootKullanici SET Durum = 'Pasif' WHERE ID = @ID");

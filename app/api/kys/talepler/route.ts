@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
         seri: sp.get("seri") || "",
         page: Number(sp.get("page") || 1),
         limit: Number(sp.get("limit") || 20),
+        allowedFirmalar: (await getPortalUser())?.firmalar,
       }),
     );
   } catch (e: unknown) {
@@ -41,6 +42,10 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
+    const requestedFirma = body.seri === "Spektrotek" ? "Spektrotek" : "Unique";
+    const portalUser = await getPortalUser();
+    if (!portalUser?.firmalar.includes(requestedFirma))
+      return Response.json({ error: "Bu firma için talep oluşturma yetkiniz yok." }, { status: 403 });
     const id = await createKysRequest({
       ...body,
       olusturanId: (session.user as { userId?: string })?.userId || null,

@@ -26,6 +26,8 @@ export async function GET(
     const detail = await getKysRequestDetail(Number(id), satinAlmaYetkisi);
     if (!detail)
       return Response.json({ error: "Talep bulunamadı" }, { status: 404 });
+    if (!user.firmalar.includes(detail.talep.seri))
+      return Response.json({ error: "Bu firmanın talebini görüntüleme yetkiniz yok." }, { status: 403 });
     return Response.json({
       ...detail,
       belgeler: await getKysRequestFiles(Number(id)),
@@ -52,6 +54,10 @@ export async function PATCH(
 
   try {
     const { id } = await params;
+    const current = await getKysRequestDetail(Number(id), false);
+    if (!current) return Response.json({ error: "Talep bulunamadı" }, { status: 404 });
+    if (!user.firmalar.includes(current.talep.seri))
+      return Response.json({ error: "Bu firmanın talebini düzenleme yetkiniz yok." }, { status: 403 });
     const body = await request.json();
     if (body.islem === "siparis-fatura") { await updateKysOrderBilling(Number(id),body);return Response.json({ok:true}); }
     if (body.islem === "numara-duzenle") {
@@ -91,6 +97,10 @@ export async function DELETE(
     return Response.json({ error: "Yetkiniz yok." }, { status: 403 });
   try {
     const { id } = await params;
+    const current = await getKysRequestDetail(Number(id), false);
+    if (!current) return Response.json({ error: "Talep bulunamadı" }, { status: 404 });
+    if (!user.firmalar.includes(current.talep.seri))
+      return Response.json({ error: "Bu firmanın talebini silme yetkiniz yok." }, { status: 403 });
     await deleteKysRequest(Number(id), user.userId);
     return Response.json({ ok: true });
   } catch (e) {

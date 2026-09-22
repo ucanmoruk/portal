@@ -544,6 +544,7 @@ export async function listKysStocks(params: {
   sort?: string;
   page?: number;
   limit?: number;
+  allowedFirmalar?: string[];
 }) {
   await ensureKysSchema();
   const pool = await cosmoPool;
@@ -559,6 +560,11 @@ export async function listKysStocks(params: {
   if (malzemeTuru) where += " AND MalzemeTuru = @malzemeTuru";
   if (durum) where += " AND StokDurumu = @durum";
   if (params.kritik) where += " AND StokMiktari <= KritikLimit";
+  const canUnique = params.allowedFirmalar?.includes("Unique") ?? true;
+  const canSpektrotek = params.allowedFirmalar?.includes("Spektrotek") ?? true;
+  if (canUnique && !canSpektrotek) where += " AND MalzemeTuru <> 'Spektrotek'";
+  if (!canUnique && canSpektrotek) where += " AND MalzemeTuru = 'Spektrotek'";
+  if (!canUnique && !canSpektrotek) where += " AND 1 = 0";
   const order =
     params.sort === "miktar-asc" ? "StokMiktari ASC, Ad ASC" :
     params.sort === "miktar-desc" ? "StokMiktari DESC, Ad ASC" :
@@ -942,7 +948,7 @@ export async function listKysExpiry(params: { search?: string; days?: number; pa
   };
 }
 
-export async function listKysRequests(params: { search?: string; durum?: string; tur?: string; seri?: string; odeme?: string; page?: number; limit?: number }) {
+export async function listKysRequests(params: { search?: string; durum?: string; tur?: string; seri?: string; odeme?: string; page?: number; limit?: number; allowedFirmalar?: string[] }) {
   await ensureKysSchema();
   await ensureKysRequestNumbers(await cosmoPool);
   const pool = await cosmoPool;
@@ -966,6 +972,9 @@ export async function listKysRequests(params: { search?: string; durum?: string;
   if (tur) where += " AND t.TalepTuru = @tur";
   if (params.seri === "Spektrotek") where += " AND t.Seri = 'Spektrotek'";
   if (params.seri === "Unique") where += " AND t.Seri = 'Unique'";
+  const visibleSeries = ["Unique", "Spektrotek"].filter((firma) => params.allowedFirmalar?.includes(firma));
+  if (params.allowedFirmalar && visibleSeries.length === 0) where += " AND 1 = 0";
+  else if (params.allowedFirmalar && visibleSeries.length === 1) where += ` AND t.Seri = '${visibleSeries[0]}'`;
   const bind = (req: any) => req.input("search", `%${search}%`).input("durum", durum).input("tur", tur).input("odeme", text(params.odeme));
 
   const countRes = await bind(pool.request()).query(`SELECT COUNT(*) AS total FROM KysTalep t LEFT JOIN Fatura f ON f.ID=t.SiparisFaturaID AND f.Durum='Aktif' ${where}`);
@@ -1376,15 +1385,18 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
   } catch (e) { await pool.rollback(); throw e; }
 }
 
-export async function listKysPurchases(params: { search?: string; page?: number; limit?: number }) {
+export async function listKysPurchases(params: { search?: string; page?: number; limit?: number; allowedFirmalar?: string[] }) {
   await ensureKysSchema();
   const pool = await cosmoPool;
   const page = Math.max(1, Number(params.page || 1));
   const limit = Math.min(100, Math.max(5, Number(params.limit || 25)));
   const offset = (page - 1) * limit;
   const search = text(params.search);
+  const visibleSeries = ["Unique", "Spektrotek"].filter((firma) => params.allowedFirmalar?.includes(firma));
+  const companyWhere = !params.allowedFirmalar ? "" : visibleSeries.length === 2 ? "" : visibleSeries.length === 1 ? `AND t.Seri='${visibleSeries[0]}'` : "AND 1=0";
   const where = `
-    WHERE (k.Tedarikci IS NOT NULL OR k.SatinAlmaTarihi IS NOT NULL OR k.BirimFiyat IS NOT NULL OR k.ToplamTutar IS NOT NULL)
+    WHERE t.Durum <> 'Silindi' AND t.TalepTuru <> 'Sipariş'
+      ${companyWhere}
       ${search ? "AND (s.Kod LIKE @search OR s.Ad LIKE @search OR tk.MalzemeAdi LIKE @search OR k.Tedarikci LIKE @search OR t.TalepNo LIKE @search OR k.FaturaNo LIKE @search)" : ""}
   `;
   const bind = (request: any) => request.input("search", `%${search}%`);
@@ -1400,7 +1412,7 @@ export async function listKysPurchases(params: { search?: string; page?: number;
     .input("limit", limit)
     .query(`
       SELECT k.ID, k.StokID, s.Kod AS StokKod, COALESCE(s.Ad, tk.MalzemeAdi) AS MalzemeAdi,
-             t.ID AS TalepID, t.TalepNo, k.GelenMiktar, tk.Birim, k.Tedarikci,
+             t.ID AS TalepID, t.TalepNo, k.GelenMiktar, tk.Birim, k.Tedarikci, k.TedarikciID,
              k.SatinAlmaTarihi, k.BirimFiyat, k.ParaBirimi, k.ToplamTutar,
              k.FaturaNo, k.SatinAlanAd, k.CreatedAt
       ${from} ${where}
@@ -1419,6 +1431,7 @@ export async function listKysPurchases(params: { search?: string; page?: number;
       miktar: Number(r.GelenMiktar || 0),
       birim: rowString(r, "Birim"),
       tedarikci: rowString(r, "Tedarikci"),
+      tedarikciId: r.TedarikciID == null ? null : Number(r.TedarikciID),
       satinAlmaTarihi: asDate(r.SatinAlmaTarihi),
       birimFiyat: r.BirimFiyat == null ? null : Number(r.BirimFiyat),
       paraBirimi: rowString(r, "ParaBirimi"),
@@ -1431,6 +1444,45 @@ export async function listKysPurchases(params: { search?: string; page?: number;
     limit,
     totalPages: Math.ceil(total / limit) || 1,
   };
+}
+
+export async function updateKysPurchase(id: number, input: any, user: { userId: string; userName: string; firmalar: string[] }) {
+  await ensureKysSchema();
+  const { ensureKysPurchaseSchema, resolveKysSupplier } = await import("@/lib/kysPurchaseWorkflow");
+  await ensureKysPurchaseSchema();
+  const pool = await cosmoPool;
+  const current = (await pool.request().input("ID", id).query(`
+    SELECT k.ID, k.GelenMiktar, t.Seri
+    FROM KysTalepKabul k INNER JOIN KysTalep t ON t.ID=k.TalepID
+    WHERE k.ID=@ID AND t.Durum<>'Silindi'
+  `)).recordset[0];
+  if (!current) throw new Error("Satın alma kaydı bulunamadı.");
+  if (!user.firmalar.includes(String(current.Seri || "Unique"))) throw new Error("Bu firmanın satın alma kaydını düzenleme yetkiniz yok.");
+  const supplier = input.tedarikciId ? await resolveKysSupplier(pool, input.tedarikciId) : null;
+  const price = input.birimFiyat === "" || input.birimFiyat == null ? null : numberValue(input.birimFiyat, NaN);
+  const total = input.toplamTutar === "" || input.toplamTutar == null
+    ? price == null ? null : price * Number(current.GelenMiktar || 0)
+    : numberValue(input.toplamTutar, NaN);
+  if ((price != null && (!Number.isFinite(price) || price < 0)) || (total != null && (!Number.isFinite(total) || total < 0))) {
+    throw new Error("Birim fiyat ve toplam tutar geçerli, negatif olmayan sayılar olmalıdır.");
+  }
+  await pool.request()
+    .input("ID", id)
+    .input("TedarikciID", supplier?.id || null)
+    .input("Tedarikci", supplier?.ad || null)
+    .input("SatinAlmaTarihi", dateValue(input.satinAlmaTarihi))
+    .input("FaturaNo", nullableText(input.faturaNo))
+    .input("BirimFiyat", price)
+    .input("ParaBirimi", text(input.paraBirimi) || "TRY")
+    .input("ToplamTutar", total)
+    .input("SatinAlanID", user.userId)
+    .input("SatinAlanAd", user.userName)
+    .query(`UPDATE KysTalepKabul SET
+      TedarikciID=@TedarikciID,Tedarikci=@Tedarikci,SatinAlmaTarihi=@SatinAlmaTarihi,
+      FaturaNo=@FaturaNo,BirimFiyat=@BirimFiyat,ParaBirimi=@ParaBirimi,ToplamTutar=@ToplamTutar,
+      SatinAlanID=@SatinAlanID,SatinAlanAd=@SatinAlanAd
+      WHERE ID=@ID`);
+  return { ok: true };
 }
 
 export async function updateKysOrderBilling(id:number, body:{faturaId?:number|string|null;faturaNo?:string;faturaTutari?:string;vade?:string;odemeDurumu?:string}) {

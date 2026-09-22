@@ -57,7 +57,6 @@ const navGroups: NavGroup[] = [
     ),
     items: [
       { label: "Müşteri Listesi",  href: "/musteriler/musteri-listesi",  menuKey: "musteriler.musteri-listesi"  },
-      { label: "Notlar",           href: "/musteriler/notlar",           menuKey: "musteriler.notlar"           },
       { label: "Teklif Listesi",   href: "/musteriler/teklif-listesi",   menuKey: "musteriler.teklif-listesi"   },
       { label: "Proforma Listesi", href: "/musteriler/proforma-listesi", menuKey: "musteriler.proforma-listesi" },
       { label: "Fatura Takip",     href: "/musteriler/fatura-takip",     menuKey: "musteriler.fatura-takip"     },
@@ -105,6 +104,20 @@ const navGroups: NavGroup[] = [
       { label: "Tedarikçi Listesi", href: "/laboratuvar/kys/tedarikci-listesi", menuKey: "laboratuvar.kys.tedarikci-listesi" },
       { label: "Satın Alma Geçmişi", href: "/laboratuvar/kys/satin-alma-gecmisi", menuKey: "laboratuvar.kys.satin-alma-gecmisi" },
       {label:"Sipariş Listesi",href:"/laboratuvar/kys/siparis-listesi",menuKey:"laboratuvar.kys.talep-listesi"},
+    ],
+  },
+  {
+    id: "iletisim",
+    menuKey: "laboratuvar.kys",
+    label: "İletişim",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" aria-hidden>
+        <path d="M2 4.75A2.75 2.75 0 0 1 4.75 2h10.5A2.75 2.75 0 0 1 18 4.75v6.5A2.75 2.75 0 0 1 15.25 14H9l-3.6 3a.75.75 0 0 1-1.23-.576V14.4A2.75 2.75 0 0 1 2 11.75v-7Z" />
+      </svg>
+    ),
+    items: [
+      { label: "İç İletişim", href: "/laboratuvar/kys/iletisim", menuKey: "laboratuvar.kys" },
+      { label: "Müşteri Takip", href: "/musteriler/notlar", menuKey: "musteriler.notlar" },
     ],
   },
   {
@@ -306,12 +319,6 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
               )}
 
             </div>
-            {group.id === "kys" && canSee("laboratuvar.kys") && (
-              <Link href="/laboratuvar/kys/iletisim" className={`${styles.navLink} ${pathname.startsWith("/laboratuvar/kys/iletisim") ? styles.navLinkActive : ""}`}>
-                <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" aria-hidden><path d="M2 4.75A2.75 2.75 0 0 1 4.75 2h10.5A2.75 2.75 0 0 1 18 4.75v6.5A2.75 2.75 0 0 1 15.25 14H9l-3.6 3a.75.75 0 0 1-1.23-.576V14.4A2.75 2.75 0 0 1 2 11.75v-7Z"/></svg>
-                <span>İletişim</span>
-              </Link>
-            )}
             </Fragment>
           );
         })}

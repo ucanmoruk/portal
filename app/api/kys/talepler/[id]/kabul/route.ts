@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { acceptKysRequestItem } from "@/lib/kysStore";
+import { acceptKysRequestItem, getKysRequestDetail } from "@/lib/kysStore";
 import { getPortalUser } from "@/lib/portalYetki";
 import {
   correctKysAcceptance,
@@ -23,6 +23,9 @@ export async function POST(
 
   try {
     const { id } = await params;
+    const current = await getKysRequestDetail(Number(id), false);
+    if (!current || !portalUser.firmalar.includes(current.talep.seri))
+      return Response.json({ error: "Bu firmanın talebine erişiminiz yok." }, { status: 403 });
     const body = await readKysAcceptanceInput(request);
     const canEnterPurchase = Boolean(portalUser?.can(PURCHASE_KEY));
     const result = await acceptKysRequestItem(Number(id), {
@@ -59,6 +62,9 @@ export async function PATCH(
     return Response.json({ error: "Yetkiniz yok." }, { status: 403 });
   try {
     const { id } = await params;
+    const current = await getKysRequestDetail(Number(id), false);
+    if (!current || !user.firmalar.includes(current.talep.seri))
+      return Response.json({ error: "Bu firmanın talebine erişiminiz yok." }, { status: 403 });
     const body = await readKysAcceptanceInput(request);
     return Response.json(
       await correctKysAcceptance(
@@ -68,7 +74,7 @@ export async function PATCH(
           degerlendirenId: user.userId,
           degerlendirenAd: user.userName,
         },
-        user.can(PURCHASE_KEY),
+        false,
       ),
     );
   } catch (e) {
@@ -85,6 +91,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (!user.can("laboratuvar.kys.talep-listesi")) return Response.json({ error: "Yetkiniz yok." }, { status: 403 });
   try {
     const { id } = await params;
+    const current = await getKysRequestDetail(Number(id), false);
+    if (!current || !user.firmalar.includes(current.talep.seri))
+      return Response.json({ error: "Bu firmanın talebine erişiminiz yok." }, { status: 403 });
     const body = await request.json();
     return Response.json(await deleteKysAcceptance(Number(id), Number(body.kabulId), user.userId));
   } catch (e) { return Response.json({ error: e instanceof Error ? e.message : "Kabul silinemedi." }, { status: 400 }); }

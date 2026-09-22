@@ -1,7 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import sql from "@/lib/db";
+import { getUserFirmalari, getUserPool } from "@/lib/userStore";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -26,6 +26,8 @@ export const authOptions: NextAuthOptions = {
               name: process.env.LOCAL_DEV_NAME || "Local Admin",
               email: process.env.LOCAL_DEV_EMAIL || null,
               birimId: Number(process.env.LOCAL_DEV_BIRIM_ID || 0),
+              laboratuvarBirimId: Number(process.env.LOCAL_DEV_LAB_BIRIM_ID || 0),
+              firmalar: (process.env.LOCAL_DEV_FIRMALAR || "Unique,Spektrotek,Root,Ozeco").split(","),
             };
           }
 
@@ -33,14 +35,14 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          const pool = await sql;
+          const pool = await getUserPool();
 
           // Kolon listesini dinamik oku
           const colsResult = await pool.request().query(`
             SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_NAME = 'RootKullanici'
           `);
-          const cols = colsResult.recordset.map((r: any) => r.COLUMN_NAME as string);
+          const cols: string[] = colsResult.recordset.map((r: any) => r.COLUMN_NAME as string);
 
           const passwordCol = cols.find((c) =>
             ["Sifre", "Parola", "Password", "sifre", "password", "parola", "UserPassword", "UserParola"].includes(c)
@@ -98,6 +100,8 @@ export const authOptions: NextAuthOptions = {
               name: displayName,
               email: emailCol ? user[emailCol] : null,
               birimId: birimCol ? (Number(user[birimCol]) || 0) : 0,
+              laboratuvarBirimId: Number(user.LaboratuvarBirimID || 0),
+              firmalar: await getUserFirmalari(idCol ? String(user[idCol]) : user[usernameCol]),
             };
           } else {
             throw new Error("Hatalı kullanıcı adı veya şifre.");
@@ -113,6 +117,8 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.birimId = (user as any).birimId ?? 0;
+        token.laboratuvarBirimId = (user as any).laboratuvarBirimId ?? 0;
+        token.firmalar = (user as any).firmalar ?? ["Unique"];
         token.userId  = user.id; // DB'deki ID (string)
       }
       return token;
@@ -120,6 +126,8 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.birimId = token.birimId ?? 0;
+        session.user.laboratuvarBirimId = token.laboratuvarBirimId ?? 0;
+        session.user.firmalar = token.firmalar ?? ["Unique"];
         session.user.userId  = token.userId as string;
       }
       return session;

@@ -12,8 +12,6 @@ import TalepEditModal from "../TalepEditModal";
 
 type Birim = { id: number; ad: string };
 type Detail = { talep: any; kalemler: any[]; kabuller: any[]; belgeler?: any[]; satinAlmaYetkisi?: boolean };
-const numeric = (v:string) => Number(v.includes(",")?v.replace(/\./g,"").replace(",","."):v)||0;
-
 const today = () => new Date().toISOString().slice(0, 10);
 
 function dateFmt(value?: string | null) {
@@ -28,7 +26,6 @@ export default function TalepDetayClient({ id }: { id: number }) {
   const [requestNumber, setRequestNumber] = useState("");
   const [numberError, setNumberError] = useState("");
   const [exporting, setExporting] = useState(false);
-  const [suppliers,setSuppliers]=useState<any[]>([]);
   const [correcting,setCorrecting]=useState<any|null>(null);
   const [belge,setBelge]=useState<File|null>(null);
   const [duzeltmeAciklamasi,setDuzeltmeAciklamasi]=useState("");
@@ -51,13 +48,6 @@ export default function TalepDetayClient({ id }: { id: number }) {
     sktUygun: true,
     sertifikaGerekli: false,
     genelDegerlendirme: "",
-    tedarikci: "",
-    tedarikciId: "",
-    satinAlmaTarihi: today(),
-    birimFiyat: "",
-    paraBirimi: "TRY",
-    toplamTutar: "",
-    faturaNo: "",
   });
 
   const fetchDetail = useCallback(async () => {
@@ -68,10 +58,6 @@ export default function TalepDetayClient({ id }: { id: number }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Talep detayı alınamadı.");
       setDetail(json);
-      if(json.satinAlmaYetkisi) {
-        const supplierRes=await fetch("/api/kys/tedarikciler");const sj=await supplierRes.json();
-        if(supplierRes.ok)setSuppliers(sj.data||[]);
-      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -113,13 +99,6 @@ export default function TalepDetayClient({ id }: { id: number }) {
       sktUygun: true,
       sertifikaGerekli: false,
       genelDegerlendirme: "",
-      tedarikci: "",
-      tedarikciId: "",
-      satinAlmaTarihi: today(),
-      birimFiyat: "",
-      paraBirimi: "TRY",
-      toplamTutar: "",
-      faturaNo: "",
     });
     setFormError("");
   }
@@ -155,8 +134,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
     const item=detail?.kalemler.find(i=>i.id===k.kalemId);if(!item)return;
     openAccept(item);setCorrecting(k);
     setForm(f=>({...f,gelenMiktar:String(k.gelenMiktar),hedefBirimId:k.hedefBirimId?String(k.hedefBirimId):"",marka:k.marka||"",lot:k.lot||"",skt:k.skt||"",kabulTarihi:k.kabulTarihi||today(),
-      istenilenMiktardaGeldi:k.istenilenMiktardaGeldi,markaOzellikUygun:k.markaOzellikUygun,sktUygun:k.sktUygun,sertifikaGerekli:k.sertifikaGerekli,genelDegerlendirme:k.genelDegerlendirme||"",
-      tedarikci:k.tedarikci||"",tedarikciId:k.tedarikciId?String(k.tedarikciId):"",satinAlmaTarihi:k.satinAlmaTarihi||today(),birimFiyat:k.birimFiyat==null?"":String(k.birimFiyat),paraBirimi:k.paraBirimi||"TRY",toplamTutar:k.toplamTutar==null?"":String(k.toplamTutar),faturaNo:k.faturaNo||""}));
+      istenilenMiktardaGeldi:k.istenilenMiktardaGeldi,markaOzellikUygun:k.markaOzellikUygun,sktUygun:k.sktUygun,sertifikaGerekli:k.sertifikaGerekli,genelDegerlendirme:k.genelDegerlendirme||""}));
   }
   async function deleteAcceptance(k: any) {
     if (saving || !confirm(detail?.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? "Sipariş kabulü silinecek, teslim edilen miktar stoğa geri eklenecek. Devam edilsin mi?" : "Bu kabul ve bağlı satın alma kaydı silinecek, gelen miktar stoktan geri alınacak. Devam edilsin mi?")) return;
@@ -174,7 +152,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
     setSaving(true);
     setFormError("");
     try {
-      const payload={ ...form, kalemId: acceptItem.id, kabulId:correcting?.id, duzeltmeAciklamasi, toplamTutar:form.toplamTutar || (form.birimFiyat?String(numeric(form.birimFiyat)*numeric(form.gelenMiktar)):""), hedefBirimId: form.hedefBirimId ? Number(form.hedefBirimId) : null };
+      const payload={ ...form, kalemId: acceptItem.id, kabulId:correcting?.id, duzeltmeAciklamasi, hedefBirimId: form.hedefBirimId ? Number(form.hedefBirimId) : null };
       const body=new FormData();body.append("payload",JSON.stringify(payload));if(belge)body.append("belge",belge);
       const res = await fetch(`/api/kys/talepler/${id}/kabul`, {
         method: correcting ? "PATCH" : "POST",
@@ -289,19 +267,6 @@ export default function TalepDetayClient({ id }: { id: number }) {
                 <div className={styles.formGroup}><label>Marka</label><input value={form.marka} onChange={e => setForm(f => ({ ...f, marka: e.target.value }))} /></div>
                 <div className={styles.formGroup}><label>Lot</label><input value={form.lot} onChange={e => setForm(f => ({ ...f, lot: e.target.value }))} /></div>
                 <div className={styles.formGroup}><label>SKT</label><input type="date" value={form.skt} onChange={e => setForm(f => ({ ...f, skt: e.target.value }))} /></div>
-                {detail.satinAlmaYetkisi && (
-                  <div className={kys.purchaseSection}>
-                    <div className={kys.purchaseSectionTitle}>Satın alma bilgileri</div>
-                    <div className={styles.formGrid3}>
-                      <div className={styles.formGroup}><label>Kimden satın alındı?</label><select value={form.tedarikciId} onChange={e => setForm(f => ({ ...f, tedarikciId: e.target.value }))}><option value="">{correcting?.tedarikci?`Mevcut: ${correcting.tedarikci}`:"Tedarikçi seçin"}</option>{correcting?.tedarikciId&&!suppliers.some(s=>s.ID===correcting.tedarikciId)&&<option value={correcting.tedarikciId}>{correcting.tedarikci} (pasif)</option>}{suppliers.map(s=><option key={s.ID} value={s.ID}>{s.Ad}</option>)}</select><Link href="/laboratuvar/kys/tedarikci-listesi" target="_blank">Tedarikçi listesi</Link></div>
-                      <div className={styles.formGroup}><label>Satın alma tarihi</label><input type="date" value={form.satinAlmaTarihi} onChange={e => setForm(f => ({ ...f, satinAlmaTarihi: e.target.value }))} /></div>
-                      <div className={styles.formGroup}><label>Fatura no</label><input value={form.faturaNo} onChange={e => setForm(f => ({ ...f, faturaNo: e.target.value }))} /></div>
-                      <div className={styles.formGroup}><label>Birim fiyat</label><input inputMode="decimal" value={form.birimFiyat} onChange={e => setForm(f => ({ ...f, birimFiyat: e.target.value,toplamTutar:"" }))} /></div>
-                      <div className={styles.formGroup}><label>Para birimi</label><select value={form.paraBirimi} onChange={e => setForm(f => ({ ...f, paraBirimi: e.target.value }))}><option>TRY</option><option>EUR</option><option>USD</option><option>GBP</option></select></div>
-                      <div className={styles.formGroup}><label>Toplam tutar (birim fiyat × miktar)</label><input inputMode="decimal" value={form.toplamTutar || (form.birimFiyat?String(numeric(form.birimFiyat)*numeric(form.gelenMiktar)):"")} onChange={e => setForm(f => ({ ...f, toplamTutar: e.target.value }))} /></div>
-                    </div>
-                  </div>
-                )}
                 {[
                   ["İstenilen miktarda geldi mi?", "istenilenMiktardaGeldi"],
                   ["İstenilen marka ve özelliklerde geldi mi?", "markaOzellikUygun"],
