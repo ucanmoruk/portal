@@ -131,7 +131,7 @@ export default function SatinAlmaGecmisiClient() {
               ) : rows.map(row => (
                 <tr key={row.id}>
                   <td>{dateFmt(row.satinAlmaTarihi)}</td>
-                  <td>{row.stokId ? <Link href={`/laboratuvar/kys/stok-listesi/${row.stokId}`} className={styles.tdMono}>{row.stokKod || `#${row.stokId}`}</Link> : <span className={styles.tdMono}>{row.stokKod || "-"}</span>}</td>
+                  <td>{row.stokId ? <Link href={`/laboratuvar/kys/stok-listesi/${row.stokId}`} className={`${styles.tdMono} ${kys.purchaseStockLink}`}>{row.stokKod || `#${row.stokId}`}</Link> : <span className={styles.tdMono}>{row.stokKod || "-"}</span>}</td>
                   <td className={styles.tdName}>{row.malzemeAdi}</td>
                   <td>{row.tedarikci || "-"}</td>
                   <td>{row.miktar.toLocaleString("tr-TR")} {row.birim}</td>

@@ -514,6 +514,25 @@ table.purchaseHistoryTable tbody td {
   word-break: break-word;
 }
 
+table.purchaseHistoryTable a.purchaseStockLink {
+  color: var(--color-accent);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent-border);
+  text-underline-offset: 2px;
+}
+
+table.purchaseHistoryTable a.purchaseStockLink:hover {
+  color: var(--color-accent-hover);
+  text-decoration-color: currentColor;
+}
+
+table.purchaseHistoryTable a.purchaseStockLink:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 table.purchaseHistoryTable .iconButton {
   width: 26px;
   height: 26px;

@@ -6,6 +6,8 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   List,
   ListTodo,
@@ -73,6 +75,10 @@ export default function IletisimClient({
   const [taskFilter, setTaskFilter] = useState("Tümü");
   const [taskView, setTaskView] = useState<"liste" | "takvim">("liste");
   const [calendarTaskId, setCalendarTaskId] = useState<number | null>(null);
+  const [calendarDate, setCalendarDate] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -239,14 +245,13 @@ export default function IletisimClient({
     },
   ];
   const days = useMemo(() => {
-    const now = new Date();
-    const first = new Date(now.getFullYear(), now.getMonth(), 1);
-    const count = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const first = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
+    const count = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 0).getDate();
     return [
       ...Array(first.getDay() === 0 ? 6 : first.getDay() - 1).fill(null),
       ...Array.from({ length: count }, (_, i) => i + 1),
     ];
-  }, []);
+  }, [calendarDate]);
   return (
     <div className={styles.shell}>
       {error && <div className={styles.error}>{error}</div>}
@@ -518,10 +523,21 @@ export default function IletisimClient({
       ) : taskView === "takvim" ? (
         <div className={styles.calendar}>
           <header>
-            {new Date().toLocaleDateString("tr-TR", {
-              month: "long",
-              year: "numeric",
-            })}
+            <button
+              type="button"
+              aria-label="Önceki ay"
+              onClick={() => setCalendarDate((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1))}
+            >
+              <ChevronLeft size={17} />
+            </button>
+            <strong>{calendarDate.toLocaleDateString("tr-TR", { month: "long", year: "numeric" })}</strong>
+            <button
+              type="button"
+              aria-label="Sonraki ay"
+              onClick={() => setCalendarDate((date) => new Date(date.getFullYear(), date.getMonth() + 1, 1))}
+            >
+              <ChevronRight size={17} />
+            </button>
           </header>
           <div className={styles.weekdays}>
             {["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((x) => (
@@ -540,9 +556,9 @@ export default function IletisimClient({
                           task.terminTarihi &&
                           new Date(task.terminTarihi).getDate() === day &&
                           new Date(task.terminTarihi).getMonth() ===
-                            new Date().getMonth() &&
+                            calendarDate.getMonth() &&
                           new Date(task.terminTarihi).getFullYear() ===
-                            new Date().getFullYear(),
+                            calendarDate.getFullYear(),
                       )
                       .map((task) => {
                         const overdue = Boolean(
