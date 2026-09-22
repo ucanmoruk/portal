@@ -26,6 +26,19 @@ const CORS = {
   "Cache-Control": "no-store",
 };
 
+type VerificationRow = {
+  KarekodToken?: unknown;
+  RevizyonNo?: unknown;
+  YayinUrl?: unknown;
+  Durum?: unknown;
+  DisRaporKodu?: unknown;
+  RaporNo?: unknown;
+  YayinTarihi?: unknown;
+  FirmaAd?: unknown;
+  NumuneAd?: unknown;
+  RaporFormati?: unknown;
+};
+
 export function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS });
 }
@@ -51,12 +64,15 @@ export async function GET(request: NextRequest) {
   const tokenInput = tokenRaw.replace(/\s+/g, "");
   const authToken = authRaw.replace(/\s+/g, "");
 
-  // raporNo: kullanıcı "ÜGAM/GE26/K9RX" (revizyonsuz) veya "ÜGAM/GE26/K9RX/00"
-  // (revizyonlu) veya iç "26060126" girebilir. /NN suffix'i ayır, base + rev'i çıkar.
-  let raporNoInput = raporNoRaw;
-  let baseDisKod = raporNoRaw;
+  // Basılı eski QR'larda ÜGAM öneki bulunabilir. Veritabanındaki güncel UGAM
+  // koduna normalize ederek eski ve yeni QR'ların ikisini de doğrula.
+  const normalizedRaporNo = raporNoRaw.replace(/^ÜGAM(?=\/)/i, "UGAM");
+  // raporNo: kullanıcı "UGAM/GE26/K9RX" (revizyonsuz), revizyonlu veya iç
+  // "26060126" girebilir. /NN suffix'i ayır, base + rev'i çıkar.
+  const raporNoInput = normalizedRaporNo;
+  let baseDisKod = normalizedRaporNo;
   let expectedRev: number | null = null;
-  const revMatch = raporNoRaw.match(/^(.+)\/(\d{1,2})$/);
+  const revMatch = normalizedRaporNo.match(/^(.+)\/(\d{1,2})$/);
   if (revMatch) {
     baseDisKod = revMatch[1];
     expectedRev = parseInt(revMatch[2], 10);
@@ -125,7 +141,7 @@ export async function GET(request: NextRequest) {
     const tokenUpper = tokenInput.toUpperCase();
     const isLikelyFullToken = tokenInput.length >= 16;
 
-    const matchRow = r.recordset.find((row: any) => {
+    const matchRow = (r.recordset as VerificationRow[]).find((row) => {
       // Eğer kullanıcı /NN belirttiyse revizyon eşleşmeli
       if (expectedRev !== null) {
         const dbRev = Number(row.RevizyonNo ?? 0);
@@ -186,11 +202,12 @@ export async function GET(request: NextRequest) {
       },
       { headers: CORS },
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const error = e instanceof Error ? e : new Error("Sunucu hatası");
     console.error("[rapor-dogrula] hata:", {
       raporNoRaw, baseDisKod, expectedRev, tokenLen: tokenInput.length,
-      msg: e?.message, stack: e?.stack,
+      msg: error.message, stack: error.stack,
     });
-    return Response.json({ valid: false, error: e?.message || "Sunucu hatası" }, { status: 500, headers: CORS });
+    return Response.json({ valid: false, error: error.message }, { status: 500, headers: CORS });
   }
 }

@@ -121,23 +121,25 @@ export default function SatinAlmaGecmisiClient() {
       </div>
       <div className={styles.tableCard}>
         {error && <div className={styles.errorBar}>{error}</div>}
-        <div className={styles.tableWrapper}>
-          <table className={styles.table} style={{ fontSize: 11, tableLayout: "fixed", width: "100%" }}>
-            <thead><tr><th>Tarih</th><th style={{ width: "20%" }}>Stok / Malzeme</th><th>Tedarikçi</th><th>Miktar</th><th>Fatura no</th><th>Birim fiyat</th><th>Para</th><th>Toplam</th><th>Talep</th><th aria-label="İşlemler"></th></tr></thead>
+        <div className={`${styles.tableWrapper} ${kys.purchaseTableWrapper}`}>
+          <table className={`${styles.table} ${kys.purchaseHistoryTable}`}>
+            <colgroup><col style={{width:"7%"}}/><col style={{width:"7%"}}/><col style={{width:"15%"}}/><col style={{width:"11%"}}/><col style={{width:"8%"}}/><col style={{width:"11%"}}/><col style={{width:"10%"}}/><col style={{width:"10%"}}/><col style={{width:"8%"}}/><col style={{width:"9%"}}/><col style={{width:"4%"}}/></colgroup>
+            <thead><tr><th>Tarih</th><th>Stok</th><th>Malzeme</th><th>Tedarikçi</th><th>Miktar</th><th>Fatura no</th><th>Birim fiyat</th><th>Toplam</th><th>Talep</th><th>Kaydeden</th><th aria-label="İşlemler"></th></tr></thead>
             <tbody>
-              {loading ? <tr><td colSpan={10}><div className={styles.skeleton} /></td></tr> : rows.length === 0 ? (
-                <tr><td colSpan={10}><div className={styles.empty}>Satın alma kaydı bulunamadı.</div></td></tr>
+              {loading ? <tr><td colSpan={11}><div className={styles.skeleton} /></td></tr> : rows.length === 0 ? (
+                <tr><td colSpan={11}><div className={styles.empty}>Satın alma kaydı bulunamadı.</div></td></tr>
               ) : rows.map(row => (
                 <tr key={row.id}>
                   <td>{dateFmt(row.satinAlmaTarihi)}</td>
-                  <td><div className={styles.tdName}>{row.malzemeAdi}</div>{row.stokId ? <Link href={`/laboratuvar/kys/stok-listesi/${row.stokId}`} className={styles.tdMono}>{row.stokKod || `#${row.stokId}`}</Link> : <span className={styles.tdMono}>{row.stokKod || "-"}</span>}</td>
+                  <td>{row.stokId ? <Link href={`/laboratuvar/kys/stok-listesi/${row.stokId}`} className={styles.tdMono}>{row.stokKod || `#${row.stokId}`}</Link> : <span className={styles.tdMono}>{row.stokKod || "-"}</span>}</td>
+                  <td className={styles.tdName}>{row.malzemeAdi}</td>
                   <td>{row.tedarikci || "-"}</td>
                   <td>{row.miktar.toLocaleString("tr-TR")} {row.birim}</td>
-                  <td className={styles.tdMono}>{row.faturaNo || "-"}</td>
+                  <td className={kys.purchaseInvoiceNo} title={row.faturaNo || undefined}>{row.faturaNo || "-"}</td>
                   <td>{money(row.birimFiyat, row.paraBirimi)}</td>
-                  <td>{row.paraBirimi || "TRY"}</td>
                   <td><strong>{money(row.toplamTutar, row.paraBirimi)}</strong></td>
                   <td><Link className={kys.purchaseLink} href={`/laboratuvar/kys/talep-listesi/${row.talepId}`}>{row.talepNo}</Link></td>
+                  <td>{row.satinAlanAd || "-"}</td>
                   <td><button type="button" className={`${styles.editBtn} ${kys.iconButton}`} title="Satın alma bilgilerini düzenle" aria-label={`${row.malzemeAdi} satın alma bilgilerini düzenle`} onClick={() => openEdit(row)}><Pencil size={15} aria-hidden="true" /></button></td>
                 </tr>
               ))}
@@ -150,11 +152,11 @@ export default function SatinAlmaGecmisiClient() {
           <button className={styles.pageBtn} disabled={page >= totalPages} onClick={() => setPage(current => current + 1)}>›</button>
         </div>
       </div>
-      {editing && <div className={styles.modalOverlay}><div className={styles.modal} style={{ maxWidth: 760 }} role="dialog" aria-modal="true" aria-labelledby="purchase-edit-title">
+      {editing && <div className={styles.modalOverlay}><div className={`${styles.modal} ${kys.purchaseEditModal}`} role="dialog" aria-modal="true" aria-labelledby="purchase-edit-title">
         <div className={styles.modalHeader}><h2 id="purchase-edit-title">Satın alma bilgilerini düzenle</h2><button className={styles.modalClose} disabled={saving} onClick={() => setEditing(null)} aria-label="Kapat">×</button></div>
         <div className={styles.modalBody}>
           {formError && <div className={styles.formError} role="alert">{formError}</div>}
-          <div className={styles.formGrid3}>
+          <div className={kys.purchaseEditForm}>
             <div className={styles.formGroup}><label>Tedarikçi</label><select value={form.tedarikciId} onChange={event => setForm(current => ({ ...current, tedarikciId: event.target.value }))}><option value="">Seçilmedi</option>{editing.tedarikciId && !suppliers.some(item => item.ID === editing.tedarikciId) && <option value={editing.tedarikciId}>{editing.tedarikci} (pasif)</option>}{suppliers.map(item => <option key={item.ID} value={item.ID}>{item.Ad}</option>)}</select></div>
             <div className={styles.formGroup}><label>Satın alma tarihi</label><input type="date" value={form.satinAlmaTarihi} onChange={event => setForm(current => ({ ...current, satinAlmaTarihi: event.target.value }))} /></div>
             <div className={styles.formGroup}><label>Fatura no</label><input value={form.faturaNo} onChange={event => setForm(current => ({ ...current, faturaNo: event.target.value }))} /></div>

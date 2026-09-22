@@ -456,3 +456,65 @@ table.acceptanceTable td a {
     padding: 0;
   }
 }
+.purchaseEditModal {
+  max-width: 420px;
+  font-size: 12px;
+}
+
+.purchaseEditModal h2 {
+  font-size: 16px;
+}
+
+.purchaseEditModal input,
+.purchaseEditModal select,
+.purchaseEditModal button {
+  font-size: 12px;
+}
+
+.purchaseEditForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 11px;
+}
+
+.purchaseTableWrapper {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+table.purchaseHistoryTable {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  font-size: 10px;
+}
+
+table.purchaseHistoryTable thead th {
+  padding: 7px 5px;
+  font-size: 9px;
+  letter-spacing: 0.015em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+table.purchaseHistoryTable tbody td {
+  min-width: 0;
+  padding: 7px 5px;
+  font-size: 10px;
+  line-height: 1.25;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}
+
+.purchaseInvoiceNo {
+  font-size: 9px !important;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+table.purchaseHistoryTable .iconButton {
+  width: 26px;
+  height: 26px;
+}
