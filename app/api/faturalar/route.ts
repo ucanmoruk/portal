@@ -5,6 +5,7 @@ import { type NextRequest } from "next/server";
 import { hasProformaFaturaFirmaCol } from "@/lib/proformaSchema";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { ensureFaturaTrackingSchema, isFaturaKaynagi } from "@/lib/faturaSchema";
+import { syncFaturaRecordToMuhasebe } from "@/lib/muhasebeStore";
 
 // Fatura Takip — cosmo `Fatura` (başlık) + `Odeme` (ödeme durumu aşamaları) tabloları.
 // Proforma "Faturaya çevir" akışı: Fatura kaydı oluşturur, Odeme'ye 'Ödeme Bekliyor'
@@ -252,6 +253,8 @@ export async function POST(request: NextRequest) {
           VALUES (@Evrak_No, N'Ödeme Bekliyor', @Fatura_ID, @Tarih)
         `);
 
+      await syncFaturaRecordToMuhasebe(faturaId, { userId: String(session.user?.userId || ""), userName: String(session.user?.name || "Fatura Takip") });
+
       return Response.json({ id: faturaId }, { status: 201 });
     }
 
@@ -333,6 +336,8 @@ export async function POST(request: NextRequest) {
     await pool.request()
       .input("id", proformaId)
       .query(`UPDATE ProformaBaslik SET Durum = N'Faturalaştı' WHERE ID = @id AND SilindiMi = 0`);
+
+    await syncFaturaRecordToMuhasebe(faturaId, { userId: String(session.user?.userId || ""), userName: String(session.user?.name || "Fatura Takip") });
 
     return Response.json({ id: faturaId }, { status: 201 });
   } catch (e: any) {

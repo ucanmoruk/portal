@@ -66,6 +66,11 @@
   color: #6941c6;
 }
 
+.sourcePayment {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .invoiceModal {
   max-width: 570px !important;
 }

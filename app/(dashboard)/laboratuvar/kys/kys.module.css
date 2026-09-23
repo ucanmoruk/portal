@@ -516,6 +516,7 @@ table.purchaseHistoryTable tbody td {
 
 table.purchaseHistoryTable a.purchaseStockLink {
   color: var(--color-accent);
+  font-size: 9px;
   font-weight: 700;
   text-decoration: underline;
   text-decoration-color: var(--color-accent-border);

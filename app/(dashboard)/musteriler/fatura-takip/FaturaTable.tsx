@@ -417,7 +417,7 @@ export default function FaturaTable() {
                 <tr key={row.ID}>
                   <td className={localStyles.ellipsisCell} title={row.ProformaNo || "-"}>{row.ProformaNo || "-"}</td>
                   <td className={`${styles.primaryCell} ${localStyles.ellipsisCell}`} title={row.FaturaNo}>{row.FaturaNo}</td>
-                  <td><span className={`${localStyles.sourceBadge} ${row.Kaynak === "Spektrotek" ? localStyles.sourceSpektrotek : row.Kaynak === "Root" ? localStyles.sourceRoot : localStyles.sourceUnique}`}>{row.Kaynak || "Unique"}</span></td>
+                  <td><span className={`${localStyles.sourceBadge} ${row.Kaynak === "Spektrotek" ? localStyles.sourceSpektrotek : row.Kaynak === "Root" ? localStyles.sourceRoot : row.Kaynak === "Ödeme" ? localStyles.sourcePayment : localStyles.sourceUnique}`}>{row.Kaynak || "Unique"}</span></td>
                   <td>{fmtTarih(row.Tarih)}</td>
                   <td>{fmtTarih(row.VadeTarihi)}</td>
                   <td className={localStyles.ellipsisCell} title={upperTr(row.FirmaAd) || "-"}>{upperTr(row.FirmaAd) || "-"}</td>

@@ -12,6 +12,7 @@ import {
   List,
   ListTodo,
   MessageSquare,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -75,6 +76,8 @@ export default function IletisimClient({
   const [taskFilter, setTaskFilter] = useState("Tümü");
   const [taskView, setTaskView] = useState<"liste" | "takvim">("liste");
   const [calendarTaskId, setCalendarTaskId] = useState<number | null>(null);
+  const [editingTask, setEditingTask] = useState<Item | null>(null);
+  const [editTaskForm, setEditTaskForm] = useState({ baslik: "", icerik: "", aliciId: "", terminTarihi: "" });
   const [calendarDate, setCalendarDate] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
@@ -147,6 +150,17 @@ export default function IletisimClient({
       body: JSON.stringify(body),
     });
     if (r.ok) await load();
+  }
+  function openTaskEdit(task: Item) {
+    setEditingTask(task);
+    setEditTaskForm({ baslik: task.baslik, icerik: task.icerik, aliciId: task.aliciId, terminTarihi: String(task.terminTarihi || "").slice(0, 10) });
+  }
+  async function saveTaskEdit() {
+    if (!editingTask) return;
+    const response = await fetch("/api/kys/iletisim", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ islem: "gorev-duzenle", id: editingTask.id, ...editTaskForm, aliciAd: peopleById.get(editTaskForm.aliciId) || editTaskForm.aliciId }) });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) { setError(json.error || "Görev düzenlenemedi."); return; }
+    setEditingTask(null); await load();
   }
   async function answer(id: number) {
     const value = reply[id]?.trim();
@@ -550,6 +564,7 @@ export default function IletisimClient({
                 {day && (
                   <>
                     <b>{day}</b>
+                    <div className={styles.calendarTasks}>
                     {tasks
                       .filter(
                         (task) =>
@@ -593,6 +608,7 @@ export default function IletisimClient({
                           </button>
                         );
                       })}
+                    </div>
                   </>
                 )}
               </div>
@@ -651,6 +667,9 @@ export default function IletisimClient({
                 ))}
               </div>
               <div className={styles.taskActions}>
+                {calendarTask.olusturanId === currentUserId && calendarTask.durum !== "Tamamlandı" && (
+                  <button className={styles.editTask} onClick={() => openTaskEdit(calendarTask)}><Pencil size={15} />Düzenle</button>
+                )}
                 {calendarTask.durum === "Atandı" &&
                   calendarTask.aliciId === currentUserId && (
                     <button
@@ -753,6 +772,9 @@ export default function IletisimClient({
                       ))}
                     </div>
                     <div className={styles.taskActions}>
+                      {item.olusturanId === currentUserId && item.durum !== "Tamamlandı" && (
+                        <button className={styles.editTask} onClick={() => openTaskEdit(item)}><Pencil size={15} />Düzenle</button>
+                      )}
                       {item.durum === "Atandı" &&
                         item.aliciId === currentUserId && (
                           <button
@@ -890,6 +912,20 @@ export default function IletisimClient({
                 Yayınla
               </button>
             </footer>
+          </div>
+        </div>
+      )}
+      {editingTask && (
+        <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingTask(null); }}>
+          <div className={`${styles.modal} ${styles.taskEditModal}`} role="dialog" aria-modal="true" aria-labelledby="task-edit-title">
+            <header><h2 id="task-edit-title">Görevi düzenle</h2><button onClick={() => setEditingTask(null)} aria-label="Kapat">×</button></header>
+            <div className={styles.form}>
+              <label>Başlık<input value={editTaskForm.baslik} onChange={(event) => setEditTaskForm((form) => ({ ...form, baslik: event.target.value }))} /></label>
+              <label>Alıcı<select value={editTaskForm.aliciId} onChange={(event) => setEditTaskForm((form) => ({ ...form, aliciId: event.target.value }))}>{people.map((person) => <option key={String(person.ID)} value={String(person.ID)}>{person.Ad}</option>)}</select></label>
+              <label>Termin<input type="date" value={editTaskForm.terminTarihi} onChange={(event) => setEditTaskForm((form) => ({ ...form, terminTarihi: event.target.value }))} /></label>
+              <label className={styles.full}>Açıklama<textarea rows={5} value={editTaskForm.icerik} onChange={(event) => setEditTaskForm((form) => ({ ...form, icerik: event.target.value }))} /></label>
+            </div>
+            <footer><button onClick={() => setEditingTask(null)}>Vazgeç</button><button className={styles.primary} onClick={() => void saveTaskEdit()}>Güncelle</button></footer>
           </div>
         </div>
       )}

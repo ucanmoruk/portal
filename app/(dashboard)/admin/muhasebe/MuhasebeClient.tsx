@@ -8,7 +8,7 @@ const PERIODS = ["Ekim", "Kasım", "Aralık", "2027"] as const;
 const RELATED = ["Root", "Unique", "Spektrotek", "Oğuzhan", "Selin"] as const;
 type Period = typeof PERIODS[number];
 type PaymentState = "bekliyor" | "odendi";
-type Row = { id: number; aciklama: string; ilgili: string; gun: number; tutarlar: Record<string, number | null>; durumlar: Record<string, PaymentState> };
+type Row = { id: number; aciklama: string; ilgili: string; gun: number; tutarlar: Record<string, number | null>; durumlar: Record<string, PaymentState>; kaynakTipi?: string | null; faturaId?: number | null };
 type View = "aylik" | "haftalik";
 
 const money = (value: number) => new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 2 }).format(value);
@@ -57,6 +57,8 @@ export default function MuhasebeClient() {
     const response = await fetch("/api/admin/muhasebe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aciklama: "Yeni ödeme", ilgili: "Unique", gun: 1, tutarlar: emptyValues(), durumlar: {} }) });
     const json = await response.json();
     if (!response.ok) { setError(json.error || "Satır eklenemedi."); return; }
+    setView("aylik");
+    setFilter("tumu");
     setRows((current) => [...current, json.data]);
   }
 
@@ -89,11 +91,13 @@ export default function MuhasebeClient() {
       if (row.gun < start || row.gun > Math.min(start + 6, 31) || row.tutarlar[weekPeriod] == null) return false;
     }
     const filteredPeriods: readonly Period[] = view === "haftalik" ? [weekPeriod] : PERIODS;
-    return filter === "tumu" || filteredPeriods.some((period) => row.tutarlar[period] != null && row.durumlar[period] !== "odendi");
+    const hasAmount = filteredPeriods.some((period) => row.tutarlar[period] != null);
+    return filter === "tumu" || !hasAmount || filteredPeriods.some((period) => row.tutarlar[period] != null && row.durumlar[period] !== "odendi");
   }), [rows, related, view, week, weekPeriod, filter]);
 
-  const totals = useMemo(() => Object.fromEntries(PERIODS.map((period) => [period, visibleRows.reduce((sum, row) => sum + Number(row.tutarlar[period] || 0), 0)])), [visibleRows]);
-  const grandTotal = visibleRows.reduce((sum, row) => sum + (view === "haftalik" ? Number(row.tutarlar[weekPeriod] || 0) : PERIODS.reduce((rowSum, period) => rowSum + Number(row.tutarlar[period] || 0), 0)), 0);
+  const unpaidAmount = (row: Row, period: Period) => row.durumlar[period] === "odendi" ? 0 : Number(row.tutarlar[period] || 0);
+  const totals = useMemo(() => Object.fromEntries(PERIODS.map((period) => [period, visibleRows.reduce((sum, row) => sum + (row.durumlar[period] === "odendi" ? 0 : Number(row.tutarlar[period] || 0)), 0)])), [visibleRows]);
+  const grandTotal = visibleRows.reduce((sum, row) => sum + (view === "haftalik" ? unpaidAmount(row, weekPeriod) : PERIODS.reduce((rowSum, period) => rowSum + unpaidAmount(row, period), 0)), 0);
 
   return <main className={styles.page}>
     <header className={styles.pageHeader}><div><p className={styles.eyebrow}>Finans operasyonu</p><h1>Muhasebe ödeme planı</h1><p>Aylık yükümlülükleri girin, vadesine göre izleyin ve ödenen tutarları işaretleyin.</p></div><div className={`${styles.headerActions} ${styles.noPrint}`}><button onClick={() => window.print()}><Printer size={16}/>Yazdır</button><button className={styles.addButton} onClick={() => void addRow()}><Plus size={16}/>Satır ekle</button></div></header>
@@ -104,8 +108,8 @@ export default function MuhasebeClient() {
       <thead><tr><th>Açıklama</th><th>İlgili</th><th>Gün</th>{view === "aylik" ? PERIODS.map((period) => <th key={period}>{period}</th>) : <th>{weekPeriod}</th>}<th>Toplam</th><th className={styles.noPrint}/></tr></thead>
       <tbody>{loading ? <tr><td colSpan={view === "aylik" ? 8 : 5} className={styles.empty}>Yükleniyor…</td></tr> : visibleRows.length === 0 ? <tr><td colSpan={view === "aylik" ? 8 : 5} className={styles.empty}>Bu görünümde kayıt yok.</td></tr> : visibleRows.map((row) => {
         const periods = view === "aylik" ? PERIODS : [weekPeriod];
-        const rowTotal = view === "haftalik" ? Number(row.tutarlar[weekPeriod] || 0) : PERIODS.reduce((sum, period) => sum + Number(row.tutarlar[period] || 0), 0);
-        return <tr key={row.id} className={saving === row.id ? styles.saving : ""}><td><input className={styles.textInput} value={row.aciklama} onChange={(event) => patchRow(row.id, { aciklama: event.target.value })} onBlur={() => { const value = currentRow(row.id); if (value) void save(value); }}/></td><td><select value={row.ilgili} onChange={(event) => { const changed = { ...row, ilgili: event.target.value }; patchRow(row.id, changed); void save(changed); }}>{RELATED.map((item) => <option key={item}>{item}</option>)}</select></td><td><input className={styles.dayInput} type="number" min="1" max="31" value={row.gun} onChange={(event) => patchRow(row.id, { gun: Number(event.target.value) })} onBlur={() => { const value = currentRow(row.id); if (value) void save(value); }}/></td>{periods.map((period) => { const amount = row.tutarlar[period]; const state = amount == null ? "bos" : row.durumlar[period] === "odendi" ? "odendi" : "bekliyor"; return <td key={period} className={`${styles.paymentCell} ${styles[state]}`}><div><input aria-label={`${row.aciklama} ${period} tutarı`} type="number" min="0" step="0.01" value={amount ?? ""} placeholder="—" onChange={(event) => setAmount(row, period, event.target.value)} onBlur={() => { const value = currentRow(row.id); if (value) void save(value); }}/>{amount != null && <button className={styles.stateButton} onClick={() => toggleState(row, period)} title={state === "odendi" ? "Ödendi" : "Bekliyor"}><Check size={13}/></button>}</div></td>; })}<td className={styles.rowTotal}>{money(rowTotal)}</td><td className={styles.noPrint}><button className={styles.deleteButton} onClick={() => void removeRow(row.id)} aria-label={`${row.aciklama} satırını sil`}><Trash2 size={15}/></button></td></tr>;
+        const rowTotal = view === "haftalik" ? unpaidAmount(row, weekPeriod) : PERIODS.reduce((sum, period) => sum + unpaidAmount(row, period), 0);
+        return <tr key={row.id} className={saving === row.id ? styles.saving : ""}><td><input className={styles.textInput} value={row.aciklama} onChange={(event) => patchRow(row.id, { aciklama: event.target.value })} onBlur={() => { const value = currentRow(row.id); if (value) void save(value); }}/></td><td><select value={row.ilgili} onChange={(event) => { const changed = { ...row, ilgili: event.target.value }; patchRow(row.id, changed); void save(changed); }}>{RELATED.map((item) => <option key={item}>{item}</option>)}</select></td><td><input className={styles.dayInput} type="number" min="1" max="31" value={row.gun} onChange={(event) => patchRow(row.id, { gun: Number(event.target.value) })} onBlur={() => { const value = currentRow(row.id); if (value) void save(value); }}/></td>{periods.map((period) => { const amount = row.tutarlar[period]; const state = amount == null ? "bos" : row.durumlar[period] === "odendi" ? "odendi" : "bekliyor"; return <td key={period} className={`${styles.paymentCell} ${styles[state]}`}><div><input aria-label={`${row.aciklama} ${period} tutarı`} type="number" min="0" step="0.01" value={amount ?? ""} placeholder="—" disabled={state === "odendi"} title={state === "odendi" ? "Düzenlemek için tekrar bekliyor durumuna alın." : undefined} onChange={(event) => setAmount(row, period, event.target.value)} onBlur={() => { const value = currentRow(row.id); if (value) void save(value); }}/>{amount != null && <button className={styles.stateButton} onClick={() => toggleState(row, period)} title={state === "odendi" ? "Bekliyor olarak işaretle ve düzenlemeyi aç" : "Ödendi olarak işaretle"}><Check size={13}/></button>}</div></td>; })}<td className={styles.rowTotal}>{money(rowTotal)}</td><td className={styles.noPrint}><button className={styles.deleteButton} onClick={() => void removeRow(row.id)} aria-label={`${row.aciklama} satırını sil`}><Trash2 size={15}/></button></td></tr>;
       })}</tbody>
       {visibleRows.length > 0 && <tfoot><tr><th colSpan={3}>Görünüm toplamı</th>{(view === "aylik" ? PERIODS : [weekPeriod]).map((period) => <td key={period}>{money(Number(totals[period] || 0))}</td>)}<td>{money(grandTotal)}</td><td className={styles.noPrint}/></tr></tfoot>}
     </table></div><footer className={styles.legend}><span><i className={styles.pendingDot}/>Sarı: ödeme bekliyor</span><span><i className={styles.paidDot}/>Yeşil: ödendi</span><span>Tutarı yazın; onay simgesine basarak durumu değiştirin.</span></footer></section>

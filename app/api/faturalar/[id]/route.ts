@@ -5,6 +5,7 @@ import { ODEME_DURUMLARI } from "@/lib/faturaConstants";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { hasProformaFaturaFirmaCol } from "@/lib/proformaSchema";
 import { ensureFaturaTrackingSchema, isFaturaKaynagi } from "@/lib/faturaSchema";
+import { syncFaturaRecordToMuhasebe, syncInvoicePaymentToMuhasebe } from "@/lib/muhasebeStore";
 
 function toNumber(value: any, fallback = 0) {
   const raw = String(value ?? "").trim();
@@ -148,6 +149,7 @@ export async function PATCH(
 
       if (setParts.length > 0) {
         await updateReq.query(`UPDATE Fatura SET ${setParts.join(", ")} WHERE ID = @id`);
+        await syncFaturaRecordToMuhasebe(Number(id), { userId: String(session.user?.userId || ""), userName: String(session.user?.name || "Fatura Takip") });
       }
     }
 
@@ -241,6 +243,9 @@ export async function PATCH(
     } else if (statusForLink === "Ödeme Bekliyor") {
       await pool.request().input("id", Number(id))
         .query(`UPDATE Fatura SET Odenen_Tutar = 0 WHERE ID = @id`);
+    }
+    if (statusForLink === "Ödendi" || statusForLink === "Ödeme Bekliyor") {
+      await syncInvoicePaymentToMuhasebe(Number(id), statusForLink === "Ödendi");
     }
 
     return Response.json({ success: true, evrakNo: evrakNo || null, odemeDurumu: statusForLink });
