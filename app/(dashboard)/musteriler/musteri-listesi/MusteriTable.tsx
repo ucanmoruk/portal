@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import styles from '@/app/styles/table.module.css';
+import { ODEME_DURUMLARI } from "@/lib/faturaConstants";
 
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 // ----------------------------------------------------------------
@@ -19,7 +20,7 @@ interface Musteri {
   Tur2: string | null;
   Yetkili: string | null;
   Kimin: string | null;
-  CariDurum: number | string;
+  AcikBakiye: number | string;
 }
 
 interface ApiResponse {
@@ -37,7 +38,10 @@ interface CariRow {
   Tarih: string | null;
   Durum: string | null;
   Tutar: number | string;
+  OdenenTutar?: number | string;
   AcikTutar?: number | string;
+  MahsupTutar?: number | string;
+  MahsupEdilmemis?: number | string;
   ParaBirimi: string;
   Yon: string;
   OdemeYeri: string | null;
@@ -51,12 +55,14 @@ interface CariSummary {
   fatura: number;
   acikFatura: number;
   gelenOdeme: number;
+  mahsupEdilen: number;
+  mahsupEdilmemis: number;
   gidenOdeme: number;
   net: number;
 }
 
 // Form, listede dönmeyen Parola alanını da taşır (yalnızca kayıt/güncelleme için).
-type FirmaForm = Omit<Musteri, "ID" | "Kimin" | "CariDurum"> & { Parola: string };
+type FirmaForm = Omit<Musteri, "ID" | "Kimin" | "AcikBakiye"> & { Parola: string };
 
 const emptyForm: FirmaForm = {
   Ad: "", Adres: "", VergiDairesi: "", VergiNo: "",
@@ -91,6 +97,15 @@ function fmtTarih(value?: string | null) {
   if (!value) return "-";
   const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m ? `${m[3]}.${m[2]}.${m[1]}` : String(value);
+}
+
+function parseMoney(value: string | number | null | undefined) {
+  const raw = String(value ?? "").trim();
+  const normalized = raw.includes(",")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : /^\d{1,3}(\.\d{3})+$/.test(raw) ? raw.replace(/\./g, "") : raw;
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : 0;
 }
 
 // ----------------------------------------------------------------
@@ -128,6 +143,8 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null);
+  const [paymentAllocations, setPaymentAllocations] = useState<Record<number, string>>({});
   const [paymentForm, setPaymentForm] = useState({
     tip: "Gelen Ödeme",
     tutar: "",
@@ -255,6 +272,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     setCariTarihBit("");
     setCariError("");
     setPaymentOpen(false);
+    setPaymentAllocations({});
     fetchCari(m, "Tümü", "", "", "resmi");
   };
 
@@ -268,14 +286,20 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     setPaymentSaving(true);
     setPaymentError("");
     try {
+      const dagitimlar = paymentForm.tip === "Gelen Ödeme" && ["TRY", "TL"].includes(paymentForm.paraBirimi) ? Object.entries(paymentAllocations)
+        .map(([faturaId, amount]) => ({ faturaId: Number(faturaId), tutar: parseMoney(amount) }))
+        .filter(item => item.tutar > 0) : [];
+      const dagitimToplami = dagitimlar.reduce((sum, item) => sum + item.tutar, 0);
+      if (dagitimToplami > parseMoney(paymentForm.tutar) + 0.005) throw new Error("Faturalara dağıtılan tutar, ödeme tutarını aşamaz.");
       const res = await fetch(`/api/firmalar/${cariTarget.ID}/cari`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(paymentForm),
+        body: JSON.stringify({ ...paymentForm, dagitimlar }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Ödeme kaydedilemedi.");
       setPaymentOpen(false);
+      setPaymentAllocations({});
       setPaymentForm({
         tip: "Gelen Ödeme",
         tutar: "",
@@ -290,6 +314,60 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     } finally {
       setPaymentSaving(false);
     }
+  };
+
+  const updateInvoiceStatus = async (invoice: CariRow, odemeDurumu: string) => {
+    let odenenTutar: number | undefined;
+    if (odemeDurumu === "Kısmen Ödendi") {
+      const suggested = Number(invoice.OdenenTutar || 0) > 0 && Number(invoice.OdenenTutar) < Number(invoice.Tutar)
+        ? Number(invoice.OdenenTutar).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : "";
+      const entered = window.prompt("Şu ana kadar ödenen toplam tutarı girin:", suggested);
+      if (entered == null) return;
+      odenenTutar = parseMoney(entered);
+      if (odenenTutar <= 0 || odenenTutar >= Number(invoice.Tutar || 0)) {
+        setCariError("Kısmi ödeme tutarı sıfırdan büyük ve fatura toplamından küçük olmalıdır.");
+        return;
+      }
+    }
+
+    setStatusUpdatingId(invoice.KaynakID);
+    setCariError("");
+    try {
+      const response = await fetch(`/api/faturalar/${invoice.KaynakID}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ odemeDurumu, ...(odenenTutar != null ? { odenenTutar } : {}) }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || "Fatura durumu güncellenemedi.");
+      await Promise.all([
+        cariTarget ? fetchCari(cariTarget, cariTip, cariTarihBas, cariTarihBit, cariGrup) : Promise.resolve(),
+        fetchData(search, page, limit),
+      ]);
+    } catch (error: unknown) {
+      setCariError(error instanceof Error ? error.message : "Fatura durumu güncellenemedi.");
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  };
+
+  const openInvoices = cariRows
+    .filter(row => row.Kaynak === "Fatura" && Number(row.AcikTutar || 0) > 0)
+    .sort((a, b) => String(a.Tarih || "").localeCompare(String(b.Tarih || "")));
+  const allocationTotal = Object.values(paymentAllocations).reduce((sum, value) => sum + parseMoney(value), 0);
+  const unallocatedPayment = Math.max(0, parseMoney(paymentForm.tutar) - allocationTotal);
+
+  const autoAllocatePayment = () => {
+    let remaining = parseMoney(paymentForm.tutar);
+    const next: Record<number, string> = {};
+    for (const invoice of openInvoices) {
+      if (remaining <= 0) break;
+      const amount = Math.min(remaining, Number(invoice.AcikTutar || 0));
+      if (amount > 0) next[invoice.KaynakID] = amount.toFixed(2);
+      remaining = Math.max(0, remaining - amount);
+    }
+    setPaymentAllocations(next);
   };
 
   const pageNumbers = () => {
@@ -362,7 +440,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                 <th>V.D. / V.N.</th>
                 <th>Yetkili</th>
                 <th>İletişim</th>
-                <th style={{ textAlign: "right" }} title="Güncel net açık bakiye">Cari Durum</th>
+                <th style={{ textAlign: "right" }} title="Mahsup ve ödemeler sonrası bekleyen tutar">Açık Bakiye</th>
                 <th style={{ width: 112 }}></th>
               </tr>
             </thead>
@@ -409,7 +487,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                     </div>
                   </td>
                   <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
-                    {fmtMoney(m.CariDurum, "TRY")}
+                    {fmtMoney(m.AcikBakiye, "TRY")}
                   </td>
                   <td>
                     <div className={styles.actionBtns}>
@@ -592,6 +670,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                     type="button"
                     onClick={() => {
                       setPaymentError("");
+                      setPaymentAllocations({});
                       setPaymentOpen(v => !v);
                     }}
                   >
@@ -637,8 +716,43 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                       <input value={paymentForm.aciklama} onChange={e => setPaymentForm(f => ({ ...f, aciklama: e.target.value }))} placeholder="İsteğe bağlı" />
                     </div>
                   </div>
+                  {paymentForm.tip === "Gelen Ödeme" && ["TRY", "TL"].includes(paymentForm.paraBirimi) && (
+                    <div style={{ marginTop: 14, borderTop: "1px solid var(--color-border-light)", paddingTop: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+                        <div>
+                          <strong style={{ fontSize: 13 }}>Faturalara mahsup et</strong>
+                          <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginTop: 2 }}>Boş bırakılan tutar müşteri bakiyesi olarak kalır.</div>
+                        </div>
+                        <button className={styles.cancelBtn} type="button" onClick={autoAllocatePayment} disabled={!parseMoney(paymentForm.tutar) || openInvoices.length === 0}>En eski faturadan dağıt</button>
+                      </div>
+                      {openInvoices.length === 0 ? (
+                        <div style={{ padding: 10, borderRadius: 8, background: "var(--color-surface)", color: "var(--color-text-tertiary)", fontSize: 12 }}>Mahsup edilebilecek açık fatura bulunmuyor.</div>
+                      ) : (
+                        <div style={{ display: "grid", gap: 6, maxHeight: 190, overflowY: "auto" }}>
+                          {openInvoices.map(invoice => (
+                            <div key={invoice.KaynakID} style={{ display: "grid", gridTemplateColumns: "minmax(150px,1fr) 130px 130px", alignItems: "center", gap: 8, padding: "7px 9px", border: "1px solid var(--color-border-light)", borderRadius: 8, background: "var(--color-surface)" }}>
+                              <div><strong style={{ fontSize: 12 }}>{invoice.BelgeNo || `Fatura #${invoice.KaynakID}`}</strong><div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{fmtTarih(invoice.Tarih)}</div></div>
+                              <div style={{ fontSize: 11, textAlign: "right" }}>Açık: <strong>{fmtMoney(invoice.AcikTutar, invoice.ParaBirimi)}</strong></div>
+                              <input
+                                inputMode="decimal"
+                                aria-label={`${invoice.BelgeNo} mahsup tutarı`}
+                                placeholder="0,00"
+                                value={paymentAllocations[invoice.KaynakID] || ""}
+                                onChange={e => setPaymentAllocations(current => ({ ...current, [invoice.KaynakID]: e.target.value }))}
+                                style={{ textAlign: "right" }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: 18, marginTop: 9, fontSize: 12 }}>
+                        <span>Mahsup: <strong>{fmtMoney(allocationTotal, paymentForm.paraBirimi)}</strong></span>
+                        <span>Mahsup edilmemiş: <strong style={{ color: unallocatedPayment > 0 ? "#b46600" : "#1a7f4b" }}>{fmtMoney(unallocatedPayment, paymentForm.paraBirimi)}</strong></span>
+                      </div>
+                    </div>
+                  )}
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-                    <button className={styles.cancelBtn} type="button" onClick={() => setPaymentOpen(false)} disabled={paymentSaving}>Vazgeç</button>
+                    <button className={styles.cancelBtn} type="button" onClick={() => { setPaymentOpen(false); setPaymentAllocations({}); }} disabled={paymentSaving}>Vazgeç</button>
                     <button className={styles.saveBtn} type="button" onClick={submitPayment} disabled={paymentSaving}>
                       {paymentSaving ? "Kaydediliyor..." : "Kaydet"}
                     </button>
@@ -659,7 +773,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                       <th>Yön</th>
                       <th>Ödeme Yeri</th>
                       <th style={{ textAlign: "right" }}>Tutar</th>
-                      {cariGrup === "resmi" && <th style={{ textAlign: "right" }}>Açık Tutar</th>}
+                      {cariGrup === "resmi" && <th style={{ textAlign: "right" }}>Mahsup / Kalan</th>}
                       <th>Açıklama</th>
                     </tr>
                   </thead>
@@ -673,14 +787,26 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                         <td><span className={styles.badge}>{row.Kaynak}</span></td>
                         <td className={styles.tdMono}>{row.BelgeNo || "-"}</td>
                         <td>{fmtTarih(row.Tarih)}</td>
-                        <td>{row.Durum || "-"}</td>
+                        <td>{row.Kaynak === "Fatura" ? (
+                          <select
+                            className={styles.pageSizeSelect}
+                            value={row.Durum || "Ödeme Bekliyor"}
+                            disabled={statusUpdatingId === row.KaynakID}
+                            onChange={event => void updateInvoiceStatus(row, event.target.value)}
+                            aria-label={`${row.BelgeNo} ödeme durumu`}
+                            title="Fatura ödeme durumunu değiştir"
+                            style={{ minWidth: 126, fontSize: 11, padding: "5px 7px" }}
+                          >
+                            {ODEME_DURUMLARI.map(status => <option key={status} value={status}>{status}</option>)}
+                          </select>
+                        ) : row.Durum || "-"}</td>
                         <td>{row.Yon || "-"}</td>
                         <td>{row.OdemeYeri || "-"}</td>
                         <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
                           {fmtMoney(row.Tutar, row.ParaBirimi)}
                         </td>
                         {cariGrup === "resmi" && <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
-                          {row.Kaynak === "Fatura" ? fmtMoney(row.AcikTutar, row.ParaBirimi) : "-"}
+                          {row.Kaynak === "Fatura" ? <><div>{fmtMoney(row.AcikTutar, row.ParaBirimi)}</div>{Number(row.MahsupTutar || 0) > 0 && <div style={{ fontSize: 10, color: "#1a7f4b", fontWeight: 600 }}>Mahsup: {fmtMoney(row.MahsupTutar, row.ParaBirimi)}</div>}</> : row.Durum === "Gelen Ödeme" ? <><div>{fmtMoney(row.MahsupEdilmemis, row.ParaBirimi)}</div><div style={{ fontSize: 10, color: "var(--color-text-tertiary)", fontWeight: 600 }}>Dağıtılan: {fmtMoney(row.MahsupTutar, row.ParaBirimi)}</div></> : "-"}
                         </td>}
                         <td className={styles.tdAdres} title={row.Aciklama || ""}>{row.Aciklama || "-"}</td>
                       </tr>
@@ -696,7 +822,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                   <div key={s.paraBirimi} style={{ border: "1px solid var(--color-border-light)", borderRadius: 10, padding: 12, background: "var(--color-surface-2)" }}>
                     <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 6 }}>{s.paraBirimi}</div>
                     <div style={{ display: "grid", gap: 4, fontSize: 13 }}>
-                      {cariGrup === "planlama" ? <><div>Teklif: <strong>{fmtMoney(s.teklif, s.paraBirimi)}</strong></div><div>Proforma: <strong>{fmtMoney(s.proforma, s.paraBirimi)}</strong></div></> : <><div>Toplam fatura: <strong>{fmtMoney(s.fatura, s.paraBirimi)}</strong></div><div>Açık fatura: <strong>{fmtMoney(s.acikFatura, s.paraBirimi)}</strong></div><div>Gelen ödeme: <strong>{fmtMoney(s.gelenOdeme, s.paraBirimi)}</strong></div><div>Giden ödeme: <strong>{fmtMoney(s.gidenOdeme, s.paraBirimi)}</strong></div></>}
+                      {cariGrup === "planlama" ? <><div>Teklif: <strong>{fmtMoney(s.teklif, s.paraBirimi)}</strong></div><div>Proforma: <strong>{fmtMoney(s.proforma, s.paraBirimi)}</strong></div></> : <><div>Toplam fatura: <strong>{fmtMoney(s.fatura, s.paraBirimi)}</strong></div><div>Açık fatura: <strong>{fmtMoney(s.acikFatura, s.paraBirimi)}</strong></div><div>Gelen ödeme: <strong>{fmtMoney(s.gelenOdeme, s.paraBirimi)}</strong></div><div>Mahsup edilen: <strong>{fmtMoney(s.mahsupEdilen, s.paraBirimi)}</strong></div><div>Mahsup edilmemiş: <strong>{fmtMoney(s.mahsupEdilmemis, s.paraBirimi)}</strong></div><div>Giden ödeme: <strong>{fmtMoney(s.gidenOdeme, s.paraBirimi)}</strong></div></>}
                       <div style={{ borderTop: "1px solid var(--color-border-light)", paddingTop: 6, marginTop: 4 }}>
                         {cariGrup === "resmi" ? <>Net açık bakiye: <strong>{fmtMoney(s.net, s.paraBirimi)}</strong></> : <>Planlanan toplam: <strong>{fmtMoney(s.teklif + s.proforma, s.paraBirimi)}</strong></>}
                       </div>

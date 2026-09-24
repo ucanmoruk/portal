@@ -65,6 +65,8 @@ export async function PATCH(
     const body = await request.json();
     const hasOdemeDurumu = body.odemeDurumu != null && String(body.odemeDurumu).trim() !== "";
     const odemeDurumu = hasOdemeDurumu ? String(body.odemeDurumu).trim() : "";
+    const hasOdenenTutar = hasOwn(body, "odenenTutar");
+    const requestedOdenenTutar = hasOdenenTutar ? toNumber(body.odenenTutar) : null;
     const hasEvrakNo = hasOwn(body, "evrakNo");
     const requestedEvrakNo = hasEvrakNo ? String(body.evrakNo ?? "").trim() : "";
     const hasFaturaFields = ["faturaNo", "faturaTarihi", "toplam", "kdvOran", "faturaFirmaId", "firmaAdManuel", "aciklama", "kaynak", "vadeTarihi"]
@@ -73,7 +75,7 @@ export async function PATCH(
     if (hasOdemeDurumu && !ODEME_DURUMLARI.includes(odemeDurumu)) {
       return Response.json({ error: "Geçersiz ödeme durumu" }, { status: 400 });
     }
-    if (!hasOdemeDurumu && !hasEvrakNo && !hasFaturaFields) {
+    if (!hasOdemeDurumu && !hasEvrakNo && !hasFaturaFields && !hasOdenenTutar) {
       return Response.json({ error: "Güncellenecek alan bulunamadı." }, { status: 400 });
     }
 
@@ -86,6 +88,9 @@ export async function PATCH(
       .query(`SELECT ID, ProformaNo, Toplam, KDV, FaturaFirmaID FROM Fatura WHERE ID = @id AND Durum = 'Aktif'`);
     const fatura = fatRes.recordset[0];
     if (!fatura) return Response.json({ error: "Fatura bulunamadı." }, { status: 404 });
+    if (hasOdenenTutar && (requestedOdenenTutar == null || requestedOdenenTutar < 0 || requestedOdenenTutar > Number(fatura.Toplam || 0))) {
+      return Response.json({ error: "Ödenen tutar 0 ile fatura toplamı arasında olmalıdır." }, { status: 400 });
+    }
 
     let evrakNo = fatura.ProformaNo ? String(fatura.ProformaNo).trim() : "";
     if (hasFaturaFields) {
@@ -243,6 +248,9 @@ export async function PATCH(
     } else if (statusForLink === "Ödeme Bekliyor") {
       await pool.request().input("id", Number(id))
         .query(`UPDATE Fatura SET Odenen_Tutar = 0 WHERE ID = @id`);
+    } else if (statusForLink === "Kısmen Ödendi" && hasOdenenTutar) {
+      await pool.request().input("id", Number(id)).input("OdenenTutar", Number(requestedOdenenTutar!.toFixed(2)))
+        .query(`UPDATE Fatura SET Odenen_Tutar = @OdenenTutar WHERE ID = @id`);
     }
     if (statusForLink === "Ödendi" || statusForLink === "Ödeme Bekliyor") {
       await syncInvoicePaymentToMuhasebe(Number(id), statusForLink === "Ödendi");

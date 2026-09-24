@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WalletCards } from "lucide-react";
 import styles from "@/app/styles/table.module.css";
 import localStyles from "./fatura.module.css";
 import { FATURA_KAYNAKLARI, ODEME_DURUMLARI } from "@/lib/faturaConstants";
+import CariQuickModal from "./CariQuickModal";
 
 interface FaturaRow {
   ID: number;
@@ -200,6 +202,7 @@ export default function FaturaTable() {
   const [manualSaving, setManualSaving] = useState(false);
   const [manualError, setManualError] = useState("");
   const [manualFirma, setManualFirma] = useState<FirmaOpt | null>(null);
+  const [cariFirma, setCariFirma] = useState<FirmaOpt | null>(null);
   const [manualForm, setManualForm] = useState({
     faturaNo: "",
     faturaTarihi: todayIso(),
@@ -233,20 +236,6 @@ export default function FaturaTable() {
   }, [search, yil, ay, odeme, kaynak, vade, page, limit]);
 
   useEffect(() => { fetchRows(); }, [fetchRows]);
-
-  async function updateOdeme(row: FaturaRow, odemeDurumu: string) {
-    setRows(rs => rs.map(r => r.ID === row.ID ? { ...r, OdemeDurumu: odemeDurumu } : r));
-    const res = await fetch(`/api/faturalar/${row.ID}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ odemeDurumu }),
-    });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      setError(j.error || "Ödeme durumu güncellenemedi.");
-    }
-    fetchRows();
-  }
 
   function openManualModal() {
     setManualError("");
@@ -409,10 +398,6 @@ export default function FaturaTable() {
             ) : rows.length === 0 ? (
               <tr><td colSpan={9} className={styles.empty}>Kayıt bulunamadı.</td></tr>
             ) : rows.map(row => {
-              // Mevcut (legacy) durum listede yoksa seçeneğe ekle ki select doğru görünsün.
-              const opts = row.OdemeDurumu && !ODEME_DURUMLARI.includes(row.OdemeDurumu)
-                ? [row.OdemeDurumu, ...ODEME_DURUMLARI]
-                : ODEME_DURUMLARI;
               return (
                 <tr key={row.ID}>
                   <td className={localStyles.ellipsisCell} title={row.ProformaNo || "-"}>{row.ProformaNo || "-"}</td>
@@ -425,20 +410,13 @@ export default function FaturaTable() {
                     {fmtMoney(row.Toplam)} TL
                   </td>
                   <td>
-                    <select
-                      value={row.OdemeDurumu || ""}
-                      onChange={e => updateOdeme(row, e.target.value)}
-                      className={`${styles.pageSizeSelect} ${localStyles.compactSelect}`}
-                      style={odemeStyle(row.OdemeDurumu)}
-                    >
-                      {!row.OdemeDurumu && <option value="">Fatura Kesilmedi</option>}
-                      {opts.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
+                    <span className={localStyles.paymentStatus} style={odemeStyle(row.OdemeDurumu)}>{row.OdemeDurumu || "Fatura Kesilmedi"}</span>
                   </td>
                   <td style={{ textAlign: "right" }}>
-                    <button className={styles.editBtn} type="button" onClick={() => openFaturaEdit(row)} title="Fatura detaylarını düzenle">
-                      ✏️
-                    </button>
+                    <div className={styles.actionBtns}>
+                      <button className={styles.editBtn} type="button" disabled={!row.FaturaFirmaID} onClick={() => row.FaturaFirmaID && setCariFirma({ ID: row.FaturaFirmaID, Ad: row.FirmaAd })} title={row.FaturaFirmaID ? "Cari hesabı aç ve ödeme ekle" : "Bu fatura sistemdeki bir firmaya bağlı değil"} aria-label={`${row.FirmaAd} cari hesabı`}><WalletCards size={15} /></button>
+                      <button className={styles.editBtn} type="button" onClick={() => openFaturaEdit(row)} title="Fatura detaylarını düzenle">✏️</button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -578,6 +556,7 @@ export default function FaturaTable() {
           </div>
         </div>
       )}
+      {cariFirma && <CariQuickModal firma={cariFirma} onClose={() => setCariFirma(null)} onChanged={() => void fetchRows()} />}
     </>
   );
 }

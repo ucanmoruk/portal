@@ -8,7 +8,9 @@ const CARI_TIPLER = new Set(["Gelen Ödeme", "Giden Ödeme"]);
 
 function toNumber(value: unknown, fallback = 0) {
   const raw = String(value ?? "").trim();
-  const normalized = raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw;
+  const normalized = raw.includes(",")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : /^\d{1,3}(\.\d{3})+$/.test(raw) ? raw.replace(/\./g, "") : raw;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -36,6 +38,17 @@ async function ensureCariOdemeTable(pool: any) {
         KEY IX_FirmaCariOdeme_Tarih (Tarih)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci
     `);
+    await pool.request().query(`
+      CREATE TABLE IF NOT EXISTS FirmaCariOdemeDagitim (
+        ID INT AUTO_INCREMENT PRIMARY KEY,
+        OdemeID INT NOT NULL,
+        FaturaID INT NOT NULL,
+        Tutar DECIMAL(18,2) NOT NULL DEFAULT 0,
+        CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY UX_FirmaCariOdemeDagitim (OdemeID, FaturaID),
+        KEY IX_FirmaCariOdemeDagitim_FaturaID (FaturaID)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci
+    `);
     return;
   }
 
@@ -52,6 +65,17 @@ async function ensureCariOdemeTable(pool: any) {
       Aciklama    NVARCHAR(MAX)  NULL,
       KID         INT            NULL,
       CreatedAt   DATETIME       NOT NULL DEFAULT GETDATE()
+    )
+  `);
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT 1 FROM sysobjects WHERE name='FirmaCariOdemeDagitim' AND xtype='U')
+    CREATE TABLE FirmaCariOdemeDagitim (
+      ID        INT IDENTITY(1,1) PRIMARY KEY,
+      OdemeID   INT           NOT NULL,
+      FaturaID  INT           NOT NULL,
+      Tutar     DECIMAL(18,2) NOT NULL DEFAULT 0,
+      CreatedAt DATETIME      NOT NULL DEFAULT GETDATE(),
+      CONSTRAINT UX_FirmaCariOdemeDagitim UNIQUE (OdemeID, FaturaID)
     )
   `);
 }
@@ -103,6 +127,7 @@ export async function GET(
       (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No=f.ProformaNo AND o.Fatura_ID IS NULL ORDER BY o.ID DESC),
       N'Ödeme Bekliyor'
     )`;
+    const faturaMahsup = `ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.FaturaID=f.ID), 0)`;
     const includeTeklif = grup === "planlama" && (tip === "Tümü" || tip === "Teklif");
     const includeProforma = grup === "planlama" && (tip === "Tümü" || tip === "Proforma");
     const includeFatura = grup === "resmi" && (tip === "Tümü" || tip === "Fatura");
@@ -182,15 +207,17 @@ export async function GET(
             ${faturaOdemeDurumu} AS Durum,
             ISNULL(f.Toplam, 0) AS Tutar,
             CASE
-              WHEN ${faturaOdemeDurumu} = N'Ödendi' THEN ISNULL(f.Toplam, 0)
               WHEN ISNULL(f.Odenen_Tutar, 0) >= ISNULL(f.Toplam, 0) THEN ISNULL(f.Toplam, 0)
               WHEN ISNULL(f.Odenen_Tutar, 0) > 0 THEN ISNULL(f.Odenen_Tutar, 0)
               ELSE 0
             END AS OdenenTutar,
+            ${faturaMahsup} AS MahsupTutar,
             CASE
               WHEN ${faturaOdemeDurumu} IN (N'Ödendi', N'İptal') THEN 0
               WHEN ISNULL(f.Odenen_Tutar, 0) >= ISNULL(f.Toplam, 0) THEN 0
-              ELSE ISNULL(f.Toplam, 0) - ISNULL(f.Odenen_Tutar, 0)
+              WHEN ISNULL(f.Toplam, 0) - ISNULL(f.Odenen_Tutar, 0) - ${faturaMahsup} > 0
+                THEN ISNULL(f.Toplam, 0) - ISNULL(f.Odenen_Tutar, 0) - ${faturaMahsup}
+              ELSE 0
             END AS AcikTutar,
             'TRY' AS ParaBirimi,
             N'Alacak' AS Yon,
@@ -200,13 +227,13 @@ export async function GET(
           WHERE f.Durum = 'Aktif'
             AND (
               f.FaturaFirmaID = @firmaId
-              OR EXISTS (
+              OR (f.FaturaFirmaID IS NULL AND EXISTS (
                 SELECT 1
                 FROM ProformaBaslik p
                 WHERE p.SilindiMi = 0
                   AND p.FirmaID = @firmaId
                   AND p.EvrakNo = f.ProformaNo
-              )
+              ))
             )
             ${dateFilter("f", tarihBas, tarihBit)}
         `);
@@ -226,6 +253,12 @@ export async function GET(
             CONVERT(varchar(10), o.Tarih, 23) AS Tarih,
             o.Tip AS Durum,
             ISNULL(o.Tutar, 0) AS Tutar,
+            ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.OdemeID=o.ID), 0) AS MahsupTutar,
+            CASE
+              WHEN ISNULL(o.Tutar, 0) - ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.OdemeID=o.ID), 0) > 0
+                THEN ISNULL(o.Tutar, 0) - ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.OdemeID=o.ID), 0)
+              ELSE 0
+            END AS MahsupEdilmemis,
             ISNULL(o.ParaBirimi, 'TRY') AS ParaBirimi,
             CASE WHEN o.Tip = N'Gelen Ödeme' THEN N'Tahsilat' ELSE N'Borç' END AS Yon,
             ISNULL(o.OdemeYeri, '') AS OdemeYeri,
@@ -241,7 +274,7 @@ export async function GET(
 
     const summary = movements.reduce((acc, row) => {
       const currency = String(row.ParaBirimi || "TRY");
-      if (!acc[currency]) acc[currency] = { paraBirimi: currency, teklif: 0, proforma: 0, fatura: 0, acikFatura: 0, gelenOdeme: 0, manuelGelenOdeme: 0, gidenOdeme: 0, net: 0 };
+      if (!acc[currency]) acc[currency] = { paraBirimi: currency, teklif: 0, proforma: 0, fatura: 0, acikFatura: 0, gelenOdeme: 0, manuelGelenOdeme: 0, mahsupEdilen: 0, mahsupEdilmemis: 0, gidenOdeme: 0, net: 0 };
       const item = acc[currency];
       const tutar = Number(row.Tutar || 0);
       if (row.Kaynak === "Teklif") item.teklif += tutar;
@@ -255,10 +288,12 @@ export async function GET(
       else if (row.Durum === "Gelen Ödeme") {
         item.gelenOdeme += tutar;
         item.manuelGelenOdeme += tutar;
+        item.mahsupEdilen += Number(row.MahsupTutar || 0);
+        item.mahsupEdilmemis += Number(row.MahsupEdilmemis ?? tutar);
       }
       else if (row.Durum === "Giden Ödeme") item.gidenOdeme += tutar;
-      // Fatura tahsilatları AcikTutar'dan zaten düştüğü için ikinci kez mahsup edilmez.
-      item.net = item.acikFatura - item.manuelGelenOdeme + item.gidenOdeme;
+      // Mahsuplar fatura açık tutarından düşer; yalnızca dağıtılmamış kredi ayrıca netten düşer.
+      item.net = item.acikFatura - item.mahsupEdilmemis + item.gidenOdeme;
       return acc;
     }, {} as Record<string, any>);
 
@@ -293,16 +328,63 @@ export async function POST(
     const paraBirimi = String(body.paraBirimi || "TRY").trim().toUpperCase() || "TRY";
     const odemeYeri = clean(body.odemeYeri);
     const aciklama = clean(body.aciklama);
+    const dagitimlar = Array.isArray(body.dagitimlar)
+      ? body.dagitimlar.map((item: any) => ({ faturaId: Number(item.faturaId), tutar: toNumber(item.tutar) })).filter((item: any) => Number.isInteger(item.faturaId) && item.faturaId > 0 && item.tutar > 0)
+      : [];
+    const dagitimToplami = dagitimlar.reduce((sum: number, item: { tutar: number }) => sum + item.tutar, 0);
 
     if (!CARI_TIPLER.has(tip)) return Response.json({ error: "Ödeme tipi geçersiz." }, { status: 400 });
     if (tutar <= 0) return Response.json({ error: "Ödeme tutarı sıfırdan büyük olmalı." }, { status: 400 });
     if (!tarih) return Response.json({ error: "Ödeme tarihi zorunludur." }, { status: 400 });
+    if (dagitimlar.length && tip !== "Gelen Ödeme") return Response.json({ error: "Yalnızca gelen ödemeler faturalara mahsup edilebilir." }, { status: 400 });
+    if (dagitimlar.length && !["TRY", "TL"].includes(paraBirimi)) return Response.json({ error: "Fatura mahsuplaştırması şu anda yalnızca TRY için kullanılabilir." }, { status: 400 });
+    if (dagitimToplami > tutar + 0.005) return Response.json({ error: "Faturalara dağıtılan tutar, ödeme tutarını aşamaz." }, { status: 400 });
 
     const pool = await cosmoPool;
     await ensureCariOdemeTable(pool);
 
     const userId = (session.user as any)?.userId ?? null;
-    const result = await pool.request()
+    const faturaOdemeDurumu = `COALESCE(
+      (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Fatura_ID=f.ID AND ISNULL(o.Odeme_Durumu,N'')<>N'Proforma' ORDER BY o.ID DESC),
+      (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No=f.ProformaNo AND o.Fatura_ID IS NULL AND ISNULL(o.Odeme_Durumu,N'')<>N'Proforma' ORDER BY o.ID DESC),
+      (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Fatura_ID=f.ID ORDER BY o.ID DESC),
+      (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No=f.ProformaNo AND o.Fatura_ID IS NULL ORDER BY o.ID DESC),
+      N'Ödeme Bekliyor'
+    )`;
+    const tx = await pool.transaction();
+    await tx.begin();
+    try {
+      const invoiceState = new Map<number, { toplam: number; odenen: number; oncekiMahsup: number; evrakNo: string | null }>();
+      for (const item of dagitimlar) {
+        const invoice = await tx.request().input("FaturaID", item.faturaId).input("FirmaID", firmaId).query(`
+          SELECT TOP 1
+            f.ID,
+            f.ProformaNo,
+            ISNULL(f.Toplam, 0) AS Toplam,
+            ISNULL(f.Odenen_Tutar, 0) AS OdenenTutar,
+            ${faturaOdemeDurumu} AS OdemeDurumu,
+            ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.FaturaID=f.ID), 0) AS OncekiMahsup
+          FROM Fatura f
+          WHERE f.ID=@FaturaID AND f.Durum='Aktif' AND (
+            f.FaturaFirmaID=@FirmaID OR (f.FaturaFirmaID IS NULL AND EXISTS (
+              SELECT 1 FROM ProformaBaslik p WHERE p.SilindiMi=0 AND p.FirmaID=@FirmaID AND p.EvrakNo=f.ProformaNo
+            ))
+          )
+        `);
+        const row = invoice.recordset?.[0];
+        if (!row) throw new Error("Mahsup edilecek fatura bulunamadı veya bu firmaya ait değil.");
+        const legacyOpen = ["Ödendi", "İptal"].includes(String(row.OdemeDurumu || "")) ? 0 : Math.max(0, Number(row.Toplam || 0) - Number(row.OdenenTutar || 0));
+        const available = Math.max(0, legacyOpen - Number(row.OncekiMahsup || 0));
+        if (item.tutar > available + 0.005) throw new Error(`Fatura için girilen mahsup tutarı açık bakiyeyi aşıyor. Kalan: ${available.toFixed(2)} TRY`);
+        invoiceState.set(item.faturaId, {
+          toplam: Number(row.Toplam || 0),
+          odenen: Number(row.OdenenTutar || 0),
+          oncekiMahsup: Number(row.OncekiMahsup || 0),
+          evrakNo: row.ProformaNo ? String(row.ProformaNo) : null,
+        });
+      }
+
+      const result = await tx.request()
       .input("FirmaID", firmaId)
       .input("Tip", tip)
       .input("Tutar", Number(tutar.toFixed(2)))
@@ -316,8 +398,29 @@ export async function POST(
         OUTPUT INSERTED.ID
         VALUES (@FirmaID, @Tip, @Tutar, @ParaBirimi, @Tarih, @OdemeYeri, @Aciklama, @KID)
       `);
-
-    return Response.json({ id: result.recordset?.[0]?.ID ?? null }, { status: 201 });
+      const odemeId = Number(result.recordset?.[0]?.ID || 0);
+      if (!odemeId) throw new Error("Ödeme kaydı oluşturulamadı.");
+      for (const item of dagitimlar) {
+        await tx.request()
+          .input("OdemeID", odemeId)
+          .input("FaturaID", item.faturaId)
+          .input("Tutar", Number(item.tutar.toFixed(2)))
+          .query("INSERT INTO FirmaCariOdemeDagitim (OdemeID,FaturaID,Tutar) VALUES (@OdemeID,@FaturaID,@Tutar)");
+        const state = invoiceState.get(item.faturaId)!;
+        const remaining = Math.max(0, state.toplam - state.odenen - state.oncekiMahsup - item.tutar);
+        const nextStatus = remaining <= 0.005 ? "Ödendi" : "Kısmen Ödendi";
+        await tx.request()
+          .input("EvrakNo", state.evrakNo)
+          .input("OdemeDurumu", nextStatus)
+          .input("FaturaID", item.faturaId)
+          .query(`INSERT INTO Odeme (Evrak_No,Odeme_Durumu,Fatura_ID,Tarih) VALUES (@EvrakNo,@OdemeDurumu,@FaturaID,GETDATE())`);
+      }
+      await tx.commit();
+      return Response.json({ id: odemeId, mahsupEdilen: Number(dagitimToplami.toFixed(2)), mahsupEdilmemis: Number((tutar - dagitimToplami).toFixed(2)) }, { status: 201 });
+    } catch (error) {
+      await tx.rollback();
+      throw error;
+    }
   } catch (e: any) {
     return Response.json({ error: e.message }, { status: 500 });
   }

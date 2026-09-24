@@ -74,21 +74,31 @@ export async function GET(request: NextRequest) {
                   N'Ödeme Bekliyor'
                 ) IN (N'Ödendi', N'İptal') THEN 0
                 WHEN ISNULL(f.Odenen_Tutar, 0) >= ISNULL(f.Toplam, 0) THEN 0
-                ELSE ISNULL(f.Toplam, 0) - ISNULL(f.Odenen_Tutar, 0)
+                WHEN ISNULL(f.Toplam, 0) - ISNULL(f.Odenen_Tutar, 0)
+                     - ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.FaturaID = f.ID), 0) > 0
+                  THEN ISNULL(f.Toplam, 0) - ISNULL(f.Odenen_Tutar, 0)
+                       - ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.FaturaID = f.ID), 0)
+                ELSE 0
               END
             )
             FROM Fatura f
             WHERE f.Durum = 'Aktif'
               AND (
                 f.FaturaFirmaID = firma.ID
-                OR EXISTS (
+                OR (f.FaturaFirmaID IS NULL AND EXISTS (
                   SELECT 1 FROM ProformaBaslik p
                   WHERE p.SilindiMi = 0 AND p.FirmaID = firma.ID AND p.EvrakNo = f.ProformaNo
-                )
+                ))
               )
           ), 0)
           - ISNULL((
-            SELECT SUM(co.Tutar) FROM FirmaCariOdeme co
+            SELECT SUM(
+              CASE
+                WHEN ISNULL(co.Tutar, 0) - ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.OdemeID = co.ID), 0) > 0
+                  THEN ISNULL(co.Tutar, 0) - ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.OdemeID = co.ID), 0)
+                ELSE 0
+              END
+            ) FROM FirmaCariOdeme co
             WHERE co.FirmaID = firma.ID
               AND co.Tip = N'Gelen Ödeme'
               AND ISNULL(co.ParaBirimi, 'TRY') IN ('TRY', 'TL')
@@ -98,7 +108,7 @@ export async function GET(request: NextRequest) {
             WHERE co.FirmaID = firma.ID
               AND co.Tip = N'Giden Ödeme'
               AND ISNULL(co.ParaBirimi, 'TRY') IN ('TRY', 'TL')
-          ), 0) AS DECIMAL(18,2)) AS CariDurum
+          ), 0) AS DECIMAL(18,2)) AS AcikBakiye
         FROM (
           SELECT
             ID,

@@ -24,10 +24,10 @@
 .compactTable th:nth-child(3) { width: 7%; }
 .compactTable th:nth-child(4) { width: 8%; }
 .compactTable th:nth-child(5) { width: 8%; }
-.compactTable th:nth-child(6) { width: 27%; }
+.compactTable th:nth-child(6) { width: 25%; }
 .compactTable th:nth-child(7) { width: 12%; }
 .compactTable th:nth-child(8) { width: 10%; }
-.compactTable th:nth-child(9) { width: 5%; }
+.compactTable th:nth-child(9) { width: 7%; }
 
 .ellipsisCell {
   overflow: hidden;
@@ -51,6 +51,19 @@
   min-width: 0 !important;
   padding: 4px 5px !important;
   font-size: 0.63rem !important;
+}
+
+.paymentStatus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  min-width: 0 !important;
+  padding: 4px 7px;
+  font-size: 0.62rem;
+  line-height: 1.1;
+  white-space: normal;
+  text-align: center;
 }
 
 .sourceBadge {
