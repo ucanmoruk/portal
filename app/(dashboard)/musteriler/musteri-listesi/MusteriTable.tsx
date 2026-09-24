@@ -144,18 +144,9 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [paymentError, setPaymentError] = useState("");
   const [editingPayment, setEditingPayment] = useState<CariRow | null>(null);
-  const [editPaymentSaving, setEditPaymentSaving] = useState(false);
   const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null);
   const [paymentAllocations, setPaymentAllocations] = useState<Record<number, string>>({});
   const [paymentForm, setPaymentForm] = useState({
-    tip: "Gelen Ödeme",
-    tutar: "",
-    paraBirimi: "TRY",
-    tarih: todayIso(),
-    odemeYeri: "",
-    aciklama: "",
-  });
-  const [editPaymentForm, setEditPaymentForm] = useState({
     tip: "Gelen Ödeme",
     tutar: "",
     paraBirimi: "TRY",
@@ -301,14 +292,17 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
         .filter(item => item.tutar > 0) : [];
       const dagitimToplami = dagitimlar.reduce((sum, item) => sum + item.tutar, 0);
       if (dagitimToplami > parseMoney(paymentForm.tutar) + 0.005) throw new Error("Faturalara dağıtılan tutar, ödeme tutarını aşamaz.");
-      const res = await fetch(`/api/firmalar/${cariTarget.ID}/cari`, {
-        method: "POST",
+      const res = await fetch(editingPayment
+        ? `/api/firmalar/${cariTarget.ID}/cari/${editingPayment.KaynakID}`
+        : `/api/firmalar/${cariTarget.ID}/cari`, {
+        method: editingPayment ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...paymentForm, dagitimlar }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Ödeme kaydedilemedi.");
       setPaymentOpen(false);
+      setEditingPayment(null);
       setPaymentAllocations({});
       setPaymentForm({
         tip: "Gelen Ödeme",
@@ -362,45 +356,34 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     }
   };
 
-  const openPaymentEdit = (payment: CariRow) => {
+  const openPaymentEdit = async (payment: CariRow) => {
+    if (!cariTarget) return;
     setCariError("");
-    setEditingPayment(payment);
-    setEditPaymentForm({
-      tip: payment.Durum || "Gelen Ödeme",
-      tutar: String(payment.Tutar || ""),
-      paraBirimi: payment.ParaBirimi || "TRY",
-      tarih: String(payment.Tarih || todayIso()).slice(0, 10),
-      odemeYeri: payment.OdemeYeri || "",
-      aciklama: payment.Aciklama || "",
-    });
-  };
-
-  const submitPaymentEdit = async () => {
-    if (!cariTarget || !editingPayment) return;
-    setEditPaymentSaving(true);
-    setCariError("");
+    setPaymentError("");
     try {
-      const response = await fetch(`/api/firmalar/${cariTarget.ID}/cari/${editingPayment.KaynakID}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editPaymentForm),
+      const response = await fetch(`/api/firmalar/${cariTarget.ID}/cari/${payment.KaynakID}`, { cache: "no-store" });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Ödeme ayrıntıları alınamadı.");
+      setEditingPayment(payment);
+      setPaymentForm({
+        tip: json.tip || payment.Durum || "Gelen Ödeme",
+        tutar: String(json.tutar ?? payment.Tutar ?? ""),
+        paraBirimi: json.paraBirimi || payment.ParaBirimi || "TRY",
+        tarih: String(json.tarih || payment.Tarih || todayIso()).slice(0, 10),
+        odemeYeri: json.odemeYeri || "",
+        aciklama: json.aciklama || "",
       });
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(json.error || "Ödeme güncellenemedi.");
-      setEditingPayment(null);
-      await Promise.all([
-        fetchCari(cariTarget, cariTip, cariTarihBas, cariTarihBit, cariGrup),
-        fetchData(search, page, limit),
-      ]);
+      const allocationMap: Record<number, string> = {};
+      for (const item of Array.isArray(json.dagitimlar) ? json.dagitimlar : []) allocationMap[Number(item.faturaId)] = String(item.tutar);
+      setPaymentAllocations(allocationMap);
+      setPaymentOpen(true);
     } catch (error: unknown) {
-      setCariError(error instanceof Error ? error.message : "Ödeme güncellenemedi.");
-    } finally {
-      setEditPaymentSaving(false);
+      setCariError(error instanceof Error ? error.message : "Ödeme ayrıntıları alınamadı.");
     }
   };
 
   const openInvoices = cariRows
-    .filter(row => row.Kaynak === "Fatura" && Number(row.AcikTutar || 0) > 0)
+    .filter(row => row.Kaynak === "Fatura" && Number(row.AcikTutar || 0) + parseMoney(paymentAllocations[row.KaynakID]) > 0)
     .sort((a, b) => String(a.Tarih || "").localeCompare(String(b.Tarih || "")));
   const allocationTotal = Object.values(paymentAllocations).reduce((sum, value) => sum + parseMoney(value), 0);
   const unallocatedPayment = Math.max(0, parseMoney(paymentForm.tutar) - allocationTotal);
@@ -410,7 +393,8 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     const next: Record<number, string> = {};
     for (const invoice of openInvoices) {
       if (remaining <= 0) break;
-      const amount = Math.min(remaining, Number(invoice.AcikTutar || 0));
+      const available = Number(invoice.AcikTutar || 0) + parseMoney(paymentAllocations[invoice.KaynakID]);
+      const amount = Math.min(remaining, available);
       if (amount > 0) next[invoice.KaynakID] = amount.toFixed(2);
       remaining = Math.max(0, remaining - amount);
     }
@@ -717,7 +701,9 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                     type="button"
                     onClick={() => {
                       setPaymentError("");
+                      setEditingPayment(null);
                       setPaymentAllocations({});
+                      setPaymentForm({ tip: "Gelen Ödeme", tutar: "", paraBirimi: "TRY", tarih: todayIso(), odemeYeri: "", aciklama: "" });
                       setPaymentOpen(v => !v);
                     }}
                   >
@@ -728,6 +714,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
 
               {paymentOpen && (
                 <div style={{ border: "1px solid var(--color-border-light)", borderRadius: 10, padding: 14, marginBottom: 14, background: "var(--color-surface-2)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{editingPayment ? `Manuel Ödemeyi Düzenle (#${editingPayment.KaynakID})` : "Yeni Manuel Ödeme"}</div>
                   {paymentError && <div className={styles.formError}>{paymentError}</div>}
                   <div className={styles.formGrid3}>
                     <div className={styles.formGroup}>
@@ -779,7 +766,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                           {openInvoices.map(invoice => (
                             <div key={invoice.KaynakID} style={{ display: "grid", gridTemplateColumns: "minmax(150px,1fr) 130px 130px", alignItems: "center", gap: 8, padding: "7px 9px", border: "1px solid var(--color-border-light)", borderRadius: 8, background: "var(--color-surface)" }}>
                               <div><strong style={{ fontSize: 12 }}>{invoice.BelgeNo || `Fatura #${invoice.KaynakID}`}</strong><div style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>{fmtTarih(invoice.Tarih)}</div></div>
-                              <div style={{ fontSize: 11, textAlign: "right" }}>Açık: <strong>{fmtMoney(invoice.AcikTutar, invoice.ParaBirimi)}</strong></div>
+                              <div style={{ fontSize: 11, textAlign: "right" }}>Kullanılabilir: <strong>{fmtMoney(Number(invoice.AcikTutar || 0) + parseMoney(paymentAllocations[invoice.KaynakID]), invoice.ParaBirimi)}</strong></div>
                               <input
                                 inputMode="decimal"
                                 aria-label={`${invoice.BelgeNo} mahsup tutarı`}
@@ -799,9 +786,9 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                     </div>
                   )}
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-                    <button className={styles.cancelBtn} type="button" onClick={() => { setPaymentOpen(false); setPaymentAllocations({}); }} disabled={paymentSaving}>Vazgeç</button>
+                    <button className={styles.cancelBtn} type="button" onClick={() => { setPaymentOpen(false); setEditingPayment(null); setPaymentAllocations({}); }} disabled={paymentSaving}>Vazgeç</button>
                     <button className={styles.saveBtn} type="button" onClick={submitPayment} disabled={paymentSaving}>
-                      {paymentSaving ? "Kaydediliyor..." : "Kaydet"}
+                      {paymentSaving ? "Kaydediliyor..." : editingPayment ? "Değişiklikleri Kaydet" : "Kaydet"}
                     </button>
                   </div>
                 </div>
@@ -861,7 +848,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                           {row.Kaynak === "Ödeme" && <button
                             type="button"
                             className={styles.iconBtn}
-                            onClick={() => openPaymentEdit(row)}
+                            onClick={() => void openPaymentEdit(row)}
                             title="Manuel ödemeyi düzenle"
                             aria-label={`${row.BelgeNo} numaralı manuel ödemeyi düzenle`}
                           >
@@ -892,29 +879,6 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
             </div>
             <div className={styles.modalFooter}>
               <button className={styles.cancelBtn} onClick={() => setCariTarget(null)}>Kapat</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editingPayment && cariTarget && (
-        <div className={styles.modalOverlay} style={{ zIndex: 1200 }}>
-          <div className={`${styles.modal} ${styles.modalSm}`}>
-            <div className={styles.modalHeader}><h2>Manuel Ödemeyi Düzenle</h2></div>
-            <div className={styles.modalBody}>
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}><label>Tip</label><select value={editPaymentForm.tip} onChange={e => setEditPaymentForm(f => ({ ...f, tip: e.target.value }))}><option>Gelen Ödeme</option><option>Giden Ödeme</option></select></div>
-                <div className={styles.formGroup}><label>Tutar</label><input inputMode="decimal" value={editPaymentForm.tutar} onChange={e => setEditPaymentForm(f => ({ ...f, tutar: e.target.value }))} /></div>
-                <div className={styles.formGroup}><label>Para Birimi</label><select value={editPaymentForm.paraBirimi} onChange={e => setEditPaymentForm(f => ({ ...f, paraBirimi: e.target.value }))}><option>TRY</option><option>EUR</option><option>USD</option><option>GBP</option></select></div>
-                <div className={styles.formGroup}><label>Tarih</label><input type="date" value={editPaymentForm.tarih} onChange={e => setEditPaymentForm(f => ({ ...f, tarih: e.target.value }))} /></div>
-                <div className={styles.formGroup}><label>Ödeme Yeri</label><input value={editPaymentForm.odemeYeri} onChange={e => setEditPaymentForm(f => ({ ...f, odemeYeri: e.target.value }))} /></div>
-                <div className={styles.formGroup}><label>Açıklama</label><input value={editPaymentForm.aciklama} onChange={e => setEditPaymentForm(f => ({ ...f, aciklama: e.target.value }))} /></div>
-              </div>
-              {Number(editingPayment.MahsupTutar || 0) > 0 && <div style={{ marginTop: 12, fontSize: 12, color: "var(--color-text-secondary)" }}>Bu ödemenin {fmtMoney(editingPayment.MahsupTutar, editingPayment.ParaBirimi)} tutarı faturalara mahsup edilmiştir. Yeni tutar bu değerin altına indirilemez.</div>}
-            </div>
-            <div className={styles.modalFooter}>
-              <button className={styles.cancelBtn} type="button" onClick={() => setEditingPayment(null)} disabled={editPaymentSaving}>Vazgeç</button>
-              <button className={styles.saveBtn} type="button" onClick={() => void submitPaymentEdit()} disabled={editPaymentSaving}>{editPaymentSaving ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}</button>
             </div>
           </div>
         </div>
