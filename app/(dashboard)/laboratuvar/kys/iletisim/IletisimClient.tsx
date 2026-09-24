@@ -16,6 +16,7 @@ import {
   Plus,
   Search,
   Send,
+  Trash2,
   Users,
 } from "lucide-react";
 import styles from "./iletisim.module.css";
@@ -161,6 +162,16 @@ export default function IletisimClient({
     const json = await response.json().catch(() => ({}));
     if (!response.ok) { setError(json.error || "Görev düzenlenemedi."); return; }
     setEditingTask(null); await load();
+  }
+  async function deleteTask(task: Item) {
+    if (!window.confirm(`"${task.baslik}" görevini silmek istediğinize emin misiniz?`)) return;
+    setError("");
+    const response = await fetch("/api/kys/iletisim", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: task.id }) });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) { setError(json.error || "Görev silinemedi."); return; }
+    setCalendarTaskId(null);
+    setEditingTask(null);
+    await load();
   }
   async function answer(id: number) {
     const value = reply[id]?.trim();
@@ -668,7 +679,7 @@ export default function IletisimClient({
               </div>
               <div className={styles.taskActions}>
                 {calendarTask.olusturanId === currentUserId && calendarTask.durum !== "Tamamlandı" && (
-                  <button className={styles.editTask} onClick={() => openTaskEdit(calendarTask)}><Pencil size={15} />Düzenle</button>
+                  <><button className={styles.editTask} onClick={() => openTaskEdit(calendarTask)}><Pencil size={15} />Düzenle</button><button className={styles.deleteTask} onClick={() => void deleteTask(calendarTask)}><Trash2 size={15} />Sil</button></>
                 )}
                 {calendarTask.durum === "Atandı" &&
                   calendarTask.aliciId === currentUserId && (
@@ -755,6 +766,12 @@ export default function IletisimClient({
                     size={17}
                   />
                 </button>
+                {item.olusturanId === currentUserId && item.durum !== "Tamamlandı" && (
+                  <div className={styles.taskQuickActions}>
+                    <button type="button" onClick={() => openTaskEdit(item)} aria-label={`${item.baslik} görevini düzenle`} title="Düzenle"><Pencil size={14} /></button>
+                    <button type="button" className={styles.quickDelete} onClick={() => void deleteTask(item)} aria-label={`${item.baslik} görevini sil`} title="Sil"><Trash2 size={14} /></button>
+                  </div>
+                )}
                 {open && (
                   <div className={styles.taskDetail}>
                     <p>{item.icerik}</p>
@@ -772,9 +789,6 @@ export default function IletisimClient({
                       ))}
                     </div>
                     <div className={styles.taskActions}>
-                      {item.olusturanId === currentUserId && item.durum !== "Tamamlandı" && (
-                        <button className={styles.editTask} onClick={() => openTaskEdit(item)}><Pencil size={15} />Düzenle</button>
-                      )}
                       {item.durum === "Atandı" &&
                         item.aliciId === currentUserId && (
                           <button

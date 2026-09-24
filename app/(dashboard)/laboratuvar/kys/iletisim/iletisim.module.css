@@ -110,6 +110,7 @@
 .card,
 .thread,
 .taskRow {
+  position: relative;
   overflow: hidden;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
@@ -280,6 +281,36 @@
 .taskSummary {
   display: grid;
   grid-template-columns: 10px minmax(0, 1fr) 120px 95px 18px;
+  padding-right: 145px;
+}
+.taskQuickActions {
+  position: absolute;
+  top: 10px;
+  right: 48px;
+  display: flex;
+  gap: 4px;
+}
+.taskQuickActions button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-accent);
+  cursor: pointer;
+}
+.taskQuickActions button:hover {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-light);
+}
+.taskQuickActions .quickDelete {
+  color: var(--color-danger);
+}
+.taskQuickActions .quickDelete:hover {
+  border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
+  background: var(--color-danger-light);
 }
 .statusDot {
   width: 9px;
@@ -368,6 +399,7 @@
 .start,
 .finish,
 .editTask,
+.deleteTask,
 .primary {
   display: inline-flex;
   align-items: center;
@@ -387,6 +419,14 @@
 .editTask:hover {
   border-color: var(--color-accent-border);
   background: var(--color-accent-light);
+}
+.deleteTask {
+  border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+  background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface));
+  color: var(--color-danger);
+}
+.deleteTask:hover {
+  background: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
 }
 .start {
   background: var(--color-accent);

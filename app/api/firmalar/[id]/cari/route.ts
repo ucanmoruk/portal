@@ -78,6 +78,7 @@ export async function GET(
 
   const sp = request.nextUrl.searchParams;
   const tip = (sp.get("tip") || "Tümü").trim();
+  const grup = sp.get("grup") === "planlama" ? "planlama" : "resmi";
   const tarihBas = (sp.get("tarihBas") || "").trim();
   const tarihBit = (sp.get("tarihBit") || "").trim();
 
@@ -95,10 +96,17 @@ export async function GET(
     if (!firmaRes.recordset.length) return Response.json({ error: "Firma bulunamadı." }, { status: 404 });
 
     const movements: any[] = [];
-    const includeTeklif = tip === "Tümü" || tip === "Teklif";
-    const includeProforma = tip === "Tümü" || tip === "Proforma";
-    const includeFatura = tip === "Tümü" || tip === "Fatura";
-    const includeOdeme = tip === "Tümü" || tip === "Ödeme";
+    const faturaOdemeDurumu = `COALESCE(
+      (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Fatura_ID=f.ID AND ISNULL(o.Odeme_Durumu,N'')<>N'Proforma' ORDER BY o.ID DESC),
+      (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No=f.ProformaNo AND o.Fatura_ID IS NULL AND ISNULL(o.Odeme_Durumu,N'')<>N'Proforma' ORDER BY o.ID DESC),
+      (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Fatura_ID=f.ID ORDER BY o.ID DESC),
+      (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No=f.ProformaNo AND o.Fatura_ID IS NULL ORDER BY o.ID DESC),
+      N'Ödeme Bekliyor'
+    )`;
+    const includeTeklif = grup === "planlama" && (tip === "Tümü" || tip === "Teklif");
+    const includeProforma = grup === "planlama" && (tip === "Tümü" || tip === "Proforma");
+    const includeFatura = grup === "resmi" && (tip === "Tümü" || tip === "Fatura");
+    const includeOdeme = grup === "resmi" && (tip === "Tümü" || tip === "Ödeme");
 
     if (includeTeklif) {
       const teklifRes = await pool.request()
@@ -171,8 +179,19 @@ export async function GET(
             f.ID AS KaynakID,
             ISNULL(f.Fatura_No, '') AS BelgeNo,
             CONVERT(varchar(10), f.Tarih, 23) AS Tarih,
-            ISNULL((SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Fatura_ID = f.ID ORDER BY o.ID DESC), 'Ödeme Bekliyor') AS Durum,
+            ${faturaOdemeDurumu} AS Durum,
             ISNULL(f.Toplam, 0) AS Tutar,
+            CASE
+              WHEN ${faturaOdemeDurumu} = N'Ödendi' THEN ISNULL(f.Toplam, 0)
+              WHEN ISNULL(f.Odenen_Tutar, 0) >= ISNULL(f.Toplam, 0) THEN ISNULL(f.Toplam, 0)
+              WHEN ISNULL(f.Odenen_Tutar, 0) > 0 THEN ISNULL(f.Odenen_Tutar, 0)
+              ELSE 0
+            END AS OdenenTutar,
+            CASE
+              WHEN ${faturaOdemeDurumu} IN (N'Ödendi', N'İptal') THEN 0
+              WHEN ISNULL(f.Odenen_Tutar, 0) >= ISNULL(f.Toplam, 0) THEN 0
+              ELSE ISNULL(f.Toplam, 0) - ISNULL(f.Odenen_Tutar, 0)
+            END AS AcikTutar,
             'TRY' AS ParaBirimi,
             N'Alacak' AS Yon,
             CAST(NULL AS NVARCHAR(120)) AS OdemeYeri,
@@ -222,15 +241,24 @@ export async function GET(
 
     const summary = movements.reduce((acc, row) => {
       const currency = String(row.ParaBirimi || "TRY");
-      if (!acc[currency]) acc[currency] = { paraBirimi: currency, teklif: 0, proforma: 0, fatura: 0, gelenOdeme: 0, gidenOdeme: 0, net: 0 };
+      if (!acc[currency]) acc[currency] = { paraBirimi: currency, teklif: 0, proforma: 0, fatura: 0, acikFatura: 0, gelenOdeme: 0, manuelGelenOdeme: 0, gidenOdeme: 0, net: 0 };
       const item = acc[currency];
       const tutar = Number(row.Tutar || 0);
       if (row.Kaynak === "Teklif") item.teklif += tutar;
       else if (row.Kaynak === "Proforma") item.proforma += tutar;
-      else if (row.Kaynak === "Fatura") item.fatura += tutar;
-      else if (row.Durum === "Gelen Ödeme") item.gelenOdeme += tutar;
+      else if (row.Kaynak === "Fatura") {
+        item.fatura += tutar;
+        item.acikFatura += Number(row.AcikTutar ?? tutar);
+        // Fatura üzerinden kaydedilen tahsilat da gerçek bir gelen ödemedir.
+        item.gelenOdeme += Number(row.OdenenTutar || 0);
+      }
+      else if (row.Durum === "Gelen Ödeme") {
+        item.gelenOdeme += tutar;
+        item.manuelGelenOdeme += tutar;
+      }
       else if (row.Durum === "Giden Ödeme") item.gidenOdeme += tutar;
-      item.net = item.fatura - item.gelenOdeme + item.gidenOdeme;
+      // Fatura tahsilatları AcikTutar'dan zaten düştüğü için ikinci kez mahsup edilmez.
+      item.net = item.acikFatura - item.manuelGelenOdeme + item.gidenOdeme;
       return acc;
     }, {} as Record<string, any>);
 

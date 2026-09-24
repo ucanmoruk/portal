@@ -420,7 +420,7 @@ export default function FaturaTable() {
                   <td><span className={`${localStyles.sourceBadge} ${row.Kaynak === "Spektrotek" ? localStyles.sourceSpektrotek : row.Kaynak === "Root" ? localStyles.sourceRoot : row.Kaynak === "Ödeme" ? localStyles.sourcePayment : localStyles.sourceUnique}`}>{row.Kaynak || "Unique"}</span></td>
                   <td>{fmtTarih(row.Tarih)}</td>
                   <td>{fmtTarih(row.VadeTarihi)}</td>
-                  <td className={localStyles.ellipsisCell} title={upperTr(row.FirmaAd) || "-"}>{upperTr(row.FirmaAd) || "-"}</td>
+                  <td className={localStyles.companyCell} title={upperTr(row.FirmaAd) || "-"}>{upperTr(row.FirmaAd) || "-"}</td>
                   <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
                     {fmtMoney(row.Toplam)} TL
                   </td>

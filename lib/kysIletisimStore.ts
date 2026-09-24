@@ -121,4 +121,15 @@ export async function updateKysGorevDetails(id:number,input:Record<string,unknow
   await pool.request().input("ID",id).input("UserID",user.userId).input("UserName",user.userName).query("INSERT INTO KysIletisimGorevLog (GorevID,Durum,KullaniciID,KullaniciAd) VALUES (@ID,'Düzenlendi',@UserID,@UserName)");
 }
 
+export async function deleteKysGorev(id:number,user:User){
+  await ensureKysIletisimSchema();const pool=await cosmoPool;
+  const row=(await pool.request().input("ID",id).query("SELECT TOP 1 OlusturanID,Durum FROM KysIletisim WHERE ID=@ID AND Tur='Görev'")).recordset[0];
+  if(!row)throw new Error("Görev bulunamadı.");
+  if(string(row,"OlusturanID")!==user.userId)throw new Error("Görevi yalnızca atayan kişi silebilir.");
+  if(string(row,"Durum")==="Tamamlandı")throw new Error("Tamamlanan görevler silinemez.");
+  await pool.request().input("ID",id).query("DELETE FROM KysIletisimOkuma WHERE IcerikID=@ID");
+  await pool.request().input("ID",id).query("DELETE FROM KysIletisimGorevLog WHERE GorevID=@ID");
+  await pool.request().input("ID",id).query("DELETE FROM KysIletisim WHERE ID=@ID AND Tur='Görev'");
+}
+
 export async function getKysBildirimler(user:User){const data=await listKysIletisim(user);const items=[...data.duyurular.filter((x:any)=>!x.okundu&&x.olusturanId!==user.userId).map((x:any)=>({...x,etiket:"Duyuru"})),...data.mesajlar.flatMap((t:any)=>t.messages).filter((x:any)=>!x.okundu&&x.aliciId===user.userId).map((x:any)=>({...x,etiket:"Mesaj"})),...data.gorevler.filter((x:any)=>!x.okundu&&x.aliciId===user.userId).map((x:any)=>({...x,etiket:"Görev"}))].sort((a:any,b:any)=>String(b.createdAt).localeCompare(String(a.createdAt)));return {count:items.length,items:items.slice(0,8)};}

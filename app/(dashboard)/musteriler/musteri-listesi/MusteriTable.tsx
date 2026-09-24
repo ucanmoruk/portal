@@ -19,6 +19,7 @@ interface Musteri {
   Tur2: string | null;
   Yetkili: string | null;
   Kimin: string | null;
+  CariDurum: number | string;
 }
 
 interface ApiResponse {
@@ -36,6 +37,7 @@ interface CariRow {
   Tarih: string | null;
   Durum: string | null;
   Tutar: number | string;
+  AcikTutar?: number | string;
   ParaBirimi: string;
   Yon: string;
   OdemeYeri: string | null;
@@ -47,13 +49,14 @@ interface CariSummary {
   teklif: number;
   proforma: number;
   fatura: number;
+  acikFatura: number;
   gelenOdeme: number;
   gidenOdeme: number;
   net: number;
 }
 
 // Form, listede dönmeyen Parola alanını da taşır (yalnızca kayıt/güncelleme için).
-type FirmaForm = Omit<Musteri, "ID" | "Kimin"> & { Parola: string };
+type FirmaForm = Omit<Musteri, "ID" | "Kimin" | "CariDurum"> & { Parola: string };
 
 const emptyForm: FirmaForm = {
   Ad: "", Adres: "", VergiDairesi: "", VergiNo: "",
@@ -61,7 +64,10 @@ const emptyForm: FirmaForm = {
 };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
-const CARI_TIPLER = ["Tümü", "Teklif", "Proforma", "Fatura", "Ödeme"];
+const CARI_TIPLER = {
+  resmi: ["Tümü", "Fatura", "Ödeme"],
+  planlama: ["Tümü", "Teklif", "Proforma"],
+} as const;
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -115,6 +121,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
   const [cariSummary, setCariSummary] = useState<CariSummary[]>([]);
   const [cariLoading, setCariLoading] = useState(false);
   const [cariError, setCariError] = useState("");
+  const [cariGrup, setCariGrup] = useState<"resmi" | "planlama">("resmi");
   const [cariTip, setCariTip] = useState("Tümü");
   const [cariTarihBas, setCariTarihBas] = useState("");
   const [cariTarihBit, setCariTarihBit] = useState("");
@@ -221,11 +228,11 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     }
   };
 
-  const fetchCari = useCallback(async (firma: Musteri, tip = cariTip, tarihBas = cariTarihBas, tarihBit = cariTarihBit) => {
+  const fetchCari = useCallback(async (firma: Musteri, tip = cariTip, tarihBas = cariTarihBas, tarihBit = cariTarihBit, grup = cariGrup) => {
     setCariLoading(true);
     setCariError("");
     try {
-      const params = new URLSearchParams({ tip, tarihBas, tarihBit });
+      const params = new URLSearchParams({ tip, tarihBas, tarihBit, grup });
       const res = await fetch(`/api/firmalar/${firma.ID}/cari?${params}`, { cache: "no-store" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Cari hareketleri alınamadı.");
@@ -236,23 +243,24 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     } finally {
       setCariLoading(false);
     }
-  }, [cariTip, cariTarihBas, cariTarihBit]);
+  }, [cariTip, cariTarihBas, cariTarihBit, cariGrup]);
 
   const openCari = (m: Musteri) => {
     setCariTarget(m);
     setCariRows([]);
     setCariSummary([]);
+    setCariGrup("resmi");
     setCariTip("Tümü");
     setCariTarihBas("");
     setCariTarihBit("");
     setCariError("");
     setPaymentOpen(false);
-    fetchCari(m, "Tümü", "", "");
+    fetchCari(m, "Tümü", "", "", "resmi");
   };
 
   const refreshCari = () => {
     if (!cariTarget) return;
-    fetchCari(cariTarget, cariTip, cariTarihBas, cariTarihBit);
+    fetchCari(cariTarget, cariTip, cariTarihBas, cariTarihBit, cariGrup);
   };
 
   const submitPayment = async () => {
@@ -350,11 +358,11 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
               <tr>
                 <th>#</th>
                 <th>Firma Adı</th>
-                <th>Tür</th>
                 <th>Adres</th>
                 <th>V.D. / V.N.</th>
                 <th>Yetkili</th>
                 <th>İletişim</th>
+                <th style={{ textAlign: "right" }} title="Güncel net açık bakiye">Cari Durum</th>
                 <th style={{ width: 112 }}></th>
               </tr>
             </thead>
@@ -377,7 +385,6 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                 <tr key={m.ID}>
                   <td className={styles.tdNum}>{(page - 1) * limit + i + 1}</td>
                   <td className={styles.tdName}>{upperTr(m.Ad) || "—"}</td>
-                  <td>{m.Tur2 || "Müşteri"}</td>
                   <td className={styles.tdAdres}>{m.Adres || "—"}</td>
                   <td className={styles.tdMono}>
                     {m.VergiDairesi ? <div>{m.VergiDairesi}</div> : null}
@@ -400,6 +407,9 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                         </a>
                       )}
                     </div>
+                  </td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
+                    {fmtMoney(m.CariDurum, "TRY")}
                   </td>
                   <td>
                     <div className={styles.actionBtns}>
@@ -524,6 +534,10 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
               </button>
             </div>
             <div className={styles.modalBody}>
+              <div className={styles.cariTabs} role="tablist" aria-label="Cari hareket grubu">
+                <button type="button" role="tab" aria-selected={cariGrup === "resmi"} className={cariGrup === "resmi" ? styles.cariTabActive : ""} onClick={() => { setCariGrup("resmi"); setCariTip("Tümü"); fetchCari(cariTarget, "Tümü", cariTarihBas, cariTarihBit, "resmi"); }}>Faturalar ve Ödemeler</button>
+                <button type="button" role="tab" aria-selected={cariGrup === "planlama"} className={cariGrup === "planlama" ? styles.cariTabActive : ""} onClick={() => { setCariGrup("planlama"); setCariTip("Tümü"); setPaymentOpen(false); fetchCari(cariTarget, "Tümü", cariTarihBas, cariTarihBit, "planlama"); }}>Proforma ve Teklifler</button>
+              </div>
               <div className={styles.toolbar} style={{ marginBottom: 14 }}>
                 <div className={styles.toolbarLeft}>
                   <select
@@ -535,7 +549,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                       fetchCari(cariTarget, next, cariTarihBas, cariTarihBit);
                     }}
                   >
-                    {CARI_TIPLER.map(t => <option key={t} value={t}>{t}</option>)}
+                    {CARI_TIPLER[cariGrup].map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                   <input
                     type="date"
@@ -565,14 +579,14 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                         setCariTip("Tümü");
                         setCariTarihBas("");
                         setCariTarihBit("");
-                        fetchCari(cariTarget, "Tümü", "", "");
+                        fetchCari(cariTarget, "Tümü", "", "", cariGrup);
                       }}
                     >
                       Temizle
                     </button>
                   )}
                 </div>
-                <div className={styles.toolbarRight}>
+                {cariGrup === "resmi" && <div className={styles.toolbarRight}>
                   <button
                     className={styles.addBtn}
                     type="button"
@@ -583,7 +597,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                   >
                     Ödeme Ekle
                   </button>
-                </div>
+                </div>}
               </div>
 
               {paymentOpen && (
@@ -645,14 +659,15 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                       <th>Yön</th>
                       <th>Ödeme Yeri</th>
                       <th style={{ textAlign: "right" }}>Tutar</th>
+                      {cariGrup === "resmi" && <th style={{ textAlign: "right" }}>Açık Tutar</th>}
                       <th>Açıklama</th>
                     </tr>
                   </thead>
                   <tbody>
                     {cariLoading ? (
-                      <tr><td colSpan={8} className={styles.empty}>Cari hareketleri yükleniyor...</td></tr>
+                      <tr><td colSpan={cariGrup === "resmi" ? 9 : 8} className={styles.empty}>Cari hareketleri yükleniyor...</td></tr>
                     ) : cariRows.length === 0 ? (
-                      <tr><td colSpan={8} className={styles.empty}>Cari hareket bulunamadı.</td></tr>
+                      <tr><td colSpan={cariGrup === "resmi" ? 9 : 8} className={styles.empty}>Cari hareket bulunamadı.</td></tr>
                     ) : cariRows.map((row, idx) => (
                       <tr key={`${row.Kaynak}-${row.KaynakID}-${idx}`}>
                         <td><span className={styles.badge}>{row.Kaynak}</span></td>
@@ -664,6 +679,9 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                         <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
                           {fmtMoney(row.Tutar, row.ParaBirimi)}
                         </td>
+                        {cariGrup === "resmi" && <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
+                          {row.Kaynak === "Fatura" ? fmtMoney(row.AcikTutar, row.ParaBirimi) : "-"}
+                        </td>}
                         <td className={styles.tdAdres} title={row.Aciklama || ""}>{row.Aciklama || "-"}</td>
                       </tr>
                     ))}
@@ -678,13 +696,9 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                   <div key={s.paraBirimi} style={{ border: "1px solid var(--color-border-light)", borderRadius: 10, padding: 12, background: "var(--color-surface-2)" }}>
                     <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 6 }}>{s.paraBirimi}</div>
                     <div style={{ display: "grid", gap: 4, fontSize: 13 }}>
-                      <div>Teklif: <strong>{fmtMoney(s.teklif, s.paraBirimi)}</strong></div>
-                      <div>Proforma: <strong>{fmtMoney(s.proforma, s.paraBirimi)}</strong></div>
-                      <div>Fatura: <strong>{fmtMoney(s.fatura, s.paraBirimi)}</strong></div>
-                      <div>Gelen ödeme: <strong>{fmtMoney(s.gelenOdeme, s.paraBirimi)}</strong></div>
-                      <div>Giden ödeme: <strong>{fmtMoney(s.gidenOdeme, s.paraBirimi)}</strong></div>
+                      {cariGrup === "planlama" ? <><div>Teklif: <strong>{fmtMoney(s.teklif, s.paraBirimi)}</strong></div><div>Proforma: <strong>{fmtMoney(s.proforma, s.paraBirimi)}</strong></div></> : <><div>Toplam fatura: <strong>{fmtMoney(s.fatura, s.paraBirimi)}</strong></div><div>Açık fatura: <strong>{fmtMoney(s.acikFatura, s.paraBirimi)}</strong></div><div>Gelen ödeme: <strong>{fmtMoney(s.gelenOdeme, s.paraBirimi)}</strong></div><div>Giden ödeme: <strong>{fmtMoney(s.gidenOdeme, s.paraBirimi)}</strong></div></>}
                       <div style={{ borderTop: "1px solid var(--color-border-light)", paddingTop: 6, marginTop: 4 }}>
-                        Net bakiye: <strong>{fmtMoney(s.net, s.paraBirimi)}</strong>
+                        {cariGrup === "resmi" ? <>Net açık bakiye: <strong>{fmtMoney(s.net, s.paraBirimi)}</strong></> : <>Planlanan toplam: <strong>{fmtMoney(s.teklif + s.proforma, s.paraBirimi)}</strong></>}
                       </div>
                     </div>
                   </div>

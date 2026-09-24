@@ -54,21 +54,70 @@ export async function GET(request: NextRequest) {
       .input("limit", limit)
       .query(`
         SELECT
-          ID,
-          ISNULL(Firma_Adi,'')     AS Ad,
-          ISNULL(Adres,'')         AS Adres,
-          ISNULL(Vergi_Dairesi,'') AS VergiDairesi,
-          ISNULL(Vergi_No,'')      AS VergiNo,
-          ISNULL(Telefon,'')       AS Telefon,
-          ISNULL(Mail,'')          AS Email,
-          ''                       AS Web,
-          ISNULL(Tur,'')           AS Tur2,
-          ISNULL(Yetkili,'')       AS Yetkili,
-          ''                       AS Kimin
-        FROM Firma
-        WHERE Durum = 'Aktif' ${searchClause}
-        ORDER BY Firma_Adi
-        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+          firma.ID,
+          firma.Ad,
+          firma.Adres,
+          firma.VergiDairesi,
+          firma.VergiNo,
+          firma.Telefon,
+          firma.Email,
+          firma.Web,
+          firma.Tur2,
+          firma.Yetkili,
+          firma.Kimin,
+          CAST(ISNULL((
+            SELECT SUM(
+              CASE
+                WHEN COALESCE(
+                  (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Fatura_ID = f.ID AND ISNULL(o.Odeme_Durumu,N'') <> N'Proforma' ORDER BY o.ID DESC),
+                  (SELECT TOP 1 o.Odeme_Durumu FROM Odeme o WHERE o.Evrak_No = f.ProformaNo AND o.Fatura_ID IS NULL AND ISNULL(o.Odeme_Durumu,N'') <> N'Proforma' ORDER BY o.ID DESC),
+                  N'Ödeme Bekliyor'
+                ) IN (N'Ödendi', N'İptal') THEN 0
+                WHEN ISNULL(f.Odenen_Tutar, 0) >= ISNULL(f.Toplam, 0) THEN 0
+                ELSE ISNULL(f.Toplam, 0) - ISNULL(f.Odenen_Tutar, 0)
+              END
+            )
+            FROM Fatura f
+            WHERE f.Durum = 'Aktif'
+              AND (
+                f.FaturaFirmaID = firma.ID
+                OR EXISTS (
+                  SELECT 1 FROM ProformaBaslik p
+                  WHERE p.SilindiMi = 0 AND p.FirmaID = firma.ID AND p.EvrakNo = f.ProformaNo
+                )
+              )
+          ), 0)
+          - ISNULL((
+            SELECT SUM(co.Tutar) FROM FirmaCariOdeme co
+            WHERE co.FirmaID = firma.ID
+              AND co.Tip = N'Gelen Ödeme'
+              AND ISNULL(co.ParaBirimi, 'TRY') IN ('TRY', 'TL')
+          ), 0)
+          + ISNULL((
+            SELECT SUM(co.Tutar) FROM FirmaCariOdeme co
+            WHERE co.FirmaID = firma.ID
+              AND co.Tip = N'Giden Ödeme'
+              AND ISNULL(co.ParaBirimi, 'TRY') IN ('TRY', 'TL')
+          ), 0) AS DECIMAL(18,2)) AS CariDurum
+        FROM (
+          SELECT
+            ID,
+            ISNULL(Firma_Adi,'')     AS Ad,
+            ISNULL(Adres,'')         AS Adres,
+            ISNULL(Vergi_Dairesi,'') AS VergiDairesi,
+            ISNULL(Vergi_No,'')      AS VergiNo,
+            ISNULL(Telefon,'')       AS Telefon,
+            ISNULL(Mail,'')          AS Email,
+            ''                       AS Web,
+            ISNULL(Tur,'')           AS Tur2,
+            ISNULL(Yetkili,'')       AS Yetkili,
+            ''                       AS Kimin
+          FROM Firma
+          WHERE Durum = 'Aktif' ${searchClause}
+          ORDER BY Firma_Adi
+          OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+        ) firma
+        ORDER BY firma.Ad
       `);
 
     return Response.json({
