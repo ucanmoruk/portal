@@ -38,7 +38,7 @@ type Item = {
   okuyanlar?: Read[];
   akış?: Array<{ durum: string; kullaniciAd: string; createdAt: string }>;
 };
-type Thread = { id: number; messages: Item[] };
+type Thread = { id: number; participants: Array<{ id: string; ad: string }>; messages: Item[] };
 const fmt = (v: string | null) =>
   v
     ? new Date(v).toLocaleString("tr-TR", {
@@ -459,13 +459,13 @@ export default function IletisimClient({
             })
             .map((thread) => {
               const last = thread.messages.at(-1)!;
-              const other =
-                last.olusturanId === currentUserId
-                  ? last.aliciAd
-                  : last.olusturanAd;
+              const other = thread.participants
+                .filter((participant) => participant.id !== currentUserId)
+                .map((participant) => participant.ad)
+                .join(", ") || (last.olusturanId === currentUserId ? last.aliciAd : last.olusturanAd);
               const open = expanded.has(thread.id);
               const unread = thread.messages.filter(
-                (x) => !x.okundu && x.aliciId === currentUserId,
+                (x) => !x.okundu && x.olusturanId !== currentUserId,
               ).length;
               return (
                 <article className={styles.thread} key={thread.id}>
@@ -476,7 +476,7 @@ export default function IletisimClient({
                       if (!open)
                         thread.messages
                           .filter(
-                            (x) => !x.okundu && x.aliciId === currentUserId,
+                            (x) => !x.okundu && x.olusturanId !== currentUserId,
                           )
                           .forEach(
                             (x) => void action({ islem: "okundu", id: x.id }),
@@ -857,7 +857,7 @@ export default function IletisimClient({
               </label>
               {form.tur !== "Duyuru" && (
                 <fieldset className={styles.recipientField}>
-                  <legend>{form.tur === "Mesaj" ? "Alıcılar" : "Alıcı"}</legend>
+                  <legend>Alıcılar</legend>
                   <div>
                     {people.map((p) => {
                       const id = String(p.ID);
@@ -865,17 +865,14 @@ export default function IletisimClient({
                       return (
                         <label key={id}>
                           <input
-                            type={form.tur === "Mesaj" ? "checkbox" : "radio"}
+                            type="checkbox"
                             checked={checked}
                             onChange={() =>
                               setForm((f) => ({
                                 ...f,
-                                aliciIds:
-                                  form.tur === "Mesaj"
-                                    ? checked
-                                      ? f.aliciIds.filter((x) => x !== id)
-                                      : [...f.aliciIds, id]
-                                    : [id],
+                                aliciIds: checked
+                                  ? f.aliciIds.filter((x) => x !== id)
+                                  : [...f.aliciIds, id],
                               }))
                             }
                           />
