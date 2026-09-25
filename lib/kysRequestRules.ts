@@ -19,7 +19,6 @@ export function requireRequestAcceptance(
   status: string,
   itemStatus: string,
   received: number,
-  requested: number,
   next: number,
 ) {
   if (!["İşleme Alındı", "Kısmi Kabul"].includes(status))
@@ -28,12 +27,6 @@ export function requireRequestAcceptance(
     throw new Error(
       "Tamamlanan kalem tekrar kabul edilemez; mevcut kabulü düzeltin.",
     );
-  if (
-    !Number.isFinite(next) ||
-    next <= 0 ||
-    next > requested - received + 0.00001
-  )
-    throw new Error(
-      "Gelen miktar pozitif olmalı ve kalan talep miktarını aşmamalıdır.",
-    );
+  if (!Number.isFinite(next) || next <= 0)
+    throw new Error("Gelen miktar pozitif olmalıdır.");
 }

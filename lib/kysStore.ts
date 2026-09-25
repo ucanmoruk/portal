@@ -1266,7 +1266,7 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
   const detail = await getKysRequestDetail(talepId, false, pool);
   const item = detail?.kalemler.find((k: any) => k.id === kalemId);
   if (!item) throw new Error("Talep kalemi bulunamadı.");
-  requireRequestAcceptance(detail!.talep.durum, item.durum, item.kabulMiktari, item.miktar, gelenMiktar);
+  requireRequestAcceptance(detail!.talep.durum, item.durum, item.kabulMiktari, gelenMiktar);
   if(input.hedefBirimId&&!(await pool.request().input("ID",Number(input.hedefBirimId)).query("SELECT ID FROM KysLaboratuvarBirim WHERE ID=@ID AND Durum='Aktif'")).recordset.length)throw new Error("Hedef birim bulunamadı.");
   for(const key of ["birimFiyat","toplamTutar"]){if(input[key]!==""&&input[key]!=null&&(!Number.isFinite(numberValue(input[key],NaN))||numberValue(input[key],NaN)<0))throw new Error("Fiyat ve tutar negatif olamaz; geçerli sayı girin.");}
   const supplier = input.satinAlanId ? await resolveKysSupplier(pool, input.tedarikciId) : null;

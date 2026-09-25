@@ -497,8 +497,6 @@ export async function correctKysAcceptance(
     const delta = quantity - Number(before.GelenMiktar);
     const sign = movement.HareketTipi === "Çıkış" ? -1 : 1;
     const stockDelta = sign * delta;
-    if (Number(item.KabulMiktari) + delta > Number(item.Miktar) + 0.00001)
-      throw new Error("Düzeltme talep miktarını aşamaz.");
     const stock = (
       await tx
         .request()
