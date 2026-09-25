@@ -6,6 +6,18 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { renderUrlToPdf } from "@/lib/chromiumPdf";
 import { getRaporPdfBaseUrl } from "@/lib/raporPdfBaseUrl";
+import { cosmoPool } from "@/lib/db";
+
+function downloadFileName(prefix: string, firmaAdi: unknown) {
+  const firstWord = String(firmaAdi || "").trim().split(/\s+/)[0] || "Firma";
+  const safeWord = firstWord.replace(/[^\p{L}\p{N}_-]+/gu, "_");
+  return `${prefix}_${safeWord || "Firma"}.pdf`;
+}
+
+function contentDisposition(disposition: string, fileName: string) {
+  const ascii = fileName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `${disposition}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -18,7 +30,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const cookieHeader = req.headers.get("cookie") || "";
 
   try {
-    const pdf = await renderUrlToPdf(reportUrl, {
+    const pool = await cosmoPool;
+    const firmaPromise = pool.request().input("ID", Number(id)).query(`
+      SELECT TOP 1 ISNULL(f.Firma_Adi, '') AS FirmaAd
+      FROM ProformaBaslik p
+      LEFT JOIN Firma f ON f.ID=p.FirmaID
+      WHERE p.ID=@ID AND p.SilindiMi=0
+    `);
+    const pdfPromise = renderUrlToPdf(reportUrl, {
       cookieHeader,
       printBackground: true,
       displayHeaderFooter: true,
@@ -46,13 +65,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         })()
       `,
     });
+    const [pdf, firmaResult] = await Promise.all([pdfPromise, firmaPromise]);
 
-    const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, "_");
+    const fileName = downloadFileName("Proforma", firmaResult.recordset?.[0]?.FirmaAd);
     const disposition = forceDownload ? "attachment" : "inline";
     return new Response(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `${disposition}; filename="Proforma-${safeId}.pdf"`,
+        "Content-Disposition": contentDisposition(disposition, fileName),
         "Cache-Control": "no-store",
       },
     });
