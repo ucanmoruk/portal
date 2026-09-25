@@ -121,6 +121,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+  const [sort, setSort] = useState("ad_asc");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
@@ -161,7 +162,8 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ search: s, page: String(p), limit: String(l) });
+      const [sortBy, sortDir] = sort.split("_");
+      const params = new URLSearchParams({ search: s, page: String(p), limit: String(l), sortBy, sortDir });
       if (filterKimin) params.set("kimin", filterKimin);
       const res = await fetch(`/api/firmalar?${params}`);
       if (!res.ok) throw new Error((await res.json()).error || "Veri alınamadı");
@@ -174,7 +176,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     } finally {
       setLoading(false);
     }
-  }, [filterKimin]);
+  }, [filterKimin, sort]);
 
   useEffect(() => { fetchData(search, page, limit); }, [page, limit, fetchData, search]);
 
@@ -442,6 +444,12 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
 
         <div className={styles.toolbarRight}>
           <span className={styles.totalCount}>{total} kayıt</span>
+          <select className={styles.pageSizeSelect} value={sort} onChange={e => { setSort(e.target.value); setPage(1); }} aria-label="Müşterileri sırala">
+            <option value="ad_asc">Firma adı: A–Z</option>
+            <option value="ad_desc">Firma adı: Z–A</option>
+            <option value="bakiye_desc">Açık bakiye: Yüksekten düşüğe</option>
+            <option value="bakiye_asc">Açık bakiye: Düşükten yükseğe</option>
+          </select>
           <select
             className={styles.pageSizeSelect}
             value={limit}

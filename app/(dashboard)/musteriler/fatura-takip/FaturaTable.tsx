@@ -194,6 +194,7 @@ export default function FaturaTable() {
   const [summary, setSummary] = useState<Summary>({ adet: 0, toplam: 0, odenen: 0 });
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+  const [sort, setSort] = useState("tarih_desc");
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [manualOpen, setManualOpen] = useState(false);
@@ -219,7 +220,8 @@ export default function FaturaTable() {
     setLoading(true);
     setError("");
     try {
-      const qs = new URLSearchParams({ search, yil, ay, odeme, kaynak, vade, page: String(page), limit: String(limit) });
+      const [sortBy, sortDir] = sort.split("_");
+      const qs = new URLSearchParams({ search, yil, ay, odeme, kaynak, vade, page: String(page), limit: String(limit), sortBy, sortDir });
       const res = await fetch(`/api/faturalar?${qs.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Fatura listesi alınamadı.");
@@ -233,7 +235,7 @@ export default function FaturaTable() {
     } finally {
       setLoading(false);
     }
-  }, [search, yil, ay, odeme, kaynak, vade, page, limit]);
+  }, [search, yil, ay, odeme, kaynak, vade, page, limit, sort]);
 
   useEffect(() => { fetchRows(); }, [fetchRows]);
 
@@ -369,6 +371,18 @@ export default function FaturaTable() {
           <span className={styles.totalCount}>{total} kayıt</span>
         </div>
         <div className={styles.toolbarRight}>
+          <select className={styles.pageSizeSelect} value={sort} onChange={e => { setSort(e.target.value); setPage(1); }} aria-label="Faturaları sırala">
+            <option value="tarih_desc">Tarih: Yeniden eskiye</option>
+            <option value="tarih_asc">Tarih: Eskiden yeniye</option>
+            <option value="vade_asc">Vade: Yakından uzağa</option>
+            <option value="vade_desc">Vade: Uzaktan yakına</option>
+            <option value="faturaNo_asc">Fatura no: Artan</option>
+            <option value="faturaNo_desc">Fatura no: Azalan</option>
+            <option value="firma_asc">Firma adı: A–Z</option>
+            <option value="firma_desc">Firma adı: Z–A</option>
+            <option value="tutar_desc">Tutar: Yüksekten düşüğe</option>
+            <option value="tutar_asc">Tutar: Düşükten yükseğe</option>
+          </select>
           <button className={styles.addBtn} type="button" onClick={openManualModal}>+ Manuel Fatura</button>
           <select className={styles.pageSizeSelect} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
             {[10, 20, 50].map(n => <option key={n} value={n}>{n} / sayfa</option>)}

@@ -27,6 +27,11 @@ export async function GET(request: NextRequest) {
   const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
   const limit = Math.min(100, Math.max(5, parseInt(sp.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
+  const sortBy = sp.get("sortBy") === "bakiye" ? "bakiye" : "ad";
+  const sortDir = sp.get("sortDir") === "desc" ? "DESC" : "ASC";
+  const orderBy = sortBy === "bakiye"
+    ? `firma.AcikBakiye ${sortDir}, firma.Ad ASC`
+    : `firma.Ad ${sortDir}`;
 
   const searchClause = search
     ? `AND (
@@ -65,6 +70,9 @@ export async function GET(request: NextRequest) {
           firma.Tur2,
           firma.Yetkili,
           firma.Kimin,
+          firma.AcikBakiye
+        FROM (
+          SELECT firmaTemel.*,
           CAST(ISNULL((
             SELECT SUM(
               CASE
@@ -80,36 +88,21 @@ export async function GET(request: NextRequest) {
                        - ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.FaturaID = f.ID), 0)
                 ELSE 0
               END
+            ) FROM Fatura f
+            WHERE f.Durum = 'Aktif' AND (
+              f.FaturaFirmaID = firmaTemel.ID OR (f.FaturaFirmaID IS NULL AND EXISTS (
+                SELECT 1 FROM ProformaBaslik p WHERE p.SilindiMi = 0 AND p.FirmaID = firmaTemel.ID AND p.EvrakNo = f.ProformaNo
+              ))
             )
-            FROM Fatura f
-            WHERE f.Durum = 'Aktif'
-              AND (
-                f.FaturaFirmaID = firma.ID
-                OR (f.FaturaFirmaID IS NULL AND EXISTS (
-                  SELECT 1 FROM ProformaBaslik p
-                  WHERE p.SilindiMi = 0 AND p.FirmaID = firma.ID AND p.EvrakNo = f.ProformaNo
-                ))
-              )
           ), 0)
-          - ISNULL((
-            SELECT SUM(
-              CASE
-                WHEN ISNULL(co.Tutar, 0) - ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.OdemeID = co.ID), 0) > 0
-                  THEN ISNULL(co.Tutar, 0) - ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.OdemeID = co.ID), 0)
-                ELSE 0
-              END
-            ) FROM FirmaCariOdeme co
-            WHERE co.FirmaID = firma.ID
-              AND co.Tip = N'Gelen Ödeme'
-              AND ISNULL(co.ParaBirimi, 'TRY') IN ('TRY', 'TL')
-          ), 0)
-          + ISNULL((
-            SELECT SUM(co.Tutar) FROM FirmaCariOdeme co
-            WHERE co.FirmaID = firma.ID
-              AND co.Tip = N'Giden Ödeme'
-              AND ISNULL(co.ParaBirimi, 'TRY') IN ('TRY', 'TL')
-          ), 0) AS DECIMAL(18,2)) AS AcikBakiye
-        FROM (
+          - ISNULL((SELECT SUM(CASE
+              WHEN ISNULL(co.Tutar,0) - ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.OdemeID=co.ID),0) > 0
+                THEN ISNULL(co.Tutar,0) - ISNULL((SELECT SUM(d.Tutar) FROM FirmaCariOdemeDagitim d WHERE d.OdemeID=co.ID),0)
+              ELSE 0 END)
+            FROM FirmaCariOdeme co WHERE co.FirmaID=firmaTemel.ID AND co.Tip=N'Gelen Ödeme' AND ISNULL(co.ParaBirimi,'TRY') IN ('TRY','TL')),0)
+          + ISNULL((SELECT SUM(co.Tutar) FROM FirmaCariOdeme co WHERE co.FirmaID=firmaTemel.ID AND co.Tip=N'Giden Ödeme' AND ISNULL(co.ParaBirimi,'TRY') IN ('TRY','TL')),0)
+          AS DECIMAL(18,2)) AS AcikBakiye
+          FROM (
           SELECT
             ID,
             ISNULL(Firma_Adi,'')     AS Ad,
@@ -124,10 +117,10 @@ export async function GET(request: NextRequest) {
             ''                       AS Kimin
           FROM Firma
           WHERE Durum = 'Aktif' ${searchClause}
-          ORDER BY Firma_Adi
-          OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+          ) firmaTemel
         ) firma
-        ORDER BY firma.Ad
+        ORDER BY ${orderBy}
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
 
     return Response.json({

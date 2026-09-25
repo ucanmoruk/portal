@@ -92,6 +92,8 @@ export async function GET(request: NextRequest) {
   const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
   const limit = Math.min(100, Math.max(5, parseInt(sp.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
+  const sortBy = (sp.get("sortBy") || "tarih").trim();
+  const sortDir = sp.get("sortDir") === "asc" ? "ASC" : "DESC";
 
   // Guncel odeme durumu: backfill'in sonradan ekledigi yalniz "Proforma" satiri,
   // faturalasan kaydin "Odeme Bekliyor/Odendi/..." durumunu ezmemeli.
@@ -105,6 +107,14 @@ export async function GET(request: NextRequest) {
   const yilExpr = `COALESCE(NULLIF(REGEXP_SUBSTR(f.Fatura_No, '20[0-9][0-9]'), ''), DATE_FORMAT(COALESCE(NULLIF(f.Tarih, '0000-00-00 00:00:00'), (SELECT MAX(fd.Tarih) FROM FaturaDetay fd WHERE fd.ProformaNo = f.ProformaNo)), '%Y'))`;
   // Efektif tarih: gerçek Fatura.Tarih yoksa FaturaDetay'daki en güncel tarih.
   const tarihExpr = `COALESCE(NULLIF(f.Tarih, '0000-00-00 00:00:00'), (SELECT MAX(fd.Tarih) FROM FaturaDetay fd WHERE fd.ProformaNo = f.ProformaNo))`;
+  const sortExpressions: Record<string, string> = {
+    faturaNo: "ISNULL(f.Fatura_No,'')",
+    firma: "COALESCE(NULLIF(fr.Firma_Adi,''), NULLIF(f.FirmaAdManuel,''), '')",
+    tarih: tarihExpr,
+    vade: "f.VadeTarihi",
+    tutar: "ISNULL(f.Toplam,0)",
+  };
+  const orderExpression = sortExpressions[sortBy] || sortExpressions.tarih;
 
   // Ortak WHERE (search/yil/odeme). Parametreler her request'e ayrıca eklenir.
   let where = "WHERE f.Durum = 'Aktif'";
@@ -165,7 +175,7 @@ export async function GET(request: NextRequest) {
         FROM Fatura f
         LEFT JOIN Firma fr ON fr.ID = f.FaturaFirmaID
         ${where}
-        ORDER BY f.ID DESC
+        ORDER BY ${orderExpression} ${sortDir}, f.ID DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
 
