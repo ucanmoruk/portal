@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import styles from '@/app/styles/table.module.css';
 import { ODEME_DURUMLARI } from "@/lib/faturaConstants";
+import FirmaNotlari from "./FirmaNotlari";
 
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 // ----------------------------------------------------------------
@@ -137,7 +138,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
   const [cariSummary, setCariSummary] = useState<CariSummary[]>([]);
   const [cariLoading, setCariLoading] = useState(false);
   const [cariError, setCariError] = useState("");
-  const [cariGrup, setCariGrup] = useState<"resmi" | "planlama">("resmi");
+  const [cariGrup, setCariGrup] = useState<"resmi" | "planlama" | "notlar">("resmi");
   const [cariTip, setCariTip] = useState("Tümü");
   const [cariTarihBas, setCariTarihBas] = useState("");
   const [cariTarihBit, setCariTarihBit] = useState("");
@@ -171,8 +172,8 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
       setData(json.data);
       setTotal(json.total);
       setTotalPages(json.totalPages);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Veri alınamadı.");
     } finally {
       setLoading(false);
     }
@@ -226,8 +227,8 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
       if (!res.ok) throw new Error((await res.json()).error || "İşlem başarısız");
       setModalOpen(false);
       fetchData(search, page, limit);
-    } catch (e: any) {
-      setFormError(e.message);
+    } catch (e: unknown) {
+      setFormError(e instanceof Error ? e.message : "İşlem başarısız.");
     } finally {
       setSaving(false);
     }
@@ -241,14 +242,14 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
       if (!res.ok) throw new Error((await res.json()).error || "İşlem başarısız");
       setDeleteTarget(null);
       fetchData(search, page, limit);
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "İşlem başarısız.");
     } finally {
       setDeleting(false);
     }
   };
 
-  const fetchCari = useCallback(async (firma: Musteri, tip = cariTip, tarihBas = cariTarihBas, tarihBit = cariTarihBit, grup = cariGrup) => {
+  const fetchCari = useCallback(async (firma: Musteri, tip = cariTip, tarihBas = cariTarihBas, tarihBit = cariTarihBit, grup: "resmi" | "planlama" = cariGrup === "notlar" ? "resmi" : cariGrup) => {
     setCariLoading(true);
     setCariError("");
     try {
@@ -258,8 +259,8 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
       if (!res.ok) throw new Error(json.error || "Cari hareketleri alınamadı.");
       setCariRows(Array.isArray(json.data) ? json.data : []);
       setCariSummary(Array.isArray(json.summary) ? json.summary : []);
-    } catch (e: any) {
-      setCariError(e.message || "Cari hareketleri alınamadı.");
+    } catch (e: unknown) {
+      setCariError(e instanceof Error ? e.message : "Cari hareketleri alınamadı.");
     } finally {
       setCariLoading(false);
     }
@@ -281,7 +282,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
 
   const refreshCari = () => {
     if (!cariTarget) return;
-    fetchCari(cariTarget, cariTip, cariTarihBas, cariTarihBit, cariGrup);
+    fetchCari(cariTarget, cariTip, cariTarihBas, cariTarihBit, cariGrup === "notlar" ? "resmi" : cariGrup);
   };
 
   const submitPayment = async () => {
@@ -315,8 +316,8 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
         aciklama: "",
       });
       refreshCari();
-    } catch (e: any) {
-      setPaymentError(e.message || "Ödeme kaydedilemedi.");
+    } catch (e: unknown) {
+      setPaymentError(e instanceof Error ? e.message : "Ödeme kaydedilemedi.");
     } finally {
       setPaymentSaving(false);
     }
@@ -348,7 +349,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
       const json = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(json.error || "Fatura durumu güncellenemedi.");
       await Promise.all([
-        cariTarget ? fetchCari(cariTarget, cariTip, cariTarihBas, cariTarihBit, cariGrup) : Promise.resolve(),
+        cariTarget ? fetchCari(cariTarget, cariTip, cariTarihBas, cariTarihBit, cariGrup === "notlar" ? "resmi" : cariGrup) : Promise.resolve(),
         fetchData(search, page, limit),
       ]);
     } catch (error: unknown) {
@@ -654,7 +655,9 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
               <div className={styles.cariTabs} role="tablist" aria-label="Cari hareket grubu">
                 <button type="button" role="tab" aria-selected={cariGrup === "resmi"} className={cariGrup === "resmi" ? styles.cariTabActive : ""} onClick={() => { setCariGrup("resmi"); setCariTip("Tümü"); fetchCari(cariTarget, "Tümü", cariTarihBas, cariTarihBit, "resmi"); }}>Faturalar ve Ödemeler</button>
                 <button type="button" role="tab" aria-selected={cariGrup === "planlama"} className={cariGrup === "planlama" ? styles.cariTabActive : ""} onClick={() => { setCariGrup("planlama"); setCariTip("Tümü"); setPaymentOpen(false); fetchCari(cariTarget, "Tümü", cariTarihBas, cariTarihBit, "planlama"); }}>Proforma ve Teklifler</button>
+                <button type="button" role="tab" aria-selected={cariGrup === "notlar"} className={cariGrup === "notlar" ? styles.cariTabActive : ""} onClick={() => { setCariGrup("notlar"); setPaymentOpen(false); }}>Notlar</button>
               </div>
+              {cariGrup === "notlar" ? <FirmaNotlari firmaId={cariTarget.ID} /> : <>
               <div className={styles.toolbar} style={{ marginBottom: 14 }}>
                 <div className={styles.toolbarLeft}>
                   <select
@@ -884,6 +887,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                   </div>
                 ))}
               </div>
+              </>}
             </div>
             <div className={styles.modalFooter}>
               <button className={styles.cancelBtn} onClick={() => setCariTarget(null)}>Kapat</button>

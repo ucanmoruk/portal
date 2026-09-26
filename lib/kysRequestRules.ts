@@ -19,6 +19,7 @@ export function requireRequestAcceptance(
   status: string,
   itemStatus: string,
   received: number,
+  requested: number,
   next: number,
 ) {
   if (!["İşleme Alındı", "Kısmi Kabul"].includes(status))

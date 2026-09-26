@@ -82,6 +82,7 @@ export const MENU_TREE: MenuItem[] = [
     ],
   },
   { key: "laboratuvar.kys.iletisim", label: "İletişim", href: "/laboratuvar/kys/iletisim" },
+  { key: "iletisim.crm-agent", label: "CRM Agent", href: "/iletisim/crm-agent" },
   {
     key: "eurolab",
     label: "Eurolab",
