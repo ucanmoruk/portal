@@ -120,7 +120,10 @@
   --transition-fast: all 0.15s ease;
 }
 
-html { font-size: 16px; }
+html {
+  font-size: 16px;
+  overflow-x: clip;
+}
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
@@ -130,6 +133,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
+  overflow-x: clip;
 }
 
 a {

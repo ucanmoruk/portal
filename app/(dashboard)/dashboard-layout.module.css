@@ -5,6 +5,7 @@
 
 .main {
   flex: 1;
+  min-width: 0;
   margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
@@ -14,6 +15,7 @@
 
 .content {
   flex: 1;
+  min-width: 0;
   padding: 28px 32px;
 }
 
@@ -23,6 +25,12 @@
   }
 
   .content {
-    padding: 16px;
+    padding: 16px max(12px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+}
+
+@media (max-width: 420px) {
+  .content {
+    padding-top: 12px;
   }
 }

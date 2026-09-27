@@ -260,21 +260,21 @@ export default function StokListesiClient() {
                 <tr><td colSpan={11}><div className={styles.empty}>Stok kaydı bulunamadı.</div></td></tr>
               ) : rows.map(row => (
                 <tr key={row.id}>
-                  <td className={`${styles.tdMono} ${kys.barcodeText}`}>{row.barkod || "-"}</td>
-                  <td><span className={kys.pill}>{row.malzemeTuru}</span></td>
-                  <td className={styles.tdMono}>{row.kod}</td>
-                  <td className={styles.tdName}>{row.ad}</td>
-                  <td className={styles.tdMono}>{row.casNo || "-"}</td>
-                  <td>{row.ambalaj || "-"}</td>
-                  <td>{row.saklamaKosullari || "-"}</td>
-                  <td className={styles.tdMono}>{fmt(row.kritikLimit)}</td>
-                  <td>{row.birim}</td>
-                  <td>
+                  <td data-label="Barkod" className={`${styles.tdMono} ${kys.barcodeText}`}>{row.barkod || "-"}</td>
+                  <td data-label="Tür"><span className={kys.pill}>{row.malzemeTuru}</span></td>
+                  <td data-label="Kod" className={styles.tdMono}>{row.kod}</td>
+                  <td data-label="Ad" className={styles.tdName}>{row.ad}</td>
+                  <td data-label="CAS No" className={styles.tdMono}>{row.casNo || "-"}</td>
+                  <td data-label="Ambalaj">{row.ambalaj || "-"}</td>
+                  <td data-label="Saklama">{row.saklamaKosullari || "-"}</td>
+                  <td data-label="Kritik limit" className={styles.tdMono}>{fmt(row.kritikLimit)}</td>
+                  <td data-label="Birim">{row.birim}</td>
+                  <td data-label="Stok durumu">
                     <span className={`${kys.pill} ${row.kritikMi ? kys.pillDanger : kys.pillOk}`}>
                       <span className={row.kritikMi ? kys.lowStock : ""}>{fmt(row.stokMiktari)}</span> {row.birim}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="İşlem">
                     <div className={`${styles.actionBtns} ${kys.stockActions}`}>
                       <Link className={`${styles.editBtn} ${kys.stockActionButton}`} title="Detay" aria-label={`${row.ad} stok detayını aç`} href={`/laboratuvar/kys/stok-listesi/${row.id}`}><Info size={14} aria-hidden="true" /></Link>
                       <Link className={`${styles.editBtn} ${kys.stockActionButton}`} title="Yazdır" aria-label={`${row.ad} stok kartını yazdır`} href={`/laboratuvar/kys/stok-karti-yazdir/${row.id}`}><Printer size={14} aria-hidden="true" /></Link>
@@ -339,7 +339,8 @@ export default function StokListesiClient() {
                 )}
                 <div className={styles.formGroup}>
                   <label>Ürün görseli</label>
-                  <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] || null)} />
+                  <input id="stock-image-file" className={kys.fileInput} type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] || null)} />
+                  <label className={kys.fileButton} htmlFor="stock-image-file">Dosya seç</label>
                   {imagePreview ? (
                     <div className={kys.formImagePreviewWrap}>
                       <div
