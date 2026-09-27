@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Bell,
   CalendarDays,
@@ -52,6 +53,8 @@ export default function IletisimClient({
 }: {
   currentUserId: string;
 }) {
+  const searchParams = useSearchParams();
+  const handledTaskLink = useRef("");
   const [tab, setTab] = useState("Duyuru");
   const [data, setData] = useState<{
     duyurular: Item[];
@@ -104,6 +107,20 @@ export default function IletisimClient({
       .catch(() => {});
     return () => clearTimeout(initial);
   }, [load]);
+  useEffect(() => {
+    const taskId = Number(searchParams.get("gorevId"));
+    const linkKey = searchParams.get("sekme") === "gorev" && Number.isInteger(taskId) && taskId > 0
+      ? `gorev-${taskId}`
+      : "";
+    if (!linkKey || loading || handledTaskLink.current === linkKey) return;
+    handledTaskLink.current = linkKey;
+    if (!data.gorevler.some((task) => task.id === taskId)) return;
+    setTab("Görev");
+    setTaskFilter("Tümü");
+    setSearch("");
+    setPage(1);
+    setCalendarTaskId(taskId);
+  }, [data.gorevler, loading, searchParams]);
   useEffect(() => {
     if (calendarTaskId === null) return;
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -239,7 +256,7 @@ export default function IletisimClient({
     [data.gorevler, search, taskFilter],
   );
   const calendarTask = calendarTaskId
-    ? tasks.find((task) => task.id === calendarTaskId) ?? null
+    ? data.gorevler.find((task) => task.id === calendarTaskId) ?? null
     : null;
   const pagedAnnouncements = announcements.slice(
     (page - 1) * PAGE_SIZE,
