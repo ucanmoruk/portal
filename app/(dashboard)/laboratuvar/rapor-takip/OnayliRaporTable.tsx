@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import styles from "@/app/styles/table.module.css";
 import { baseReportFormat, expandReportFormats, type ReportLanguageChoice } from "@/lib/raporFormatLanguage";
+import RaporNotBilgiModal, { type RaporNotTarget } from "./RaporNotBilgiModal";
 
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 const normalizeReportFormat = (format: string) => String(format || "")
@@ -44,6 +45,9 @@ interface RaporRow {
   TrYayinlandi?: number | null;
   EnYayinlandi?: number | null;
   OdemeDurumu?: string | null;
+  NumuneNotu?: string | null;
+  FirmaID?: number | null;
+  ProjeFirmaID?: number | null;
 }
 
 // Sunucu Onaylandı/Yayınlandı/Arşiv döner. UI: Onaylandı | Gönderildi | Arşiv.
@@ -218,6 +222,7 @@ export default function OnayliRaporTable() {
   const [error, setError]     = useState("");
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
   const [publishingKey, setPublishingKey] = useState<string | null>(null);
+  const [noteTarget, setNoteTarget] = useState<RaporNotTarget | null>(null);
 
   // Çoklu seçim — key = `${NkrID}__${RaporFormati}`
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -995,12 +1000,35 @@ export default function OnayliRaporTable() {
               </div>
               {/* Firma / Proje · Numune — geniş */}
               <div style={{ minWidth: 0 }}>
-                <div style={{
-                  fontWeight: 500, fontSize: "0.845rem", color: "var(--color-text-primary)",
-                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                }}>
-                  {upperTr(row.FirmaAd) || "—"}
-                  {row.ProjeAd && <span style={{ color: "var(--color-text-tertiary)" }}> · {upperTr(row.ProjeAd)}</span>}
+                <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                  <span style={{
+                    minWidth: 0, fontWeight: 500, fontSize: "0.845rem", color: "var(--color-text-primary)",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  }}>
+                    {upperTr(row.FirmaAd) || "—"}
+                    {row.ProjeAd && <span style={{ color: "var(--color-text-tertiary)" }}> · {upperTr(row.ProjeAd)}</span>}
+                  </span>
+                  <button
+                    type="button"
+                    title="Numune ve firma notlarını göster"
+                    aria-label={`${row.FirmaAd || "Firma"} notlarını göster`}
+                    onClick={event => {
+                      event.stopPropagation();
+                      setNoteTarget({
+                        raporNo: row.RaporNo,
+                        numuneAdi: row.Numune_Adi,
+                        numuneNotu: row.NumuneNotu || null,
+                        firma: { id: row.FirmaID ?? null, ad: row.FirmaAd },
+                        projeFirma: { id: row.ProjeFirmaID ?? null, ad: row.ProjeAd },
+                      });
+                    }}
+                    style={{
+                      width: 20, height: 20, flex: "0 0 20px", borderRadius: "50%",
+                      border: "1px solid #0071e366", background: "#0071e312", color: "#0071e3",
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      padding: 0, cursor: "pointer", fontSize: "0.72rem", fontWeight: 800,
+                    }}
+                  >i</button>
                 </div>
                 <div style={{
                   fontSize: "0.77rem", color: "var(--color-text-secondary)",
@@ -1406,6 +1434,9 @@ export default function OnayliRaporTable() {
           )}
           <button className={styles.pageBtn} disabled={page === totalPages} onClick={() => goTo(page + 1)}>›</button>
         </div>
+      )}
+      {noteTarget && (
+        <RaporNotBilgiModal target={noteTarget} onClose={() => setNoteTarget(null)} />
       )}
     </>
   );

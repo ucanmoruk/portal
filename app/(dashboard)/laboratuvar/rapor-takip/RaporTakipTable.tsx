@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import type { BilesenSonuc } from "@/lib/altParametre";
 import { useRouter } from "next/navigation";
 import ChallengeImportPanel from "./ChallengeImportPanel";
+import RaporNotBilgiModal, { type RaporNotTarget } from "./RaporNotBilgiModal";
 import { isChallengeFormat } from "@/lib/challengeImport";
 import styles from "@/app/styles/table.module.css";
 
@@ -25,6 +26,9 @@ interface RaporRow {
   SonucluSayisi: number;
   /** Geri Gönderildi durumdaysa: onaylayan kullanıcının yazdığı not */
   GeriGonderNotu?: string | null;
+  NumuneNotu?: string | null;
+  FirmaID?: number | null;
+  ProjeFirmaID?: number | null;
 }
 
 interface HizmetDetay {
@@ -256,6 +260,7 @@ export default function RaporTakipTable({
   const [saveError, setSaveError] = useState<Record<string, string>>({});
   const [exporting, setExporting] = useState(false);
   const [batchApproving, setBatchApproving] = useState(false);
+  const [noteTarget, setNoteTarget] = useState<RaporNotTarget | null>(null);
 
   // Sonuç Girişi > ÜGDR'de analiz akordiyonu yoktur. Rapor, detay ekranında
   // hazırlanır; bu listede yalnız seçim ve doğrudan onaya gönderme yapılır.
@@ -1166,12 +1171,37 @@ export default function RaporTakipTable({
                 {/* Firma / Numune — phase=lab ve phase=returned'da firma + proje gizli */}
                 <div style={{ minWidth: 0 }}>
                   {(phase !== "lab" && phase !== "returned") && (
-                    <div style={{
-                      fontWeight: 500, fontSize: "0.845rem", color: "var(--color-text-primary)",
-                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                    }}>
-                      {upperTr(row.FirmaAd) || "—"}
-                      {row.ProjeAd && <span style={{ color: "var(--color-text-tertiary)" }}> · {upperTr(row.ProjeAd)}</span>}
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                      <span style={{
+                        minWidth: 0, fontWeight: 500, fontSize: "0.845rem", color: "var(--color-text-primary)",
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                      }}>
+                        {upperTr(row.FirmaAd) || "—"}
+                        {row.ProjeAd && <span style={{ color: "var(--color-text-tertiary)" }}> · {upperTr(row.ProjeAd)}</span>}
+                      </span>
+                      <button
+                        type="button"
+                        title="Numune ve firma notlarını göster"
+                        aria-label={`${row.FirmaAd || "Firma"} notlarını göster`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setNoteTarget({
+                            raporNo: row.RaporNo,
+                            numuneAdi: row.Numune_Adi,
+                            numuneNotu: row.NumuneNotu || null,
+                            firma: { id: row.FirmaID ?? null, ad: row.FirmaAd },
+                            projeFirma: { id: row.ProjeFirmaID ?? null, ad: row.ProjeAd },
+                          });
+                        }}
+                        style={{
+                          width: 20, height: 20, flex: "0 0 20px", borderRadius: "50%",
+                          border: "1px solid #0071e366", background: "#0071e312", color: "#0071e3",
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          padding: 0, cursor: "pointer", fontSize: "0.72rem", fontWeight: 800,
+                        }}
+                      >
+                        i
+                      </button>
                     </div>
                   )}
                   <div style={{
@@ -2011,6 +2041,9 @@ export default function RaporTakipTable({
             </div>
           </div>
         </div>
+      )}
+      {noteTarget && (
+        <RaporNotBilgiModal target={noteTarget} onClose={() => setNoteTarget(null)} />
       )}
     </>
   );

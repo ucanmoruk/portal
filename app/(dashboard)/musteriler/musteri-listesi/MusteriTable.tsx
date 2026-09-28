@@ -118,6 +118,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -247,6 +248,35 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
     } finally {
       setDeleting(false);
     }
+  };
+
+  const exportToExcel = async () => {
+    setExporting(true); setError("");
+    try {
+      const [sortBy, sortDir] = sort.split("_");
+      const params = new URLSearchParams({ search, export: "1", sortBy, sortDir });
+      if (filterKimin) params.set("kimin", filterKimin);
+      const response = await fetch(`/api/firmalar?${params}`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Müşteri listesi alınamadı.");
+      const rows = (body.data as Musteri[]).map(item => ({
+        "Firma Adı": item.Ad || "",
+        "Açık Bakiye (TRY)": Number(item.AcikBakiye || 0),
+      }));
+      const XLSX = await import("xlsx");
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      sheet["!cols"] = [{ wch: 58 }, { wch: 22 }];
+      if (sheet["!ref"]) sheet["!autofilter"] = { ref: sheet["!ref"] };
+      for (let row = 2; row <= rows.length + 1; row += 1) {
+        const cell = sheet[`B${row}`];
+        if (cell) cell.z = "#,##0.00";
+      }
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, "Firma Açık Bakiyeleri");
+      XLSX.writeFile(workbook, `Firma_Acik_Bakiyeleri_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Excel çıktısı oluşturulamadı.");
+    } finally { setExporting(false); }
   };
 
   const fetchCari = useCallback(async (firma: Musteri, tip = cariTip, tarihBas = cariTarihBas, tarihBit = cariTarihBit, grup: "resmi" | "planlama" = cariGrup === "notlar" ? "resmi" : cariGrup) => {
@@ -445,6 +475,9 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
 
         <div className={styles.toolbarRight}>
           <span className={styles.totalCount}>{total} kayıt</span>
+          <button type="button" className={styles.addBtn} disabled={exporting} onClick={() => void exportToExcel()}>
+            {exporting ? "Hazırlanıyor…" : "Excel'e Aktar"}
+          </button>
           <select className={styles.pageSizeSelect} value={sort} onChange={e => { setSort(e.target.value); setPage(1); }} aria-label="Müşterileri sırala">
             <option value="ad_asc">Firma adı: A–Z</option>
             <option value="ad_desc">Firma adı: Z–A</option>

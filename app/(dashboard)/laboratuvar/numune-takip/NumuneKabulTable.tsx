@@ -6,6 +6,7 @@ import styles from "@/app/styles/table.module.css";
 import { printBarcodes, type BarcodeNumune } from "../yeni-numune/printBarcode";
 import EvrakDetayModal from "./EvrakDetayModal";
 import KabulMailModal from "./KabulMailModal";
+import FirmaNotBilgiModal from "./FirmaNotBilgiModal";
 
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 
@@ -16,6 +17,7 @@ interface NumuneItem {
   RaporNo: string;
   DisRaporKodu?: string | null;  // ÜGAM/RR26/XXXX (birden fazla varsa virgülle)
   Numune_Adi: string;
+  Aciklama?: string | null;
   Grup: string | null;
   Tur: string | null;
   Asama?: string;          // Numune Takip aşaması (Kabul Bekliyor / Sonuç Girişi / Onay Bekliyor / Onaylandı)
@@ -33,7 +35,9 @@ interface EvrakGroup {
   evrakNo: string;
   oldEvrakNo?: string | null;
   tarih: string | null;
+  firmaId: number | null;
   firmaAd: string | null;
+  projeFirmaId: number | null;
   projeAd: string | null;
   numuneSayisi: number;
   raporDurumu: string | null;
@@ -150,6 +154,7 @@ export default function NumuneKabulTable() {
   const [invoiceOffers, setInvoiceOffers] = useState<TeklifOpt[]>([]);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [durumSaving, setDurumSaving] = useState<Record<string, boolean>>({});
+  const [firmaNotGroup, setFirmaNotGroup] = useState<EvrakGroup | null>(null);
 
   const toggleSelect = (id: number) =>
     setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -718,10 +723,10 @@ export default function NumuneKabulTable() {
 
                 {/* Firma / Proje */}
                 <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-                  <div style={{
-                    fontWeight: 500, fontSize: "0.845rem", color: "var(--color-text-primary)",
-                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                  }}>{upperTr(group.firmaAd) || "—"}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                    <div style={{ flex: "1 1 auto", minWidth: 0, fontWeight: 500, fontSize: "0.845rem", color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{upperTr(group.firmaAd) || "—"}</div>
+                    <button type="button" aria-label={`${group.firmaAd || "Firma"} notlarını göster`} title="Firma ve proje firması notlarını göster" onClick={event => { event.stopPropagation(); setFirmaNotGroup(group); }} style={{ flex: "0 0 22px", width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "1px solid #0071e366", borderRadius: "50%", background: "#0071e312", color: "#0071e3", cursor: "pointer", fontSize: 13, lineHeight: 1, fontWeight: 800 }}>i</button>
+                  </div>
                   {group.projeAd && (
                     <div style={{
                       fontSize: "0.77rem", color: "var(--color-text-tertiary)",
@@ -981,7 +986,12 @@ export default function NumuneKabulTable() {
                               )}
                             </td>
                             <td style={{ padding: "9px 12px", color: "var(--color-text-primary)", fontWeight: 500 }}>
-                              {n.Numune_Adi}
+                              <div>{n.Numune_Adi}</div>
+                              {n.Aciklama?.trim() && (
+                                <div style={{ marginTop: 3, color: "var(--color-text-secondary)", fontSize: "0.72rem", fontWeight: 400, lineHeight: 1.35, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                                  {n.Aciklama.trim()}
+                                </div>
+                              )}
                             </td>
                             <td style={{ padding: "9px 12px" }}>
                               {(() => {
@@ -1050,6 +1060,8 @@ export default function NumuneKabulTable() {
           </div>
         )}
       </div>
+
+      {firmaNotGroup && <FirmaNotBilgiModal firma={{ id: firmaNotGroup.firmaId, ad: firmaNotGroup.firmaAd }} projeFirma={{ id: firmaNotGroup.projeFirmaId, ad: firmaNotGroup.projeAd }} onClose={() => setFirmaNotGroup(null)} />}
 
       {/* ── PASİFE AL ONAY ── */}
       {deleteId !== null && (

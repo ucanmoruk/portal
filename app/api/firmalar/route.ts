@@ -24,8 +24,9 @@ export async function GET(request: NextRequest) {
 
   const sp = request.nextUrl.searchParams;
   const search = sp.get("search")?.trim() || "";
+  const isExport = sp.get("export") === "1";
   const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
-  const limit = Math.min(100, Math.max(5, parseInt(sp.get("limit") || "20", 10)));
+  const limit = isExport ? 50000 : Math.min(100, Math.max(5, parseInt(sp.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
   const sortBy = sp.get("sortBy") === "bakiye" ? "bakiye" : "ad";
   const sortDir = sp.get("sortDir") === "desc" ? "DESC" : "ASC";

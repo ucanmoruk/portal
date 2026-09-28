@@ -295,6 +295,7 @@ export async function GET(request: NextRequest) {
              FROM EvrakNoMigration2026OzelDoc m
              WHERE m.NewEvrakNo = CAST(n.Evrak_No AS NVARCHAR(50))) AS OldEvrakNo,
             MIN(CONVERT(varchar(10), n.Tarih, 120))  AS Tarih,
+            MIN(n.Firma_ID)                           AS FirmaID,
             MIN(f.Ad)                                 AS FirmaAd,
             COUNT(*)                                  AS NumuneSayisi,
             CASE
@@ -335,6 +336,13 @@ export async function GET(request: NextRequest) {
               )
               ORDER BY p.ID DESC
             )                                         AS ProformaNo,
+            (
+              SELECT TOP 1 nd.ProjeID
+              FROM NKR n2
+              INNER JOIN NumuneDetay nd ON nd.RaporID = n2.ID
+              WHERE n2.Evrak_No = n.Evrak_No AND n2.Durum = 'Aktif'
+                AND nd.ProjeID IS NOT NULL
+            )                                         AS ProjeFirmaID,
             (
               SELECT TOP 1 rt.Ad
               FROM   NKR n2
@@ -391,6 +399,7 @@ export async function GET(request: NextRequest) {
           n.RaporNo,
           ${disKodSelect} AS DisRaporKodu,
           n.Numune_Adi,
+          n.Aciklama,
           n.Grup,
           n.Tur,
           CASE
@@ -422,7 +431,9 @@ export async function GET(request: NextRequest) {
         evrakNo:        g.Evrak_No,
         oldEvrakNo:     g.OldEvrakNo && String(g.OldEvrakNo) !== String(g.Evrak_No) ? String(g.OldEvrakNo) : null,
         tarih:          g.Tarih,
+        firmaId:        g.FirmaID ? Number(g.FirmaID) : null,
         firmaAd:        g.FirmaAd,
+        projeFirmaId:   g.ProjeFirmaID ? Number(g.ProjeFirmaID) : null,
         projeAd:        g.ProjeAd,
         numuneSayisi:   g.NumuneSayisi,
         raporDurumu:    g.Rapor_Durumu,
