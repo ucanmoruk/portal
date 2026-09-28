@@ -1120,6 +1120,13 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                                 onChange={e => updateSatir(s._key, "hizmetAdi", e.target.value)}
                                 aria-label="Hizmet açıklaması"
                               />
+                              <input
+                                style={{ ...cellInputStyle, minWidth: 220, marginTop: 4, color: "var(--color-text-secondary)", fontSize: 12 }}
+                                value={s.metot}
+                                onChange={e => updateSatir(s._key, "metot", e.target.value)}
+                                placeholder="Metot"
+                                aria-label="Hizmet metodu"
+                              />
                               {s.hizmetKod && <span style={{ display: "block", color: "var(--color-text-tertiary)", fontSize: 11, marginTop: 3 }}>{s.hizmetKod}</span>}
                             </td>
                             <td style={tdStyle}>
