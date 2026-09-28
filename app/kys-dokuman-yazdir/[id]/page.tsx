@@ -14,6 +14,13 @@ function formatDate(value: string | null | undefined) {
   return match ? `${match[3]}.${match[2]}.${match[1]}` : String(value);
 }
 
+function trimTrailingEmptyParagraphs(html: string) {
+  const emptyParagraph = /<p\b[^>]*>(?:\s|\u00a0|&nbsp;|&#160;|<br\s*\/?>|<span\b[^>]*>(?:\s|\u00a0|&nbsp;|&#160;|<br\s*\/?>)*<\/span>)*<\/p>\s*$/i;
+  let cleaned = html;
+  while (emptyParagraph.test(cleaned)) cleaned = cleaned.replace(emptyParagraph, "");
+  return cleaned;
+}
+
 export default async function KysDokumanYazdirPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ print?: string; pdfMode?: string }> }) {
   const user = await getPortalUser();
   if (!user) redirect("/login");
@@ -27,20 +34,21 @@ export default async function KysDokumanYazdirPage({ params, searchParams }: { p
   const query = await searchParams;
   if (query.print === "1") redirect(`/api/kys/dokumanlar/${doc.id}/pdf`);
   const pdfMode = query.pdfMode === "1";
+  const renderedContent = pdfMode ? trimTrailingEmptyParagraphs(doc.icerik || "") : doc.icerik || "";
 
   return (
     <main className={styles.screen}>
       <div className={`${styles.document} ${pdfMode ? styles.pdfMode : ""}`}>
         <header className={styles.header}>
           <Image src="/kys-document-logo.png" alt="UNIQUE Analyse" width={374} height={374} preload unoptimized />
-          <h1>{doc.baslik}</h1>
+          <h1>{doc.baslik.toLocaleUpperCase("tr-TR")}</h1>
           <table><tbody>
             <tr><th>Doküman No</th><td>{doc.kod}</td></tr>
             <tr><th>Revizyon</th><td>{doc.revizyonEtiket}</td></tr>
             <tr><th>Yürürlük Tarihi</th><td>{formatDate(doc.yururlukTarihi)}</td></tr>
           </tbody></table>
         </header>
-        <article className={styles.content} dangerouslySetInnerHTML={{ __html: doc.icerik || "" }} />
+        <article className={styles.content} dangerouslySetInnerHTML={{ __html: renderedContent }} />
         <section className={styles.appendix}>
           <h2>Revizyon Geçmişi</h2>
           <table><thead><tr><th>Rev.</th><th>Madde No</th><th>Açıklama</th><th>Yayın Tarihi</th></tr></thead>

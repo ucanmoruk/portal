@@ -12,6 +12,9 @@
 .content > :first-child { margin-top: 0 !important; }
 .content > :last-child { margin-bottom: 0 !important; }
 .content h2,.content h3,.content h4 { margin: 4mm 0 1.5mm; font-weight: 800; break-after: avoid; }
+.content h2 { text-transform: uppercase; }
+.content strong,.content b,.content strong *,.content b * { font-weight: 800 !important; }
+.content :global(.documentFormula) { margin: 4mm auto; padding: 3mm 5mm; border-left: 1mm solid #5042ee; background: #f7f6ff; font-family: "Cambria Math", Cambria, serif; text-align: center; }
 .content p { margin: 1.5mm 0 2.5mm; }
 .content a { color: #5042ee; font-weight: 700; text-decoration: underline; text-underline-offset: 1px; }
 .content table { width: 100% !important; max-width: 100%; border-collapse: collapse; margin: 3mm 0; }

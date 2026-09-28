@@ -66,6 +66,7 @@ export default function DisKaynakliDokumanClient() {
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<Row | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -108,15 +109,16 @@ export default function DisKaynakliDokumanClient() {
   useEffect(() => { void fetchRows(); }, [fetchRows]);
 
   useEffect(() => {
-    if (!modalOpen && !deleteTarget) return;
+    if (!modalOpen && !deleteTarget && !previewTarget) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (deleteTarget) { if (!deleting) setDeleteTarget(null); }
+      if (previewTarget) setPreviewTarget(null);
+      else if (deleteTarget) { if (!deleting) setDeleteTarget(null); }
       else if (!saving) setModalOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [modalOpen, saving, deleteTarget, deleting]);
+  }, [modalOpen, saving, deleteTarget, deleting, previewTarget]);
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const visibleIds = useMemo(() => rows.map(row => row.id), [rows]);
@@ -300,20 +302,20 @@ export default function DisKaynakliDokumanClient() {
         <div className={tableStyles.tableCard}>
           {error && <div className={tableStyles.errorBar}>{error}</div>}
           <div className={tableStyles.tableWrapper}>
-            <table className={`${tableStyles.table} ${styles.documentTable}`}>
+            <table className={`${tableStyles.table} ${styles.documentTable} ${styles.externalDocumentTable}`}>
               <thead>
                 <tr>
-                  <th style={{ width: 42 }}>
+                  <th style={{ width: 34 }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Tümünü seç" />
                   </th>
-                  <th style={{ width: 170 }}>Birim</th>
-                  <th style={{ width: 150 }}>Doküman Kodu</th>
+                  <th style={{ width: 105 }}>Birim</th>
+                  <th style={{ width: 105 }}>Doküman Kodu</th>
                   <th>Doküman Adı</th>
-                  <th style={{ width: 170 }}>Yayıncısı</th>
-                  <th style={{ width: 120 }}>Yayın Tarihi</th>
-                  <th style={{ width: 90 }}>Kaynak</th>
-                  <th style={{ width: 210 }}>Kontrol Kaydı</th>
-                  <th style={{ width: 110 }} aria-label="İşlemler" />
+                  <th style={{ width: 115 }}>Yayıncısı</th>
+                  <th style={{ width: 92 }}>Yayın Tarihi</th>
+                  <th style={{ width: 62 }}>Kaynak</th>
+                  <th style={{ width: 155 }}>Kontrol Kaydı</th>
+                  <th style={{ width: 108 }} aria-label="İşlemler" />
                 </tr>
               </thead>
               <tbody>
@@ -364,16 +366,15 @@ export default function DisKaynakliDokumanClient() {
                     <td>
                       <div className={tableStyles.actionBtns}>
                         {row.pdfPath && (
-                          <a
-                            href={row.pdfPath}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => setPreviewTarget(row)}
                             className={tableStyles.editBtn}
                             title="PDF önizleme"
+                            aria-label={`${row.dokumanAdi} PDF önizlemesini aç`}
                           >
                             <FileText size={15} />
-                            <ArrowUpRight size={13} />
-                          </a>
+                          </button>
                         )}
                         <button type="button" className={tableStyles.editBtn} title="Düzenle" onClick={() => openEdit(row)}>
                           <Pencil size={15} />
@@ -403,6 +404,39 @@ export default function DisKaynakliDokumanClient() {
           )}
         </div>
       </div>
+
+      {previewTarget?.pdfPath && (
+        <div
+          className={`${tableStyles.modalOverlay} ${styles.pdfPreviewOverlay}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="external-pdf-preview-title"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setPreviewTarget(null);
+          }}
+        >
+          <div className={styles.pdfPreviewModal}>
+            <div className={styles.pdfPreviewHeader}>
+              <div>
+                <h2 id="external-pdf-preview-title">{previewTarget.dokumanAdi}</h2>
+                <span>{previewTarget.dokumanKodu}</span>
+              </div>
+              <div className={styles.pdfPreviewActions}>
+                <a href={previewTarget.pdfPath} target="_blank" rel="noopener noreferrer">
+                  <ArrowUpRight size={15} />
+                  Yeni pencerede aç
+                </a>
+                <button type="button" onClick={() => setPreviewTarget(null)} aria-label="PDF önizlemesini kapat">×</button>
+              </div>
+            </div>
+            <iframe
+              className={styles.pdfPreviewFrame}
+              src={`${previewTarget.pdfPath}#view=FitH&toolbar=1&navpanes=0`}
+              title={`${previewTarget.dokumanAdi} PDF önizlemesi`}
+            />
+          </div>
+        </div>
+      )}
 
       {modalOpen && (
         <div className={tableStyles.modalOverlay} role="dialog" aria-modal="true" aria-label={editId ? "Dış kaynaklı dokümanı düzenle" : "Dış kaynaklı doküman yükle"}>

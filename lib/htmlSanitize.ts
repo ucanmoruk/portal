@@ -51,6 +51,8 @@ function sanitizeStyle(value: string): string {
       const propName = prop.trim().toLowerCase();
       if (!ALLOWED_STYLE_PROPS.has(propName)) return false;
       if (propName === "font-family" && !SAFE_FONT_FAMILY.test(val)) return false;
+      // Word/PDF kaynaklı negatif girintiler içeriği sayfanın sol kenarının dışına taşıyabiliyor.
+      if (["margin", "margin-left", "margin-right", "text-indent"].includes(propName) && /(^|\s)-\d/.test(val.trim())) return false;
       // url(), expression(), javascript: gibi kaçış yollarını kapat
       return !/url\s*\(|expression\s*\(|javascript:|@import/.test(val);
     })
@@ -147,6 +149,12 @@ export function sanitizeDocumentHtml(input: unknown): string {
     if (full.startsWith("</")) return `</${tag}>`;
     const selfClosing = /^(br|hr|img|col)$/.test(tag);
     return `<${tag}${sanitizeAttributes(tag, attrs)}${selfClosing ? " /" : ""}>`;
+  });
+
+  // Birinci düzey doküman başlıkları (h2) veri katmanında da büyük harfli tutulur.
+  html = html.replace(/(<h2\b[^>]*>)([\s\S]*?)(<\/h2>)/gi, (_full, open: string, content: string, close: string) => {
+    const upper = content.replace(/(^|>)([^<]+)/g, (_part, prefix: string, text: string) => `${prefix}${text.toLocaleUpperCase("tr-TR")}`);
+    return `${open}${upper}${close}`;
   });
 
   return html.trim();

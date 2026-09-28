@@ -1114,8 +1114,13 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                         {satirlar.map(s => (
                           <tr key={s._key} style={{ borderBottom: "1px solid var(--color-border)" }}>
                             <td style={tdStyle}>
-                              <span style={{ fontWeight: 500 }}>{s.hizmetAdi}</span>
-                              {s.hizmetKod && <span style={{ color: "var(--color-text-tertiary)", fontSize: 11, marginLeft: 4 }}>{s.hizmetKod}</span>}
+                              <input
+                                style={{ ...cellInputStyle, minWidth: 220, fontWeight: 500 }}
+                                value={s.hizmetAdi}
+                                onChange={e => updateSatir(s._key, "hizmetAdi", e.target.value)}
+                                aria-label="Hizmet açıklaması"
+                              />
+                              {s.hizmetKod && <span style={{ display: "block", color: "var(--color-text-tertiary)", fontSize: 11, marginTop: 3 }}>{s.hizmetKod}</span>}
                             </td>
                             <td style={tdStyle}>
                               <input type="number" min="1" step="1" style={cellInputStyle}

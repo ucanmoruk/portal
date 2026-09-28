@@ -15,6 +15,7 @@ import {
   Highlighter,
   History,
   ImagePlus,
+  FileUp,
   Italic,
   Link2,
   List,
@@ -24,6 +25,7 @@ import {
   Printer,
   RotateCcw,
   Save,
+  Sigma,
   Send,
   Table2,
   Trash2,
@@ -48,6 +50,7 @@ import {
 } from "./dokumanTypes";
 
 type Kullanici = { ID: number | string; Ad: string };
+type DisKaynakliDokuman = { id: number; dokumanKodu: string; dokumanAdi: string; yayincisi: string; pdfPath: string };
 type Aksiyon =
   | "onaya-gonder"
   | "yayin-onayi"
@@ -214,6 +217,8 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     hazirlayanId: "", hazirlayanAd: "", onaylayanId: "", onaylayanAd: "",
   });
   const [yayinDokumanlari, setYayinDokumanlari] = useState<DokumanDetay[]>([]);
+  const [disKaynakliDokumanlar, setDisKaynakliDokumanlar] = useState<DisKaynakliDokuman[]>([]);
+  const [linkSearchBusy, setLinkSearchBusy] = useState(false);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
   const [revizyonOnizleme, setRevizyonOnizleme] = useState<{ etiket: string; icerik: string; aciklama: string } | null>(null);
@@ -223,9 +228,13 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   const [manualRevizyonId, setManualRevizyonId] = useState<number | null>(null);
   const [manualRevizyon, setManualRevizyon] = useState({ revizyon: "", yayinTarihi: "", revizyonuYapan: "", maddeler: [{ maddeNo: "", aciklama: "" }] });
   const [tableMenuOpen, setTableMenuOpen] = useState(false);
+  const [formulaOpen, setFormulaOpen] = useState(false);
+  const [formulaText, setFormulaText] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
 
   const editorRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const documentInputRef = useRef<HTMLInputElement | null>(null);
   const headingSeqRef = useRef(0);
   const savedRangeRef = useRef<Range | null>(null);
   const activeBlockRef = useRef<HTMLElement | null>(null);
@@ -314,11 +323,34 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   }, []);
 
   useEffect(() => {
-    fetch("/api/kys/dokumanlar?limit=200&sort=kod-asc")
-      .then(r => r.json())
-      .then(j => setYayinDokumanlari(j.data || []))
-      .catch(() => setYayinDokumanlari([]));
-  }, []);
+    const query = linkSearch.trim();
+    if (!linkModalOpen || query.length < 2) {
+      setYayinDokumanlari([]);
+      setDisKaynakliDokumanlar([]);
+      setLinkSearchBusy(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setLinkSearchBusy(true);
+      try {
+        const encoded = encodeURIComponent(query);
+        const response = await fetch(`/api/kys/dokumanlar/link-search?search=${encoded}`, { signal: controller.signal });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Doküman araması yapılamadı.");
+        setYayinDokumanlari(result.internal || []);
+        setDisKaynakliDokumanlar(result.external || []);
+      } catch (cause) {
+        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+          setYayinDokumanlari([]);
+          setDisKaynakliDokumanlar([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLinkSearchBusy(false);
+      }
+    }, 300);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [linkModalOpen, linkSearch]);
 
   // Kaydedilmemiş değişiklikle sayfadan ayrılma uyarısı
   useEffect(() => {
@@ -529,6 +561,15 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
           heading.innerHTML = block.innerHTML;
           block.replaceWith(heading);
         }
+        // Paragraftan gelen inline punto başlık boyutunu ezmesin; yeni ve dönüştürülen
+        // başlıklar aynı tipografi kuralını kullansın.
+        heading.style.removeProperty("font-size");
+        heading.style.removeProperty("line-height");
+        heading.querySelectorAll<HTMLElement>("[style]").forEach(child => {
+          child.style.removeProperty("font-size");
+          child.style.removeProperty("line-height");
+          if (!child.getAttribute("style")?.trim()) child.removeAttribute("style");
+        });
         const currentText = heading.textContent?.trim() || "";
         if (!/^\d+(?:\.\d+)*\.?\s/.test(currentText)) heading.insertBefore(document.createTextNode(`${number} `), heading.firstChild);
         headingSeqRef.current += 1;
@@ -756,6 +797,75 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     setLinkSearch("");
   }
 
+  function createExternalDocumentLink(targetId: string) {
+    if (!ensureEditing()) return;
+    const editor = editorRef.current;
+    const target = disKaynakliDokumanlar.find(item => String(item.id) === targetId);
+    if (!editor || !target?.pdfPath) return;
+    const range = currentSelectionInsideEditor() || savedRangeRef.current;
+    const anchor = document.createElement("a");
+    anchor.href = target.pdfPath;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    if (range && editor.contains(range.commonAncestorContainer)) {
+      if (range.collapsed) anchor.textContent = `${target.dokumanKodu} — ${target.dokumanAdi}`;
+      else anchor.append(range.extractContents());
+      range.insertNode(anchor);
+    } else {
+      anchor.textContent = `${target.dokumanKodu} — ${target.dokumanAdi}`;
+      const paragraph = document.createElement("p");
+      paragraph.append(anchor);
+      editor.append(paragraph);
+    }
+    const caret = document.createRange();
+    caret.setStartAfter(anchor);
+    caret.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(caret);
+    savedRangeRef.current = caret.cloneRange();
+    markDirty();
+    setLinkModalOpen(false);
+    setLinkSearch("");
+  }
+
+  function insertFormula() {
+    const value = formulaText.trim();
+    if (!value || !ensureEditing()) return;
+    restoreEditorSelection();
+    const escaped = value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    document.execCommand("insertHTML", false, `<div class="documentFormula" contenteditable="true">${escaped}</div><p><br></p>`);
+    setFormulaText("");
+    setFormulaOpen(false);
+    markDirty();
+  }
+
+  async function handleDocumentImport(file: File) {
+    if (!canEdit || importBusy) return;
+    const currentText = editorRef.current?.innerText.trim();
+    if (currentText && !window.confirm("İçe aktarılan dosya mevcut doküman içeriğinin yerini alacak. Devam edilsin mi?")) return;
+    setImportBusy(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/kys/dokumanlar/import", { method: "POST", body: form });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Dosya içe aktarılamadı.");
+      if (!ensureEditing() || !editorRef.current) return;
+      editorRef.current.innerHTML = result.html || "<p><br></p>";
+      draftRef.current = editorRef.current.innerHTML;
+      markDirty();
+      refreshSections();
+      if (result.warnings?.length) window.alert(`Dosya aktarıldı. ${result.warnings.length} biçimlendirme uyarısı oluştu; içeriği gözden geçirmenizi öneririz.`);
+    } catch (cause) {
+      setError(errorMessage(cause, "Dosya içe aktarılamadı."));
+    } finally {
+      setImportBusy(false);
+      if (documentInputRef.current) documentInputRef.current.value = "";
+    }
+  }
+
   function removeHeading(id: string) {
     if (!ensureEditing()) return;
     const editor = editorRef.current;
@@ -799,7 +909,15 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     setSaving(true);
     setSaveInfo("");
     try {
-      const icerik = editorRef.current?.innerHTML ?? draftRef.current ?? doc.icerik;
+      const source = editorRef.current?.innerHTML ?? draftRef.current ?? doc.icerik;
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = source;
+      wrapper.querySelectorAll("h2").forEach(heading => {
+        const walker = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT);
+        let node: Node | null;
+        while ((node = walker.nextNode())) node.nodeValue = (node.nodeValue || "").toLocaleUpperCase("tr-TR");
+      });
+      const icerik = wrapper.innerHTML;
       const res = await fetch(`/api/kys/dokumanlar/${doc.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -1163,6 +1281,17 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 </button>
                 <span className={styles.toolbarDivider} />
                 <ToolButton title="Tablo ekle" disabled={!canEdit} onRun={insertTable}><Table2 size={15} /></ToolButton>
+                <ToolButton title="Formül ekle" disabled={!canEdit} onRun={() => { rememberEditorSelection(); setFormulaOpen(true); }}><Sigma size={15} /></ToolButton>
+                <button type="button" disabled={!canEdit || importBusy} onClick={() => documentInputRef.current?.click()} title="Word veya PDF içe aktar">
+                  <FileUp size={14} /> {importBusy ? "Aktarılıyor…" : "Dosyadan aktar"}
+                </button>
+                <input
+                  ref={documentInputRef}
+                  type="file"
+                  hidden
+                  accept=".docx,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
+                  onChange={event => { const file = event.target.files?.[0]; if (file) void handleDocumentImport(file); }}
+                />
                 <div className={styles.tableMenuWrap} ref={tableMenuRef}>
                   <button
                     type="button"
@@ -1467,7 +1596,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
             <div className={styles.previewHeader}>
               <div>
                 <div className={styles.kicker}>{doc.kod} · Rev. {doc.revizyonEtiket}</div>
-                <h3>{doc.baslik}</h3>
+                <h3>{doc.baslik.toLocaleUpperCase("tr-TR")}</h3>
               </div>
               <div className={styles.headerActions}>
                 <button type="button" className={styles.ghostButton} onClick={openPreviewInNewTab}>
@@ -1487,7 +1616,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
               <div className={styles.previewPaperInner}>
                 <div className={styles.previewDocumentHeader}>
                   <img src="/kys-document-logo.png" alt="UNIQUE Analyse" />
-                  <strong>{doc.baslik}</strong>
+                  <strong>{doc.baslik.toLocaleUpperCase("tr-TR")}</strong>
                   <table><tbody>
                     <tr><th>Doküman No</th><td>{doc.kod}</td></tr>
                     <tr><th>Revizyon</th><td>{doc.revizyonEtiket}</td></tr>
@@ -1522,20 +1651,44 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 <input autoFocus value={linkSearch} onChange={event => setLinkSearch(event.target.value)} placeholder="Örn. PR-01 veya Numune Kabul" />
               </label>
               <div className={styles.documentLinkResults}>
-                {yayinDokumanlari
-                  .filter(item => item.id !== doc.id)
-                  .filter(item => `${item.kod} ${item.baslik}`.toLocaleLowerCase("tr-TR").includes(linkSearch.trim().toLocaleLowerCase("tr-TR"))).length === 0 && (
-                    <span className={styles.sideEmpty}>Aramanıza uygun başka bir doküman bulunamadı.</span>
-                  )}
+                {linkSearch.trim().length < 2 && <span className={styles.sideEmpty}>Sonuçları görmek için en az 2 karakter yazın.</span>}
+                {linkSearchBusy && <span className={styles.sideEmpty}>Dokümanlar aranıyor…</span>}
+                {!linkSearchBusy && linkSearch.trim().length >= 2 && yayinDokumanlari.filter(item => item.id !== doc.id).length === 0 && disKaynakliDokumanlar.length === 0 && (
+                  <span className={styles.sideEmpty}>Aramanıza uygun iç veya dış kaynaklı doküman bulunamadı.</span>
+                )}
                 {yayinDokumanlari
                   .filter(item => item.id !== doc.id)
                   .sort((a, b) => a.kod.localeCompare(b.kod, "tr", { numeric: true }))
-                  .filter(item => `${item.kod} ${item.baslik}`.toLocaleLowerCase("tr-TR").includes(linkSearch.trim().toLocaleLowerCase("tr-TR")))
                   .map(item => (
-                    <button key={item.id} type="button" onClick={() => createPublishedDocumentLink(String(item.id))}>
-                      <strong>{item.kod}</strong><span>{item.baslik}</span><small>{item.tur}</small>
+                    <button key={`internal-${item.id}`} type="button" onClick={() => createPublishedDocumentLink(String(item.id))}>
+                      <strong>{item.kod}</strong><span>{item.baslik}</span><small>İç doküman · {item.tur}</small>
                     </button>
                   ))}
+                {disKaynakliDokumanlar
+                  .sort((a, b) => a.dokumanKodu.localeCompare(b.dokumanKodu, "tr", { numeric: true }))
+                  .map(item => (
+                    <button key={`external-${item.id}`} type="button" onClick={() => createExternalDocumentLink(String(item.id))}>
+                      <strong>{item.dokumanKodu}</strong><span>{item.dokumanAdi}</span><small>Dış kaynaklı PDF{item.yayincisi ? ` · ${item.yayincisi}` : ""}</small>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {formulaOpen && (
+        <div className={tableStyles.modalOverlay} role="dialog" aria-modal="true" aria-label="Formül ekle">
+          <div className={`${tableStyles.modal} ${styles.formulaModal}`} onClick={event => event.stopPropagation()}>
+            <div className={tableStyles.modalHeader}>
+              <div><h2>Formül ekle</h2><p className={styles.modalHint}>Formülü sembollerle yazabilirsiniz. Örnek: C = m / V veya x̄ = Σx / n</p></div>
+              <button type="button" className={tableStyles.modalClose} onClick={() => setFormulaOpen(false)} aria-label="Kapat">×</button>
+            </div>
+            <div className={tableStyles.modalBody}>
+              <label className={styles.documentLinkSearch}><span>Formül</span><input autoFocus value={formulaText} onChange={event => setFormulaText(event.target.value)} onKeyDown={event => { if (event.key === "Enter") insertFormula(); }} placeholder="C = m / V" /></label>
+              <div className={tableStyles.modalFooter}>
+                <button type="button" onClick={() => setFormulaOpen(false)}>Vazgeç</button>
+                <button type="button" disabled={!formulaText.trim()} onClick={insertFormula}><Sigma size={15} /> Formülü ekle</button>
               </div>
             </div>
           </div>
@@ -1548,7 +1701,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
             <div className={styles.previewHeader}>
               <div>
                 <div className={styles.kicker}>{doc.kod} · Rev. {revizyonOnizleme.etiket} (arşiv sürümü)</div>
-                <h3>{doc.baslik}</h3>
+                <h3>{doc.baslik.toLocaleUpperCase("tr-TR")}</h3>
               </div>
               <button type="button" className={styles.iconButton} aria-label="Kapat" onClick={() => setRevizyonOnizleme(null)}>
                 <X size={17} />
@@ -1607,7 +1760,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       {/* Yazdırma üst/alt bilgileri — her sayfada sabitlenir */}
       <div className={styles.printHeader} aria-hidden="true">
         <img src="/kys-document-logo.png" alt="UNIQUE Analyse" />
-        <strong>{doc.baslik}</strong>
+        <strong>{doc.baslik.toLocaleUpperCase("tr-TR")}</strong>
         <table><tbody>
           <tr><th>Doküman No</th><td>{doc.kod}</td></tr>
           <tr><th>Revizyon</th><td>{doc.revizyonEtiket}</td></tr>

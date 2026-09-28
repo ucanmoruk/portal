@@ -1,5 +1,6 @@
 import { JetBrains_Mono } from "next/font/google";
 import type { ReactNode } from "react";
+import { ttInterphases } from "@/app/fonts/reportFonts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TeklifPrintDocument — TAŞINABİLİR teklif çıktısı (PDF/A4) bileşeni.
@@ -20,6 +21,7 @@ const jetBrainsMono = JetBrains_Mono({
   subsets: ["latin", "latin-ext"],
   weight: ["400", "500", "600", "700", "800"],
   display: "swap",
+  variable: "--font-teklif-heading",
 });
 
 export interface TeklifHeader {
@@ -138,7 +140,7 @@ export default function TeklifPrintDocument({
         @page { size: A4; margin: 0; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         .quote-print-root {
-          font-family: 'JetBrains Mono', 'Cascadia Mono', Consolas, 'Courier New', monospace;
+          font-family: var(--font-tt-interphases), Arial, sans-serif;
           background: #f5f5f7;
           color: #1d1d1f;
           font-size: 10.5px;
@@ -147,6 +149,19 @@ export default function TeklifPrintDocument({
           -webkit-font-feature-settings: "calt" 0, "liga" 0;
           font-feature-settings: "calt" 0, "liga" 0;
         }
+        .quote-print-root h1,
+        .quote-print-root h2,
+        .quote-print-root h3,
+        .quote-print-root th,
+        .quote-print-root .title,
+        .quote-print-root .section-label,
+        .quote-print-root .meta-label,
+        .quote-print-root .notlar-title,
+        .quote-print-root .approval-label,
+        .quote-print-root .prep-title {
+          font-family: var(--font-teklif-heading), 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+        }
+        .service-note { margin-top: 2px; color: #4b5563; font-size: 9px; font-style: italic; line-height: 1.35; }
         .toolbar {
           background: #1d1d1f;
           padding: 12px 24px;
@@ -343,7 +358,7 @@ export default function TeklifPrintDocument({
         }
       `}</style>
 
-      <div className={`quote-print-root ${jetBrainsMono.className}`}>
+      <div className={`quote-print-root ${ttInterphases.variable} ${jetBrainsMono.variable}`}>
         {toolbar}
 
         <div className="page quote-print-page">
@@ -404,7 +419,7 @@ export default function TeklifPrintDocument({
                 return (
                   <tr key={i}>
                     <td className="center no">{i + 1}.</td>
-                    <td>{adi}</td>
+                    <td><div>{adi}</div>{s.Notlar?.trim() && <div className="service-note">{s.Notlar.trim()}</div>}</td>
                     <td className="center">{adet}</td>
                     <td className="right">
                       {fiyat != null
