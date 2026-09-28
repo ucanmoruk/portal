@@ -306,6 +306,13 @@ export default function IletisimClient({
   const moveCalendar = (direction: -1 | 1) => setCalendarDate(current => calendarView === "hafta"
     ? new Date(current.getFullYear(), current.getMonth(), current.getDate() + direction * 7)
     : new Date(current.getFullYear(), current.getMonth() + direction, 1));
+  const printCalendar = () => {
+    const printClass = "print-communication-calendar";
+    const cleanup = () => document.body.classList.remove(printClass);
+    document.body.classList.add(printClass);
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+  };
   return (
     <div className={styles.shell}>
       {error && <div className={styles.error}>{error}</div>}
@@ -396,7 +403,7 @@ export default function IletisimClient({
                 <button className={calendarView === "ay" ? styles.selected : ""} onClick={() => setCalendarView("ay")}>Aylık</button>
                 <button className={calendarView === "hafta" ? styles.selected : ""} onClick={() => setCalendarView("hafta")}>Haftalık</button>
               </div>
-              <button type="button" className={`${styles.printButton} ${styles.calendarPrintActions}`} onClick={() => window.print()}><Printer size={15} />Yazdır</button>
+              <button type="button" className={`${styles.printButton} ${styles.calendarPrintActions}`} onClick={printCalendar}><Printer size={15} />Yazdır</button>
             </>}
           </>
         )}

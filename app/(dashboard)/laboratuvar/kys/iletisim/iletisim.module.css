@@ -787,10 +787,10 @@
 
 @media print {
   @page { size: landscape; margin: 10mm; }
-  :global(body *) { visibility: hidden !important; }
-  .calendarPrintArea,
-  .calendarPrintArea * { visibility: visible !important; }
-  .calendarPrintArea {
+  :global(body.print-communication-calendar *) { visibility: hidden !important; }
+  :global(body.print-communication-calendar) .calendarPrintArea,
+  :global(body.print-communication-calendar) .calendarPrintArea * { visibility: visible !important; }
+  :global(body.print-communication-calendar) .calendarPrintArea {
     position: fixed;
     inset: 0;
     width: 100%;
@@ -800,9 +800,9 @@
     background: #fff;
     color: #111;
   }
-  .calendarPrintArea > header button,
-  .calendarPrintArea .overlay { display: none !important; }
-  .calendarPrintArea > header { grid-template-columns: 1fr; font-size: 15pt; }
+  :global(body.print-communication-calendar) .calendarPrintArea > header button,
+  :global(body.print-communication-calendar) .calendarPrintArea .overlay { display: none !important; }
+  :global(body.print-communication-calendar) .calendarPrintArea > header { grid-template-columns: 1fr; font-size: 15pt; }
   .calendarGrid > div,
   .weekCalendar .calendarGrid > div { min-height: 105px; break-inside: avoid; }
   .calendarTask { white-space: normal; font-size: 8pt; print-color-adjust: exact; }
