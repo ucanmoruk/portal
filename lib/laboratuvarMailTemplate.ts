@@ -7,9 +7,10 @@ export function laboratoryMailBrand(settings: Record<string, string> = {}): Labo
 }
 
 // Both laboratory mail flows share the report mail's typography, logo and layout.
-export function renderLaboratoryMail({ brand, title, message, intro, headings, rows, note, logoSrc = "cid:unique-logo" }: {
+export function renderLaboratoryMail({ brand, title, message, intro, headings, rows, note, logoSrc = "cid:unique-logo", summary = [] }: {
   brand: LaboratoryMailBrand; title: string; message: string; intro: string;
   headings: string[]; rows: string[][]; note: string; logoSrc?: string;
+  summary?: Array<{ label: string; value: string }>;
 }) {
   const esc = escapeMailHtml;
   return `<!doctype html>
@@ -22,6 +23,7 @@ export function renderLaboratoryMail({ brand, title, message, intro, headings, r
     <div style="padding:28px;">
       <h2 style="margin:0 0 16px 0;font-size:18px;color:#1d1d1f;font-weight:700;">${esc(title)}</h2>
       ${message ? `<p style="margin:0 0 16px 0;color:#1d1d1f;line-height:1.6;white-space:pre-wrap;">${esc(message)}</p>` : ""}
+      ${summary.length ? `<table role="presentation" style="width:100%;border-collapse:separate;border-spacing:6px;margin:0 -6px 18px;"><tr>${summary.map(item => `<td style="padding:12px;border:1px solid #eaeaea;border-radius:8px;background:#fafafa;"><span style="display:block;font-size:11px;color:#86868b;margin-bottom:4px;">${esc(item.label)}</span><strong style="font-size:15px;color:#1d1d1f;">${esc(item.value)}</strong></td>`).join("")}</tr></table>` : ""}
       <p style="margin:0 0 12px 0;color:#86868b;font-size:14px;">${esc(intro)}</p>
       <table style="width:100%;border-collapse:collapse;border:1px solid #eaeaea;border-radius:8px;overflow:hidden;font-size:13px;">
         <thead><tr style="background:#ffffff;">${headings.map(h => `<th style="padding:8px 10px;text-align:left;color:#6e6e73;font-weight:600;border-bottom:1px solid #eaeaea;">${esc(h)}</th>`).join("")}</tr></thead>

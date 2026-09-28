@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Pencil,
   Plus,
+  Printer,
   Search,
   Send,
   Trash2,
@@ -79,12 +80,13 @@ export default function IletisimClient({
   const [announcementFilter, setAnnouncementFilter] = useState("Tümü");
   const [taskFilter, setTaskFilter] = useState("Tümü");
   const [taskView, setTaskView] = useState<"liste" | "takvim">("liste");
+  const [calendarView, setCalendarView] = useState<"ay" | "hafta">("ay");
   const [calendarTaskId, setCalendarTaskId] = useState<number | null>(null);
   const [editingTask, setEditingTask] = useState<Item | null>(null);
   const [editTaskForm, setEditTaskForm] = useState({ baslik: "", icerik: "", aliciId: "", terminTarihi: "" });
   const [calendarDate, setCalendarDate] = useState(() => {
     const today = new Date();
-    return new Date(today.getFullYear(), today.getMonth(), 1);
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
   });
   const load = useCallback(async () => {
     setLoading(true);
@@ -286,14 +288,24 @@ export default function IletisimClient({
       count: data.gorevler.length,
     },
   ];
-  const days = useMemo(() => {
+  const days = useMemo<Array<Date | null>>(() => {
+    if (calendarView === "hafta") {
+      const start = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), calendarDate.getDate());
+      start.setDate(start.getDate() - (start.getDay() === 0 ? 6 : start.getDay() - 1));
+      return Array.from({ length: 7 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
+    }
     const first = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
     const count = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 0).getDate();
-    return [
-      ...Array(first.getDay() === 0 ? 6 : first.getDay() - 1).fill(null),
-      ...Array.from({ length: count }, (_, i) => i + 1),
-    ];
-  }, [calendarDate]);
+    return [...Array(first.getDay() === 0 ? 6 : first.getDay() - 1).fill(null), ...Array.from({ length: count }, (_, index) => new Date(first.getFullYear(), first.getMonth(), index + 1))];
+  }, [calendarDate, calendarView]);
+  const calendarTitle = useMemo(() => {
+    if (calendarView === "ay") return calendarDate.toLocaleDateString("tr-TR", { month: "long", year: "numeric" });
+    const dated = days.filter((day): day is Date => Boolean(day));
+    return `${dated[0].toLocaleDateString("tr-TR", { day: "2-digit", month: "short" })} – ${dated[6].toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" })}`;
+  }, [calendarDate, calendarView, days]);
+  const moveCalendar = (direction: -1 | 1) => setCalendarDate(current => calendarView === "hafta"
+    ? new Date(current.getFullYear(), current.getMonth(), current.getDate() + direction * 7)
+    : new Date(current.getFullYear(), current.getMonth() + direction, 1));
   return (
     <div className={styles.shell}>
       {error && <div className={styles.error}>{error}</div>}
@@ -379,6 +391,13 @@ export default function IletisimClient({
                 Takvim
               </button>
             </div>
+            {taskView === "takvim" && <>
+              <div className={`${styles.viewToggle} ${styles.calendarPrintActions}`} aria-label="Takvim görünümü">
+                <button className={calendarView === "ay" ? styles.selected : ""} onClick={() => setCalendarView("ay")}>Aylık</button>
+                <button className={calendarView === "hafta" ? styles.selected : ""} onClick={() => setCalendarView("hafta")}>Haftalık</button>
+              </div>
+              <button type="button" className={`${styles.printButton} ${styles.calendarPrintActions}`} onClick={() => window.print()}><Printer size={15} />Yazdır</button>
+            </>}
           </>
         )}
       </div>
@@ -563,20 +582,20 @@ export default function IletisimClient({
             })}
         </div>
       ) : taskView === "takvim" ? (
-        <div className={styles.calendar}>
+        <div className={`${styles.calendar} ${calendarView === "hafta" ? styles.weekCalendar : ""} ${styles.calendarPrintArea}`}>
           <header>
             <button
               type="button"
-              aria-label="Önceki ay"
-              onClick={() => setCalendarDate((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1))}
+              aria-label={calendarView === "hafta" ? "Önceki hafta" : "Önceki ay"}
+              onClick={() => moveCalendar(-1)}
             >
               <ChevronLeft size={17} />
             </button>
-            <strong>{calendarDate.toLocaleDateString("tr-TR", { month: "long", year: "numeric" })}</strong>
+            <strong>{calendarTitle}</strong>
             <button
               type="button"
-              aria-label="Sonraki ay"
-              onClick={() => setCalendarDate((date) => new Date(date.getFullYear(), date.getMonth() + 1, 1))}
+              aria-label={calendarView === "hafta" ? "Sonraki hafta" : "Sonraki ay"}
+              onClick={() => moveCalendar(1)}
             >
               <ChevronRight size={17} />
             </button>
@@ -588,20 +607,18 @@ export default function IletisimClient({
           </div>
           <div className={styles.calendarGrid}>
             {days.map((day, index) => (
-              <div key={index} className={!day ? styles.blank : ""}>
+              <div key={day ? `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}` : `blank-${index}`} className={!day ? styles.blank : ""}>
                 {day && (
                   <>
-                    <b>{day}</b>
+                    <b>{day.getDate()}{calendarView === "hafta" ? ` ${day.toLocaleDateString("tr-TR", { month: "short" })}` : ""}</b>
                     <div className={styles.calendarTasks}>
                     {tasks
                       .filter(
                         (task) =>
                           task.terminTarihi &&
-                          new Date(task.terminTarihi).getDate() === day &&
-                          new Date(task.terminTarihi).getMonth() ===
-                            calendarDate.getMonth() &&
-                          new Date(task.terminTarihi).getFullYear() ===
-                            calendarDate.getFullYear(),
+                          new Date(task.terminTarihi).getDate() === day.getDate() &&
+                          new Date(task.terminTarihi).getMonth() === day.getMonth() &&
+                          new Date(task.terminTarihi).getFullYear() === day.getFullYear(),
                       )
                       .map((task) => {
                         const overdue = Boolean(

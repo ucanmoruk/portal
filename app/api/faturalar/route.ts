@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
           f.ID, f.Fatura_No AS FaturaNo, f.ProformaNo,
           ${tarihExpr} AS Tarih,
           f.Toplam, f.Tutar, f.KDV, f.Odenen_Tutar AS OdenenTutar,
-          f.FaturaFirmaID, f.FirmaAdManuel, f.Aciklama, f.Kaynak, f.VadeTarihi,
+          f.FaturaFirmaID, f.FirmaAdManuel, f.Aciklama, f.Kaynak, f.VadeTarihi, ISNULL(fr.Mail,'') AS FirmaEmail,
           COALESCE(NULLIF(fr.Firma_Adi, ''), NULLIF(f.FirmaAdManuel, ''), '') AS FirmaAd,
           ${sonOdeme} AS OdemeDurumu
         FROM Fatura f

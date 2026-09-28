@@ -102,6 +102,26 @@
 .viewToggle button {
   padding: 6px 9px;
 }
+.printButton {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  padding: 0 11px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.printButton:hover {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
 .feed,
 .taskList {
   display: grid;
@@ -493,6 +513,9 @@
   padding: 7px;
   overflow: visible;
 }
+.weekCalendar .calendarGrid > div {
+  min-height: 360px;
+}
 .calendarGrid b {
   font-size: 0.7rem;
 }
@@ -760,4 +783,28 @@
   .weekdays span {
     padding: 5px 2px;
   }
+}
+
+@media print {
+  @page { size: landscape; margin: 10mm; }
+  :global(body *) { visibility: hidden !important; }
+  .calendarPrintArea,
+  .calendarPrintArea * { visibility: visible !important; }
+  .calendarPrintArea {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    color: #111;
+  }
+  .calendarPrintArea > header button,
+  .calendarPrintArea .overlay { display: none !important; }
+  .calendarPrintArea > header { grid-template-columns: 1fr; font-size: 15pt; }
+  .calendarGrid > div,
+  .weekCalendar .calendarGrid > div { min-height: 105px; break-inside: avoid; }
+  .calendarTask { white-space: normal; font-size: 8pt; print-color-adjust: exact; }
+  .weekdays span { print-color-adjust: exact; }
 }

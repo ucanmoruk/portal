@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { WalletCards } from "lucide-react";
+import { Mail, WalletCards } from "lucide-react";
 import styles from "@/app/styles/table.module.css";
 import localStyles from "./fatura.module.css";
 import { FATURA_KAYNAKLARI, ODEME_DURUMLARI } from "@/lib/faturaConstants";
 import CariQuickModal from "./CariQuickModal";
+import CariMailModal, { type CariMailTarget } from "../_components/CariMailModal";
 
 interface FaturaRow {
   ID: number;
@@ -21,6 +22,7 @@ interface FaturaRow {
   OdenenTutar: number | string | null;
   FaturaFirmaID: number | null;
   FirmaAdManuel: string | null;
+  FirmaEmail?: string | null;
   Aciklama: string | null;
   OdemeDurumu: string | null;
 }
@@ -204,6 +206,7 @@ export default function FaturaTable() {
   const [manualError, setManualError] = useState("");
   const [manualFirma, setManualFirma] = useState<FirmaOpt | null>(null);
   const [cariFirma, setCariFirma] = useState<FirmaOpt | null>(null);
+  const [mailTarget, setMailTarget] = useState<CariMailTarget | null>(null);
   const [manualForm, setManualForm] = useState({
     faturaNo: "",
     faturaTarihi: todayIso(),
@@ -428,6 +431,7 @@ export default function FaturaTable() {
                   </td>
                   <td style={{ textAlign: "right" }}>
                     <div className={styles.actionBtns}>
+                      <button className={styles.editBtn} type="button" onClick={() => setMailTarget({ mode: "fatura", faturaId: row.ID, firmaId: row.FaturaFirmaID, firmaAd: row.FirmaAd || row.FirmaAdManuel || "Müşteri", email: row.FirmaEmail, faturaNo: row.FaturaNo })} title="Fatura bilgisini mail gönder" aria-label={`${row.FaturaNo} faturasını mail gönder`}><Mail size={15} /></button>
                       <button className={styles.editBtn} type="button" disabled={!row.FaturaFirmaID} onClick={() => row.FaturaFirmaID && setCariFirma({ ID: row.FaturaFirmaID, Ad: row.FirmaAd })} title={row.FaturaFirmaID ? "Cari hesabı aç ve ödeme ekle" : "Bu fatura sistemdeki bir firmaya bağlı değil"} aria-label={`${row.FirmaAd} cari hesabı`}><WalletCards size={15} /></button>
                       <button className={styles.editBtn} type="button" onClick={() => openFaturaEdit(row)} title="Fatura detaylarını düzenle">✏️</button>
                     </div>
@@ -570,6 +574,8 @@ export default function FaturaTable() {
           </div>
         </div>
       )}
+
+      {mailTarget && <CariMailModal target={mailTarget} onClose={() => setMailTarget(null)} />}
       {cariFirma && <CariQuickModal firma={cariFirma} onClose={() => setCariFirma(null)} onChanged={() => void fetchRows()} />}
     </>
   );

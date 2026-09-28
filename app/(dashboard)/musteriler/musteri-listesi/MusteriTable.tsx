@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import styles from '@/app/styles/table.module.css';
 import { ODEME_DURUMLARI } from "@/lib/faturaConstants";
 import FirmaNotlari from "./FirmaNotlari";
+import CariMailModal, { type CariMailTarget } from "../_components/CariMailModal";
 
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 // ----------------------------------------------------------------
@@ -139,6 +140,7 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
   const [cariSummary, setCariSummary] = useState<CariSummary[]>([]);
   const [cariLoading, setCariLoading] = useState(false);
   const [cariError, setCariError] = useState("");
+  const [mailTarget, setMailTarget] = useState<CariMailTarget | null>(null);
   const [cariGrup, setCariGrup] = useState<"resmi" | "planlama" | "notlar">("resmi");
   const [cariTip, setCariTip] = useState("Tümü");
   const [cariTarihBas, setCariTarihBas] = useState("");
@@ -678,6 +680,9 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
                   {upperTr(cariTarget.Ad)}
                 </div>
               </div>
+              <button type="button" className={styles.addBtn} onClick={() => setMailTarget({ mode: "firma", firmaId: cariTarget.ID, firmaAd: cariTarget.Ad, email: cariTarget.Email })}>
+                Cariyi Mail Gönder
+              </button>
               <button className={styles.modalClose} onClick={() => setCariTarget(null)}>
                 <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
                   <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
@@ -928,6 +933,8 @@ export default function MusteriTable({ filterKimin }: { filterKimin?: string }) 
           </div>
         </div>
       )}
+
+      {mailTarget && <CariMailModal target={mailTarget} onClose={() => setMailTarget(null)} />}
 
       {deleteTarget && (
         <div className={styles.modalOverlay}>
