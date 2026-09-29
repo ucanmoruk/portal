@@ -52,6 +52,9 @@ export default function StokDetayClient({ id }: { id: number }) {
     aciklama: "",
   });
   const [uploading, setUploading] = useState(false);
+  const [certFile, setCertFile] = useState<File | null>(null);
+  const [certMovementId, setCertMovementId] = useState("");
+  const [certInputKey, setCertInputKey] = useState(0);
   const [imageUploading, setImageUploading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -127,17 +130,24 @@ export default function StokDetayClient({ id }: { id: number }) {
     }
   }
 
-  async function uploadCert(file: File | undefined) {
-    if (!file) return;
+  async function uploadCert() {
+    if (!certFile || !certMovementId) {
+      setError("PDF dosyasını ve sertifikanın ait olduğu marka / lot kaydını seçin.");
+      return;
+    }
     setUploading(true);
     setError("");
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", certFile);
+      fd.append("hareketId", certMovementId);
       const res = await fetch(`/api/kys/stoklar/${id}/sertifikalar`, { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Sertifika yüklenemedi.");
-      fetchDetail();
+      setCertFile(null);
+      setCertMovementId("");
+      setCertInputKey(key => key + 1);
+      await fetchDetail();
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -282,16 +292,34 @@ export default function StokDetayClient({ id }: { id: number }) {
 
         {tab === "sertifika" && (
           <div style={{ display: "grid", gap: 14 }}>
+            <div className={kys.detailGrid}>
+              <div className={styles.formGroup}>
+                <label htmlFor="certificate-movement">Marka / lot stok kaydı</label>
+                <select id="certificate-movement" value={certMovementId} onChange={e => setCertMovementId(e.target.value)} disabled={uploading}>
+                  <option value="">Seçin</option>
+                  {detail.movements.filter(h => h.marka || h.lot).map(h => (
+                    <option key={h.id} value={h.id}>{h.marka || "Markasız"} / {h.lot || "Lotsuz"} / SKT: {dateFmt(h.skt)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="certificate-file">Sertifika PDF</label>
+                <input key={certInputKey} id="certificate-file" className={kys.fileInput} type="file" accept="application/pdf,.pdf" onChange={e => setCertFile(e.target.files?.[0] || null)} disabled={uploading} />
+              </div>
+            </div>
             <div className={kys.inlineActions}>
-              <input className={kys.fileInput} aria-label="Stok sertifikası seç" type="file" onChange={e => uploadCert(e.target.files?.[0])} disabled={uploading} />
-              <span className={kys.formHint}>{uploading ? "Yükleniyor..." : "Ürünle gelen sertifikaları buraya yükleyebilirsiniz."}</span>
+              <button className={styles.addBtn} type="button" onClick={uploadCert} disabled={uploading || !certFile || !certMovementId}>{uploading ? "Yükleniyor..." : "PDF sertifikayı yükle"}</button>
+              <span className={kys.formHint}>Belge, seçtiğiniz marka ve lot kaydıyla eşleştirilir.</span>
             </div>
             <table className={kys.miniTable}>
-              <thead><tr><th>Dosya</th><th>Yükleyen</th><th>Tarih</th><th></th></tr></thead>
+              <thead><tr><th>Dosya</th><th>Marka</th><th>Lot</th><th>SKT</th><th>Yükleyen</th><th>Yükleme tarihi</th><th></th></tr></thead>
               <tbody>
-                {detail.certificates.length === 0 ? <tr><td colSpan={4}>Sertifika yüklenmemiş.</td></tr> : detail.certificates.map(c => (
+                {detail.certificates.length === 0 ? <tr><td colSpan={7}>Sertifika yüklenmemiş.</td></tr> : detail.certificates.map(c => (
                   <tr key={`${c.kaynak}-${c.id}`}>
                     <td>{c.dosyaAdi}</td>
+                    <td>{c.marka || "-"}</td>
+                    <td>{c.lot || "-"}</td>
+                    <td>{dateFmt(c.skt)}</td>
                     <td>{c.yukleyenAd || "-"}</td>
                     <td>{dateFmt(c.createdAt)}</td>
                     <td>

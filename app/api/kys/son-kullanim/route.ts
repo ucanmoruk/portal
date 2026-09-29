@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     return Response.json(await listKysExpiry({
       search: sp.get("search") || "",
-      days: Number(sp.get("days") || 180),
+      days: Number(sp.get("days") || 0),
       page: Number(sp.get("page") || 1),
       limit: Number(sp.get("limit") || 20),
     }));

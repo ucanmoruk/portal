@@ -711,19 +711,31 @@ export async function getKysStockDetail(id: number) {
     ORDER BY b.Ad
   `);
   const certRes = await pool.request().input("ID", id).query(`
-    SELECT ID, StokID, HareketID, DosyaAdi, MimeType, YukleyenAd, CreatedAt,
-           'stok' AS Kaynak, NULL AS TalepID
-    FROM KysStokSertifika
-    WHERE StokID = @ID
-    ORDER BY CreatedAt DESC, ID DESC
+    SELECT c.ID, c.StokID, c.HareketID, c.DosyaAdi, c.MimeType,
+           COALESCE(NULLIF(c.YukleyenAd, ''),
+             NULLIF(LTRIM(RTRIM(CONCAT(COALESCE(u.Ad, ''), ' ', COALESCE(u.Soyad, '')))), ''),
+             c.YukleyenID) AS YukleyenAd,
+           c.CreatedAt,
+           'stok' AS Kaynak, NULL AS TalepID, h.Marka, h.Lot, h.SKT
+    FROM KysStokSertifika c
+    LEFT JOIN KysStokHareket h ON h.ID = c.HareketID AND h.StokID = c.StokID
+    LEFT JOIN RootKullanici u ON u.ID = TRY_CAST(c.YukleyenID AS INT)
+    WHERE c.StokID = @ID
+    ORDER BY c.CreatedAt DESC, c.ID DESC
   `);
   const acceptanceCertRes = await pool.request().input("ID", id).query(`
-    SELECT b.ID, k.StokID, k.HareketID, b.DosyaAdi, b.MimeType, NULL AS YukleyenAd, b.CreatedAt,
-           'talep' AS Kaynak, b.TalepID
+    SELECT b.ID, k.StokID, k.HareketID, b.DosyaAdi, b.MimeType,
+           COALESCE(
+             NULLIF(LTRIM(RTRIM(CONCAT(COALESCE(u.Ad, ''), ' ', COALESCE(u.Soyad, '')))), ''),
+             b.YukleyenID) AS YukleyenAd,
+           b.CreatedAt,
+           'talep' AS Kaynak, b.TalepID, h.Marka, h.Lot, h.SKT
     FROM KysTalepBelge b
     INNER JOIN KysTalepKabul k ON k.ID = b.KabulID AND k.TalepID = b.TalepID
+    LEFT JOIN KysStokHareket h ON h.ID = k.HareketID AND h.StokID = k.StokID
+    LEFT JOIN RootKullanici u ON u.ID = TRY_CAST(b.YukleyenID AS INT)
     WHERE k.StokID = @ID
-    ORDER BY CreatedAt DESC, ID DESC
+    ORDER BY b.CreatedAt DESC, b.ID DESC
   `);
 
   return {
@@ -803,6 +815,9 @@ function mapCertificate(r: AnyRow) {
     createdAt: asDateTime(r.CreatedAt),
     kaynak: rowString(r, "Kaynak") || "stok",
     talepId: r.TalepID == null ? null : Number(r.TalepID),
+    marka: rowString(r, "Marka"),
+    lot: rowString(r, "Lot"),
+    skt: asDate(r.SKT),
   };
 }
 
@@ -885,6 +900,13 @@ export async function addKysCertificate(input: {
 }) {
   await ensureKysSchema();
   const pool = await cosmoPool;
+  if (input.hareketId) {
+    const movement = await pool.request()
+      .input("HareketID", input.hareketId)
+      .input("StokID", input.stokId)
+      .query("SELECT ID FROM KysStokHareket WHERE ID = @HareketID AND StokID = @StokID");
+    if (!movement.recordset[0]) throw new Error("Seçilen marka / lot kaydı bu stok kartına ait değil.");
+  }
   const res = await pool.request()
     .input("StokID", input.stokId)
     .input("HareketID", input.hareketId || null)
@@ -917,10 +939,10 @@ export async function listKysExpiry(params: { search?: string; days?: number; pa
   const limit = Math.min(100, Math.max(5, Number(params.limit || 20)));
   const offset = (page - 1) * limit;
   const search = text(params.search);
-  const days = Math.max(0, Number(params.days || 180));
+  const days = Math.max(0, Number(params.days ?? 0));
   let where = "WHERE h.SKT IS NOT NULL";
   if (search) where += " AND (s.Kod LIKE @search OR s.Ad LIKE @search OR h.Lot LIKE @search OR h.Marka LIKE @search)";
-  if (days) where += " AND h.SKT <= DATE_ADD(CURDATE(), INTERVAL @days DAY)";
+  if (days) where += " AND h.SKT <= DATEADD(day, @days, CAST(GETDATE() AS date))";
 
   const bind = (req: any) => req.input("search", `%${search}%`).input("days", days);
   const countRes = await bind(pool.request()).query(`

@@ -34,7 +34,7 @@ const pageNums = (page: number, totalPages: number) => {
 export default function SonKullanimClient() {
   const [rows, setRows] = useState<Row[]>([]);
   const [search, setSearch] = useState("");
-  const [days, setDays] = useState("180");
+  const [days, setDays] = useState("0");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [total, setTotal] = useState(0);
@@ -72,7 +72,7 @@ export default function SonKullanimClient() {
         </div>
         <div className={styles.toolbarRight}>
           <select className={kys.select} value={days} onChange={e => { setDays(e.target.value); setPage(1); }}>
-            <option value="30">30 gün</option><option value="60">60 gün</option><option value="90">90 gün</option><option value="180">180 gün</option><option value="365">1 yıl</option>
+            <option value="0">Tüm son kullanım tarihleri</option><option value="30">30 gün</option><option value="60">60 gün</option><option value="90">90 gün</option><option value="180">180 gün</option><option value="365">1 yıl</option>
           </select>
           <select className={styles.pageSizeSelect} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>{[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} / sayfa</option>)}</select>
         </div>
