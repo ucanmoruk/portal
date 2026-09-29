@@ -715,7 +715,9 @@ export async function getKysStockDetail(id: number) {
            'stok' AS Kaynak, NULL AS TalepID
     FROM KysStokSertifika
     WHERE StokID = @ID
-    UNION ALL
+    ORDER BY CreatedAt DESC, ID DESC
+  `);
+  const acceptanceCertRes = await pool.request().input("ID", id).query(`
     SELECT b.ID, k.StokID, k.HareketID, b.DosyaAdi, b.MimeType, NULL AS YukleyenAd, b.CreatedAt,
            'talep' AS Kaynak, b.TalepID
     FROM KysTalepBelge b
@@ -734,7 +736,9 @@ export async function getKysStockDetail(id: number) {
       birimAd: rowString(r, "BirimAd"),
       miktar: Number(r.Miktar || 0),
     })),
-    certificates: certRes.recordset.map(mapCertificate),
+    certificates: [...certRes.recordset, ...acceptanceCertRes.recordset]
+      .map(mapCertificate)
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))),
   };
 }
 
