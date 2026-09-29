@@ -55,6 +55,14 @@ export default function StokDetayClient({ id }: { id: number }) {
   const [imageUploading, setImageUploading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+
+  function certificateUrl(c: any, inline = false) {
+    const base = c.kaynak === "talep"
+      ? `/api/kys/talepler/${c.talepId}/belgeler/${c.id}`
+      : `/api/kys/sertifikalar/${c.id}`;
+    return inline ? `${base}?inline=1` : base;
+  }
 
   function openEdit() {
     setEditForm(Object.fromEntries(stockEditFields.map(([key]) => [key, String(detail?.stock[key] ?? "")])));
@@ -282,11 +290,17 @@ export default function StokDetayClient({ id }: { id: number }) {
               <thead><tr><th>Dosya</th><th>Yükleyen</th><th>Tarih</th><th></th></tr></thead>
               <tbody>
                 {detail.certificates.length === 0 ? <tr><td colSpan={4}>Sertifika yüklenmemiş.</td></tr> : detail.certificates.map(c => (
-                  <tr key={c.id}>
+                  <tr key={`${c.kaynak}-${c.id}`}>
                     <td>{c.dosyaAdi}</td>
                     <td>{c.yukleyenAd || "-"}</td>
                     <td>{dateFmt(c.createdAt)}</td>
-                    <td><a className={styles.cancelBtn} href={`/api/kys/sertifikalar/${c.id}`}>İndir</a></td>
+                    <td>
+                      {c.mimeType === "application/pdf" ? (
+                        <button className={styles.cancelBtn} type="button" onClick={() => setPreview({ url: certificateUrl(c, true), name: c.dosyaAdi })}>Önizle</button>
+                      ) : (
+                        <a className={styles.cancelBtn} href={certificateUrl(c)}>İndir</a>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -294,6 +308,24 @@ export default function StokDetayClient({ id }: { id: number }) {
           </div>
         )}
       </div>
+
+      {preview && (
+        <div className={styles.modalOverlay} onMouseDown={e => { if (e.target === e.currentTarget) setPreview(null); }}>
+          <div className={styles.modal} style={{ width: "min(1000px, 94vw)", maxWidth: 1000, height: "88vh" }} role="dialog" aria-modal="true" aria-labelledby="certificate-preview-title">
+            <div className={styles.modalHeader}>
+              <h2 id="certificate-preview-title">{preview.name}</h2>
+              <button type="button" className={styles.modalClose} aria-label="Kapat" onClick={() => setPreview(null)}>×</button>
+            </div>
+            <div className={styles.modalBody} style={{ padding: 0, flex: 1, minHeight: 0 }}>
+              <iframe title={`${preview.name} PDF önizleme`} src={preview.url} style={{ width: "100%", height: "100%", border: 0 }} />
+            </div>
+            <div className={styles.modalFooter}>
+              <button type="button" className={styles.cancelBtn} onClick={() => setPreview(null)}>Kapat</button>
+              <a className={styles.saveBtn} href={preview.url} target="_blank" rel="noreferrer">Yeni sekmede aç</a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editOpen && (
         <div className={styles.modalOverlay}>

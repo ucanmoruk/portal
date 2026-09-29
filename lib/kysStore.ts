@@ -711,10 +711,17 @@ export async function getKysStockDetail(id: number) {
     ORDER BY b.Ad
   `);
   const certRes = await pool.request().input("ID", id).query(`
-    SELECT ID, StokID, HareketID, DosyaAdi, MimeType, YukleyenAd, CreatedAt
+    SELECT ID, StokID, HareketID, DosyaAdi, MimeType, YukleyenAd, CreatedAt,
+           'stok' AS Kaynak, NULL AS TalepID
     FROM KysStokSertifika
     WHERE StokID = @ID
-    ORDER BY ID DESC
+    UNION ALL
+    SELECT b.ID, k.StokID, k.HareketID, b.DosyaAdi, b.MimeType, NULL AS YukleyenAd, b.CreatedAt,
+           'talep' AS Kaynak, b.TalepID
+    FROM KysTalepBelge b
+    INNER JOIN KysTalepKabul k ON k.ID = b.KabulID AND k.TalepID = b.TalepID
+    WHERE k.StokID = @ID
+    ORDER BY CreatedAt DESC, ID DESC
   `);
 
   return {
@@ -790,6 +797,8 @@ function mapCertificate(r: AnyRow) {
     mimeType: rowString(r, "MimeType"),
     yukleyenAd: rowString(r, "YukleyenAd"),
     createdAt: asDateTime(r.CreatedAt),
+    kaynak: rowString(r, "Kaynak") || "stok",
+    talepId: r.TalepID == null ? null : Number(r.TalepID),
   };
 }
 

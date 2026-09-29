@@ -616,9 +616,19 @@ export default function YeniNumuneClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Kaydedilemedi");
       const newSavedId = card.savedId ?? (data.id as number);
-      patchCard(card.cardId, { saving: false, saved: true, savedId: newSavedId, open: false, RaporNo: assignedRaporNo });
       setEvrak(current => ({ ...current, Evrak_No: assignedEvrakNo }));
       setEvrakSaved(true);
+      if (card.FotoFile) {
+        const photoData = new FormData();
+        photoData.append("file", card.FotoFile);
+        const photoRes = await fetch(`/api/numune-form/${newSavedId}/foto`, { method: "POST", body: photoData });
+        const photoJson = await photoRes.json().catch(() => ({}));
+        if (!photoRes.ok) {
+          patchCard(card.cardId, { saving: false, saved: true, savedId: newSavedId, open: true, RaporNo: assignedRaporNo });
+          throw new Error(photoJson.error || "Numune kaydedildi ancak fotoğraf yüklenemedi. Tekrar kaydedebilirsiniz.");
+        }
+      }
+      patchCard(card.cardId, { saving: false, saved: true, savedId: newSavedId, open: false, RaporNo: assignedRaporNo, FotoFile: null });
     } catch (e: any) {
       patchCard(card.cardId, { saving: false, error: e.message || "Hata" });
     }
@@ -853,6 +863,17 @@ export default function YeniNumuneClient() {
                     <label>SKT</label>
                     <input style={sel} value={card.SKT} onChange={e => patchCard(card.cardId, { SKT: e.target.value })} placeholder="2025-12" />
                   </div>
+                </div>
+
+                <div className={yn.fg} style={{ marginTop: 12 }}>
+                  <label>Numune notu</label>
+                  <textarea
+                    rows={3}
+                    style={sel}
+                    value={card.Aciklama}
+                    onChange={e => patchCard(card.cardId, { Aciklama: e.target.value })}
+                    placeholder="Bu ürüne özel not ekleyin…"
+                  />
                 </div>
 
                 {/* Ürün fotoğrafı */}

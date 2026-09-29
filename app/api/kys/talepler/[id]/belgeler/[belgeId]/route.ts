@@ -2,7 +2,7 @@ import { getPortalUser } from "@/lib/portalYetki";
 import { cosmoPool } from "@/lib/db";
 import { ensureKysPurchaseSchema } from "@/lib/kysPurchaseWorkflow";
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string; belgeId: string }> },
 ) {
   const user = await getPortalUser();
@@ -22,10 +22,11 @@ export async function GET(
       )
   ).recordset[0];
   if (!row) return new Response("Belge bulunamadı", { status: 404 });
+  const inline = new URL(request.url).searchParams.get("inline") === "1";
   return new Response(new Uint8Array(row.FileData), {
     headers: {
       "Content-Type": row.MimeType,
-      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(row.DosyaAdi)}`,
+      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(row.DosyaAdi)}`,
       "X-Content-Type-Options": "nosniff",
       "Cache-Control": "private, no-store",
     },
