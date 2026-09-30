@@ -168,11 +168,6 @@ export default function DisKaynakliDokumanClient() {
       setFormError("Doküman kodu ve doküman adı zorunludur.");
       return;
     }
-    // Yeni kayıtta PDF zorunlu; düzenlemede mevcut PDF korunabildiği için opsiyonel.
-    if (!editId && !pdfFile) {
-      setFormError("PDF dosyası seçilmelidir.");
-      return;
-    }
     setSaving(true);
     setFormError("");
     try {
@@ -270,7 +265,7 @@ export default function DisKaynakliDokumanClient() {
             </button>
             <button className={tableStyles.addBtn} type="button" onClick={openAdd}>
               <FilePlus2 size={16} />
-              PDF yükle
+              Yeni doküman
             </button>
           </div>
         </div>
@@ -327,7 +322,7 @@ export default function DisKaynakliDokumanClient() {
                   <tr>
                     <td colSpan={9}>
                       <div className={tableStyles.empty}>
-                        {filtreAktif ? "Filtrelere uyan kayıt bulunamadı." : "Henüz dış kaynaklı doküman yok. PDF yükle ile ilk kaydı oluşturun."}
+                        {filtreAktif ? "Filtrelere uyan kayıt bulunamadı." : "Henüz dış kaynaklı doküman yok. Yeni doküman ile ilk kaydı oluşturun."}
                       </div>
                     </td>
                   </tr>
@@ -442,7 +437,7 @@ export default function DisKaynakliDokumanClient() {
         <div className={tableStyles.modalOverlay} role="dialog" aria-modal="true" aria-label={editId ? "Dış kaynaklı dokümanı düzenle" : "Dış kaynaklı doküman yükle"}>
           <div className={tableStyles.modal}>
             <div className={tableStyles.modalHeader}>
-              <h2>{editId ? "Dış kaynaklı dokümanı düzenle" : "Dış kaynaklı doküman yükle"}</h2>
+              <h2>{editId ? "Dış kaynaklı dokümanı düzenle" : "Yeni dış kaynaklı doküman"}</h2>
               <button type="button" className={tableStyles.modalClose} onClick={() => setModalOpen(false)} aria-label="Kapat">×</button>
             </div>
             <div className={tableStyles.modalBody}>
@@ -479,10 +474,11 @@ export default function DisKaynakliDokumanClient() {
                 </div>
                 <div className={`${tableStyles.formGroup} ${tableStyles.colSpan2}`}>
                   <label>
-                    PDF dosyası {!editId && <span className={tableStyles.required}>*</span>}
+                    PDF dosyası <span>(isteğe bağlı)</span>
                   </label>
                   <input
                     ref={fileInputRef}
+                    className={styles.blueFileInput}
                     type="file"
                     accept="application/pdf,.pdf"
                     onChange={event => setPdfFile(event.target.files?.[0] || null)}

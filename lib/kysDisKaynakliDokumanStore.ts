@@ -225,8 +225,6 @@ export async function createDisKaynakliDokuman(input: DisKaynakliDokumanInput) {
   const dokumanAdi = text(input.dokumanAdi);
   if (!dokumanKodu) throw new Error("Doküman kodu zorunludur.");
   if (!dokumanAdi) throw new Error("Doküman adı zorunludur.");
-  if (!input.pdfPath) throw new Error("PDF dosyası zorunludur.");
-
   const birim = validateBirim(input.birim);
   const pool = await cosmoPool;
   const res = await pool.request()

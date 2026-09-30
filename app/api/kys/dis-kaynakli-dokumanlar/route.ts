@@ -42,15 +42,19 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get("pdf");
-    if (!(file instanceof File)) return fail("PDF dosyası zorunludur.", 400);
-    if (file.type && file.type !== "application/pdf") return fail("Sadece PDF dosyası yüklenebilir.", 400);
-
-    const originalName = safePdfName(file.name || "dokuman.pdf");
-    const fileName = `${Date.now()}-${randomUUID()}-${originalName}`;
-    const { publicUrl } = await uploadDisKaynakliPdfToFtp({
-      pdfBuffer: Buffer.from(await file.arrayBuffer()),
-      fileName,
-    });
+    let publicUrl = "";
+    let pdfOriginalName = "";
+    if (file instanceof File && file.size > 0) {
+      if (file.type && file.type !== "application/pdf") return fail("Sadece PDF dosyası yüklenebilir.", 400);
+      const originalName = safePdfName(file.name || "dokuman.pdf");
+      const fileName = `${Date.now()}-${randomUUID()}-${originalName}`;
+      const uploaded = await uploadDisKaynakliPdfToFtp({
+        pdfBuffer: Buffer.from(await file.arrayBuffer()),
+        fileName,
+      });
+      publicUrl = uploaded.publicUrl;
+      pdfOriginalName = file.name || originalName;
+    }
 
     const created = await createDisKaynakliDokuman({
       birim: String(formData.get("birim") || ""),
@@ -60,7 +64,7 @@ export async function POST(request: Request) {
       yayinTarihi: String(formData.get("yayinTarihi") || ""),
       yayinLinki: String(formData.get("yayinLinki") || ""),
       pdfPath: publicUrl,
-      pdfOriginalName: file.name || originalName,
+      pdfOriginalName,
     });
     return Response.json(created, { status: 201 });
   } catch (e: unknown) {

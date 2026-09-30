@@ -323,6 +323,23 @@
   color: var(--color-accent);
 }
 
+.blueFileInput::file-selector-button {
+  margin-right: 10px;
+  border: 0;
+  border-radius: var(--radius-full);
+  padding: 7px 14px;
+  background: var(--color-accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.blueFileInput::file-selector-button:hover {
+  background: var(--color-accent-hover);
+}
+
 .tabs {
   display: flex;
   gap: 4px;
