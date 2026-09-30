@@ -16,6 +16,10 @@ import { cosmoPool } from "@/lib/db";
 
 const VALID_TUR = new Set(["Teklif", "AnalizTalep", "DestekTalep", "Dosya"]);
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Beklenmeyen bir hata oluştu.";
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ evrakNo: string }> }
@@ -107,8 +111,8 @@ export async function GET(
       destekTalepleri:  destekRes.recordset,
       dosyalar:         dosyaRes.recordset,
     });
-  } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    return Response.json({ error: errorMessage(e) }, { status: 500 });
   }
 }
 
@@ -119,8 +123,9 @@ export async function POST(
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
 
-  const userId = (session.user as any)?.userId ?? null;
-  const userName = (session.user as any)?.name || (session.user as any)?.email || null;
+  const sessionUser = session.user as (typeof session.user & { userId?: string | number }) | undefined;
+  const userId = sessionUser?.userId ?? null;
+  const userName = sessionUser?.name || sessionUser?.email || null;
 
   const { evrakNo } = await params;
   if (!evrakNo) return Response.json({ error: "Evrak no gerekli" }, { status: 400 });
@@ -140,55 +145,74 @@ export async function POST(
     }
 
     const pool = await cosmoPool;
+    const tx = await pool.transaction();
+    await tx.begin();
 
-    // Aynı eşleştirme var mı? (Dosya hariç)
-    if (tur !== "Dosya") {
-      const exists = await pool.request()
-        .input("e", evrakNo).input("t", tur).input("h", hedefId)
-        .query(`SELECT TOP 1 ID FROM NKR_EvrakEslestirme WHERE EvrakNo = @e AND Tur = @t AND HedefID = @h`);
-      if (exists.recordset.length > 0) {
-        return Response.json({ error: "Bu kayıt zaten bu evraka eşleştirilmiş." }, { status: 409 });
+    try {
+      // Kontrol, kayıt ve durum geçişi birlikte başarılı olmalı. Aksi halde
+      // kullanıcı hata görürken eşleştirme satırının tek başına kalması önlenir.
+      if (tur !== "Dosya") {
+        const exists = await tx.request()
+          .input("e", evrakNo).input("t", tur).input("h", hedefId)
+          .query(`SELECT TOP 1 ID FROM NKR_EvrakEslestirme WHERE EvrakNo = @e AND Tur = @t AND HedefID = @h`);
+        if (exists.recordset.length > 0) {
+          await tx.rollback();
+          return Response.json({ error: "Bu kayıt zaten bu evraka eşleştirilmiş." }, { status: 409 });
+        }
       }
+
+      const ins = await tx.request()
+        .input("e", evrakNo).input("t", tur).input("h", hedefId)
+        .input("kod", hedefKod).input("ac", aciklama)
+        .input("uid", userId ? Number(userId) : null).input("uad", userName)
+        .query(`
+          INSERT INTO NKR_EvrakEslestirme
+            (EvrakNo, Tur, HedefID, HedefKod, Aciklama, EslestirenID, EslestirenAd, EslestirmeTarihi)
+          OUTPUT INSERTED.ID
+          VALUES (@e, @t, @h, @kod, @ac, @uid, @uad, GETDATE())
+        `);
+
+      // UPDATE ... OUTPUT, MySQL uyumluluk katmanında geçerli değildir. Önceki
+      // durumu transaction içinde okuyup standart UPDATE sonucuyla doğruluyoruz.
+      let durumDegisti: { tablo: string; eski: string; yeni: string } | null = null;
+      if (tur === "Teklif" && hedefId) {
+        const onceki = await tx.request().input("id", hedefId).query(`
+          SELECT TeklifDurum AS Eski FROM TeklifBaslik
+          WHERE ID = @id AND TeklifDurum = N'Onay Bekleniyor'
+        `);
+        const r = await tx.request().input("id", hedefId).query(`
+          UPDATE TeklifBaslik SET TeklifDurum = N'Onaylandı'
+          WHERE ID = @id AND TeklifDurum = N'Onay Bekleniyor'
+        `);
+        if (r.rowsAffected[0] > 0 && onceki.recordset[0]) {
+          durumDegisti = { tablo: "TeklifBaslik", eski: String(onceki.recordset[0].Eski), yeni: "Onaylandı" };
+        }
+      } else if (tur === "AnalizTalep" && hedefId) {
+        const onceki = await tx.request().input("id", hedefId).query(`
+          SELECT Durum AS Eski FROM dbo.Talep
+          WHERE ID = @id AND Durum IN (N'Yeni Talep', N'Numune Bekleniyor')
+        `);
+        const r = await tx.request().input("id", hedefId).query(`
+          UPDATE dbo.Talep SET Durum = N'Analiz Aşamasında'
+          WHERE ID = @id AND Durum IN (N'Yeni Talep', N'Numune Bekleniyor')
+        `);
+        if (r.rowsAffected[0] > 0 && onceki.recordset[0]) {
+          durumDegisti = { tablo: "dbo.Talep", eski: String(onceki.recordset[0].Eski), yeni: "Analiz Aşamasında" };
+        }
+      }
+
+      await tx.commit();
+      return Response.json({
+        success: true,
+        id: ins.recordset[0]?.ID ?? null,
+        durumDegisti,
+      });
+    } catch (e) {
+      await tx.rollback();
+      throw e;
     }
-
-    // INSERT
-    const ins = await pool.request()
-      .input("e", evrakNo).input("t", tur).input("h", hedefId)
-      .input("kod", hedefKod).input("ac", aciklama)
-      .input("uid", userId ? parseInt(userId) : null).input("uad", userName)
-      .query(`
-        INSERT INTO NKR_EvrakEslestirme (EvrakNo, Tur, HedefID, HedefKod, Aciklama, EslestirenID, EslestirenAd)
-        OUTPUT INSERTED.ID
-        VALUES (@e, @t, @h, @kod, @ac, @uid, @uad)
-      `);
-
-    // ── Durum geçişleri ──
-    let durumDegisti: { tablo: string; eski: string; yeni: string } | null = null;
-    if (tur === "Teklif" && hedefId) {
-      // 'Onay Bekleniyor' → 'Onaylandı'
-      const r = await pool.request().input("id", hedefId).query(`
-        UPDATE TeklifBaslik SET TeklifDurum = N'Onaylandı'
-        OUTPUT DELETED.TeklifDurum AS Eski, INSERTED.TeklifDurum AS Yeni
-        WHERE ID = @id AND TeklifDurum = N'Onay Bekleniyor'
-      `);
-      if (r.recordset[0]) durumDegisti = { tablo: "TeklifBaslik", eski: r.recordset[0].Eski, yeni: r.recordset[0].Yeni };
-    } else if (tur === "AnalizTalep" && hedefId) {
-      // 'Yeni Talep' veya 'Numune Bekleniyor' → 'Analiz Aşamasında'
-      const r = await pool.request().input("id", hedefId).query(`
-        UPDATE dbo.Talep SET Durum = N'Analiz Aşamasında'
-        OUTPUT DELETED.Durum AS Eski, INSERTED.Durum AS Yeni
-        WHERE ID = @id AND Durum IN (N'Yeni Talep', N'Numune Bekleniyor')
-      `);
-      if (r.recordset[0]) durumDegisti = { tablo: "dbo.Talep", eski: r.recordset[0].Eski, yeni: r.recordset[0].Yeni };
-    }
-
-    return Response.json({
-      success: true,
-      id: ins.recordset[0]?.ID ?? null,
-      durumDegisti,
-    });
-  } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    return Response.json({ error: errorMessage(e) }, { status: 500 });
   }
 }
 
@@ -209,7 +233,7 @@ export async function DELETE(
     await pool.request().input("e", evrakNo).input("id", id)
       .query(`DELETE FROM NKR_EvrakEslestirme WHERE EvrakNo = @e AND ID = @id`);
     return Response.json({ success: true });
-  } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    return Response.json({ error: errorMessage(e) }, { status: 500 });
   }
 }
