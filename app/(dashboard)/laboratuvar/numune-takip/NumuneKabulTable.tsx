@@ -15,7 +15,7 @@ interface NumuneItem {
   ID: number;
   Evrak_No: string;
   RaporNo: string;
-  DisRaporKodu?: string | null;  // ÜGAM/RR26/XXXX (birden fazla varsa virgülle)
+  DisRaporKodu?: string | null;  // UGAM/RR26/XXXX (birden fazla varsa virgülle)
   Numune_Adi: string;
   Aciklama?: string | null;
   Grup: string | null;

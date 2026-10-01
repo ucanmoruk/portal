@@ -203,7 +203,6 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
   }
 
   const addHizmet = (h: HizmetOpt) => {
-    if (rows.some(x => x.AnalizID === h.ID && !x.x3ID)) return;
     const sure = h.Sure == null ? null : Number(h.Sure);
     const next = [
       ...rows,
@@ -244,7 +243,6 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
       for (const it of itemsToAdd) {
         const aid = pickAnalizId(it);
         if (!aid) continue;
-        if (next.some(x => x.AnalizID === aid && x.x3ID === x3id)) continue;
         const sureRaw = it.Sure ?? it.sure;
         const sure = sureRaw == null ? null : Number(sureRaw);
 
@@ -289,7 +287,6 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
     if (!aid) return;
 
     const next = [...rows];
-    if (next.some(x => x.AnalizID === aid && x.x3ID === x3id)) return;
 
     const sureRaw = item.Sure ?? item.sure;
     const sure = sureRaw == null ? null : Number(sureRaw);

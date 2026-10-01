@@ -2,7 +2,7 @@
 //
 // İki ayrı numara:
 //  • İç takip no (TeklifNo, INT)  : YY + 4 haneli sıra. 2026 için ilk = 260200.
-//  • Dış takip kodu (DisTeklifKodu): "ÜGAM-YY-XXXXX" — müşteriye giden, tahmin
+//  • Dış takip kodu (DisTeklifKodu): "UGAM-YY-XXXXX" — müşteriye giden, tahmin
 //    edilemez benzersiz kod. XXXXX = karışıklık yaratmayan alfabeden 5 karakter.
 //  • Revizyon her ikisinde de "/NN" olarak gösterilir (RevNo).
 
@@ -18,17 +18,17 @@ export function icTeklifRange(year: number) {
   return { yearMin, yearMax, floor };
 }
 
-/** Rastgele dış teklif kodu üretir: ÜGAM-26-AB3KP (benzersizlik DB'de kontrol edilir). */
+/** Rastgele dış teklif kodu üretir: UGAM-26-AB3KP (benzersizlik DB'de kontrol edilir). */
 export function randomDisKod(year: number): string {
   const year2 = String(year % 100).padStart(2, "0");
   let s = "";
   for (let i = 0; i < 5; i++) {
     s += DIS_TEKLIF_ALPHABET[Math.floor(Math.random() * DIS_TEKLIF_ALPHABET.length)];
   }
-  return `ÜGAM-${year2}-${s}`;
+  return `UGAM-${year2}-${s}`;
 }
 
-/** Dış kod + revizyon etiketi: "ÜGAM-26-AB3KP/00" */
+/** Dış kod + revizyon etiketi: "UGAM-26-AB3KP/00" */
 export function disTeklifLabel(kod: string | null | undefined, rev: number): string {
   if (!kod) return "-";
   return `${kod}/${String(rev).padStart(2, "0")}`;

@@ -9,7 +9,7 @@ import { type NextRequest } from "next/server";
 //   2) Manuel: müşteri raporNo + token (QR altındaki 8 karakterlik kod) elle girer.
 //
 // raporNo iki formatta gelebilir:
-//   - Yeni: ÜGAM/RR26/XXXX/NN  (NKR_RaporOnay.DisRaporKodu + /Rev)
+//   - Yeni: UGAM/RR26/XXXX/NN  (NKR_RaporOnay.DisRaporKodu + /Rev)
 //   - Eski/iç: NKR.RaporNo     (örn "26060126")
 //
 // token iki şekilde gelebilir:

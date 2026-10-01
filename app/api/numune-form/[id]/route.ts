@@ -521,7 +521,7 @@ export async function PUT(
       }
     }
 
-    // ── 3.5. Dış Rapor Kodları (ÜGAM/RR26/XXXX) — her format için tahsis et ──
+    // ── 3.5. Dış Rapor Kodları (UGAM/RR26/XXXX) — her format için tahsis et ──
     // Onay anına bırakmıyoruz; numune kayıt anında allocate edelim ki Numune Kabul
     // listesinde hemen görünsün. Helper idempotent — tekrar çalışırsa yeni satır eklemez.
     try {

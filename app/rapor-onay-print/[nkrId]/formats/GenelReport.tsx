@@ -200,7 +200,7 @@ export default function GenelReport({
     sirketAdi,
   } = meta;
 
-  // Test raporunda DAİMA dış kod gösterilir (ÜGAM/RR26/XXXX/NN).
+  // Test raporunda DAİMA dış kod gösterilir (UGAM/RR26/XXXX/NN).
   // DisKod yoksa (eski kayıt / migration 018 koşulmamış) iç koda düş.
   const revNum = parseInt(revNo, 10) || 0;
   const raporKodu = onay?.disRaporKodu

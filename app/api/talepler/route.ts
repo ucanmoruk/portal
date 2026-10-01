@@ -7,7 +7,7 @@ import { hasMysqlConfig } from "@/lib/mysqlCompat";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET  /api/talepler?tur=Analiz|Destek&search=&page=1&limit=20  — listele
-// POST /api/talepler  — yeni Talep olustur (iç TalepNo = MAX+1, dış kod = ÜGAM/A26/XXXX)
+// POST /api/talepler  — yeni Talep olustur (iç TalepNo = MAX+1, dış kod = UGAM/A26/XXXX)
 //
 // Müşteri portalında oluşturulan TALEPLER (Analiz / Destek).
 // Analiz için cosmoroot.VIEW_TALEP_LISTE (Tur='Analiz' filtreli) kullanılır.
@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
 //   numuneler?: Array<{ numune, ozellik?, analiz?, metot? }>,
 // }
 //
-// İç TalepNo: global MAX(TalepNo) + 1. Dış kod: ÜGAM/A26/XXXX (benzersiz, retry).
+// İç TalepNo: global MAX(TalepNo) + 1. Dış kod: UGAM/A26/XXXX (benzersiz, retry).
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function nextTalepNo(pool: any): Promise<number> {

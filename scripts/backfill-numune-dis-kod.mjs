@@ -50,7 +50,7 @@ function raporFormatToRR(f) {
   if (n.startsWith("DIGER") || n.startsWith("OZEL"))       return "DG";
   return "DG";
 }
-const randomDisKodRapor = (yil, fmt) => `ÜGAM/${raporFormatToRR(fmt)}${year2(yil)}/${random4()}`;
+const randomDisKodRapor = (yil, fmt) => `UGAM/${raporFormatToRR(fmt)}${year2(yil)}/${random4()}`;
 const newToken = () => randomBytes(18).toString("base64url");
 
 const pool = await new mssql.ConnectionPool(config).connect();

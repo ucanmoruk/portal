@@ -13,7 +13,7 @@ CREATE TABLE NKR_EvrakEslestirme (
   EvrakNo          NVARCHAR(50)  NOT NULL,
   Tur              NVARCHAR(20)  NOT NULL,
   HedefID          INT           NULL,
-  HedefKod         NVARCHAR(100) NULL,    -- ÜGAM-26-XXXXX, ÜGAM/26/XXXX vb.
+  HedefKod         NVARCHAR(100) NULL,    -- UGAM-26-XXXXX, UGAM/26/XXXX vb.
   Aciklama         NVARCHAR(500) NULL,    -- dosya için path/etiket
   EslestirenID     INT           NULL,
   EslestirenAd     NVARCHAR(255) NULL,

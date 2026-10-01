@@ -11,7 +11,7 @@ import { randomDisKodTeklif } from "@/lib/disKod";
 // (legacy TeklifX1/TeklifX2'ye dokunulmaz). Cari kaynağı: Firma.
 //
 //  • İç teklif no (TeklifNo, INT): 2026 için ilk 260200, sonra +1.
-//  • Dış teklif kodu (DisTeklifKodu): ÜGAM-26-XXXXX (benzersiz, tahmin edilemez).
+//  • Dış teklif kodu (DisTeklifKodu): UGAM-26-XXXXX (benzersiz, tahmin edilemez).
 //  • Revizyon: her ikisi sabit kalır, RevNo (/NN) artar.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ async function ensureTablesUncached() {
     CREATE TABLE TeklifBaslik (
       ID            INT IDENTITY(1,1) PRIMARY KEY,
       TeklifNo      INT           NULL,           -- iç takip no (260200+)
-      DisTeklifKodu NVARCHAR(20)  NULL,           -- dış kod: ÜGAM-26-XXXXX
+      DisTeklifKodu NVARCHAR(20)  NULL,           -- dış kod: UGAM-26-XXXXX
       RevNo         INT           NOT NULL DEFAULT 0,
       MusteriID     INT           NULL,           -- → Firma.ID
       Tarih         DATETIME      NOT NULL DEFAULT GETDATE(),

@@ -66,7 +66,7 @@ async function verify() {
     INNER JOIN NKR n ON n.ID=m.NkrID WHERE CAST(n.RaporNo AS CHAR) <> m.NewRaporNo`);
   const [external] = await db.query(`SELECT
     (SELECT COUNT(*) FROM NKR_RaporOnay ro INNER JOIN RaporNoMigration2026Ozel m ON m.NkrID=ro.NkrID
-      WHERE ro.DisRaporKodu LIKE 'ÜGAM%') AS ugamRows,
+      WHERE ro.DisRaporKodu LIKE 'UGAM%') AS ugamRows,
     (SELECT COUNT(*) FROM Odeme o INNER JOIN (SELECT DISTINCT EvrakNo FROM RaporNoMigration2026Ozel) m
       ON CAST(o.Evrak_No AS CHAR)=m.EvrakNo) AS paymentRows`);
   if (summary.changedEvrak || summary.changedProtectedFields || Number(mismatch[0].count || 0)) throw new Error("Korunan alan doğrulaması başarısız.");

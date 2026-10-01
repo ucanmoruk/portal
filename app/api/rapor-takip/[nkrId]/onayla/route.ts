@@ -28,7 +28,7 @@ async function lockCurrentReportSnapshot(pool: any, nkrId: number, format: strin
   await lockRaporEdit(pool, nkrId, format, data ? buildRaporSnapshotPayload(data) : null);
 }
 
-// Benzersiz dış rapor kodu üret: ÜGAM/RR26/XXXX (çakışırsa tekrar dener).
+// Benzersiz dış rapor kodu üret: UGAM/RR26/XXXX (çakışırsa tekrar dener).
 // Eğer DisRaporKodu kolonu yoksa null döner (eski şemada graceful degrade).
 async function genUniqueDisRaporKodu(pool: any, raporFormati: string): Promise<string | null> {
   const colCheck = await pool.request().query(

@@ -470,7 +470,7 @@ export default function StabiliteReport({
   // örnek rapordan türetilmiş varsayılanı kullan. (Giriş ekranı 2. adımda.)
   const veri: StabiliteVeri = ((meta as any)?.stabiliteVeri as StabiliteVeri) || DEFAULT_STABILITE_VERI;
 
-  // Test raporunda DAİMA dış kod gösterilir (ÜGAM/RR26/XXXX/NN — Challenge için RR=CH).
+  // Test raporunda DAİMA dış kod gösterilir (UGAM/RR26/XXXX/NN — Challenge için RR=CH).
   // DisKod yoksa (eski kayıt / migration 018 koşulmamış) iç koda düş.
   const revNum = parseInt(revNo, 10) || 0;
   const raporKodu = onay?.disRaporKodu

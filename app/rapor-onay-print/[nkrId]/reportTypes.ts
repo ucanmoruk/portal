@@ -75,7 +75,7 @@ export interface OnayInfo {
   yayinTarihi: string | null;
   yayinUrl: string | null;
   onaylayanAd: string | null;
-  /** ÜGAM/RR26/XXXX — onay anında üretilir, migration 018 sonrası dolar. */
+  /** UGAM/RR26/XXXX — onay anında üretilir, migration 018 sonrası dolar. */
   disRaporKodu: string | null;
   /** Revize açıklaması (NKR_RaporOnay.Notlar) — revize edilmiş raporlarda dolu. */
   notlar?: string | null;

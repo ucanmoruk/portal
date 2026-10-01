@@ -2,7 +2,7 @@
 -- 018 — NKR_RaporOnay.DisRaporKodu (rapor dış takip kodu)
 -- ----------------------------------------------------------------------------
 -- Her (NkrID, RaporFormati) onayında atanan dış kod. Format:
---   ÜGAM/RR26/XXXX  — RR rapor formatından türetilir (GE/ST/CH/CL/ÜG/DG).
+--   UGAM/RR26/XXXX  — RR rapor formatından türetilir (GE/ST/CH/CL/ÜG/DG).
 -- Onay anında üretilir, idempotent (zaten doluysa dokunulmaz).
 -- Eski (migration öncesi) kayıtlarda NULL kalır; eski PDF'ler, mailler ve
 -- yazışmalar mevcut TaskTokeniyle çalışmaya devam eder.

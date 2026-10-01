@@ -153,7 +153,7 @@ const parseRev = (v?: string | null): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-// Revize açıklama cümlesi — dış takip kodu (ÜGAM/…) kullanılır, iç RaporNo değil.
+// Revize açıklama cümlesi — dış takip kodu (UGAM/…) kullanılır, iç RaporNo değil.
 // Kod SABİT kalır, revizyon /NN suffix'iyle gösterilir (disRaporLabel biçimi):
 // [DışKod]/[EskiRev] ... revize edilmiştir. … Geçerli rapor numarası [DışKod]/[YeniRev].
 const revLabel = (kod: string, rev: number): string => `${kod}-${String(rev).padStart(2, "0")}`;
@@ -163,7 +163,7 @@ const buildRevizeCumle = (kod: string, eskiRev: number, sebep: string): string =
     `${revLabel(kod, eskiRev)} numaralı rapor geçersizdir. Geçerli rapor numarası ${revLabel(kod, eskiRev + 1)}.`;
 };
 
-// Revize cümlesinde kullanılacak takip kodu: dış kod (ÜGAM/…) varsa o, yoksa RaporNo.
+// Revize cümlesinde kullanılacak takip kodu: dış kod (UGAM/…) varsa o, yoksa RaporNo.
 const revizeTakipKodu = (r: RaporRow): string => (r.DisRaporKodu?.trim() || r.RaporNo);
 
 const isEnglishFormat = (format: string) => baseReportFormat(format) !== String(format || "").trim();
@@ -323,7 +323,7 @@ export default function OnayliRaporTable() {
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = objUrl;
-      // Dosya adi: "ÜGAM-RR26-XXXX - UrunAdi.pdf" — dış kod öncelikli.
+      // Dosya adi: "UGAM-RR26-XXXX - UrunAdi.pdf" — dış kod öncelikli.
       // DisRaporKodu yoksa Barkod / RaporNo / NkrID sırasıyla fallback.
       const idSource = row.DisRaporKodu || row.Barkod || row.RaporNo || String(row.NkrID);
       const idPart = sanitizeFileName(String(idSource).replace(/\//g, "-"));
@@ -987,7 +987,7 @@ export default function OnayliRaporTable() {
               <div style={{ fontWeight: 600, fontSize: "0.8rem", color: "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>
                 {row.Evrak_No}
               </div>
-              {/* Rapor No (üstte iç, varsa altta dış ÜGAM kodu) */}
+              {/* Rapor No (üstte iç, varsa altta dış UGAM kodu) */}
               <div style={{ fontVariantNumeric: "tabular-nums" }}>
                 <div style={{ fontWeight: 700, fontSize: "0.8rem", color: "var(--color-accent)" }}>
                   {row.RaporNo}

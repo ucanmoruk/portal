@@ -146,7 +146,7 @@ function teklifLabel(no: number | null, rev: number) {
   if (!no) return "—";
   return rev > 0 ? `${no}/${String(rev).padStart(2, "0")}` : String(no);
 }
-// Dış teklif kodu (müşteriye giden): ÜGAM-26-XXXXX/00
+// Dış teklif kodu (müşteriye giden): UGAM-26-XXXXX/00
 function disLabel(kod: string | null | undefined, rev: number) {
   if (!kod) return "—";
   return `${kod}/${String(rev).padStart(2, "0")}`;

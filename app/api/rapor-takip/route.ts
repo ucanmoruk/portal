@@ -87,7 +87,7 @@ export async function GET(request: Request) {
     `);
     const hasKayitTarihi = kayitCheck.recordset.length > 0;
 
-    // DisRaporKodu (ÜGAM/RR26/XXXX) NKR_RaporOnay tablosunda — n.ID üzerinden
+    // DisRaporKodu (UGAM/RR26/XXXX) NKR_RaporOnay tablosunda — n.ID üzerinden
     // EXISTS ile aranır. Kolon yoksa aramaya dahil edilmez.
     const disKodSearchClause = (hasDisRaporKodu && search)
       ? `OR EXISTS (

@@ -73,7 +73,7 @@ function raporFormatToRR(f) {
   return "DG";
 }
 function randomDisKodRapor(year, raporFormati) {
-  return `ÜGAM/${raporFormatToRR(raporFormati)}${year2(year)}/${random4()}`;
+  return `UGAM/${raporFormatToRR(raporFormati)}${year2(year)}/${random4()}`;
 }
 const newToken = () => randomBytes(18).toString("base64url"); // ~24 char
 

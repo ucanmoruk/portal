@@ -1,5 +1,5 @@
 // Geri dönük backfill: NKR_RaporOnay'da DisRaporKodu NULL olan tüm satırlara
-// ÜGAM/RR26/XXXX formatında dış kod atar.
+// UGAM/RR26/XXXX formatında dış kod atar.
 //   - Yıl: OnayTarihi'nin yılı (yoksa şimdiki yıl)
 //   - RR : RaporFormati'den türetilir (GE/ST/CH/CL/ÜG/DG)
 //   - XXXX: 4 karakter, ABCDEFGHJKMNPQRSTUVWXYZ23456789 alfabesinden, en az 1 rakam
@@ -59,7 +59,7 @@ function raporFormatToRR(f) {
   return "DG";
 }
 function randomDisKodRapor(year, raporFormati) {
-  return `ÜGAM/${raporFormatToRR(raporFormati)}${year2(year)}/${random4()}`;
+  return `UGAM/${raporFormatToRR(raporFormati)}${year2(year)}/${random4()}`;
 }
 
 // ── Çalıştır ─────────────────────────────────────────────────────────────

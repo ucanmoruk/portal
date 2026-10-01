@@ -1,9 +1,9 @@
 // Üç sistem için ortak dış kod üretici: Talep, Teklif, Rapor.
 //
 // Formatlar:
-//   Talep   → ÜGAM/A26/XXXX         (revizyonsuz)
-//   Teklif  → ÜGAM/T26/XXXX[/NN]    (revizyon /NN)
-//   Rapor   → ÜGAM/RR26/XXXX[/NN]   (RR = rapor formatı kodu, revizyon /NN)
+//   Talep   → UGAM/A26/XXXX         (revizyonsuz)
+//   Teklif  → UGAM/T26/XXXX[/NN]    (revizyon /NN)
+//   Rapor   → UGAM/RR26/XXXX[/NN]   (RR = rapor formatı kodu, revizyon /NN)
 //
 // XXXX:
 //   4 karakter, alfabe = ABCDEFGHJKMNPQRSTUVWXYZ23456789 (I, L, O, 0, 1 yok).
@@ -36,17 +36,17 @@ function year2(year: number): string {
 
 // ── Üretici (random kod) ──────────────────────────────────────────────────
 
-/** ÜGAM/A26/XXXX */
+/** UGAM/A26/XXXX */
 export function randomDisKodTalep(year: number): string {
-  return `ÜGAM/A${year2(year)}/${random4()}`;
+  return `UGAM/A${year2(year)}/${random4()}`;
 }
 
-/** ÜGAM/T26/XXXX */
+/** UGAM/T26/XXXX */
 export function randomDisKodTeklif(year: number): string {
-  return `ÜGAM/T${year2(year)}/${random4()}`;
+  return `UGAM/T${year2(year)}/${random4()}`;
 }
 
-/** ÜGAM/RR26/XXXX — RR rapor formatından türetilir. */
+/** UGAM/RR26/XXXX — RR rapor formatından türetilir. */
 export function randomDisKodRapor(year: number, raporFormati: string): string {
   const rr = raporFormatToRR(raporFormati);
   return `UGAM/${rr}${year2(year)}/${random4()}`;
@@ -82,18 +82,18 @@ export function raporFormatToRR(raporFormati: string | null | undefined): string
 
 // ── Etiket helper'ları (revizyon ekleme) ──────────────────────────────────
 
-/** Talep dış kodu (revizyonsuz): "ÜGAM/A26/XXXX" veya "-". */
+/** Talep dış kodu (revizyonsuz): "UGAM/A26/XXXX" veya "-". */
 export function disTalepLabel(kod: string | null | undefined): string {
   return kod || "-";
 }
 
-/** Teklif dış kodu + revizyon: "ÜGAM/T26/XXXX/00". */
+/** Teklif dış kodu + revizyon: "UGAM/T26/XXXX/00". */
 export function disTeklifLabelV2(kod: string | null | undefined, rev: number): string {
   if (!kod) return "-";
   return `${kod}/${String(rev).padStart(2, "0")}`;
 }
 
-/** Rapor dış kodu + revizyon: "ÜGAM/GE26/XXXX-00". */
+/** Rapor dış kodu + revizyon: "UGAM/GE26/XXXX-00". */
 export function disRaporLabel(kod: string | null | undefined, rev: number): string {
   if (!kod) return "-";
   return `${kod}-${String(rev).padStart(2, "0")}`;

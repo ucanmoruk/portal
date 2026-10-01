@@ -15,7 +15,7 @@ import { useState } from "react";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface OnayTeklif {
-  no: string;            // ÜGAM-26-XXXXX/00 (DisTeklifKodu + RevNo)
+  no: string;            // UGAM-26-XXXXX/00 (DisTeklifKodu + RevNo)
   musteriAd: string;
   musteriYetkili?: string;
   tarih: string;         // dd.MM.yyyy

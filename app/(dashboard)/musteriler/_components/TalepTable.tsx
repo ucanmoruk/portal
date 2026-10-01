@@ -15,7 +15,7 @@ const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-T
 
 interface Talep {
   ID: number;
-  TalepNo: string;       // dış kod (ÜGAM/26/XXXX veya UQ193)
+  TalepNo: string;       // dış kod (UGAM/26/XXXX veya UQ193)
   IcTakipNo: string;     // iç kod (26{TalepNo})
   Tarih: string;
   FirmaKodu: string;

@@ -173,7 +173,7 @@ export async function GET(request: NextRequest) {
     `);
     const hasDisRaporKodu = disKodCheck.recordset.length > 0;
 
-    // DisRaporKodu (ÜGAM/RR26/XXXX) NKR_RaporOnay tablosunda — EXISTS ile arar.
+    // DisRaporKodu (UGAM/RR26/XXXX) NKR_RaporOnay tablosunda — EXISTS ile arar.
     const disKodSearchClause = (hasDisRaporKodu && search)
       ? `OR EXISTS (
              SELECT 1 FROM NKR_RaporOnay ro

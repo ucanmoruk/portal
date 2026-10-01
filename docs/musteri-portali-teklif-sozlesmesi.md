@@ -15,7 +15,7 @@
 |---|---|---|
 | `ID` | INT IDENTITY PK | İç teklif kimliği |
 | `TeklifNo` | INT | **İç takip no** (örn. 260200). Müşteriye gösterme. |
-| `DisTeklifKodu` | NVARCHAR(20) | **Dış/müşteri kodu** `ÜGAM-26-XXXXX` — tahmin edilemez. URL/referans bu olmalı. |
+| `DisTeklifKodu` | NVARCHAR(20) | **Dış/müşteri kodu** `UGAM-26-XXXXX` — tahmin edilemez. URL/referans bu olmalı. |
 | `RevNo` | INT | Revizyon no (gösterim: `/00`, `/01`…) |
 | `MusteriID` | INT | **→ `Firma.ID`** (teklifin müşterisi) |
 | `Tarih` | DATETIME | Oluşturma tarihi |
@@ -51,7 +51,7 @@
 |---|---|---|
 | `ID` | INT IDENTITY PK | |
 | `TeklifID` | INT | → `TeklifBaslik.ID` |
-| `TeklifNo` | NVARCHAR(50) | Etiket (örn. `ÜGAM-26-XXXXX/00`) |
+| `TeklifNo` | NVARCHAR(50) | Etiket (örn. `UGAM-26-XXXXX/00`) |
 | `Aksiyon` | NVARCHAR(20) | `Oluşturuldu` / `Gönderildi` / `Onaylandı` / `Reddedildi` / `Revize` … |
 | `Aciklama` | NVARCHAR(MAX) | Açıklama (red sebebi vb.) |
 | `IpAdresi` | NVARCHAR(100) | |
@@ -95,7 +95,7 @@ WHERE t.MusteriID = @firmaId
 ORDER BY t.ID DESC;
 ```
 - **Müşteriye gösterilen referans:** `DisTeklifKodu` + `/` + iki haneli `RevNo`
-  (örn. `ÜGAM-26-AB3KP/00`). `ID`/`TeklifNo` gibi tahmin edilebilir değerleri URL'de kullanma.
+  (örn. `UGAM-26-AB3KP/00`). `ID`/`TeklifNo` gibi tahmin edilebilir değerleri URL'de kullanma.
 - **Revizyon:** Aynı `TeklifNo`'nun birden çok revizyonu olabilir; genelde en güncel
   (`MAX(RevNo)`) gösterilir. Tüm geçmiş gerekirse `TeklifNo`'ya göre grupla.
 
@@ -128,7 +128,7 @@ INSERT INTO TeklifOnayLog (TeklifID, TeklifNo, Aksiyon, Aciklama, IpAdresi, Must
 VALUES (@teklifId, @disKodEtiket, @karar, @aciklama, @ip, @firmaAd, @firmaMail, @firmaYetkili, GETDATE());
 ```
 - Red'de `@aciklama` = red/revizyon sebebi (zorunlu tutulması önerilir).
-- `@disKodEtiket` = `ÜGAM-26-XXXXX/00` biçimi.
+- `@disKodEtiket` = `UGAM-26-XXXXX/00` biçimi.
 
 ## 6. Tutar hesabı (PDF ve toplamlar için)
 ```
@@ -166,7 +166,7 @@ kendi içinde yapar.
 - **Görseller:** `/unique-logo.png` ve `/unique-seal.png` müşteri portalının `public/`'ine
   kopyalanmalı (ya da yol güncellenmeli).
 - İç portalda Word çıktısı ayrıca `app/api/teklifler/[id]/export/route.ts`'tedir (docx şablonu).
-- Müşteriye gösterilen referans = `DisTeklifKodu` (örn. `ÜGAM-26-XXXXX/00`).
+- Müşteriye gösterilen referans = `DisTeklifKodu` (örn. `UGAM-26-XXXXX/00`).
 
 ## 8. Bildirim ("yeni teklifiniz var")
 Müşteri portalı kendi tarafında üretir (bağımsızlık için):
@@ -208,7 +208,7 @@ import TeklifOnayDocument, { type OnayKarar } from "./TeklifOnayDocument";
 
 // §4'teki sorguyla teklifi çek (MusteriID = firmaId ŞART). Karar verilmişse `karar` doldur.
 <TeklifOnayDocument
-  teklif={{ no: "ÜGAM-26-XXXXX/00", musteriAd, musteriYetkili, tarih, durum }}
+  teklif={{ no: "UGAM-26-XXXXX/00", musteriAd, musteriYetkili, tarih, durum }}
   karar={alreadyDecided ? { aksiyon: "Onaylandı", tarih, firmaAd } : null}
   onApprove={() => approveAction(teklifId, "Onaylandı")}
   onReject={(aciklama) => approveAction(teklifId, "Reddedildi", aciklama)}
@@ -225,7 +225,7 @@ WHERE ID = @teklifId
   AND MusteriID = @firmaId
   AND TeklifDurum = N'Onay Bekleniyor';
 
--- 1) Log (iç portalın 'Geçmiş' sekmesinde görünür; @disKodEtiket = ÜGAM-26-XXXXX/00)
+-- 1) Log (iç portalın 'Geçmiş' sekmesinde görünür; @disKodEtiket = UGAM-26-XXXXX/00)
 INSERT INTO TeklifOnayLog
   (TeklifID, TeklifNo, Aksiyon, Aciklama, IpAdresi, MusteriAd, MusteriEmail, MusteriYetkili, Tarih)
 VALUES
