@@ -223,7 +223,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
                   <td>{item.marka || "-"}</td>
                   <td className={styles.tdAdres}>{item.kullaniciNotu || item.ozellik || "-"}</td>
                   <td><span className={kys.pill}>{item.durum}</span></td>
-                  <td>{["İşleme Alındı","Kısmi Kabul"].includes(detail.talep.durum)&&item.durum!=="Tamamlandı"&&<button type="button" className={styles.addBtn} onClick={() => openAccept(item)}>Kabul et</button>}{item.durum==="Tamamlandı"&&<span className={kys.muted}>Kabul tamamlandı</span>}</td>
+                  <td>{["İşleme Alındı","Kısmi Kabul"].includes(detail.talep.durum)&&item.durum!=="Tamamlandı"&&<button type="button" className={styles.addBtn} onClick={() => openAccept(item)}>{detail.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? "Siparişi tamamla" : "Kabul et"}</button>}{item.durum==="Tamamlandı"&&<span className={kys.muted}>{detail.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? "Sipariş tamamlandı" : "Kabul tamamlandı"}</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -257,13 +257,13 @@ export default function TalepDetayClient({ id }: { id: number }) {
       {acceptItem && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 820 }}>
-            <div className={styles.modalHeader}><h2>{correcting?"Kabul düzeltme":"Talep kabul"} - {acceptItem.malzemeAdi}</h2><button disabled={saving} className={styles.modalClose} onClick={() => setAcceptItem(null)}>×</button></div>
+            <div className={styles.modalHeader}><h2>{detail.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? (correcting ? "Sipariş düzeltme" : "Siparişi tamamla") : (correcting ? "Kabul düzeltme" : "Talep kabul")} - {acceptItem.malzemeAdi}</h2><button disabled={saving} className={styles.modalClose} onClick={() => setAcceptItem(null)}>×</button></div>
             <div className={styles.modalBody}>
               {formError && <div className={styles.formError}>{formError}</div>}
               <div className={styles.formGrid3}>
                 <div className={kys.quantityWithUnit}><div className={styles.formGroup}><label htmlFor="accept-quantity">{detail.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? "Teslim edilen miktar" : "Gelen miktar"}</label><input id="accept-quantity" inputMode="decimal" value={form.gelenMiktar} onChange={e => setForm(f => ({ ...f, gelenMiktar: e.target.value,toplamTutar:"" }))} /></div><div className={styles.formGroup}><label htmlFor="accept-unit">Birim</label><input id="accept-unit" readOnly value={acceptItem.birim || "Adet"} aria-label="Stok kartı birimi (sabit)" /></div></div>
                 <div className={styles.formGroup}><label>Kabul tarihi</label><input type="date" value={form.kabulTarihi} onChange={e => setForm(f => ({ ...f, kabulTarihi: e.target.value }))} /></div>
-                <div className={styles.formGroup}><label>Depoya/Birime işle</label><select value={form.hedefBirimId} onChange={e => setForm(f => ({ ...f, hedefBirimId: e.target.value }))}><option value="">Seçiniz</option>{birimler.map(b => <option key={b.id} value={b.id}>{b.ad}</option>)}</select></div>
+                <div className={styles.formGroup}><label>{detail.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? "Stoktan düşülecek depo/birim" : "Depoya/Birime işle"}</label><select value={form.hedefBirimId} onChange={e => setForm(f => ({ ...f, hedefBirimId: e.target.value }))}><option value="">Seçiniz</option>{birimler.map(b => <option key={b.id} value={b.id}>{b.ad}</option>)}</select></div>
                 <div className={styles.formGroup}><label>Marka</label><input value={form.marka} onChange={e => setForm(f => ({ ...f, marka: e.target.value }))} /></div>
                 <div className={styles.formGroup}><label>Lot</label><input value={form.lot} onChange={e => setForm(f => ({ ...f, lot: e.target.value }))} /></div>
                 <div className={styles.formGroup}><label>SKT</label><input type="date" value={form.skt} onChange={e => setForm(f => ({ ...f, skt: e.target.value }))} /></div>

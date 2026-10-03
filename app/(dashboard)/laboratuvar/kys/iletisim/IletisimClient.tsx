@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  Archive,
+  ArchiveRestore,
   Bell,
   CalendarDays,
   Check,
@@ -27,6 +29,7 @@ type Person = { ID: number | string; Ad: string };
 type Read = { kullaniciId: string; okunduAt: string };
 type Item = {
   id: number;
+  tur: string;
   baslik: string;
   icerik: string;
   olusturanId: string;
@@ -35,6 +38,7 @@ type Item = {
   aliciAd: string;
   durum: string;
   terminTarihi: string | null;
+  kategori: string | null;
   createdAt: string;
   okundu: boolean;
   okuyanlar?: Read[];
@@ -60,8 +64,9 @@ export default function IletisimClient({
   const [data, setData] = useState<{
     duyurular: Item[];
     mesajlar: Thread[];
+    arsivMesajlar: Thread[];
     gorevler: Item[];
-  }>({ duyurular: [], mesajlar: [], gorevler: [] });
+  }>({ duyurular: [], mesajlar: [], arsivMesajlar: [], gorevler: [] });
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -72,6 +77,7 @@ export default function IletisimClient({
     icerik: "",
     aliciIds: [] as string[],
     terminTarihi: "",
+    kategori: "Rutin",
   });
   const [reply, setReply] = useState<Record<number, string>>({});
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -79,11 +85,13 @@ export default function IletisimClient({
   const [page, setPage] = useState(1);
   const [announcementFilter, setAnnouncementFilter] = useState("Tümü");
   const [taskFilter, setTaskFilter] = useState("Tümü");
+  const [taskCategoryFilter, setTaskCategoryFilter] = useState("Tümü");
+  const [messageView, setMessageView] = useState<"gelen" | "arsiv">("gelen");
   const [taskView, setTaskView] = useState<"liste" | "takvim">("liste");
-  const [calendarView, setCalendarView] = useState<"ay" | "hafta">("ay");
+  const [calendarView, setCalendarView] = useState<"ay" | "hafta" | "gun">("ay");
   const [calendarTaskId, setCalendarTaskId] = useState<number | null>(null);
   const [editingTask, setEditingTask] = useState<Item | null>(null);
-  const [editTaskForm, setEditTaskForm] = useState({ baslik: "", icerik: "", aliciId: "", terminTarihi: "" });
+  const [editTaskForm, setEditTaskForm] = useState({ baslik: "", icerik: "", aliciId: "", terminTarihi: "", kategori: "Rutin" });
   const [calendarDate, setCalendarDate] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -111,13 +119,20 @@ export default function IletisimClient({
   }, [load]);
   useEffect(() => {
     const taskId = Number(searchParams.get("gorevId"));
-    const linkKey = searchParams.get("sekme") === "gorev" && Number.isInteger(taskId) && taskId > 0
+    const isCalendarLink = searchParams.get("sekme") === "gorev";
+    if (isCalendarLink) {
+      setTab("Görev");
+      if (searchParams.get("gorunum") === "takvim") {
+        setTaskView("takvim");
+        if (window.matchMedia("(max-width: 760px)").matches) setCalendarView("gun");
+      }
+    }
+    const linkKey = isCalendarLink && Number.isInteger(taskId) && taskId > 0
       ? `gorev-${taskId}`
       : "";
     if (!linkKey || loading || handledTaskLink.current === linkKey) return;
     handledTaskLink.current = linkKey;
     if (!data.gorevler.some((task) => task.id === taskId)) return;
-    setTab("Görev");
     setTaskFilter("Tümü");
     setSearch("");
     setPage(1);
@@ -160,6 +175,7 @@ export default function IletisimClient({
       icerik: "",
       aliciIds: [],
       terminTarihi: "",
+      kategori: "Rutin",
     });
     await load();
   }
@@ -173,7 +189,7 @@ export default function IletisimClient({
   }
   function openTaskEdit(task: Item) {
     setEditingTask(task);
-    setEditTaskForm({ baslik: task.baslik, icerik: task.icerik, aliciId: task.aliciId, terminTarihi: String(task.terminTarihi || "").slice(0, 10) });
+    setEditTaskForm({ baslik: task.baslik, icerik: task.icerik, aliciId: task.aliciId, terminTarihi: String(task.terminTarihi || "").slice(0, 10), kategori: task.kategori || "Rutin" });
   }
   async function saveTaskEdit() {
     if (!editingTask) return;
@@ -252,13 +268,18 @@ export default function IletisimClient({
             `${item.baslik} ${item.icerik} ${item.aliciAd}`
               .toLocaleLowerCase("tr-TR")
               .includes(q)) &&
-          (taskFilter === "Tümü" || taskFilter === state)
+          (taskFilter === "Tümü" || taskFilter === state) &&
+          (taskCategoryFilter === "Tümü" || item.kategori === taskCategoryFilter)
         );
       }),
-    [data.gorevler, search, taskFilter],
+    [data.gorevler, search, taskFilter, taskCategoryFilter],
   );
+  const calendarItems = useMemo(() => [
+    ...tasks,
+    ...(taskCategoryFilter === "Tümü" ? data.duyurular.filter((item) => item.terminTarihi) : []),
+  ], [tasks, data.duyurular, taskCategoryFilter]);
   const calendarTask = calendarTaskId
-    ? data.gorevler.find((task) => task.id === calendarTaskId) ?? null
+    ? calendarItems.find((task) => task.id === calendarTaskId) ?? null
     : null;
   const pagedAnnouncements = announcements.slice(
     (page - 1) * PAGE_SIZE,
@@ -279,7 +300,7 @@ export default function IletisimClient({
       id: "Mesaj",
       label: "Mesajlar",
       icon: MessageSquare,
-      count: data.mesajlar.length,
+      count: data.mesajlar.length + data.arsivMesajlar.length,
     },
     {
       id: "Görev",
@@ -289,6 +310,7 @@ export default function IletisimClient({
     },
   ];
   const days = useMemo<Array<Date | null>>(() => {
+    if (calendarView === "gun") return [new Date(calendarDate.getFullYear(), calendarDate.getMonth(), calendarDate.getDate())];
     if (calendarView === "hafta") {
       const start = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), calendarDate.getDate());
       start.setDate(start.getDate() - (start.getDay() === 0 ? 6 : start.getDay() - 1));
@@ -300,11 +322,13 @@ export default function IletisimClient({
   }, [calendarDate, calendarView]);
   const calendarTitle = useMemo(() => {
     if (calendarView === "ay") return calendarDate.toLocaleDateString("tr-TR", { month: "long", year: "numeric" });
+    if (calendarView === "gun") return calendarDate.toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     const dated = days.filter((day): day is Date => Boolean(day));
     return `${dated[0].toLocaleDateString("tr-TR", { day: "2-digit", month: "short" })} – ${dated[6].toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" })}`;
   }, [calendarDate, calendarView, days]);
-  const moveCalendar = (direction: -1 | 1) => setCalendarDate(current => calendarView === "hafta"
-    ? new Date(current.getFullYear(), current.getMonth(), current.getDate() + direction * 7)
+  const moveCalendar = (direction: -1 | 1) => setCalendarDate(current => calendarView === "gun"
+    ? new Date(current.getFullYear(), current.getMonth(), current.getDate() + direction)
+    : calendarView === "hafta" ? new Date(current.getFullYear(), current.getMonth(), current.getDate() + direction * 7)
     : new Date(current.getFullYear(), current.getMonth() + direction, 1));
   const printCalendar = () => {
     const printClass = "print-communication-calendar";
@@ -337,6 +361,7 @@ export default function IletisimClient({
               icerik: "",
               aliciIds: [],
               terminTarihi: "",
+              kategori: "Rutin",
             });
             setCompose(true);
           }}
@@ -370,9 +395,20 @@ export default function IletisimClient({
             <option>Okundu</option>
           </select>
         )}
+        {tab === "Mesaj" && (
+          <div className={styles.viewToggle} aria-label="Mesaj görünümü">
+            <button className={messageView === "gelen" ? styles.selected : ""} onClick={() => setMessageView("gelen")}>
+              <MessageSquare size={15} /> Mesajlar ({data.mesajlar.length})
+            </button>
+            <button className={messageView === "arsiv" ? styles.selected : ""} onClick={() => setMessageView("arsiv")}>
+              <Archive size={15} /> Arşiv ({data.arsivMesajlar.length})
+            </button>
+          </div>
+        )}
         {tab === "Görev" && (
           <>
             <select
+              aria-label="Görev durumu"
               value={taskFilter}
               onChange={(e) => setTaskFilter(e.target.value)}
             >
@@ -381,6 +417,16 @@ export default function IletisimClient({
               <option>Termini Geçmiş</option>
               <option>Başladı</option>
               <option>Tamamlandı</option>
+            </select>
+            <select
+              aria-label="Görev kategorisi"
+              value={taskCategoryFilter}
+              onChange={(e) => setTaskCategoryFilter(e.target.value)}
+            >
+              <option>Tümü</option>
+              <option>Rutin</option>
+              <option>Satış</option>
+              <option>Rutin Dışı</option>
             </select>
             <div className={styles.viewToggle}>
               <button
@@ -402,6 +448,7 @@ export default function IletisimClient({
               <div className={`${styles.viewToggle} ${styles.calendarPrintActions}`} aria-label="Takvim görünümü">
                 <button className={calendarView === "ay" ? styles.selected : ""} onClick={() => setCalendarView("ay")}>Aylık</button>
                 <button className={calendarView === "hafta" ? styles.selected : ""} onClick={() => setCalendarView("hafta")}>Haftalık</button>
+                <button className={calendarView === "gun" ? styles.selected : ""} onClick={() => setCalendarView("gun")}>Günlük</button>
               </div>
               <button type="button" className={`${styles.printButton} ${styles.calendarPrintActions}`} onClick={printCalendar}><Printer size={15} />Yazdır</button>
             </>}
@@ -490,7 +537,7 @@ export default function IletisimClient({
         </>
       ) : tab === "Mesaj" ? (
         <div className={styles.feed}>
-          {data.mesajlar
+          {(messageView === "arsiv" ? data.arsivMesajlar : data.mesajlar)
             .filter((thread) => {
               const last = thread.messages.at(-1)!;
               return (
@@ -581,6 +628,7 @@ export default function IletisimClient({
                         <button onClick={() => void answer(thread.id)}>
                           <Send size={15} />
                         </button>
+                        <button className={styles.archiveButton} onClick={() => void action({ islem: messageView === "arsiv" ? "mesaj-arsivden-cikar" : "mesaj-arsivle", konusmaId: thread.id })} title={messageView === "arsiv" ? "Konuşmayı arşivden çıkar" : "Konuşmayı arşivle"} aria-label={messageView === "arsiv" ? "Konuşmayı arşivden çıkar" : "Konuşmayı arşivle"}>{messageView === "arsiv" ? <ArchiveRestore size={15} /> : <Archive size={15} />}</button>
                       </div>
                     </>
                   )}
@@ -589,11 +637,11 @@ export default function IletisimClient({
             })}
         </div>
       ) : taskView === "takvim" ? (
-        <div className={`${styles.calendar} ${calendarView === "hafta" ? styles.weekCalendar : ""} ${styles.calendarPrintArea}`}>
+        <div className={`${styles.calendar} ${calendarView === "hafta" ? styles.weekCalendar : ""} ${calendarView === "gun" ? styles.dayCalendar : ""} ${styles.calendarPrintArea}`}>
           <header>
             <button
               type="button"
-              aria-label={calendarView === "hafta" ? "Önceki hafta" : "Önceki ay"}
+              aria-label={calendarView === "gun" ? "Önceki gün" : calendarView === "hafta" ? "Önceki hafta" : "Önceki ay"}
               onClick={() => moveCalendar(-1)}
             >
               <ChevronLeft size={17} />
@@ -601,17 +649,17 @@ export default function IletisimClient({
             <strong>{calendarTitle}</strong>
             <button
               type="button"
-              aria-label={calendarView === "hafta" ? "Sonraki hafta" : "Sonraki ay"}
+              aria-label={calendarView === "gun" ? "Sonraki gün" : calendarView === "hafta" ? "Sonraki hafta" : "Sonraki ay"}
               onClick={() => moveCalendar(1)}
             >
               <ChevronRight size={17} />
             </button>
           </header>
-          <div className={styles.weekdays}>
+          {calendarView !== "gun" && <div className={styles.weekdays}>
             {["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map((x) => (
               <span key={x}>{x}</span>
             ))}
-          </div>
+          </div>}
           <div className={styles.calendarGrid}>
             {days.map((day, index) => (
               <div key={day ? `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}` : `blank-${index}`} className={!day ? styles.blank : ""}>
@@ -619,7 +667,7 @@ export default function IletisimClient({
                   <>
                     <b>{day.getDate()}{calendarView === "hafta" ? ` ${day.toLocaleDateString("tr-TR", { month: "short" })}` : ""}</b>
                     <div className={styles.calendarTasks}>
-                    {tasks
+                    {calendarItems
                       .filter(
                         (task) =>
                           task.terminTarihi &&
@@ -634,7 +682,7 @@ export default function IletisimClient({
                               new Date() &&
                             task.durum !== "Tamamlandı",
                         );
-                        const state = overdue
+                        const state = task.tur === "Duyuru" ? "Duyuru" : overdue
                           ? "Gecikti"
                           : task.durum === "Atandı"
                             ? "Bekliyor"
@@ -642,7 +690,7 @@ export default function IletisimClient({
                         return (
                           <button
                             key={task.id}
-                            className={`${styles.calendarTask} ${styles[`calendar${state}`] || ""}`}
+                            className={`${styles.calendarTask} ${styles[`calendar${state}`] || ""} ${task.kategori ? styles[`calendarCategory${task.kategori.replace(/\s/g, "")}`] || "" : ""}`}
                             title={`${task.baslik} · ${overdue ? "Termini Geçmiş" : task.durum}`}
                             onClick={() => {
                               setCalendarTaskId(task.id);
@@ -656,7 +704,7 @@ export default function IletisimClient({
                                 });
                             }}
                           >
-                            {task.baslik}
+                            {task.tur === "Duyuru" ? "Duyuru · " : task.kategori ? `${task.kategori} · ` : ""}{task.baslik}
                           </button>
                         );
                       })}
@@ -683,7 +731,7 @@ export default function IletisimClient({
               <header>
                 <span>
                   <small>
-                    {calendarTask.aliciAd} · Atayan {calendarTask.olusturanAd}
+                    {calendarTask.tur === "Duyuru" ? `Duyuru · ${calendarTask.olusturanAd}` : `${calendarTask.aliciAd} · Atayan ${calendarTask.olusturanAd}`}
                   </small>
                   <strong id="calendar-task-title">{calendarTask.baslik}</strong>
                 </span>
@@ -694,15 +742,23 @@ export default function IletisimClient({
                   ×
                 </button>
               </header>
-              <p>{calendarTask.icerik || "Açıklama girilmemiş."}</p>
+              <section className={styles.calendarDetailBody}>
+                <h3>Açıklama</h3>
+                <p>{calendarTask.icerik || "Açıklama girilmemiş."}</p>
+              </section>
               <div className={styles.calendarDetailMeta}>
-                <span>Durum: {calendarTask.durum}</span>
                 <span>
-                  Termin: {calendarTask.terminTarihi
+                  <small>{calendarTask.tur === "Duyuru" ? "Tür" : "Durum"}</small>
+                  <strong>{calendarTask.tur === "Duyuru" ? "Duyuru" : calendarTask.durum}</strong>
+                </span>
+                {calendarTask.kategori && <span><small>Kategori</small><strong className={`${styles.categoryBadge} ${styles[`category${calendarTask.kategori.replace(/\s/g, "")}`] || ""}`}>{calendarTask.kategori}</strong></span>}
+                <span>
+                  <small>{calendarTask.tur === "Duyuru" ? "Tarih" : "Termin"}</small>
+                  <strong>{calendarTask.terminTarihi
                     ? new Date(calendarTask.terminTarihi).toLocaleDateString(
                         "tr-TR",
                       )
-                    : "Yok"}
+                    : "Yok"}</strong>
                 </span>
               </div>
               <div className={styles.timeline}>
@@ -719,10 +775,10 @@ export default function IletisimClient({
                 ))}
               </div>
               <div className={styles.taskActions}>
-                {calendarTask.olusturanId === currentUserId && calendarTask.durum !== "Tamamlandı" && (
+                {calendarTask.tur === "Görev" && calendarTask.olusturanId === currentUserId && calendarTask.durum !== "Tamamlandı" && (
                   <><button className={styles.editTask} onClick={() => openTaskEdit(calendarTask)}><Pencil size={15} />Düzenle</button><button className={styles.deleteTask} onClick={() => void deleteTask(calendarTask)}><Trash2 size={15} />Sil</button></>
                 )}
-                {calendarTask.durum === "Atandı" &&
+                {calendarTask.tur === "Görev" && calendarTask.durum === "Atandı" &&
                   calendarTask.aliciId === currentUserId && (
                     <button
                       className={styles.start}
@@ -738,7 +794,7 @@ export default function IletisimClient({
                       Başlat
                     </button>
                   )}
-                {calendarTask.durum === "Başladı" &&
+                {calendarTask.tur === "Görev" && calendarTask.durum === "Başladı" &&
                   (calendarTask.aliciId === currentUserId ||
                     calendarTask.olusturanId === currentUserId) && (
                     <button
@@ -789,7 +845,7 @@ export default function IletisimClient({
                 >
                   <span className={styles.statusDot} />
                   <span className={styles.taskMain}>
-                    <strong>{item.baslik}</strong>
+                    <strong>{item.baslik}{item.kategori && <em className={`${styles.categoryBadge} ${styles[`category${item.kategori.replace(/\s/g, "")}`] || ""}`}>{item.kategori}</em>}</strong>
                     <small>
                       {item.aliciAd} · Atayan {item.olusturanAd}
                     </small>
@@ -935,9 +991,10 @@ export default function IletisimClient({
                   }
                 />
               </label>
-              {form.tur === "Görev" && (
+              {form.tur === "Görev" && <label>Kategori<select value={form.kategori} onChange={(e) => setForm((f) => ({ ...f, kategori: e.target.value }))}><option>Rutin</option><option>Satış</option><option>Rutin Dışı</option></select></label>}
+              {(form.tur === "Görev" || form.tur === "Duyuru") && (
                 <label>
-                  Termin
+                  {form.tur === "Görev" ? "Termin" : "Takvim tarihi (isteğe bağlı)"}
                   <input
                     type="date"
                     value={form.terminTarihi}
@@ -975,6 +1032,7 @@ export default function IletisimClient({
               <label>Başlık<input value={editTaskForm.baslik} onChange={(event) => setEditTaskForm((form) => ({ ...form, baslik: event.target.value }))} /></label>
               <label>Alıcı<select value={editTaskForm.aliciId} onChange={(event) => setEditTaskForm((form) => ({ ...form, aliciId: event.target.value }))}>{people.map((person) => <option key={String(person.ID)} value={String(person.ID)}>{person.Ad}</option>)}</select></label>
               <label>Termin<input type="date" value={editTaskForm.terminTarihi} onChange={(event) => setEditTaskForm((form) => ({ ...form, terminTarihi: event.target.value }))} /></label>
+              <label>Kategori<select value={editTaskForm.kategori} onChange={(event) => setEditTaskForm((form) => ({ ...form, kategori: event.target.value }))}><option>Rutin</option><option>Satış</option><option>Rutin Dışı</option></select></label>
               <label className={styles.full}>Açıklama<textarea rows={5} value={editTaskForm.icerik} onChange={(event) => setEditTaskForm((form) => ({ ...form, icerik: event.target.value }))} /></label>
             </div>
             <footer><button onClick={() => setEditingTask(null)}>Vazgeç</button><button className={styles.primary} onClick={() => void saveTaskEdit()}>Güncelle</button></footer>

@@ -2,7 +2,7 @@
 
 import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
-import { Bell } from "lucide-react";
+import { Bell, CalendarDays } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import styles from "./Header.module.css";
 import { useSidebar } from "./SidebarProvider";
@@ -27,6 +27,7 @@ export default function Header() {
       <div className={styles.right}>
         {session?.user ? (
           <div className={styles.userArea}>
+            <Link className={styles.calendarButton} href="/laboratuvar/kys/iletisim?sekme=gorev&gorunum=takvim" aria-label="Takvimi aç" title="Takvim"><CalendarDays size={18}/></Link>
             <div className={styles.notificationWrap}>
               <button className={styles.notificationButton} aria-label={`${notifications.count} okunmamış bildirim`} onClick={()=>setNotificationsOpen(value=>!value)}>
                 <Bell size={17}/>{notifications.count>0&&<span>{notifications.count>99?"99+":notifications.count}</span>}

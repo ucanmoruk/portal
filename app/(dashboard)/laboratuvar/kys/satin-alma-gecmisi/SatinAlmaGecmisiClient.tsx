@@ -27,6 +27,8 @@ type PurchaseRow = {
 
 type Supplier = { ID: number; Ad: string; Durum?: string };
 
+const MANUAL_SUPPLIER = "manual";
+
 function dateFmt(value: string | null) {
   if (!value) return "-";
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -50,7 +52,7 @@ export default function SatinAlmaGecmisiClient() {
   const [editing, setEditing] = useState<PurchaseRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
-  const [form, setForm] = useState({ tedarikciId: "", satinAlmaTarihi: "", faturaNo: "", birimFiyat: "", paraBirimi: "TRY", toplamTutar: "" });
+  const [form, setForm] = useState({ tedarikciId: "", tedarikci: "", satinAlmaTarihi: "", faturaNo: "", birimFiyat: "", paraBirimi: "TRY", toplamTutar: "" });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
@@ -80,7 +82,8 @@ export default function SatinAlmaGecmisiClient() {
     setEditing(row);
     setFormError("");
     setForm({
-      tedarikciId: row.tedarikciId ? String(row.tedarikciId) : "",
+      tedarikciId: row.tedarikciId ? String(row.tedarikciId) : row.tedarikci ? MANUAL_SUPPLIER : "",
+      tedarikci: row.tedarikci || "",
       satinAlmaTarihi: row.satinAlmaTarihi || "",
       faturaNo: row.faturaNo || "",
       birimFiyat: row.birimFiyat == null ? "" : String(row.birimFiyat),
@@ -91,9 +94,23 @@ export default function SatinAlmaGecmisiClient() {
 
   async function savePurchase() {
     if (!editing || saving) return;
+    const isManualSupplier = form.tedarikciId === MANUAL_SUPPLIER;
+    if (isManualSupplier && !form.tedarikci.trim()) {
+      setFormError("Manuel tedarikçi firma adını girin.");
+      return;
+    }
     setSaving(true); setFormError("");
     try {
-      const response = await fetch("/api/kys/satin-almalar", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: editing.id, ...form }) });
+      const response = await fetch("/api/kys/satin-almalar", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editing.id,
+          ...form,
+          tedarikciId: isManualSupplier ? null : form.tedarikciId || null,
+          tedarikci: isManualSupplier ? form.tedarikci.trim() : null,
+        }),
+      });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error || "Satın alma kaydı güncellenemedi.");
       setEditing(null); await load();
@@ -157,7 +174,8 @@ export default function SatinAlmaGecmisiClient() {
         <div className={styles.modalBody}>
           {formError && <div className={styles.formError} role="alert">{formError}</div>}
           <div className={kys.purchaseEditForm}>
-            <div className={styles.formGroup}><label>Tedarikçi</label><select value={form.tedarikciId} onChange={event => setForm(current => ({ ...current, tedarikciId: event.target.value }))}><option value="">Seçilmedi</option>{editing.tedarikciId && !suppliers.some(item => item.ID === editing.tedarikciId) && <option value={editing.tedarikciId}>{editing.tedarikci} (pasif)</option>}{suppliers.map(item => <option key={item.ID} value={item.ID}>{item.Ad}</option>)}</select></div>
+            <div className={styles.formGroup}><label>Tedarikçi</label><select value={form.tedarikciId} onChange={event => setForm(current => ({ ...current, tedarikciId: event.target.value, tedarikci: event.target.value === MANUAL_SUPPLIER ? current.tedarikci : "" }))}><option value="">Seçilmedi</option><option value={MANUAL_SUPPLIER}>Listede yok — manuel firma adı</option>{editing.tedarikciId && !suppliers.some(item => item.ID === editing.tedarikciId) && <option value={editing.tedarikciId}>{editing.tedarikci} (pasif)</option>}{suppliers.map(item => <option key={item.ID} value={item.ID}>{item.Ad}</option>)}</select></div>
+            {form.tedarikciId === MANUAL_SUPPLIER && <div className={styles.formGroup}><label htmlFor="manual-supplier-name">Manuel firma adı</label><input id="manual-supplier-name" value={form.tedarikci} maxLength={220} autoFocus placeholder="Tedarikçi firma adını yazın" onChange={event => setForm(current => ({ ...current, tedarikci: event.target.value }))} /></div>}
             <div className={styles.formGroup}><label>Satın alma tarihi</label><input type="date" value={form.satinAlmaTarihi} onChange={event => setForm(current => ({ ...current, satinAlmaTarihi: event.target.value }))} /></div>
             <div className={styles.formGroup}><label>Fatura no</label><input value={form.faturaNo} onChange={event => setForm(current => ({ ...current, faturaNo: event.target.value }))} /></div>
             <div className={styles.formGroup}><label>Birim fiyat</label><input inputMode="decimal" value={form.birimFiyat} onChange={event => setForm(current => ({ ...current, birimFiyat: event.target.value }))} /></div>

@@ -421,21 +421,27 @@ export async function deleteKysAcceptance(talepId: number, kabulId: number, user
     const item = (await tx.request().input("ID", before.KalemID).input("TalepID", talepId)
       .query("SELECT * FROM KysTalepKalem WHERE ID=@ID AND TalepID=@TalepID")).recordset[0];
     const quantity = Number(before.GelenMiktar);
-    const reversal = movement?.HareketTipi === "Çıkış" ? quantity : -quantity;
-    if (!movement || !item || !["Kabul", "Çıkış"].includes(movement.HareketTipi) || Number(movement.StokID) !== Number(before.StokID) ||
-        !Number.isFinite(quantity) || quantity <= 0 || Math.abs(Number(movement.Miktar) - quantity) > 0.00001 ||
-        Number(item.KabulMiktari) - quantity < -0.00001) throw new Error("Kabul ve stok kayıtları eşleşmiyor.");
-    const stock = (await tx.request().input("ID", before.StokID).query(hasMysqlConfig()
-      ? "SELECT * FROM KysStokKart WHERE ID=@ID FOR UPDATE"
-      : "SELECT * FROM KysStokKart WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
-    if (!stock || Number(stock.StokMiktari) + reversal < -0.00001) throw new Error("Kabul edilen stok kullanılmış; silme işlemi stok miktarını negatife düşüremez.");
-    await tx.request().input("ID", before.StokID).input("D", reversal)
-      .query("UPDATE KysStokKart SET StokMiktari=StokMiktari+@D,UpdatedAt=GETDATE() WHERE ID=@ID");
-    await balance(tx, Number(before.StokID), movement.HedefBirimID == null
-      ? (movement.KaynakBirimID == null ? null : Number(movement.KaynakBirimID)) : Number(movement.HedefBirimID), reversal);
+    const manualOrderItem = parent.Seri === "Spektrotek" && parent.TalepTuru === "Sipariş" && before.StokID == null && before.HareketID == null;
+    if (!item || !Number.isFinite(quantity) || quantity <= 0 || Number(item.KabulMiktari) - quantity < -0.00001 ||
+        (!manualOrderItem && (!movement || !["Kabul", "Çıkış"].includes(movement.HareketTipi) || Number(movement.StokID) !== Number(before.StokID) || Math.abs(Number(movement.Miktar) - quantity) > 0.00001))) {
+      throw new Error("Kabul ve stok kayıtları eşleşmiyor.");
+    }
+    if (movement) {
+      const reversal = movement.HareketTipi === "Çıkış" ? quantity : -quantity;
+      const stock = (await tx.request().input("ID", before.StokID).query(hasMysqlConfig()
+        ? "SELECT * FROM KysStokKart WHERE ID=@ID FOR UPDATE"
+        : "SELECT * FROM KysStokKart WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
+      if (!stock || Number(stock.StokMiktari) + reversal < -0.00001) throw new Error("Kabul edilen stok kullanılmış; silme işlemi stok miktarını negatife düşüremez.");
+      await tx.request().input("ID", before.StokID).input("D", reversal)
+        .query("UPDATE KysStokKart SET StokMiktari=StokMiktari+@D,UpdatedAt=GETDATE() WHERE ID=@ID");
+      await balance(tx, Number(before.StokID), movement.HedefBirimID == null
+        ? (movement.KaynakBirimID == null ? null : Number(movement.KaynakBirimID)) : Number(movement.HedefBirimID), reversal);
+    }
     await tx.request().input("ID", kabulId).query("DELETE FROM KysTalepBelge WHERE KabulID=@ID");
-    await tx.request().input("ID", before.HareketID).query("DELETE FROM KysStokSertifika WHERE HareketID=@ID");
-    await tx.request().input("ID", before.HareketID).query("DELETE FROM KysStokHareket WHERE ID=@ID");
+    if (before.HareketID != null) {
+      await tx.request().input("ID", before.HareketID).query("DELETE FROM KysStokSertifika WHERE HareketID=@ID");
+      await tx.request().input("ID", before.HareketID).query("DELETE FROM KysStokHareket WHERE ID=@ID");
+    }
     await tx.request().input("ID", kabulId).input("TalepID", talepId).query("DELETE FROM KysTalepKabul WHERE ID=@ID AND TalepID=@TalepID");
     await tx.request().input("ID", before.KalemID).input("Q", Math.max(0, Number(item.KabulMiktari) - quantity))
       .query("UPDATE KysTalepKalem SET KabulMiktari=@Q,Durum=CASE WHEN @Q=0 THEN 'Bekliyor' WHEN @Q>=Miktar THEN 'Tamamlandı' ELSE 'Kısmi Kabul' END WHERE ID=@ID");
@@ -492,25 +498,10 @@ export async function correctKysAcceptance(
         .input("ID", before.KalemID)
         .query("SELECT * FROM KysTalepKalem WHERE ID=@ID")
     ).recordset[0];
-    if (!movement || !item)
+    const manualOrderItem = parent.Seri === "Spektrotek" && parent.TalepTuru === "Sipariş" && before.StokID == null && before.HareketID == null;
+    if (!item || (!movement && !manualOrderItem))
       throw new Error("Stok hareketi veya kalem bulunamadı.");
     const delta = quantity - Number(before.GelenMiktar);
-    const sign = movement.HareketTipi === "Çıkış" ? -1 : 1;
-    const stockDelta = sign * delta;
-    const stock = (
-      await tx
-        .request()
-        .input("ID", before.StokID)
-        .query(
-          hasMysqlConfig()
-            ? "SELECT * FROM KysStokKart WHERE ID=@ID FOR UPDATE"
-            : "SELECT * FROM KysStokKart WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID",
-        )
-    ).recordset[0];
-    if (!stock || Number(stock.StokMiktari) + stockDelta < -0.00001)
-      throw new Error("Düzeltme stok miktarını negatife düşürüyor.");
-    const oldUnit =
-      movement.HedefBirimID == null ? null : Number(movement.HedefBirimID);
     const nextUnit = input.hedefBirimId ? Number(input.hedefBirimId) : null;
     if (
       nextUnit &&
@@ -524,18 +515,37 @@ export async function correctKysAcceptance(
       ).recordset.length
     )
       throw new Error("Hedef birim bulunamadı.");
-    if (nextUnit === oldUnit) await balance(tx, before.StokID, nextUnit, stockDelta);
-    else {
-      await balance(tx, before.StokID, oldUnit, -sign * Number(before.GelenMiktar));
-      await balance(tx, before.StokID, nextUnit, sign * quantity);
+    let stock: any = null;
+    let stockDelta = 0;
+    if (movement) {
+      const sign = movement.HareketTipi === "Çıkış" ? -1 : 1;
+      stockDelta = sign * delta;
+      stock = (
+        await tx
+          .request()
+          .input("ID", before.StokID)
+          .query(
+            hasMysqlConfig()
+              ? "SELECT * FROM KysStokKart WHERE ID=@ID FOR UPDATE"
+              : "SELECT * FROM KysStokKart WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID",
+          )
+      ).recordset[0];
+      if (!stock || Number(stock.StokMiktari) + stockDelta < -0.00001)
+        throw new Error("Düzeltme stok miktarını negatife düşürüyor.");
+      const oldUnit = movement.HedefBirimID == null ? null : Number(movement.HedefBirimID);
+      if (nextUnit === oldUnit) await balance(tx, before.StokID, nextUnit, stockDelta);
+      else {
+        await balance(tx, before.StokID, oldUnit, -sign * Number(before.GelenMiktar));
+        await balance(tx, before.StokID, nextUnit, sign * quantity);
+      }
+      await tx
+        .request()
+        .input("ID", before.StokID)
+        .input("D", stockDelta)
+        .query(
+          "UPDATE KysStokKart SET StokMiktari=StokMiktari+@D,UpdatedAt=GETDATE() WHERE ID=@ID",
+        );
     }
-    await tx
-      .request()
-      .input("ID", before.StokID)
-      .input("D", stockDelta)
-      .query(
-        "UPDATE KysStokKart SET StokMiktari=StokMiktari+@D,UpdatedAt=GETDATE() WHERE ID=@ID",
-      );
     const supplier =
       purchasePermission &&
       input.tedarikciId &&
@@ -580,19 +590,21 @@ export async function correctKysAcceptance(
         .map((k) => `${k}=@${k}`)
         .join(",")} WHERE ID=@ID`,
     );
-    await tx
-      .request()
-      .input("ID", movement.ID)
-      .input("Q", quantity)
-      .input("U", nextUnit)
-      .input("B", stock.Birim)
-      .input("M", clean(input.marka) || null)
-      .input("L", clean(input.lot) || null)
-      .input("SKT", input.skt || null)
-      .input("Date", input.kabulTarihi || before.KabulTarihi)
-      .query(
-        "UPDATE KysStokHareket SET Miktar=@Q,HedefBirimID=@U,Birim=@B,Marka=@M,Lot=@L,SKT=@SKT,StokGirisTarihi=@Date WHERE ID=@ID",
-      );
+    if (movement) {
+      await tx
+        .request()
+        .input("ID", movement.ID)
+        .input("Q", quantity)
+        .input("U", nextUnit)
+        .input("B", stock.Birim)
+        .input("M", clean(input.marka) || null)
+        .input("L", clean(input.lot) || null)
+        .input("SKT", input.skt || null)
+        .input("Date", input.kabulTarihi || before.KabulTarihi)
+        .query(
+          "UPDATE KysStokHareket SET Miktar=@Q,HedefBirimID=@U,Birim=@B,Marka=@M,Lot=@L,SKT=@SKT,StokGirisTarihi=@Date WHERE ID=@ID",
+        );
+    }
     await tx
       .request()
       .input("ID", item.ID)

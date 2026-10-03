@@ -9,6 +9,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/_next/static",
   "/_next/image",
   "/favicon.ico",
+  "/manifest.webmanifest",
   "/login",
 ];
 
@@ -49,6 +50,6 @@ export const config = {
      * Yalnizca giris yapilmis kullanicilarin erisebilecegi rotalar korunur.
      * API istekleri oturum yoksa HTML login sayfasi yerine JSON 401 doner.
      */
-    "/((?!api/auth|api/musteriler|api/teklifler/[^/]+/onay|rapordogrulama|api/rapor-dogrula|_next/static|_next/image|favicon.ico|login).*)",
+    "/((?!api/auth|api/musteriler|api/teklifler/[^/]+/onay|rapordogrulama|api/rapor-dogrula|_next/static|_next/image|favicon.ico|manifest.webmanifest|login).*)",
   ],
 };

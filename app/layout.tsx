@@ -4,6 +4,9 @@ import Providers from "@/components/Providers";
 import { ttInterphases } from "@/app/fonts/reportFonts";
 
 export const metadata: Metadata = {
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Unique Takvim", statusBarStyle: "default" },
+  icons: { apple: "/favicon.ico" },
   title: {
     template: "%s | Online Portal",
     default: "Online Portal",

@@ -52,7 +52,13 @@ export async function nextSpektrotekRequestNumber(tx: any, type = "Sipariş"): P
   const key = type === "Sipariş" ? 0 : -1;
   const prefix = type === "Sipariş" ? "S" : "A";
   const counter = await lockCounter(tx, key);
-  let number = Math.max(1000, Number(counter.SonNo)) + 1;
+  const existingNumbers = (await tx.request()
+    .input("Pattern", prefix + "%")
+    .query("SELECT TalepNo FROM KysTalep WHERE TalepNo LIKE @Pattern")).recordset
+    .map((row: any) => String(row.TalepNo || row.talepNo || "").match(new RegExp(`^${prefix}(\\d+)$`)))
+    .filter((match: RegExpMatchArray | null): match is RegExpMatchArray => Boolean(match))
+    .map((match: RegExpMatchArray) => Number(match[1]));
+  let number = Math.max(1000, Number(counter.SonNo), ...existingNumbers) + 1;
   while ((await tx.request().input("No", prefix + number).query("SELECT ID FROM KysTalep WHERE TalepNo=@No")).recordset.length) number += 1;
   await tx.request().input("Y", key).input("N", number).query("UPDATE KysTalepSayac SET SonNo=@N,Hazir=1 WHERE Yil=@Y");
   return prefix + number;

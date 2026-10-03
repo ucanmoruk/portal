@@ -1075,9 +1075,9 @@ export async function createKysRequest(input: KysRequestInput) {
   if (input.seri && !["Unique", "Spektrotek"].includes(input.seri)) throw new Error("Talep serisi geçersiz.");
   const spektrotek = input.seri === "Spektrotek";
   if (spektrotek && (!text(input.firmaAdi) || text(input.firmaAdi).length > 220)) throw new Error("Firma adı zorunludur (en fazla 220 karakter).");
-  if (spektrotek && input.kalemler.some(k => k.stokId)) throw new Error("Spektrotek kalemleri manuel girilmelidir.");
-  const talepNo = spektrotek ? await nextSpektrotekRequestNumber(pool, text(input.talepTuru)) : await nextKysRequestNumber(pool);
   const talepTuru = spektrotek ? (text(input.talepTuru) === "Sipariş" ? "Sipariş" : "Satın Alma") : text(input.talepTuru) || "Stok Malzeme";
+  if (spektrotek && talepTuru !== "Sipariş" && input.kalemler.some(k => k.stokId)) throw new Error("Spektrotek satın alma kalemleri manuel girilmelidir.");
+  const talepNo = spektrotek ? await nextSpektrotekRequestNumber(pool, talepTuru) : await nextKysRequestNumber(pool);
   const res = await pool.request()
     .input("TalepNo", talepNo)
     .input("Seri", spektrotek ? "Spektrotek" : "Unique")
@@ -1158,10 +1158,11 @@ export async function editKysRequest(id: number, input: KysRequestInput) {
       throw new Error("Yalnızca onaylanmamış talepler düzenlenebilir. Sayfayı yenileyin.");
     const spektrotek = current.Seri === "Spektrotek" || String(current.TalepNo).startsWith("S");
     if (spektrotek && (!text(input.firmaAdi) || text(input.firmaAdi).length > 220)) throw new Error("Firma adı zorunludur (en fazla 220 karakter).");
-    if (spektrotek && input.kalemler.some(k => k.stokId)) throw new Error("Spektrotek kalemleri manuel girilmelidir.");
+    const talepTuru = spektrotek ? (text(input.talepTuru) === "Sipariş" ? "Sipariş" : "Satın Alma") : text(input.talepTuru) || "Stok Malzeme";
+    if (spektrotek && talepTuru !== "Sipariş" && input.kalemler.some(k => k.stokId)) throw new Error("Spektrotek satın alma kalemleri manuel girilmelidir.");
     const accepted = await pool.request().input("ID", id).query("SELECT ID FROM KysTalepKabul WHERE TalepID=@ID");
     if (accepted.recordset.length) throw new Error("Kabul kaydı bulunan talep düzenlenemez.");
-    await pool.request().input("ID", id).input("Tur", spektrotek ? (text(input.talepTuru) === "Sipariş" ? "Sipariş" : "Satın Alma") : text(input.talepTuru) || "Stok Malzeme")
+    await pool.request().input("ID", id).input("Tur", talepTuru)
       .input("Firma", spektrotek ? text(input.firmaAdi) : null)
       .input("Not", nullableText(input.notlar)).input("Spec", nullableText(input.teknikSartname))
       .query("UPDATE KysTalep SET FirmaAdi=@Firma,TalepTuru=@Tur,Notlar=@Not,TeknikSartname=@Spec,UpdatedAt=GETDATE() WHERE ID=@ID");
@@ -1315,8 +1316,7 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
       : "SELECT ID,Birim FROM KysStokKart WITH (UPDLOCK,HOLDLOCK) WHERE Kod=@Kod")).recordset[0];
     if (existing) { if (existing.Birim !== item.birim) throw new Error("Talep birimi stok kartı birimiyle eşleşmiyor."); stokId = Number(existing.ID); }
   }
-  if (sale && !stokId) throw new Error("Sipariş için mevcut stok kartı bulunamadı. Önce satın alma ile stoğa giriş yapın.");
-  if (!stokId) {
+  if (!stokId && !sale) {
     stokId = await createKysStock({
       barkod: item.kod || undefined,
       kod: item.kod || `KYS-${kalemId}`,
@@ -1330,9 +1330,11 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
     `);
   }
 
-  await pool.request().input("KalemID", kalemId).input("StokID", stokId).query("UPDATE KysTalepKalem SET StokID=@StokID WHERE ID=@KalemID");
-  if (spektrotek) await pool.request().input("ID", stokId).query("UPDATE KysStokKart SET MalzemeTuru='Spektrotek' WHERE ID=@ID");
-  if (sale) {
+  if (stokId) {
+    await pool.request().input("KalemID", kalemId).input("StokID", stokId).query("UPDATE KysTalepKalem SET StokID=@StokID WHERE ID=@KalemID");
+    if (spektrotek && !sale) await pool.request().input("ID", stokId).query("UPDATE KysStokKart SET MalzemeTuru='Spektrotek' WHERE ID=@ID");
+  }
+  if (sale && stokId) {
     const stock = (await pool.request().input("ID", stokId).query(hasMysqlConfig() ? "SELECT StokMiktari FROM KysStokKart WHERE ID=@ID FOR UPDATE" : "SELECT StokMiktari FROM KysStokKart WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
     if (!stock || Number(stock.StokMiktari) < gelenMiktar) throw new Error("Sipariş için depoda yeterli stok yok.");
     if (input.hedefBirimId) {
@@ -1342,7 +1344,7 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
       if (!unit || Number(unit.Miktar) < gelenMiktar) throw new Error("Seçilen depoda/birimde yeterli stok yok.");
     }
   }
-  const hareketId = await createKysStockMovement(stokId, {
+  const hareketId = stokId ? await createKysStockMovement(stokId, {
     hareketTipi: sale ? "Çıkış" : "Kabul",
     miktar: gelenMiktar,
     birim: item.birim || "Adet",
@@ -1354,7 +1356,7 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
     aciklama: `Talep kabul: ${detail?.talep.talepNo || talepId}`,
     kullaniciId: input.degerlendirenId,
     kullaniciAd: input.degerlendirenAd,
-  }, pool);
+  }, pool) : null;
 
   const kabulId = await pool.request()
     .input("TalepID", talepId)
@@ -1368,7 +1370,7 @@ export async function acceptKysRequestItem(talepId: number, input: any) {
     .input("KabulTarihi", dateValue(input.kabulTarihi) || new Date().toISOString().slice(0, 10))
     .input("DegerlendirenID", nullableText(input.degerlendirenId))
     .input("DegerlendirenAd", nullableText(input.degerlendirenAd))
-    .input("StokID", stokId)
+    .input("StokID", stokId || null)
     .input("HareketID", hareketId)
     .input("Tedarikci", supplier?.ad || null)
     .input("TedarikciID", supplier?.id || null)
@@ -1494,6 +1496,8 @@ export async function updateKysPurchase(id: number, input: any, user: { userId: 
   if (!current) throw new Error("Satın alma kaydı bulunamadı.");
   if (!user.firmalar.includes(String(current.Seri || "Unique"))) throw new Error("Bu firmanın satın alma kaydını düzenleme yetkiniz yok.");
   const supplier = input.tedarikciId ? await resolveKysSupplier(pool, input.tedarikciId) : null;
+  const manualSupplierName = supplier ? null : nullableText(input.tedarikci);
+  if (manualSupplierName && manualSupplierName.length > 220) throw new Error("Tedarikçi firma adı en fazla 220 karakter olabilir.");
   const price = input.birimFiyat === "" || input.birimFiyat == null ? null : numberValue(input.birimFiyat, NaN);
   const total = input.toplamTutar === "" || input.toplamTutar == null
     ? price == null ? null : price * Number(current.GelenMiktar || 0)
@@ -1504,7 +1508,7 @@ export async function updateKysPurchase(id: number, input: any, user: { userId: 
   await pool.request()
     .input("ID", id)
     .input("TedarikciID", supplier?.id || null)
-    .input("Tedarikci", supplier?.ad || null)
+    .input("Tedarikci", supplier?.ad || manualSupplierName)
     .input("SatinAlmaTarihi", dateValue(input.satinAlmaTarihi))
     .input("FaturaNo", nullableText(input.faturaNo))
     .input("BirimFiyat", price)
