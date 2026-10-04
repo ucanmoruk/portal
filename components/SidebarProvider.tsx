@@ -30,7 +30,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   }, []);
   useEffect(() => {
     document.documentElement.style.setProperty("--sidebar-width", isCollapsed ? "64px" : "240px");
-    return () => document.documentElement.style.removeProperty("--sidebar-width");
+    return () => { document.documentElement.style.removeProperty("--sidebar-width"); };
   }, [isCollapsed]);
   return (
     <SidebarContext.Provider value={{
