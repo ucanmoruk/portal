@@ -705,6 +705,12 @@ export default function IletisimClient({
                             }}
                           >
                             {task.tur === "Duyuru" ? "Duyuru · " : task.kategori ? `${task.kategori} · ` : ""}{task.baslik}
+                            {calendarView === "gun" && task.tur === "Görev" && (
+                              <>
+                                <span className={styles.dailyAssignee}>Atanan: {task.aliciAd || peopleById.get(task.aliciId) || "Belirtilmemiş"}</span>
+                                <span className={styles.dailyDescription}>{task.icerik || "Açıklama girilmemiş."}</span>
+                              </>
+                            )}
                           </button>
                         );
                       })}
@@ -742,6 +748,12 @@ export default function IletisimClient({
                   ×
                 </button>
               </header>
+              {calendarTask.tur === "Görev" && (
+                <div className={styles.taskAssignment}>
+                  <Users size={22} aria-hidden="true" />
+                  <span><small>Görevin atandığı kişi</small><strong>{calendarTask.aliciAd || peopleById.get(calendarTask.aliciId) || "Belirtilmemiş"}</strong><small>Atayan: {calendarTask.olusturanAd}</small></span>
+                </div>
+              )}
               <section className={styles.calendarDetailBody}>
                 <h3>Açıklama</h3>
                 <p>{calendarTask.icerik || "Açıklama girilmemiş."}</p>
