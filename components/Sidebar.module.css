@@ -12,6 +12,13 @@
   overflow-y: auto;
   overflow-x: hidden;
 }
+.collapseButton { align-self:flex-end;margin:8px 12px 0;border:1px solid #555;border-radius:6px;background:transparent;color:#fff;width:32px;height:28px;font-size:22px;cursor:pointer; }
+@media (min-width:769px) {
+  .collapsed .brandText,.collapsed .navLink > span,.collapsed .navGroupHeaderLeft > span,.collapsed .chevron,.collapsed .navGroupItems { display:none; }
+  .collapsed .brand { padding:12px 15px; }
+  .collapsed .navGroupHeader,.collapsed .navLink { justify-content:center;padding:12px 8px; }
+  .collapsed .navGroupHeaderLeft { justify-content:center; }
+}
 
 /* Scrollbar */
 .sidebar::-webkit-scrollbar { width: 4px; }
@@ -204,6 +211,7 @@
 /* ── Mobile ── */
 @media (max-width: 768px) {
   .sidebar {
+    width:240px;
     transform: translateX(-100%);
     transition: transform 0.25s ease;
     z-index: 200;

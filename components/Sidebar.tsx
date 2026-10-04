@@ -186,6 +186,7 @@ function groupIdForPath(path: string): string | null {
   if (path.startsWith("/admin")) return "admin";
   if (path.startsWith("/laboratuvar/kys/laboratuvar-birimleri")) return "admin";
   if (path.startsWith("/laboratuvar/numune-form")) return "laboratuvar";
+  if (path === "/laboratuvar/kys/iletisim" || path.startsWith("/laboratuvar/kys/iletisim/")) return "iletisim";
   if (path.startsWith("/laboratuvar/kys")) return "kys";
   if (path.startsWith("/laboratuvar/spektrotek")) return "spektrotek";
   if (path.startsWith("/laboratuvar/root-kozmetik")) return "root-kozmetik";
@@ -203,7 +204,7 @@ function openGroupsForPath(path: string): string[] {
 
 export default function Sidebar({ allowedKeys, isAdmin }: Props) {
   const pathname = usePathname();
-  const { isOpen, close } = useSidebar();
+  const { isOpen, close, isCollapsed, toggleCollapsed } = useSidebar();
   const [mounted, setMounted] = useState(false);
   const [openGroups, setOpenGroups] = useState<string[]>(() => openGroupsForPath(pathname));
 
@@ -223,7 +224,7 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
   const canSee  = (key: string) => allowed === null || allowed.has(key) || (key === "laboratuvar.kys" && Array.from(allowed).some(item => item.startsWith("laboratuvar.kys.")));
 
   const toggleGroup = (id: string) =>
-    setOpenGroups(prev => (prev.length === 1 && prev[0] === id ? [] : [id]));
+    { if (isCollapsed) { toggleCollapsed(); setOpenGroups([id]); } else setOpenGroups(prev => (prev.length === 1 && prev[0] === id ? [] : [id])); }
 
   const isGroupActive = (group: NavGroup) =>
     group.items.some(item => pathname.startsWith(item.href));
@@ -234,7 +235,8 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
       {isOpen && (
         <div className={styles.overlay} onClick={close} aria-hidden="true" />
       )}
-    <aside className={`${styles.sidebar} ${isOpen ? styles.sidebarOpen : ""}`} data-dashboard-sidebar>
+    <aside className={`${styles.sidebar} ${isOpen ? styles.sidebarOpen : ""} ${isCollapsed ? styles.collapsed : ""}`} data-dashboard-sidebar>
+      <button className={styles.collapseButton} onClick={toggleCollapsed} aria-label={isCollapsed ? "Menüyü genişlet" : "Menüyü daralt"} aria-expanded={!isCollapsed}>{isCollapsed ? "»" : "«"}</button>
       {/* Logo */}
       <div className={styles.brand}>
         <div className={styles.brandIcon}>
@@ -291,6 +293,7 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
                 className={`${styles.navGroupHeader} ${active ? styles.navGroupHeaderActive : ""}`}
                 onClick={() => toggleGroup(group.id)}
                 aria-expanded={isOpen}
+                title={group.label}
               >
                 <span className={styles.navGroupHeaderLeft}>
                   {group.icon}
@@ -351,6 +354,7 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
                 className={`${styles.navGroupHeader} ${pathname.startsWith("/admin") || pathname.startsWith("/laboratuvar/kys/laboratuvar-birimleri") ? styles.navGroupHeaderActive : ""}`}
                 onClick={() => toggleGroup("admin")}
                 aria-expanded={openGroups.includes("admin")}
+                title="Admin"
               >
                 <span className={styles.navGroupHeaderLeft}>
                   <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
