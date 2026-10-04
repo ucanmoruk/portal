@@ -22,11 +22,12 @@ async function createSchema() {
       ID INT NOT NULL AUTO_INCREMENT PRIMARY KEY, Tur VARCHAR(20) NOT NULL, Baslik VARCHAR(220) NOT NULL,
       Icerik TEXT NULL, OlusturanID VARCHAR(80) NOT NULL, OlusturanAd VARCHAR(160) NOT NULL,
       AliciID VARCHAR(80) NULL, AliciAd VARCHAR(160) NULL, KonusmaID INT NULL,
-      Durum VARCHAR(30) NOT NULL DEFAULT 'Aktif', TerminTarihi DATE NULL, Kategori VARCHAR(30) NULL,
+      Durum VARCHAR(30) NOT NULL DEFAULT 'Aktif', TerminTarihi DATE NULL, BaslangicTarihi DATE NULL, BitisTarihi DATE NULL, Kategori VARCHAR(30) NULL,
       CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UpdatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       KEY IX_KysIletisim_Alici (AliciID), KEY IX_KysIletisim_Konusma (KonusmaID), KEY IX_KysIletisim_Tur (Tur)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci`);
     await pool.request().query("ALTER TABLE KysIletisim ADD COLUMN IF NOT EXISTS Kategori VARCHAR(30) NULL");
+    await pool.request().query("ALTER TABLE KysIletisim ADD COLUMN IF NOT EXISTS BaslangicTarihi DATE NULL, ADD COLUMN IF NOT EXISTS BitisTarihi DATE NULL");
     await pool.request().query(`CREATE TABLE IF NOT EXISTS KysIletisimOkuma (
       ID INT NOT NULL AUTO_INCREMENT PRIMARY KEY, IcerikID INT NOT NULL, KullaniciID VARCHAR(80) NOT NULL,
       OkunduAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY UX_KysIletisimOkuma (IcerikID,KullaniciID)
@@ -53,9 +54,10 @@ async function createSchema() {
     await pool.request().query(`IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='KysIletisim') CREATE TABLE KysIletisim (
       ID INT IDENTITY(1,1) PRIMARY KEY, Tur NVARCHAR(20) NOT NULL, Baslik NVARCHAR(220) NOT NULL, Icerik NVARCHAR(MAX) NULL,
       OlusturanID NVARCHAR(80) NOT NULL, OlusturanAd NVARCHAR(160) NOT NULL, AliciID NVARCHAR(80) NULL, AliciAd NVARCHAR(160) NULL,
-      KonusmaID INT NULL, Durum NVARCHAR(30) NOT NULL DEFAULT 'Aktif', TerminTarihi DATE NULL,
+      KonusmaID INT NULL, Durum NVARCHAR(30) NOT NULL DEFAULT 'Aktif', TerminTarihi DATE NULL, BaslangicTarihi DATE NULL, BitisTarihi DATE NULL,
       CreatedAt DATETIME NOT NULL DEFAULT GETDATE(), UpdatedAt DATETIME NOT NULL DEFAULT GETDATE())`);
     await pool.request().query("IF COL_LENGTH('KysIletisim', 'Kategori') IS NULL ALTER TABLE KysIletisim ADD Kategori NVARCHAR(30) NULL");
+    await pool.request().query("IF COL_LENGTH('KysIletisim', 'BaslangicTarihi') IS NULL ALTER TABLE KysIletisim ADD BaslangicTarihi DATE NULL; IF COL_LENGTH('KysIletisim', 'BitisTarihi') IS NULL ALTER TABLE KysIletisim ADD BitisTarihi DATE NULL;");
     await pool.request().query(`IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='KysIletisimOkuma') CREATE TABLE KysIletisimOkuma (
       ID INT IDENTITY(1,1) PRIMARY KEY, IcerikID INT NOT NULL, KullaniciID NVARCHAR(80) NOT NULL, OkunduAt DATETIME NOT NULL DEFAULT GETDATE(),
       CONSTRAINT UX_KysIletisimOkuma UNIQUE (IcerikID,KullaniciID))`);
@@ -82,6 +84,7 @@ function mapItem(row: Row) {
   return { id:number(row,"ID"), tur:string(row,"Tur"), baslik:string(row,"Baslik"), icerik:string(row,"Icerik"),
     olusturanId:string(row,"OlusturanID"), olusturanAd:string(row,"OlusturanAd"), aliciId:string(row,"AliciID"), aliciAd:string(row,"AliciAd"),
     konusmaId:row.KonusmaID==null?null:number(row,"KonusmaID"), durum:string(row,"Durum"), terminTarihi:date(row.TerminTarihi), kategori:string(row,"Kategori")||null,
+    baslangicTarihi:date(row.BaslangicTarihi), bitisTarihi:date(row.BitisTarihi),
     createdAt:date(row.CreatedAt), updatedAt:date(row.UpdatedAt), okundu:Boolean(number(row,"Okundu")) };
 }
 
@@ -126,9 +129,12 @@ export async function createKysIletisim(input:Record<string,unknown>,user:User){
     return {id:threadId,ids:[threadId]};
   }
   const kategori=text(input.kategori);if(tur==="Görev"&&!['Rutin','Satış','Rutin Dışı'].includes(kategori))throw new Error("Görev kategorisi seçilmelidir.");
+  const baslangic=text(input.baslangicTarihi);const bitis=text(input.bitisTarihi);
+  if(tur==="Görev"&&(!baslangic||!bitis))throw new Error("Görev için başlama ve bitiş tarihleri zorunludur.");
+  if(tur==="Görev"&&bitis<baslangic)throw new Error("Bitiş tarihi başlama tarihinden önce olamaz.");
   for(const recipient of recipients){const result=await pool.request().input("Tur",tur).input("Baslik",baslik.slice(0,220)).input("Icerik",icerik)
-    .input("OlusturanID",user.userId).input("OlusturanAd",user.userName).input("AliciID",recipient.id).input("AliciAd",recipient.name).input("Termin",text(input.terminTarihi)||null).input("Kategori",tur==="Görev"?kategori:null)
-    .query(`INSERT INTO KysIletisim (Tur,Baslik,Icerik,OlusturanID,OlusturanAd,AliciID,AliciAd,Durum,TerminTarihi,Kategori) OUTPUT INSERTED.ID VALUES (@Tur,@Baslik,@Icerik,@OlusturanID,@OlusturanAd,@AliciID,@AliciAd,${tur==="Görev"?"'Atandı'":"'Aktif'"},@Termin,@Kategori)`);
+    .input("OlusturanID",user.userId).input("OlusturanAd",user.userName).input("AliciID",recipient.id).input("AliciAd",recipient.name).input("Termin",tur==="Görev"?bitis:text(input.terminTarihi)||null).input("Baslangic",tur==="Görev"?baslangic:null).input("Bitis",tur==="Görev"?bitis:null).input("Kategori",tur==="Görev"?kategori:null)
+    .query(`INSERT INTO KysIletisim (Tur,Baslik,Icerik,OlusturanID,OlusturanAd,AliciID,AliciAd,Durum,TerminTarihi,BaslangicTarihi,BitisTarihi,Kategori) OUTPUT INSERTED.ID VALUES (@Tur,@Baslik,@Icerik,@OlusturanID,@OlusturanAd,@AliciID,@AliciAd,${tur==="Görev"?"'Atandı'":"'Aktif'"},@Termin,@Baslangic,@Bitis,@Kategori)`);
    const id=Number(result.recordset[0]?.ID);created.push(id);if(tur==="Görev")await pool.request().input("ID",id).input("UserID",user.userId).input("UserName",user.userName).query("INSERT INTO KysIletisimGorevLog (GorevID,Durum,KullaniciID,KullaniciAd) VALUES (@ID,'Atandı',@UserID,@UserName)");}
   return {id:created[0],ids:created};
 }
@@ -168,11 +174,12 @@ export async function updateKysGorevDetails(id:number,input:Record<string,unknow
   if(!row)throw new Error("Görev bulunamadı.");
   if(string(row,"OlusturanID")!==user.userId)throw new Error("Görevi yalnızca atayan kişi düzenleyebilir.");
   if(string(row,"Durum")==="Tamamlandı")throw new Error("Tamamlanan görevler düzenlenemez.");
-  const baslik=text(input.baslik);const icerik=text(input.icerik);const aliciId=text(input.aliciId);const aliciAd=text(input.aliciAd);const termin=text(input.terminTarihi);const kategori=text(input.kategori);
-  if(!baslik||!icerik||!aliciId||!termin)throw new Error("Başlık, içerik, alıcı ve termin zorunludur.");
+  const baslik=text(input.baslik);const icerik=text(input.icerik);const aliciId=text(input.aliciId);const aliciAd=text(input.aliciAd);const baslangic=text(input.baslangicTarihi);const bitis=text(input.bitisTarihi);const termin=bitis||text(input.terminTarihi);const kategori=text(input.kategori);
+  if(!baslik||!icerik||!aliciId||!baslangic||!bitis)throw new Error("Başlık, içerik, alıcı, başlama ve bitiş tarihleri zorunludur.");
+  if(bitis<baslangic)throw new Error("Bitiş tarihi başlama tarihinden önce olamaz.");
   if(!['Rutin','Satış','Rutin Dışı'].includes(kategori))throw new Error("Görev kategorisi seçilmelidir.");
-  await pool.request().input("ID",id).input("Baslik",baslik.slice(0,220)).input("Icerik",icerik).input("AliciID",aliciId).input("AliciAd",aliciAd||aliciId).input("Termin",termin).input("Kategori",kategori)
-    .query("UPDATE KysIletisim SET Baslik=@Baslik,Icerik=@Icerik,AliciID=@AliciID,AliciAd=@AliciAd,TerminTarihi=@Termin,Kategori=@Kategori,UpdatedAt=GETDATE() WHERE ID=@ID");
+  await pool.request().input("ID",id).input("Baslik",baslik.slice(0,220)).input("Icerik",icerik).input("AliciID",aliciId).input("AliciAd",aliciAd||aliciId).input("Termin",termin).input("Baslangic",baslangic).input("Bitis",bitis).input("Kategori",kategori)
+    .query("UPDATE KysIletisim SET Baslik=@Baslik,Icerik=@Icerik,AliciID=@AliciID,AliciAd=@AliciAd,TerminTarihi=@Termin,BaslangicTarihi=@Baslangic,BitisTarihi=@Bitis,Kategori=@Kategori,UpdatedAt=GETDATE() WHERE ID=@ID");
   await pool.request().input("ID",id).input("UserID",user.userId).input("UserName",user.userName).query("INSERT INTO KysIletisimGorevLog (GorevID,Durum,KullaniciID,KullaniciAd) VALUES (@ID,'Düzenlendi',@UserID,@UserName)");
 }
 

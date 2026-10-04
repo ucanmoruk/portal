@@ -12,10 +12,13 @@
   overflow-y: auto;
   overflow-x: hidden;
 }
-.collapseButton { align-self:flex-end;margin:8px 12px 0;border:1px solid #555;border-radius:6px;background:transparent;color:#fff;width:32px;height:28px;font-size:22px;cursor:pointer; }
+.collapseButton { display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;margin-left:auto;padding:0;border:1px solid rgba(255,255,255,.14);border-radius:7px;background:transparent;color:rgba(255,255,255,.74);cursor:pointer; }
+.collapseButton:hover { background:rgba(255,255,255,.09);color:#fff; }
 @media (min-width:769px) {
   .collapsed .brandText,.collapsed .navLink > span,.collapsed .navGroupHeaderLeft > span,.collapsed .chevron,.collapsed .navGroupItems { display:none; }
-  .collapsed .brand { padding:12px 15px; }
+  .collapsed .brand { justify-content:center;gap:0;padding:12px 0; }
+  .collapsed .brandIcon { width:34px;height:34px; }
+  .collapsed .collapseButton { position:absolute;top:54px;left:17px;margin:0;background:#29292c; }
   .collapsed .navGroupHeader,.collapsed .navLink { justify-content:center;padding:12px 8px; }
   .collapsed .navGroupHeaderLeft { justify-content:center; }
 }

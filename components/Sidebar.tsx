@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Menu } from "lucide-react";
 import styles from "./Sidebar.module.css";
 import { useSidebar } from "./SidebarProvider";
 
@@ -236,7 +237,6 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
         <div className={styles.overlay} onClick={close} aria-hidden="true" />
       )}
     <aside className={`${styles.sidebar} ${isOpen ? styles.sidebarOpen : ""} ${isCollapsed ? styles.collapsed : ""}`} data-dashboard-sidebar>
-      <button className={styles.collapseButton} onClick={toggleCollapsed} aria-label={isCollapsed ? "Menüyü genişlet" : "Menüyü daralt"} aria-expanded={!isCollapsed}>{isCollapsed ? "»" : "«"}</button>
       {/* Logo */}
       <div className={styles.brand}>
         <div className={styles.brandIcon}>
@@ -248,6 +248,7 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
           <span className={styles.brandName}>Online Portal</span>
           <span className={styles.brandSub}>Laboratuvar Sistemi</span>
         </div>
+        <button className={styles.collapseButton} onClick={toggleCollapsed} aria-label={isCollapsed ? "Menüyü genişlet" : "Menüyü daralt"} aria-expanded={!isCollapsed} title={isCollapsed ? "Menüyü genişlet" : "Menüyü daralt"}><Menu size={18} /></button>
       </div>
 
       <div className={styles.divider} />

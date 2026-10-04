@@ -524,6 +524,15 @@
 .weekCalendar .calendarGrid > div {
   min-height: 360px;
 }
+.calendarWeeks { display:grid;grid-template-columns:1fr; }
+.calendarWeekRow { min-width:0; }
+.calendarWeekDays { position:relative;display:grid;grid-template-columns:repeat(7,minmax(0,1fr)); }
+.calendarWeekDays > div { min-width:0;border-top:1px solid var(--color-border-light);border-right:1px solid var(--color-border-light);border-bottom:1px solid var(--color-border-light);background:var(--color-surface);padding:7px; }
+.calendarWeekDays > div:first-child { border-left:1px solid var(--color-border-light); }
+.calendarWeekDays > div.blank { background:var(--color-surface-2); }
+.calendarWeekDays > div > b { font-size:.7rem; }
+.calendarSpanBars { position:absolute;top:38px;left:0;right:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));align-content:start;column-gap:0;row-gap:3px;pointer-events:none; }
+.calendarTask.calendarSpanTask { z-index:1;width:auto;min-width:0;margin:0 2px;border-radius:6px;pointer-events:auto; }
 .calendarGrid b {
   font-size: 0.7rem;
 }
@@ -849,6 +858,7 @@
   }
   .calendar { overflow-x:auto; }
   .calendar:not(.dayCalendar) .calendarGrid,
+  .calendar:not(.dayCalendar) .calendarWeeks,
   .calendar:not(.dayCalendar) .weekdays { min-width:760px; }
   .dayCalendar .calendarGrid { min-width:0; }
   .dayCalendar .calendarGrid > div { min-height:calc(100dvh - 310px); }
