@@ -747,7 +747,8 @@
   font-weight: 700;
 }
 
-.documentBody p { margin: 5px 0 9px; }
+.documentBody p,
+.documentBody > div:not(:global(.documentFormula)) { margin: 5px 0 9px; line-height: 1.56; }
 
 .documentBody h2:first-child {
   margin-top: 0;

@@ -14,7 +14,8 @@
 .body article h2 { margin: 16px 0 5px; font-size: 1.07rem; font-weight: 800; scroll-margin-top: 116px; }
 .body article h3 { margin: 12px 0 4px; font-size: 1rem; font-weight: 800; scroll-margin-top: 116px; }
 .body article h4 { margin: 9px 0 3px; font-size: .94rem; font-weight: 800; scroll-margin-top: 116px; }
-.body article p { margin: 5px 0 9px; }
+.body article p,
+.body article > div:not(:global(.documentFormula)) { margin: 5px 0 9px; line-height: 1.56; }
 .body article a { color: #5042ee; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 .body article table,.printAppendix table { width: 100%; border-collapse: collapse; margin: 12px 0; }
 .body article th,.body article td,.printAppendix th,.printAppendix td { border: 1px solid #bfc6cf; padding: 7px 9px; text-align: left; }

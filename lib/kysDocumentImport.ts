@@ -1,6 +1,5 @@
-import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
 import { sanitizeDocumentHtml } from "@/lib/htmlSanitize";
+import { normalizeKysDocumentSpacing } from "@/lib/kysDocumentSpacing";
 
 const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const normalized = (value: string) => value.replace(/\s+/g, " ").trim().toLocaleLowerCase("tr-TR");
@@ -58,6 +57,7 @@ function pdfPagesToHtml(pages: Array<{ text: string }>) {
 export async function importKysDocument(fileName: string, buffer: Buffer) {
   const extension = fileName.toLocaleLowerCase("tr-TR").split(".").pop();
   if (extension === "docx") {
+    const { default: mammoth } = await import("mammoth");
     const result = await mammoth.convertToHtml(
       { buffer },
       {
@@ -71,9 +71,13 @@ export async function importKysDocument(fileName: string, buffer: Buffer) {
       },
     );
     const html = result.value.replace(/<h1\b/gi, "<h2").replace(/<\/h1>/gi, "</h2>");
-    return { html: sanitizeDocumentHtml(html), warnings: result.messages.map(message => message.message), type: "docx" as const };
+    return { html: normalizeKysDocumentSpacing(sanitizeDocumentHtml(html)), warnings: result.messages.map(message => message.message), type: "docx" as const };
   }
   if (extension === "pdf") {
+    // Load inside the request's error boundary, and only for PDF imports.
+    const { PDFParse } = await import("pdf-parse");
+    const { getData } = await import("pdf-parse/worker");
+    PDFParse.setWorker(getData());
     const parser = new PDFParse({ data: buffer });
     try {
       const result = await parser.getText();

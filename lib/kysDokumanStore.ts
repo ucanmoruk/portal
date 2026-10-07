@@ -5,6 +5,7 @@
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { htmlToPlainText, sanitizeDocumentHtml } from "@/lib/htmlSanitize";
+import { normalizeKysDocumentSpacing } from "@/lib/kysDocumentSpacing";
 
 type AnyRow = Record<string, any>;
 
@@ -349,7 +350,7 @@ function mapDokuman(r: AnyRow, withContent: boolean) {
     duzenlenebilir: DUZENLENEBILIR_DURUMLAR.includes(durum),
     createdAt: asDateTime(r.CreatedAt),
     updatedAt: asDateTime(r.UpdatedAt),
-    ...(withContent ? { icerik: rowString(r, "Icerik") } : {}),
+    ...(withContent ? { icerik: normalizeKysDocumentSpacing(rowString(r, "Icerik")) } : {}),
   };
 }
 
@@ -527,7 +528,7 @@ export async function getKysDokumanRevizyonIcerik(dokumanId: number, revizyonId:
     revizyonEtiket: String(rowNumber(r, "Revizyon")).padStart(2, "0"),
     maddeNo: rowString(r, "MaddeNo"),
     aciklama: rowString(r, "Aciklama"),
-    icerik: rowString(r, "Icerik"),
+    icerik: normalizeKysDocumentSpacing(rowString(r, "Icerik")),
     yayinTarihi: asDate(r.YayinTarihi),
     createdAt: asDateTime(r.CreatedAt),
   };
@@ -589,7 +590,7 @@ export async function createKysDokuman(input: DokumanInput, user: DokumanKullani
   const dup = await pool.request().input("Kod", kod).query("SELECT ID FROM KysDokuman WHERE Kod = @Kod");
   if (dup.recordset[0]) throw new Error(`"${kod}" kodu zaten kullanılıyor.`);
 
-  const icerik = sanitizeDocumentHtml(input.icerik) || VARSAYILAN_ICERIK;
+  const icerik = normalizeKysDocumentSpacing(sanitizeDocumentHtml(input.icerik)) || VARSAYILAN_ICERIK;
 
   const res = await pool.request()
     .input("Kod", kod)
@@ -647,7 +648,7 @@ export async function updateKysDokuman(id: number, input: DokumanInput, user: Do
   // İçerik gönderilmediyse mevcut içeriği koru
   const icerik = input.icerik === undefined
     ? rowString(row, "Icerik")
-    : sanitizeDocumentHtml(input.icerik);
+    : normalizeKysDocumentSpacing(sanitizeDocumentHtml(input.icerik));
 
   await pool.request()
     .input("ID", id)

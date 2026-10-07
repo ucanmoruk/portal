@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { convertTextCase, type TextCaseMode } from "@/lib/kysTextCase";
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -499,6 +500,63 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       return;
     }
     runCommand("fontName", fontFamily);
+  }
+
+  function applyTextCase(mode: TextCaseMode) {
+    if (!ensureEditing()) return;
+    restoreEditorSelection();
+    const range = currentSelectionInsideEditor();
+    if (!range || range.collapsed) {
+      window.alert("Önce harf düzenini değiştirecek metni seçin.");
+      return;
+    }
+    const wrapper = document.createElement("div");
+    wrapper.append(range.cloneContents());
+    const walker = document.createTreeWalker(wrapper, NodeFilter.SHOW_TEXT);
+    const state = { sentenceStart: true };
+    let previousBlock: Element | null = null;
+    while (walker.nextNode()) {
+      const text = walker.currentNode as Text;
+      const block = text.parentElement?.closest("p,div,li,h2,h3,h4,td,th,blockquote") || null;
+      if (block !== previousBlock) state.sentenceStart = true;
+      previousBlock = block;
+      text.data = convertTextCase(text.data, mode, state);
+    }
+    // insertHTML preserves inline styles/links and participates in browser undo.
+    document.execCommand("insertHTML", false, wrapper.innerHTML);
+    markDirty();
+    refreshSections();
+  }
+
+  function applyParagraphSpacing(property: "line-height" | "margin-bottom", value: string) {
+    if (!ensureEditing()) return;
+    restoreEditorSelection();
+    const editor = editorRef.current;
+    const range = currentSelectionInsideEditor();
+    if (!editor || !range) return;
+    const selector = "p, h2, h3, h4, li, blockquote, div, td, th";
+    const start = range.startContainer instanceof HTMLElement ? range.startContainer : range.startContainer.parentElement;
+    const current = start?.closest<HTMLElement>(selector);
+    const blocks = range.collapsed
+      ? (current && current !== editor && editor.contains(current) ? [current] : [])
+      : Array.from(editor.querySelectorAll<HTMLElement>(selector)).filter(block => range.intersectsNode(block));
+    if (!blocks.length) {
+      // Plain text at the editor root needs a paragraph before spacing can be saved.
+      document.execCommand("formatBlock", false, "p");
+      const selection = currentSelectionInsideEditor();
+      const node = selection?.startContainer;
+      const element = node instanceof HTMLElement ? node : node?.parentElement;
+      const paragraph = element?.closest<HTMLElement>("p");
+      if (paragraph && editor.contains(paragraph)) blocks.push(paragraph);
+    }
+    blocks.forEach(block => {
+      block.style.setProperty(property, value);
+      if (property === "line-height") {
+        // Inline Word formatting must not override the paragraph's selected spacing.
+        block.querySelectorAll<HTMLElement>("[style]").forEach(child => child.style.removeProperty("line-height"));
+      }
+    });
+    markDirty();
   }
 
   function nextHeadingNumber(level: 2 | 3 | 4) {
@@ -1252,6 +1310,20 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 <ToolButton title="Alt başlık ekle (1.1)" disabled={!canEdit} onRun={() => insertHeading(3)}>1.1</ToolButton>
                 <ToolButton title="Alt alt başlık ekle (1.1.1)" disabled={!canEdit} onRun={() => insertHeading(4)}>1.1.1</ToolButton>
                 <ToolButton title="Paragraf" disabled={!canEdit} onRun={() => runCommand("formatBlock", "p")}>P</ToolButton>
+                <select className={styles.fontSelect} aria-label="Harf düzeni" title="Seçili metnin harf düzeni" disabled={!canEdit} defaultValue="" onMouseDown={rememberEditorSelection} onChange={event => { const mode = event.target.value as TextCaseMode; event.target.value = ""; applyTextCase(mode); }}>
+                  <option value="" disabled>Harf düzeni</option>
+                  <option value="lower">küçük harf</option>
+                  <option value="upper">BÜYÜK HARF</option>
+                  <option value="sentence">Tümce düzeni</option>
+                </select>
+                <select className={styles.fontSelect} aria-label="Satır aralığı" title="Satır aralığı" disabled={!canEdit} defaultValue="" onMouseDown={rememberEditorSelection} onChange={event => { applyParagraphSpacing("line-height", event.target.value); event.target.value = ""; }}>
+                  <option value="" disabled>Satır aralığı</option>
+                  {[1, 1.15, 1.5, 1.56, 2, 2.5, 3].map(value => <option key={value} value={value}>{value === 1.56 ? "Standart" : String(value).replace(".", ",")}</option>)}
+                </select>
+                <select className={styles.fontSelect} aria-label="Paragraf sonrası boşluk" title="Paragraf sonrası boşluk" disabled={!canEdit} defaultValue="" onMouseDown={rememberEditorSelection} onChange={event => { applyParagraphSpacing("margin-bottom", event.target.value); event.target.value = ""; }}>
+                  <option value="" disabled>Paragraf boşluğu</option>
+                  {[0, 6, 9, 12, 18, 24].map(value => <option key={value} value={`${value}px`}>{value === 9 ? "Standart" : `${value} px`}</option>)}
+                </select>
                 <span className={styles.toolbarDivider} />
                 <select
                   className={styles.fontSelect}

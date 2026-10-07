@@ -15,7 +15,8 @@
 .content h2 { text-transform: uppercase; }
 .content strong,.content b,.content strong *,.content b * { font-weight: 800 !important; }
 .content :global(.documentFormula) { margin: 4mm auto; padding: 3mm 5mm; border-left: 1mm solid #5042ee; background: #f7f6ff; font-family: "Cambria Math", Cambria, serif; text-align: center; }
-.content p { margin: 1.5mm 0 2.5mm; }
+.content p,
+.content > div:not(:global(.documentFormula)) { margin: 5px 0 9px; line-height: 1.56; }
 .content a { color: #5042ee; font-weight: 700; text-decoration: underline; text-underline-offset: 1px; }
 .content table { width: 100% !important; max-width: 100%; border-collapse: collapse; margin: 3mm 0; }
 .content th,.content td { border: 1px solid #9ca3af; padding: 2mm; text-align: left; }
