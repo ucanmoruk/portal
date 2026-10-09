@@ -10,6 +10,7 @@ export interface MenuItem {
 }
 
 export const MENU_TREE: MenuItem[] = [
+  { key: "iletisim.musteri-talep", label: "Müşteri Talep", href: "/iletisim/musteri-talep" },
   {
     key: "dashboard",
     label: "Dashboard",

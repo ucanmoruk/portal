@@ -1,4 +1,5 @@
 "use client";
+import { NUMUNE_GRUPLARI } from "@/lib/numuneGroups";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -581,8 +582,7 @@ export default function NumuneKabulTable() {
         <select value={grupFilter} onChange={e => applyFilters({ grup: e.target.value })}
           style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 12, background: "var(--color-bg-elevated, #fff)", color: "inherit", cursor: "pointer" }}>
           <option value="">Grup: Tümü</option>
-          <option value="Özel">Özel</option>
-          <option value="K.D.">K.D.</option>
+          {NUMUNE_GRUPLARI.map(grup => <option key={grup} value={grup}>{grup}</option>)}
         </select>
         <select value={raporDurumFilter} onChange={e => applyFilters({ raporDurumu: e.target.value })}
           style={{

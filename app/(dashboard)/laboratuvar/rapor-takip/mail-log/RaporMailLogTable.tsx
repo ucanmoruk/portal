@@ -14,6 +14,7 @@ type LogRow = {
   Durum: "Gönderiliyor" | "Başarılı" | "Başarısız" | string;
   Aciklama: string | null;
   Gonderen: string | null;
+  RaporSayisi: number;
 };
 
 function formatDate(value: string | null) {
@@ -86,7 +87,7 @@ export default function RaporMailLogTable() {
             <option value="Başarısız">Başarısız</option>
             <option value="Gönderiliyor">Gönderiliyor</option>
           </select>
-          <span className={styles.totalCount}>{total} kayıt</span>
+          <span className={styles.totalCount}>{total} e-posta gönderimi</span>
         </div>
       </div>
 
@@ -112,6 +113,7 @@ export default function RaporMailLogTable() {
                 <td><span style={{ ...statusColor(row.Durum), display: "inline-block", padding: "3px 9px", borderRadius: 12, fontSize: ".75rem", fontWeight: 700, whiteSpace: "nowrap" }}>{row.Durum}</span></td>
                 <td style={{ minWidth: 160, fontSize: ".78rem", color: "var(--color-text-secondary)" }}>
                   <div>{row.Aciklama || row.RaporFormati || "—"}</div>
+                  <div style={{ marginTop: 3 }}>{row.RaporSayisi} rapor</div>
                   {row.Gonderen && <div style={{ marginTop: 3 }}>Gönderen: {row.Gonderen}</div>}
                 </td>
               </tr>

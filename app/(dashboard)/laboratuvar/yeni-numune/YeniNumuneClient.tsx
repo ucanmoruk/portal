@@ -1,4 +1,5 @@
 "use client";
+import { NUMUNE_GRUPLARI } from "@/lib/numuneGroups";
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
@@ -49,7 +50,7 @@ interface NumuneCard {
   error: string;
 }
 
-const GRUPLAR = ["Özel", "K.D."];
+const GRUPLAR = NUMUNE_GRUPLARI;
 const BIRIMLER = ["g", "mL", "L", "Adet"];
 const KARALAR = ["Basit Karar Kuralı", "Müşteri Lehine", "Müşteri Aleyhine"];
 const DILLER = ["Türkçe", "İngilizce", "Hem Türkçe Hem İngilizce"];

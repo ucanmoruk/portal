@@ -1,4 +1,5 @@
 "use client";
+import { NUMUNE_GRUPLARI } from "@/lib/numuneGroups";
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import styles from "@/app/styles/table.module.css";
@@ -232,7 +233,7 @@ function WebcamModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => v
 const BIRIMLER = ["g", "mL", "L", "Adet"];
 const KARALAR  = ["Basit Karar Kuralı", "Müşteri Lehine", "Müşteri Aleyhine"];
 const DILLER   = ["Türkçe", "İngilizce", "Hem Türkçe Hem İngilizce"];
-const GRUPLAR  = ["Özel", "K.D."];
+const GRUPLAR = NUMUNE_GRUPLARI;
 export default function Tab1Bilgiler({ form, onChange, lookup, loadingNos }: Props) {
   const fileRef         = useRef<HTMLInputElement>(null);
   const [webcam, setWC] = useState(false);

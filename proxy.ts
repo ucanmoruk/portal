@@ -2,6 +2,7 @@ import { getToken } from "next-auth/jwt";
 import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PATH_PREFIXES = [
+  "/api/integrations/customer-requests",
   "/api/auth",
   "/api/musteriler",
   "/rapordogrulama",

@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
+import { numuneSearchLike } from "@/lib/numuneSearchSql";
 import { type NextRequest } from "next/server";
 
 let proformaNkrTableReady: Promise<void> | null = null;
@@ -172,13 +173,14 @@ export async function GET(request: NextRequest) {
       WHERE TABLE_NAME = 'NKR_RaporOnay' AND COLUMN_NAME = 'DisRaporKodu'
     `);
     const hasDisRaporKodu = disKodCheck.recordset.length > 0;
+    const searchLike = (expression: string) => numuneSearchLike(expression, hasMysqlConfig());
 
     // DisRaporKodu (UGAM/RR26/XXXX) NKR_RaporOnay tablosunda — EXISTS ile arar.
     const disKodSearchClause = (hasDisRaporKodu && search)
       ? `OR EXISTS (
              SELECT 1 FROM NKR_RaporOnay ro
              WHERE ro.NkrID = n.ID
-               AND LOWER(COALESCE(ro.DisRaporKodu, '')) LIKE LOWER(@searchLike)
+               AND ${searchLike("COALESCE(ro.DisRaporKodu, '')")}
            )`
       : "";
 
@@ -189,22 +191,22 @@ export async function GET(request: NextRequest) {
              SELECT 1 FROM NumuneDetay nd3
              INNER JOIN Firma pf ON pf.ID = nd3.ProjeID
              WHERE nd3.RaporID = n.ID
-               AND LOWER(ISNULL(pf.Firma_Adi, '')) LIKE LOWER(@searchLike)
+               AND ${searchLike("ISNULL(pf.Firma_Adi, '')")}
            )`
       : "";
 
     // Arama: Evrak_No, RaporNo, FirmaAd, NumuneAdi, ProjeAd (+ DisRaporKodu) üzerinde
     const searchClause = search
       ? `AND (
-          LOWER(ISNULL(CAST(n.Evrak_No AS NVARCHAR), '')) LIKE LOWER(@searchLike)
+          ${searchLike("ISNULL(CAST(n.Evrak_No AS NVARCHAR), '')")}
           OR EXISTS (
             SELECT 1 FROM EvrakNoMigration2026OzelDoc em
             WHERE em.NewEvrakNo = CAST(n.Evrak_No AS NVARCHAR(50))
-              AND LOWER(em.OldEvrakNo) LIKE LOWER(@searchLike)
+              AND ${searchLike("em.OldEvrakNo")}
           )
-          OR LOWER(ISNULL(CAST(n.RaporNo AS NVARCHAR), '')) LIKE LOWER(@searchLike)
-          OR LOWER(ISNULL(f.Ad, '')) LIKE LOWER(@searchLike)
-          OR LOWER(ISNULL(n.Numune_Adi, '')) LIKE LOWER(@searchLike)
+          OR ${searchLike("ISNULL(CAST(n.RaporNo AS NVARCHAR), '')")}
+          OR ${searchLike("ISNULL(f.Ad, '')")}
+          OR ${searchLike("ISNULL(n.Numune_Adi, '')")}
           ${projeSearchClause}
           ${disKodSearchClause}
         )`

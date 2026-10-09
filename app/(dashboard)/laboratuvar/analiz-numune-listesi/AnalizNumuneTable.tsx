@@ -1,4 +1,5 @@
 "use client";
+import { NUMUNE_GRUPLARI } from "@/lib/numuneGroups";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
@@ -185,8 +186,7 @@ export default function AnalizNumuneTable() {
           />
           <select value={grup} onChange={e => setGrup(e.target.value)} style={filterInputStyle} title="Numune grubu">
             <option value="">Grup: Tümü</option>
-            <option value="Özel">Özel</option>
-            <option value="K.D.">K.D.</option>
+            {NUMUNE_GRUPLARI.map(group => <option key={group} value={group}>{group}</option>)}
           </select>
           <button type="button" className={styles.pageSizeSelect} onClick={applyFilters} style={{ fontWeight: 600 }}>
             Filtrele

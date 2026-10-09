@@ -5,7 +5,7 @@ import { type NextRequest } from "next/server";
 
 // GET /api/numune-form/next-no?grup=Özel
 // Döner: { evrakNo, raporNo }
-// Özel ve K.D. için hem Evrak_No hem RaporNo ayrı sıra.
+// Belge ve Özel aynı numara sırasını paylaşır; K.D. ayrı sıra kullanır.
 // Özel: YYxxx (örn. 26061), K.D.: YY1xxx (örn. 261061).
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
         .query(
           `SELECT ISNULL(MAX(TRY_CAST(RaporNo AS BIGINT)), @minRaporNo - 1) + 1 AS NextNo
            FROM NKR
-           WHERE Grup = @grup AND TRY_CAST(RaporNo AS BIGINT) BETWEEN @minRaporNo AND @maxRaporNo`
+           WHERE ${isKd ? "Grup = @grup" : "Grup IN (N'Özel', N'Belge')"} AND TRY_CAST(RaporNo AS BIGINT) BETWEEN @minRaporNo AND @maxRaporNo`
         ),
     ]);
 
