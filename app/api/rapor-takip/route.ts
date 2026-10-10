@@ -1,3 +1,4 @@
+import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -36,9 +37,12 @@ export async function GET(request: Request) {
     // phase: "lab" → sonuç giriş aşamasındaki kayıtlar (Bekliyor + Analiz Devam Ediyor),
     //        "approval" → Onaya Gönder'le gelmiş kayıtlar (Onay Bekleniyor)
     const phase = (searchParams.get("phase") || "").trim();
+    const grup = searchParams.get("grup")?.trim() || "";
+    if (grup && grup !== "Özel" && grup !== "K.D.") return Response.json({ error: "Geçersiz numune kabul türü" }, { status: 400 });
     const offset      = (page - 1) * limit;
 
     const pool = await cosmoPool;
+    const labFilter = phase === "lab" ? labScopeSql(await getLabScope(session)) : "";
 
     // NKR_LabKabul tablosu opsiyonel — yoksa acceptedOnly filtresi yok sayılır.
     // Schema filtresi: Postgres mirror'da lowercase legacy tablolardan kaçınılır.
@@ -257,6 +261,8 @@ export async function GET(request: Request) {
       INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
       ${hasLabKabul ? `${acceptedOnly ? "INNER" : "LEFT"} JOIN NKR_LabKabul lk ON lk.NkrID = n.ID AND ${bucketSql("lk.RaporFormati")} = ${raporTuruNormExpr}` : ""}
       WHERE n.Durum = 'Aktif'
+        ${labFilter}
+        ${grup ? 'AND LTRIM(RTRIM(n.Grup)) = @grup' : ''}
         ${searchFilter}
         ${raporTuruFilter};
 
@@ -267,6 +273,7 @@ export async function GET(request: Request) {
       INTO #HS
       FROM NumuneX1 x
       INNER JOIN StokAnalizListesi s ON s.ID = x.AnalizID
+      WHERE 1=1 ${labFilter}
       GROUP BY x.RaporID, ${raporTuruExpr};
 
       ${hasRaporOnay ? `SELECT ro.NkrID, ${raporOnayNormExpr} AS NormFmt,
@@ -364,6 +371,7 @@ export async function GET(request: Request) {
       .input("offset", offset)
       .input("limit",  limit);
 
+    if (grup) req.input("grup", grup);
     if (search) req.input("search", `%${search}%`);
     if (year) req.input("year", parseInt(year));
     if (terminDate) req.input("terminDate", terminDate);

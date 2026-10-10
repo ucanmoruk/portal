@@ -1,3 +1,6 @@
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { getLabScope, assertLabFormat, LabAccessError } from "@/lib/labResultAccess";
 import * as XLSX from "xlsx";
 import { cosmoPool } from "@/lib/db";
 import { getPortalUser } from "@/lib/portalYetki";
@@ -6,13 +9,18 @@ import { loadChallengeData, saveChallengeData } from "@/lib/challengeData";
 
 export const runtime = "nodejs";
 type Context = { params: Promise<{ nkrId: string }> };
-const fail = (error: unknown) => Response.json({ error: error instanceof Error ? error.message : "Challenge verisi işlenemedi." }, { status: 400 });
+const fail = (error: unknown) => Response.json({ error: error instanceof Error ? error.message : "Challenge verisi işlenemedi." }, { status: error instanceof LabAccessError ? 403 : 400 });
 async function access(context: Context, write: boolean) {
   const user = await getPortalUser();
   if (!user) return { error: Response.json({ error: "Yetkisiz erişim" }, { status: 401 }) };
   if (!(user.can("laboratuvar.numune-takip-lab") || user.can("laboratuvar.sonuc-giris") || (!write && user.can("laboratuvar.rapor-takip")))) return { error: Response.json({ error: "Sonuç giriş yetkiniz yok." }, { status: 403 }) };
   const id = Number((await context.params).nkrId);
   if (!Number.isSafeInteger(id) || id <= 0) return { error: fail(new Error("Geçersiz numune.")) };
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return { error: Response.json({ error: "Yetkisiz erişim" }, { status: 401 }) };
+    await assertLabFormat(await getLabScope(session), id, "Challenge");
+  } catch (error) { return { error: fail(error) }; }
   return { user, id };
 }
 export async function GET(request: Request, context: Context) {

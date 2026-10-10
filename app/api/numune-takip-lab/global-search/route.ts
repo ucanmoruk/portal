@@ -1,3 +1,4 @@
+import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const pool = await cosmoPool;
+    const labFilter = labScopeSql(await getLabScope(session));
 
     const tableCheck = await pool.request().query(`
       SELECT TABLE_NAME
@@ -82,6 +84,7 @@ export async function GET(request: NextRequest) {
 
       SELECT DISTINCT
         n.ID AS NkrID,
+        n.Grup,
         CONVERT(varchar(10), n.Tarih, 23) AS Tarih,
         n.Evrak_No,
         n.RaporNo,
@@ -203,10 +206,11 @@ export async function GET(request: NextRequest) {
         FROM WithEffective
       )
       SELECT
-        NkrID, Tarih, Evrak_No, RaporNo, Barkod, Numune_Adi,
+        NkrID, Grup, Tarih, Evrak_No, RaporNo, Barkod, Numune_Adi,
         FirmaAd, ProjeAd, RaporFormati, HizmetSayisi, SonucluSayisi,
         MaxTermin, DisRaporKodu, TakipDurumu, TabKey
       FROM Final
+      WHERE TabKey <> N'sonuc' OR EXISTS (SELECT 1 FROM NumuneX1 lx INNER JOIN StokAnalizListesi s ON s.ID=lx.AnalizID WHERE lx.RaporID=Final.NkrID AND ${bucketSql("s.RaporFormati")} = ${bucketSql("Final.RaporFormati")} ${labFilter})
       ORDER BY
         CASE
           WHEN TakipDurumu = N'Kabul Bekleyenler' THEN 1

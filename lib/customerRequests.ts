@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
+import { enqueueNotification, notificationSchema } from "./customerRequestNotifications";
 import { requestStatuses, type CustomerRequest, type RequestFields, type RequestMessage, type RequestSource } from "./customerRequestTypes";
 
 export class RequestError extends Error { constructor(message: string, public status = 400) { super(message); } }
@@ -101,14 +102,26 @@ export async function updateRequest(number: string, status?: string) {
   const { request } = await getRequest(number); const pool = await cosmoPool;
   if (status) {
     if (!requestStatuses.includes(status as CustomerRequest["status"])) throw new RequestError("Geçersiz durum.");
-    await pool.request().input("number", number).input("status", status).query("UPDATE CustomerRequests SET Status=@status WHERE Number=@number"); return { ok: true };
+    if (request.status === status) return { ok: true };
+    if (request.source === "spektrotek") await notificationSchema();
+    const transaction = await pool.transaction();
+    await transaction.begin();
+    try {
+      // Compare-and-set prevents concurrent identical saves from notifying twice.
+      const updated = await transaction.request().input("number", number).input("status", status).input("previous", request.status)
+        .query("UPDATE CustomerRequests SET Status=@status WHERE Number=@number AND Status=@previous");
+      if (!updated.rowsAffected.some(count => count > 0)) throw new RequestError("Talep durumu değişti. Sayfayı yenileyip tekrar deneyin.", 409);
+      await enqueueNotification(transaction, request, randomUUID(), "status_changed", "", status);
+      await transaction.commit();
+    } catch (error) { await transaction.rollback(); throw error; }
+    return { ok: true };
   }
   const token = randomBytes(32).toString("hex");
   await pool.request().input("number", number).input("hash", hash(token)).input("expires", new Date(Date.now() + 180 * 86400000).toISOString()).query("UPDATE CustomerRequests SET TokenHash=@hash,TokenExpires=@expires WHERE Number=@number");
   return { trackingUrl: trackingUrl(request.source, token) };
 }
 export async function addMessage(number: string, request: Request, role: "staff" | "customer") {
-  await getRequest(number);
+  const { request: customerRequest } = await getRequest(number);
   const bytes = await boundedBody(request, 7 * 1024 * 1024);
   let form: FormData;
   try { form = await new Response(bytes, { headers: { "Content-Type": request.headers.get("content-type") || "" } }).formData(); } catch { throw new RequestError("Geçersiz dosya gönderimi."); }
@@ -123,7 +136,15 @@ export async function addMessage(number: string, request: Request, role: "staff"
   }
   if (!text && !files.length) throw new RequestError("Mesaj yazın veya dosya ekleyin.");
   const pool = await cosmoPool;
-  await pool.request().input("id", randomUUID()).input("number", number).input("payload", JSON.stringify({ role, text, files })).input("created", new Date().toISOString()).query("INSERT INTO CustomerRequestMessages (ID,RequestNumber,Payload,CreatedAt) VALUES (@id,@number,@payload,@created)");
+  const id = randomUUID();
+  if (role === "staff" && customerRequest.source === "spektrotek") await notificationSchema();
+  const transaction = await pool.transaction();
+  await transaction.begin();
+  try {
+    await transaction.request().input("id", id).input("number", number).input("payload", JSON.stringify({ role, text, files })).input("created", new Date().toISOString()).query("INSERT INTO CustomerRequestMessages (ID,RequestNumber,Payload,CreatedAt) VALUES (@id,@number,@payload,@created)");
+    if (role === "staff") await enqueueNotification(transaction, customerRequest, id, "staff_message", text);
+    await transaction.commit();
+  } catch (error) { await transaction.rollback(); throw error; }
   return { ok: true };
 }
 export async function downloadFile(number: string, id: string, index: number) {

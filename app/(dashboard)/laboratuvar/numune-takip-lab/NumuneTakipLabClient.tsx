@@ -17,6 +17,7 @@ type ResultTab = (typeof RESULT_TABS)[number];
 const MAIN_TABS = [
   { key: "kabul",      label: "Kabul Bekleyenler" },
   { key: "sonuc",      label: "Sonuç Girişi" },
+  { key: "sonuc-kd", label: "Sonuç Girişi (K.D.)" },
   { key: "geri",       label: "Geri Gelenler" },
   { key: "onay",       label: "Onay Bekleyenler" },
 ] as const;
@@ -56,6 +57,7 @@ const subTabContainer: React.CSSProperties = {
 
 interface Counts {
   kabul: number; sonuc: number; geri: number; onay: number;
+  byGroupLab?: Record<string, { total: number; daily: number; byFormat: Record<string, number> }>;
   dailyLab?: number;
   // Sonuç Girişi format sekmelerinin rozetleri için: anahtar
   // UPPER+normalize edilmiş RaporFormati (örn "GENEL", "UGDR", "DIGER").
@@ -63,6 +65,7 @@ interface Counts {
 }
 
 interface GlobalSearchRow {
+  Grup: string;
   NkrID: number;
   Tarih: string | null;
   Evrak_No: string | null;
@@ -103,13 +106,14 @@ const topBar: React.CSSProperties = {
   alignItems: "flex-start",
   justifyContent: "space-between",
   gap: 14,
-  flexWrap: "wrap",
+  flexWrap: "nowrap",
 };
 
 const globalSearchWrap: React.CSSProperties = {
   position: "relative",
-  minWidth: 320,
-  width: "min(420px, 100%)",
+  minWidth: 140,
+  width: 240,
+  flex: "0 1 240px",
   marginLeft: "auto",
 };
 
@@ -167,6 +171,7 @@ export default function NumuneTakipLabClient() {
         geri:  Number(j.geri  ?? 0),
         onay:  Number(j.onay  ?? 0),
         dailyLab: Number(j.dailyLab ?? 0),
+        byGroupLab: j.byGroupLab ?? {},
         byFormatLab: j.byFormatLab ?? {},
       }))
       .catch(() => { /* yoksay */ });
@@ -216,7 +221,8 @@ export default function NumuneTakipLabClient() {
   useEffect(() => {
     const q = (searchParams.get("tab") || "").toLowerCase();
     if (q === "geri" || q === "geri-gelenler") setMainTab("geri");
-    else if (q === "sonuc" || q === "sonuc-girisi") setMainTab("sonuc");
+    else if (q === "sonuc-kd") setMainTab("sonuc-kd");
+    else if (q === "sonuc" || q === "sonuc-girisi") setMainTab(searchParams.get("grup") === "K.D." ? "sonuc-kd" : "sonuc");
     else if (q === "onay" || q === "onay-bekleyenler" || q === "onaylanan" || q === "onaylananlar") setMainTab("onay");
     else if (q === "kabul" || q === "kabul-bekleyenler") setMainTab("kabul");
     // ?format=Genel → Sonuç Girişi + ilgili format
@@ -224,7 +230,7 @@ export default function NumuneTakipLabClient() {
     if (f) {
       const found = FORMAT_TABS.find(x => x.toLowerCase() === f.toLowerCase());
       if (found) {
-        setMainTab("sonuc");
+        setMainTab(q === "sonuc-kd" || searchParams.get("grup") === "K.D." ? "sonuc-kd" : "sonuc");
         setFormatTab(found);
       }
     }
@@ -239,7 +245,7 @@ export default function NumuneTakipLabClient() {
 
   const jumpToGlobalResult = (row: GlobalSearchRow) => {
     if (row.TabKey !== "approved") {
-      setMainTab(row.TabKey);
+      setMainTab(row.TabKey === "sonuc" && row.Grup?.trim() === "K.D." ? "sonuc-kd" : row.TabKey);
       if (row.TabKey === "sonuc") {
         const fmt = FORMAT_TABS.find(f => normFmt(f) === normFmt(row.RaporFormati));
         setFormatTab(fmt ?? "Tümü");
@@ -248,14 +254,19 @@ export default function NumuneTakipLabClient() {
     setGlobalOpen(false);
   };
 
+  const resultGroup = mainTab === "sonuc-kd" ? "K.D." : "Özel";
+  const resultCounts = counts.byGroupLab?.[resultGroup];
+
   return (
     <>
       {/* Ana tablar */}
       <div style={topBar}>
-        <div style={tabContainer}>
+        <div style={{ ...tabContainer, minWidth: 0, flex: "0 1 auto" }}>
           {MAIN_TABS.map(t => {
             // counts byFormatLab Record alanını da içerdiği için number'a daralt
-            const v = counts[t.key as keyof Counts];
+            const v = t.key === "sonuc" || t.key === "sonuc-kd"
+              ? counts.byGroupLab?.[t.key === "sonuc-kd" ? "K.D." : "Özel"]?.total
+              : counts[t.key as keyof Counts];
             const n: number = typeof v === "number" ? v : 0;
             const active = mainTab === t.key;
             return (
@@ -281,13 +292,15 @@ export default function NumuneTakipLabClient() {
         </div>
 
         <div style={globalSearchWrap}>
-          <div className={styles.searchBox} style={{ width: "100%" }}>
+          <div className={styles.searchBox} style={{ width: "100%", minWidth: 0 }}>
             <svg className={styles.searchIcon} viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
               <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
             </svg>
             <input
               className={styles.searchInput}
-              placeholder="Durum ara: rapor no, evrak no, firma, numune..."
+              style={{ minWidth: 0, width: "100%" }}
+              placeholder="Rapor, firma veya numune ara…"
+              aria-label="Rapor, evrak, firma veya numune durumunu ara"
               value={globalSearch}
               onFocus={() => globalSearch.trim().length >= 2 && setGlobalOpen(true)}
               onChange={e => setGlobalSearch(e.target.value)}
@@ -420,13 +433,13 @@ export default function NumuneTakipLabClient() {
         <KabulBekleyenlerTab onAccepted={bumpRefresh} />
       )}
 
-      {mainTab === "sonuc" && (
+      {(mainTab === "sonuc" || mainTab === "sonuc-kd") && (
         <>
           {/* Nested rapor formatı tabları */}
           <div style={subTabContainer}>
             {RESULT_TABS.map(f => {
               const active = formatTab === f;
-              const n = f === "Tümü" ? counts.dailyLab ?? 0 : counts.byFormatLab?.[normFmt(f)] ?? 0;
+              const n = f === "Tümü" ? resultCounts?.daily ?? 0 : resultCounts?.byFormat?.[normFmt(f)] ?? 0;
               return (
                 <button
                   key={f}
@@ -450,7 +463,8 @@ export default function NumuneTakipLabClient() {
           </div>
 
           <RaporTakipTable
-            key={`${formatTab}-${refreshKey[formatTab] ?? 0}`}
+            key={`${resultGroup}-${formatTab}-${refreshKey[formatTab] ?? 0}`}
+            fixedGrup={resultGroup}
             fixedRaporTuru={formatTab === "Tümü" ? "" : formatTab}
             acceptedOnly
             phase="lab"

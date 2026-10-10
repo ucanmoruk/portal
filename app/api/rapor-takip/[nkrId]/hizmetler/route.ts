@@ -1,3 +1,4 @@
+import { getLabScope, labScopeSql, assertLabServices, LabAccessError } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -49,6 +50,7 @@ export async function GET(
 
   try {
     const pool = await cosmoPool;
+    const labScope = await getLabScope(session);
 
     // Hangi opsiyonel kolonlar mevcut?
     const colCheck = await pool.request().query(`
@@ -100,6 +102,7 @@ export async function GET(
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
       WHERE x1.RaporID        = @nkrId
         AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @raporFormati
+        ${labScopeSql(labScope)}
       ORDER BY s.Kod, x1.ID
     `);
 
@@ -131,7 +134,7 @@ export async function GET(
 
     return Response.json(hizmetler);
   } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    return Response.json({ error: e.message }, { status: e instanceof LabAccessError ? 403 : 500 });
   }
 }
 
@@ -155,6 +158,9 @@ export async function PATCH(
     if (updates.length === 0) return Response.json({ ok: true });
 
     const pool = await cosmoPool;
+    const labScope = await getLabScope(session);
+
+    await assertLabServices(labScope, nkrIdNum, updates.map(u => Number(u.x1Id)));
 
     // Kolonları kontrol et
     const colCheck = await pool.request().query(`
@@ -279,6 +285,6 @@ export async function PATCH(
 
     return Response.json({ ok: true, updated: updates.length });
   } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    return Response.json({ error: e.message }, { status: e instanceof LabAccessError ? 403 : 500 });
   }
 }

@@ -1,3 +1,4 @@
+import { getLabScope, assertLabServices, LabAccessError } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -26,6 +27,7 @@ export async function PATCH(
     const birimEn = (body.birimEn || "").trim() || null;
 
     const pool = await cosmoPool;
+    await assertLabServices(await getLabScope(session), null, [x1Id]);
 
     // Hangi opsiyonel kolonlar var?
     const colRes = await pool.request().query(
@@ -58,6 +60,6 @@ export async function PATCH(
 
     return Response.json({ ok: true });
   } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    return Response.json({ error: e.message }, { status: e instanceof LabAccessError ? 403 : 500 });
   }
 }

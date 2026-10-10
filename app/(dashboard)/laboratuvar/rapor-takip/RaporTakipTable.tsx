@@ -199,6 +199,7 @@ function IconBtn({
 
 export default function RaporTakipTable({
   fixedRaporTuru,
+  fixedGrup,
   acceptedOnly = false,
   phase,
   hideRaporTuruTabs = false,
@@ -208,6 +209,7 @@ export default function RaporTakipTable({
   onRefresh,
 }: {
   fixedRaporTuru?: string;
+  fixedGrup?: "Özel" | "K.D.";
   /** true → sadece NKR_LabKabul'da kayıtlı (laboratuvar tarafından kabul edilmiş) raporları göster */
   acceptedOnly?: boolean;
   /** "lab"      = Sonuç Girişi (Bekliyor + Analiz Devam Ediyor + Onay Bekleniyor)
@@ -309,6 +311,7 @@ export default function RaporTakipTable({
       if (showTerminDateFilter && td) params.set("terminDate", td);
       if (acceptedOnly) params.set("acceptedOnly", "1");
       if (phase) params.set("phase", phase);
+      if (fixedGrup) params.set("grup", fixedGrup);
       const res = await fetch(
         `/api/rapor-takip?${params}`,
         { signal: ctrl.signal, cache: "no-store" },
@@ -326,7 +329,7 @@ export default function RaporTakipTable({
         setLoading(false); setTrans(false);
       }
     }
-  }, [acceptedOnly, phase, showTerminDateFilter]);
+  }, [acceptedOnly, phase, showTerminDateFilter, fixedGrup]);
 
   // İlk yükleme
   useEffect(() => {
@@ -667,6 +670,7 @@ export default function RaporTakipTable({
         if (showTerminDateFilter && terminDate) params.set("terminDate", terminDate);
         if (acceptedOnly) params.set("acceptedOnly", "1");
         if (phase) params.set("phase", phase);
+        if (fixedGrup) params.set("grup", fixedGrup);
         const res = await fetch(`/api/rapor-takip?${params}`, { cache: "no-store" });
         const json = await readApiJson<{ data: RaporRow[] }>(res, "Export alinamadi");
         allRows.push(...(json.data || []));

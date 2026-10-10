@@ -1,6 +1,18 @@
 # Spektrotek müşteri talep entegrasyonu
 
-Portal sayfası: `/iletisim/musteri-talep`. Yeni yetki: `iletisim.musteri-talep` (yöneticiler otomatik erişir). Talepler ve dosyalar portal veritabanında saklanır; ilk erişimde tablolar oluşturulur. Portal yanıt kaydeder; otomatik e-posta göndermez.
+Portal sayfası: `/iletisim/musteri-talep`. Yeni yetki: `iletisim.musteri-talep` (yöneticiler otomatik erişir). Talepler ve dosyalar portal veritabanında saklanır; ilk erişimde tablolar oluşturulur. Spektrotek taleplerindeki personel yanıtları ve durum değişiklikleri otomatik e-posta bildirimi için Spektrotek sunucusuna iletilir.
+
+## Portal yanıtı ve durum bildirimi
+
+Başarılı personel mesajı kaydı `staff_message`, gerçekten değişen durum `status_changed` olayı üretir. Yalnız `spektrotek` kaynaklı talepler için `POST https://talep.spektrotek.com/api/integrations/customer-request-notifications` çağrılır. Sunucudaki mevcut `CUSTOMER_REQUEST_SPEKTROTEK_API_KEY` değeri `x-api-key` başlığında kullanılır; e-postayı Spektrotek uygulamasının SMTP yapılandırması gönderir.
+
+JSON alanları: `eventId`, `eventType`, `number`, `email`, `name`, `subject`, `text`, `status`. Personel mesajının UUID'si bildirim kimliği olarak kullanılır; her durum değişikliği yeni UUID alır. Dosyalar ve takip tokenı bildirim gövdesine eklenmez.
+
+Yanıt/durum ile `CustomerRequestNotifications` kuyruk kaydı aynı veritabanı transaction'ında saklanır. HTTP 2xx başarılı kabul edilir. Ağ hatası, zaman aşımı veya başarısız HTTP durumunda aynı olay kimliğiyle tekrar denenir; gecikme 30 saniyeden başlayıp en fazla 1 saate çıkar. Spektrotek endpointinin aynı kimlikle tekrar gönderimleri tek e-postaya indirmesi gerekir. Bildirim hatası kaydedilen yanıtı geri almaz; kuyruk ekleme hatası transaction'ı geri alır.
+
+İlk gönderim portal isteğinin yanıtından sonra yapılır. Production Node.js/Passenger süreci ayrıca kuyruğu 30 saniyede bir kontrol eder; süreç kapalıyken kuyruk veritabanında kalır, yeniden başlatıldığında devam eder. Birden fazla süreçte 60 saniyelik kiralama aynı kaydın paralel gönderilmesini önler. Sunucusuz ortamda ayrıca zamanlanmış kuyruk çalıştırıcısı gerekir; bu uygulamanın çalışan Passenger süreci esas alınmıştır.
+
+Yeni paket yüklendikten sonra portal Node.js uygulamasını yeniden başlatın. Mevcut iki sunucu anahtarı eşleşiyorsa yeni ortam değişkeni gerekmez. Veritabanı kullanıcısı kuyruk tablosunu oluşturabilmelidir. Kuyruk takibi için `ID, Attempts, NextAttempt, SentAt, LastError` alanlarını inceleyin; `Payload` kişisel veri içerir ve loglanmamalıdır. Başarılı endpoint yanıtı, mesajın alıcının gelen kutusuna teslimini tek başına kanıtlamaz.
 
 ## Sunucu kurulumu
 

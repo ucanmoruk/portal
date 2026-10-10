@@ -1,3 +1,4 @@
+import { ensureServiceDepartments, validateServiceDepartment, ServiceDepartmentError } from "@/lib/serviceDepartments";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -33,6 +34,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const pool = await cosmoPool;
+    await ensureServiceDepartments();
     const cols = await getStokCols(pool);
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
@@ -96,7 +98,7 @@ export async function GET(request: NextRequest) {
       totalPages: Math.ceil(total / limit),
     });
   } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    return Response.json({ error: e.message }, { status: e instanceof ServiceDepartmentError ? 400 : 500 });
   }
 }
 
@@ -120,6 +122,7 @@ export async function POST(request: Request) {
     if (!Ad?.trim())  return Response.json({ error: "Ad zorunludur."  }, { status: 400 });
 
     const pool = await cosmoPool;
+    await ensureServiceDepartments();
     const cols = await getStokCols(pool);
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
@@ -162,7 +165,7 @@ export async function POST(request: Request) {
       extraVals.push("@YetkiliID");
     }
     if (hasBL) {
-      req.input("BolumID", BolumID ? parseInt(BolumID) : null);
+      req.input("BolumID", await validateServiceDepartment(BolumID));
       extraCols.push("BolumID");
       extraVals.push("@BolumID");
     }
@@ -193,6 +196,6 @@ export async function POST(request: Request) {
 
     return Response.json({ id: newId }, { status: 201 });
   } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    return Response.json({ error: e.message }, { status: e instanceof ServiceDepartmentError ? 400 : 500 });
   }
 }

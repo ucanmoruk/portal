@@ -1,3 +1,4 @@
+import { ensureServiceDepartments, validateServiceDepartment, ServiceDepartmentError } from "@/lib/serviceDepartments";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -29,6 +30,7 @@ export async function GET(
   const { id } = await params;
   try {
     const pool = await cosmoPool;
+    await ensureServiceDepartments();
     const cols = await getStokCols(pool);
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
@@ -68,7 +70,7 @@ export async function GET(
 
     return Response.json({ ...result.recordset[0], altParametreler });
   } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    return Response.json({ error: e.message }, { status: e instanceof ServiceDepartmentError ? 400 : 500 });
   }
 }
 
@@ -93,6 +95,7 @@ export async function PUT(
     } = body;
 
     const pool = await cosmoPool;
+    await ensureServiceDepartments();
     const cols = await getStokCols(pool);
     const hasRF = cols.has("RaporFormati");
     const hasYK = cols.has("YetkiliID");
@@ -133,7 +136,7 @@ export async function PUT(
       extraSets.push("YetkiliID = @YetkiliID");
     }
     if (hasBL) {
-      req.input("BolumID", BolumID ? parseInt(BolumID) : null);
+      req.input("BolumID", await validateServiceDepartment(BolumID));
       extraSets.push("BolumID = @BolumID");
     }
     if (hasOB) {
@@ -174,6 +177,6 @@ export async function PUT(
 
     return Response.json({ message: "Güncellendi" });
   } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    return Response.json({ error: e.message }, { status: e instanceof ServiceDepartmentError ? 400 : 500 });
   }
 }

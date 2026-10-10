@@ -53,7 +53,6 @@ interface Birim { ID: number | null; Birim: string; }
 interface KysBirimResponse { data?: Array<{ id: number | null; legacyId?: number | null; ad: string }>; error?: string; }
 
 const RAPOR_FORMATLARI = ["Genel", "Stabilite", "Challenge", "Claim", "ÜGDR", "Diğer"] as const;
-const HIZMET_BOLUM_ADLARI = ["Mikrobiyoloji", "Kimyasal", "Dış Lab.", "Dış Laboratuvar"];
 
 const EMPTY: Partial<Hizmet> = {
   Kod: "", Ad: "", AdEn: "", Method: "", MethodEn: "",
@@ -115,7 +114,7 @@ export default function HizmetTable() {
       .then((d: KysBirimResponse | Birim[] | { error?: string }) => {
         if (Array.isArray(d)) setBirimler(d);
         else if (Array.isArray((d as KysBirimResponse).data)) {
-          setBirimler(((d as KysBirimResponse).data || []).map((b) => ({ ID: b.legacyId ?? b.id, Birim: b.ad })));
+          setBirimler(((d as KysBirimResponse).data || []).map((b) => ({ ID: b.id, Birim: b.ad })));
         }
       })
       .catch(() => {});
@@ -399,7 +398,7 @@ export default function HizmetTable() {
                 ["Dipnot",       detailRow.NumDipnot || "—"],
                 ["Fiyat",        fiyatLabel(detailRow) || "—"],
                 ["Rapor Formatı", detailRow.RaporFormati?.split(",").filter(Boolean).join(", ") || "—"],
-                ["Bölüm",        birimler.find(b => b.ID === detailRow.BolumID)?.Birim || (detailRow.BolumID ? `#${detailRow.BolumID}` : "—")],
+                ["Bölüm",        birimler.find(b => Number(b.ID) === Number(detailRow.BolumID))?.Birim || (detailRow.BolumID ? `#${detailRow.BolumID}` : "—")],
               ]} />
               <div style={{ height: 16 }} />
               <DetailSection label="English" items={[
@@ -654,9 +653,9 @@ export default function HizmetTable() {
                 </div>
               </div>
 
-              {/* Satır 4: Bölüm — yalnız 3 lab birimi (whitelist) */}
+              {/* Satır 4: KYS laboratuvar birimleri */}
               {(() => {
-                const filtered = birimler.filter(b => HIZMET_BOLUM_ADLARI.includes(String(b.Birim || "").trim()));
+                const filtered = birimler;
                 return (
                   <div className={styles.formGroup} style={{ marginBottom: 14 }}>
                     <label>Bölüm</label>

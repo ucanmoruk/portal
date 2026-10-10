@@ -6,4 +6,8 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { installSocketGuard } = await import("./lib/socketGuard");
   installSocketGuard();
+  if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build") {
+    const { startNotificationWorker } = await import("./lib/customerRequestNotifications");
+    startNotificationWorker();
+  }
 }

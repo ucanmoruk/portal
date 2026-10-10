@@ -1,3 +1,4 @@
+import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -184,6 +185,10 @@ export async function GET(request: NextRequest) {
   // Sonuç Girişi içindeki format sekmelerine (Genel/Challenge/...) numune sayısı.
   // Anahtar: UPPER(REPLACE(RaporFormati, 'Ü', 'U')) — UI normalize'i ile birebir aynı.
   const byFormatLab: Record<string, number> = {};
+  const byGroupLab: Record<string, { total: number; daily: number; byFormat: Record<string, number> }> = {
+    "Özel": { total: 0, daily: 0, byFormat: {} },
+    "K.D.": { total: 0, daily: 0, byFormat: {} },
+  };
   if (hasLabKabul) {
     try {
       const savedWhere = hasKayitTarihi
@@ -201,6 +206,7 @@ export async function GET(request: NextRequest) {
       // Production MySQL'de çevrilemiyor → sorgu sessizce patlıyor, tab badge'leri
       // 0 dönüyordu. Şimdi inline CTE'lerle hem MSSQL hem MySQL 8+ uyumlu.
       // İki ayrı query: (1) EffDurum × NormFmt sayımı, (2) dailyLab.
+      const labFilter = labScopeSql(await getLabScope(session));
       const baseWith = `
         WITH Saved AS (
           SELECT x.RaporID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati, COUNT(*) AS SavedCount
@@ -210,15 +216,17 @@ export async function GET(request: NextRequest) {
           GROUP BY x.RaporID, ${RAPOR_FORMAT_EXPR}
         ),
         Acc AS (
-          SELECT n.ID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati,
+          SELECT n.ID AS NkrID, LTRIM(RTRIM(n.Grup)) AS Grup, ${RAPOR_FORMAT_EXPR} AS RaporFormati,
             ${bucketSql(RAPOR_FORMAT_EXPR)} AS NormFmt,
+            MAX(CASE WHEN 1=1 ${labFilter} THEN 1 ELSE 0 END) AS HasLabAccess,
+            MAX(CASE WHEN 1=1 ${labFilter} THEN CONVERT(varchar(10), x1.Termin, 23) END) AS LabMaxTermin,
             MAX(CONVERT(varchar(10), x1.Termin, 23)) AS MaxTermin
           FROM NKR n
           INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
           INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
           INNER JOIN NKR_LabKabul k ON k.NkrID = n.ID AND ${bucketSql("k.RaporFormati")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
           WHERE n.Durum = 'Aktif'
-          GROUP BY n.ID, ${RAPOR_FORMAT_EXPR}, ${bucketSql(RAPOR_FORMAT_EXPR)}
+          GROUP BY n.ID, LTRIM(RTRIM(n.Grup)), ${RAPOR_FORMAT_EXPR}, ${bucketSql(RAPOR_FORMAT_EXPR)}
         )${hasRaporOnay ? `,
         OS AS (
           SELECT ro.NkrID, ${bucketSql("ro.RaporFormati")} AS NormFmt,
@@ -233,7 +241,7 @@ export async function GET(request: NextRequest) {
           GROUP BY o.NkrID, ${bucketSql("o.RaporFormati")}
         )` : ``},
         WithStatus AS (
-          SELECT ar.NkrID, ar.RaporFormati, ar.NormFmt, ar.MaxTermin,
+          SELECT ar.NkrID, ar.LabMaxTermin, ar.HasLabAccess, ar.Grup, ar.RaporFormati, ar.NormFmt, ar.MaxTermin,
             ${hasRaporOnay ? "os.RaporOnayDurum" : "NULL"} AS RaporOnayDurum,
             ${hasOverride ? "ov.OverrideDurum" : "NULL"}   AS OverrideDurum,
             COALESCE(sv.SavedCount, 0) AS SavedCount
@@ -243,7 +251,7 @@ export async function GET(request: NextRequest) {
           LEFT JOIN Saved sv ON sv.NkrID = ar.NkrID AND sv.RaporFormati = ar.RaporFormati
         ),
         Eff AS (
-          SELECT NormFmt, MaxTermin, COALESCE(
+          SELECT LabMaxTermin, HasLabAccess, Grup, NormFmt, MaxTermin, COALESCE(
             RaporOnayDurum,
             CASE
               WHEN OverrideDurum IN (N'Tamamlandı', N'Tamamlandi') THEN N'Onay Bekleniyor'
@@ -258,10 +266,12 @@ export async function GET(request: NextRequest) {
       // Query 1: EffDurum × NormFmt sayımı (Sonuç + Geri + Onay + byFormatLab)
       const effRes = await req.query(`
         ${baseWith}
-        SELECT EffDurum, NormFmt, COUNT(*) AS c
+        SELECT EffDurum, HasLabAccess, Grup, NormFmt, COUNT(*) AS c
         FROM Eff
-        WHERE (@year = 0 OR (MaxTermin IS NOT NULL AND YEAR(CONVERT(date, MaxTermin)) = @year))
-        GROUP BY EffDurum, NormFmt
+        WHERE (@year = 0
+          OR (EffDurum IN (N'Bekliyor', N'Analiz Devam Ediyor') AND YEAR(CONVERT(date, LabMaxTermin)) = @year)
+          OR (EffDurum NOT IN (N'Bekliyor', N'Analiz Devam Ediyor') AND YEAR(CONVERT(date, MaxTermin)) = @year))
+        GROUP BY EffDurum, HasLabAccess, Grup, NormFmt
       `);
 
       // Query 2: dailyLab — bekleyen + analiz devam (year veya terminDate filtreli)
@@ -270,15 +280,20 @@ export async function GET(request: NextRequest) {
       if (terminDate) dailyReq.input("terminDate", terminDate);
       const dailyRes = await dailyReq.query(`
         ${baseWith}
-        SELECT COUNT(*) AS c
+        SELECT Grup, COUNT(*) AS c
         FROM Eff
-        WHERE EffDurum IN (N'Bekliyor', N'Analiz Devam Ediyor')
-          ${terminDate ? "AND MaxTermin IS NOT NULL AND CONVERT(date, MaxTermin) = CONVERT(date, @terminDate)" : "AND (@year = 0 OR (MaxTermin IS NOT NULL AND YEAR(CONVERT(date, MaxTermin)) = @year))"}
+        WHERE HasLabAccess=1 AND EffDurum IN (N'Bekliyor', N'Analiz Devam Ediyor')
+          ${terminDate ? "AND LabMaxTermin IS NOT NULL AND CONVERT(date, LabMaxTermin) = CONVERT(date, @terminDate)" : "AND (@year = 0 OR (LabMaxTermin IS NOT NULL AND YEAR(CONVERT(date, LabMaxTermin)) = @year))"}
+        GROUP BY Grup
       `);
 
-      type Row = { EffDurum: string; NormFmt: string; c: number | string };
+      type Row = { HasLabAccess: number; Grup: string; EffDurum: string; NormFmt: string; c: number | string };
       const effRows = (effRes.recordset || []) as Array<Row>;
-      dailyLab = Number(dailyRes.recordset[0]?.c ?? 0);
+      for (const row of dailyRes.recordset) {
+        const c = Number(row.c ?? 0);
+        dailyLab += c;
+        if (byGroupLab[row.Grup]) byGroupLab[row.Grup].daily = c;
+      }
 
       const unknown: Array<{ d: string; c: number }> = [];
       for (const row of effRows) {
@@ -287,13 +302,18 @@ export async function GET(request: NextRequest) {
         const fmt = normKey(String(row.NormFmt || ""));
         const c = Number(row.c || 0);
         if (d === "Bekliyor" || d === "Analiz Devam Ediyor") {
+          if (!Number(row.HasLabAccess)) continue;
           sonuc += c;
+          if (byGroupLab[row.Grup]) {
+            byGroupLab[row.Grup].total += c;
+            byGroupLab[row.Grup].byFormat[fmt] = (byGroupLab[row.Grup].byFormat[fmt] || 0) + c;
+          }
           // Sonuç Girişi format sekmesi rozetleri için biriktir
           byFormatLab[fmt] = (byFormatLab[fmt] || 0) + c;
         }
         else if (d === "Geri Gönderildi") geri += c;
         else if (d === "Onay Bekleniyor")  onay += c;
-        else if (d === "Onaylandı" || d === "Yayınlandı") { /* görmezden gel */ }
+        else if (["Onaylandı", "Onaylandi", "Yayınlandı", "Yayinlandi", "Arşiv", "Arsiv", "Ödeme bekliyor"].includes(d)) { /* terminal / sonuç girişi dışındaki durumlar */ }
         else unknown.push({ d, c });
       }
       if (unknown.length > 0) {
@@ -307,7 +327,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const payload: Record<string, unknown> = { kabul, sonuc, geri, onay, byFormatLab, dailyLab };
+  const payload: Record<string, unknown> = { kabul, sonuc, geri, onay, byFormatLab, byGroupLab, dailyLab };
   if (Object.keys(errors).length > 0) payload.errors = errors;
   return Response.json(payload);
 }

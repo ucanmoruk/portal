@@ -1,3 +1,4 @@
+import { getLabScope, assertLabFormat, LabAccessError } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -83,10 +84,11 @@ export async function GET(
 
   try {
     const pool = await cosmoPool;
+    await assertLabFormat(await getLabScope(session), nkrIdNum, format);
     const json = await getStabiliteVeriJson(pool, nkrIdNum, format);
     return Response.json({ veri: json ? JSON.parse(json) : null });
   } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    return Response.json({ error: e.message }, { status: e instanceof LabAccessError ? 403 : 500 });
   }
 }
 
@@ -109,6 +111,7 @@ export async function PUT(
 
   try {
     const pool = await cosmoPool;
+    await assertLabFormat(await getLabScope(session), nkrIdNum, format);
     const previousJson = await getStabiliteVeriJson(pool, nkrIdNum, format);
     const nextJson = JSON.stringify(body.veri);
     const changed = !jsonContentEquals(previousJson, nextJson);
@@ -125,6 +128,6 @@ export async function PUT(
 
     return Response.json({ ok: true, changed, reopened });
   } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    return Response.json({ error: e.message }, { status: e instanceof LabAccessError ? 403 : 500 });
   }
 }

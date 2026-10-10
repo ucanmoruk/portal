@@ -1,3 +1,4 @@
+import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -18,6 +19,7 @@ export async function GET(request: Request) {
 
   try {
     const pool = await cosmoPool;
+    const labFilter = labScopeSql(await getLabScope(session));
 
     // Opsiyonel kolonlar
     const colRes = await pool.request().query(
@@ -100,7 +102,7 @@ export async function GET(request: Request) {
       FROM NKR n
       JOIN NumuneX1 x1 ON x1.RaporID = n.ID
       LEFT JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-      WHERE ${where}
+      WHERE ${where} ${labFilter}
     `);
     const total = countRes.recordset[0]?.total || 0;
 
@@ -121,7 +123,7 @@ export async function GET(request: Request) {
         FROM NKR n
         JOIN NumuneX1 x1 ON x1.RaporID = n.ID
         LEFT JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-        WHERE ${where}
+        WHERE ${where} ${labFilter}
         GROUP BY n.ID
       ),
       Ranked AS (
@@ -166,7 +168,7 @@ export async function GET(request: Request) {
         FROM NKR n
         JOIN NumuneX1 x1 ON x1.RaporID = n.ID
         LEFT JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-        WHERE n.ID IN (${inList}) AND ${where}
+        WHERE n.ID IN (${inList}) AND ${where} ${labFilter}
         ORDER BY
           n.ID,
           ${hizmetDurumPriorityExpr} ASC,
