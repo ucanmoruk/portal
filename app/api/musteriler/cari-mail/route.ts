@@ -6,6 +6,7 @@ import { getAllSettings } from "@/lib/settings";
 import { laboratoryMailBrand, renderLaboratoryMail } from "@/lib/laboratuvarMailTemplate";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { invoiceMailClosing, invoiceMailMessage } from "@/lib/invoiceMailContent";
 
 type MailRow = { tarih: string | null; vade: string | null; belgeNo: string; tur: string; durum: string; tutar: number; odenen: number; acik: number; aciklama: string };
 const money = (value: unknown) => Number(value || 0).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -72,15 +73,48 @@ export async function POST(request: Request) {
     const total = invoices.reduce((sum, row) => sum + row.tutar, 0);
     const paid = invoices.reduce((sum, row) => sum + row.odenen, 0);
     const open = invoices.reduce((sum, row) => sum + row.acik, 0);
+    const sections: Array<{ title: string; headings: string[]; rows: string[][]; note?: string }> = [];
+    if (mode === "fatura") {
+      // Fatura.ProformaNo can contain either the proforma number or its evrak
+      // number. Prefer the exact proforma reference, then the newest evrak match.
+      const services = await pool.request().input("faturaId", faturaId).query(`
+        SELECT p.ProformaNo, k.HizmetAdi, k.Adet, k.BirimFiyat, k.Iskonto, k.ParaBirimi, k.Tutar
+        FROM ProformaBaslik p INNER JOIN ProformaKalem k ON k.ProformaID=p.ID
+        WHERE p.ID=(
+          SELECT TOP 1 pb.ID FROM ProformaBaslik pb INNER JOIN Fatura f ON f.ID=@faturaId
+          WHERE pb.SilindiMi=0 AND NULLIF(f.ProformaNo,'') IS NOT NULL
+            AND (pb.ProformaNo=f.ProformaNo OR pb.EvrakNo=f.ProformaNo)
+          ORDER BY CASE WHEN pb.ProformaNo=f.ProformaNo THEN 0 ELSE 1 END, pb.ID DESC
+        )
+        ORDER BY k.ID`);
+      const lines = services.recordset;
+      if (lines.length) {
+        sections.push({
+          title: `Hizmet Detayları — ${String(lines[0].ProformaNo || "Proforma")}`,
+          headings: ["Hizmet", "Adet", "Birim Fiyat", "İskonto", "Hizmet Tutarı"],
+          rows: lines.map((line: Record<string, unknown>) => {
+            const currency = String(line.ParaBirimi || "TRY");
+            return [String(line.HizmetAdi || ""), Number(line.Adet || 0).toLocaleString("tr-TR"),
+              `${money(line.BirimFiyat)} ${currency}`, `%${Number(line.Iskonto || 0).toLocaleString("tr-TR")}`,
+              `${money(line.Tutar)} ${currency}`];
+          }),
+          note: "Hizmet ve fiyat bilgileri bağlı proformadan alınmıştır. İskonto sonrası hizmet tutarları ile vergiler dahil fatura toplamı farklı olabilir. Ödenecek tutar fatura bilgilerindeki açık bakiyedir.",
+        });
+      } else {
+        sections.push({ title: "Hizmet Detayları", headings: ["Bilgi"], rows: [["Bu faturaya bağlı proforma hizmet detayı bulunamadı."]] });
+      }
+    }
     const cfg = await getAllSettings();
     const html = renderLaboratoryMail({
       brand: laboratoryMailBrand(cfg),
       title: mode === "fatura" ? "Fatura Bilgilendirmesi" : "Cari Hesap Ekstresi",
-      message: String(body.message || ""),
+      message: String(body.message ?? (mode === "fatura" ? invoiceMailMessage : "")),
       intro: `${firmaAd} için ${mode === "fatura" ? "fatura" : "güncel cari hesap"} bilgileri:`,
       headings: ["Tarih", "Vade", "Belge No", "Tür", "Durum", "Tutar", "Açık"],
       rows: rows.map(row => [date(row.tarih), date(row.vade), row.belgeNo, row.tur, row.durum, `${money(row.tutar)} TL`, row.tur === "Fatura" ? `${money(row.acik)} TL` : "-"]),
       summary: [{ label: "Fatura Toplamı", value: `${money(total)} TL` }, { label: "Ödenen", value: `${money(paid)} TL` }, { label: "Açık Bakiye", value: `${money(open)} TL` }],
+      sections,
+      closing: mode === "fatura" ? invoiceMailClosing : [],
       note: `Bu bildirim ${new Date().toLocaleDateString("tr-TR")} tarihindeki güncel kayıtlara göre hazırlanmıştır.`,
     });
     const host = (cfg.MAIL_HOST || process.env.MAIL_HOST || "").trim().replace(/^[a-z]+:\/\//i, "").replace(/\/.*$/, ""); const user = (cfg.MAIL_USER || process.env.MAIL_USER || "").trim(); const pass = cfg.MAIL_PASS || process.env.MAIL_PASS || "";

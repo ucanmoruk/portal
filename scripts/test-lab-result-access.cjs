@@ -8,7 +8,7 @@ const units = [{ id: 7, legacyId: 103, ad: 'Mikrobiyoloji', durum: 'Aktif' }, { 
 const services = [{ ID: 11, X1ID: 11, AnalizID: 1, department: 7 }, { ID: 12, X1ID: 12, AnalizID: 2, department: 8 }];
 let writes = 0;
 const pool = { request() { const params = {}; return { input(k,v) { params[k]=v; return this; }, async query(sql) {
-  if (sql.includes('FROM RootKullanici')) return { recordset: assignment ? [{ LaboratuvarBirimID: assignment }] : [] };
+  if (sql.includes('FROM RootKullanici')) return { recordset: assignment === -1 ? [] : [{ LaboratuvarBirimID: assignment }] };
   if (sql.includes('sys.columns')) return { recordset: [{ name: 'Sonuc' }, { name: 'Degerlendirme' }] };
   if (sql.includes('INFORMATION_SCHEMA.TABLES')) return { recordset: [] };
   if (sql.includes('UPDATE NumuneX1')) { writes++; return { recordset: [], rowsAffected: [1] }; }
@@ -48,8 +48,12 @@ function load(file, imports) {
   const saved = await route.PATCH({ json: async () => ({ updates: [{ x1Id: 11, sonuc: 'Uygun' }] }) }, context);
   assert.equal(saved.status, 200); assert.equal(writes, 1);
   assignment = null;
-  assert.equal((await route.PATCH({ json: async () => ({ updates: [{ x1Id: 11 }] }) }, context)).status, 403);
-  assert.equal((await (await route.GET({ nextUrl: new URL('https://test?raporFormati=Genel') }, context)).json()).length, 0);
+  assert.equal((await route.PATCH({ json: async () => ({ updates: [{ x1Id: 11 }] }) }, context)).status, 200);
+  assert.equal((await (await route.GET({ nextUrl: new URL('https://test?raporFormati=Genel') }, context)).json()).length, 2);
+  assignment = -1;
+  assert.equal((await access.getLabScope(session)).denied, true);
+  assignment = 999;
+  assert.equal((await access.getLabScope(session)).denied, true);
   assert.equal((await access.getLabScope({ user: { userId: '2' } })).admin, true);
   console.log('PASS: current user assignment, legacy mapping, department visibility, mixed-batch rejection before writes, own result save, missing assignment and shared format isolation. No live data changed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

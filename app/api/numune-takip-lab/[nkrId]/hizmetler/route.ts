@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 import { applyManualServiceOrder } from "@/lib/raporServiceOrder";
+import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 
 // GET /api/numune-takip-lab/[nkrId]/hizmetler?raporFormati=Genel
 // "Kabul Bekleyenler" accordion açıldığında ürüne+rapor formatına ait
@@ -26,6 +27,7 @@ export async function GET(
 
   try {
     const pool = await cosmoPool;
+    const labFilter = labScopeSql(await getLabScope(session));
 
     // BolumID kolonu opsiyonel
     const hasBolumCol = await pool.request().query(
@@ -92,6 +94,7 @@ export async function GET(
         WHERE x1.RaporID = @nkrId
           AND COALESCE(NULLIF(s.RaporFormati, ''), N'Genel') = @raporFormati
           ${newOnlyFilter}
+          ${labFilter}
         ORDER BY s.Kod, x1.ID
       `);
 

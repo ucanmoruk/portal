@@ -5,32 +5,36 @@ import { listKysBirimler } from "./kysStore";
 import { cosmoPool } from "./db";
 
 export class LabAccessError extends Error { readonly status = 403; }
-export type LabScope = { departmentId: number | null; admin: boolean };
+export type LabScope = { departmentId: number | null; admin: boolean; denied?: boolean };
 export async function getLabScope(session: Session): Promise<LabScope> {
   await ensureServiceDepartments();
   const id = Number(session.user?.userId);
   if (id === 2) return { departmentId: null, admin: true };
-  if (!Number.isSafeInteger(id) || id <= 0) return { departmentId: null, admin: false };
+  if (!Number.isSafeInteger(id) || id <= 0) return { departmentId: null, admin: false, denied: true };
   // Read current assignment on every request; an old login must not retain access.
   const pool = await getUserPool();
   const users = await pool.request().input("labUserId", id)
     .query("SELECT LaboratuvarBirimID FROM RootKullanici WHERE ID=@labUserId AND Durum='Aktif'");
-  const unitId = Number(users.recordset[0]?.LaboratuvarBirimID);
+  const user = users.recordset[0];
+  if (!user) return { departmentId: null, admin: false, denied: true };
+  if (user.LaboratuvarBirimID == null || Number(user.LaboratuvarBirimID) === 0) return { departmentId: null, admin: false };
+  const unitId = Number(user.LaboratuvarBirimID);
   const units = await listKysBirimler();
   const unit = units.find(b => b.id === unitId && b.durum === "Aktif");
-  if (!unit) return { departmentId: null, admin: false };
+  if (!unit) return { departmentId: null, admin: false, denied: true };
   const departmentId = unit.id;
-  if (!Number.isSafeInteger(departmentId) || departmentId <= 0) return { departmentId: null, admin: false };
+  if (!Number.isSafeInteger(departmentId) || departmentId <= 0) return { departmentId: null, admin: false, denied: true };
   return { departmentId, admin: false };
 }
 export function labScopeSql(scope: LabScope, alias = "s") {
   if (scope.admin) return "";
-  if (scope.departmentId == null) return " AND 1=0";
+  if (scope.denied) return " AND 1=0";
+  if (scope.departmentId == null) return "";
   return ` AND ${alias}.BolumID=${scope.departmentId}`;
 }
 export async function assertLabServices(scope: LabScope, nkrId: number | null, ids: number[]) {
   if (scope.admin) return;
-  if (scope.departmentId == null) throw new LabAccessError("Sonuç girişi için aktif laboratuvar biriminiz atanmalıdır.");
+  if (scope.denied) throw new LabAccessError("Aktif kullanıcı veya laboratuvar birimi bulunamadı.");
   if (!ids.length || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new LabAccessError("Geçersiz analiz seçimi.");
   const pool = await cosmoPool;
   const result = await pool.request().input("labNkrId", nkrId).query(`SELECT x1.ID

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import styles from "@/app/styles/table.module.css";
+import { invoiceMailMessage } from "@/lib/invoiceMailContent";
 
 export type CariMailTarget = {
   mode: "firma" | "fatura";
@@ -18,7 +19,7 @@ export default function CariMailModal({ target, onClose }: { target: CariMailTar
   const [cc, setCc] = useState("");
   const [subject, setSubject] = useState(isInvoice ? `Fatura Bilgilendirmesi - ${target.faturaNo || ""}` : `Cari Hesap Ekstresi - ${target.firmaAd}`);
   const [message, setMessage] = useState(isInvoice
-    ? "Sayın Yetkili,\n\nFaturanıza ait güncel ödeme bilgileri aşağıda bilgilerinize sunulmuştur."
+    ? invoiceMailMessage
     : "Sayın Yetkili,\n\nGüncel cari hesap ekstreniz aşağıda bilgilerinize sunulmuştur.");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -52,7 +53,7 @@ export default function CariMailModal({ target, onClose }: { target: CariMailTar
         <label className={styles.formGroup}><span>Konu</span><input type="text" value={subject} onChange={event => setSubject(event.target.value)} /></label>
         <label className={styles.formGroup}><span>Mesaj</span><textarea rows={6} value={message} onChange={event => setMessage(event.target.value)} style={{ resize: "vertical" }} /></label>
         <div style={{ padding: "9px 11px", borderRadius: 8, background: "var(--color-surface-2)", color: "var(--color-text-secondary)", fontSize: 12, lineHeight: 1.45 }}>
-          {isInvoice ? "Fatura tutarı, ödeme durumu, ödenen tutar ve açık bakiye e-posta şablonuna otomatik eklenir." : "Tüm resmi faturalar, ödemeler ve güncel açık bakiye e-posta şablonuna otomatik eklenir."}
+          {isInvoice ? "Fatura ve ödeme bilgileri, bağlı proformadaki hizmet ve fiyatlar, müşteri temsilcisi notu ve banka bilgileri e-postaya otomatik eklenir." : "Tüm resmi faturalar, ödemeler ve güncel açık bakiye e-posta şablonuna otomatik eklenir."}
         </div>
         {error && <div className={styles.errorBar}>{error}</div>}
       </div>

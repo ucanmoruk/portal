@@ -7,10 +7,12 @@ export function laboratoryMailBrand(settings: Record<string, string> = {}): Labo
 }
 
 // Both laboratory mail flows share the report mail's typography, logo and layout.
-export function renderLaboratoryMail({ brand, title, message, intro, headings, rows, note, logoSrc = "cid:unique-logo", summary = [] }: {
+export function renderLaboratoryMail({ brand, title, message, intro, headings, rows, note, logoSrc = "cid:unique-logo", summary = [], sections = [], closing = [] }: {
   brand: LaboratoryMailBrand; title: string; message: string; intro: string;
   headings: string[]; rows: string[][]; note: string; logoSrc?: string;
   summary?: Array<{ label: string; value: string }>;
+  sections?: Array<{ title: string; headings: string[]; rows: string[][]; note?: string }>;
+  closing?: string[];
 }) {
   const esc = escapeMailHtml;
   return `<!doctype html>
@@ -29,6 +31,12 @@ export function renderLaboratoryMail({ brand, title, message, intro, headings, r
         <thead><tr style="background:#ffffff;">${headings.map(h => `<th style="padding:8px 10px;text-align:left;color:#6e6e73;font-weight:600;border-bottom:1px solid #eaeaea;">${esc(h)}</th>`).join("")}</tr></thead>
         <tbody>${rows.map(row => `<tr>${row.map((cell, i) => `<td style="padding:6px 10px;border-bottom:1px solid #eaeaea;color:#1d1d1f;vertical-align:top;overflow-wrap:anywhere;${i === 0 ? "font-weight:600;" : ""}">${esc(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
       </table>
+      ${sections.map(section => `<h3 style="margin:24px 0 12px;font-size:15px;color:#1d1d1f;">${esc(section.title)}</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #eaeaea;">
+          <thead><tr>${section.headings.map(heading => `<th style="padding:8px;text-align:left;border-bottom:1px solid #eaeaea;color:#6e6e73;">${esc(heading)}</th>`).join("")}</tr></thead>
+          <tbody>${section.rows.map(row => `<tr>${row.map(cell => `<td style="padding:8px;border-bottom:1px solid #eaeaea;color:#1d1d1f;vertical-align:top;overflow-wrap:anywhere;">${esc(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+        </table>${section.note ? `<p style="font-size:12px;color:#86868b;line-height:1.5;">${esc(section.note)}</p>` : ""}`).join("")}
+      ${closing.map(paragraph => `<p style="margin:18px 0 0;color:#1d1d1f;font-size:13px;line-height:1.7;white-space:pre-wrap;">${esc(paragraph)}</p>`).join("")}
       <p style="margin:18px 0 0 0;font-size:12px;color:#86868b;">${note}</p>
     </div>
     <div style="padding:18px 28px;background:#ffffff;border-top:1px solid #eaeaea;font-size:12px;color:#86868b;">

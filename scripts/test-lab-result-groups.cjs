@@ -12,8 +12,8 @@ let pool = { request() { const params = {}; return {
     if (sql.includes('INFORMATION_SCHEMA.TABLES')) recordset = ['NKR_LabKabul', 'NKR_RaporOnay', 'NKR_RaporDurumOverride'].map(TABLE_NAME => ({ TABLE_NAME }));
     else if (sql.includes('INFORMATION_SCHEMA.COLUMNS')) recordset = ['SonucKayitTarihi', 'Sonuc'].map(COLUMN_NAME => ({ COLUMN_NAME }));
     else if (sql.includes('SELECT EffDurum, HasLabAccess, Grup')) recordset = [
-      { HasLabAccess: 1, Grup: 'Özel', EffDurum: 'Bekliyor', NormFmt: 'GENEL', c: 3 },
-      { HasLabAccess: 1, Grup: 'K.D.', EffDurum: 'Analiz Devam Ediyor', NormFmt: 'GENEL', c: 7 },
+      { HasLabAccess: 1, Grup: 'Özel', EffDurum: 'Bekliyor', NormFmt: 'GENEL', c: 3, DailyCount: 2 },
+      { HasLabAccess: 1, Grup: 'K.D.', EffDurum: 'Analiz Devam Ediyor', NormFmt: 'GENEL', c: 7, DailyCount: 5 },
       { HasLabAccess: 1, Grup: 'Özel', EffDurum: 'Analiz Devam Ediyor', NormFmt: 'STABİLİTE', c: 2 },
       { HasLabAccess: 1, Grup: 'K.D.', EffDurum: 'Geri Gönderildi', NormFmt: 'GENEL', c: 4 },
       { HasLabAccess: 1, Grup: 'Belge', EffDurum: 'Bekliyor', NormFmt: 'GENEL', c: 1 },
@@ -40,6 +40,7 @@ function load(file) {
   assert.deepEqual(body.byGroupLab['Özel'], { total: 5, daily: 2, byFormat: { GENEL: 3, STABILITE: 2 } });
   assert.deepEqual(body.byGroupLab['K.D.'], { total: 7, daily: 5, byFormat: { GENEL: 7 } });
   assert.equal(body.geri, 4);
+  assert.equal(queries.filter(q => q.sql.includes('WITH Saved AS')).length, 1);
   const api = load('app/api/rapor-takip/route.ts');
   for (const group of ['Özel', 'K.D.']) {
     queries.length = 0;
@@ -47,6 +48,12 @@ function load(file) {
     assert.equal(result.status, 200);
     const list = queries.find(q => q.sql.includes('INTO #Rap'));
     assert.equal(list.params.grup, group);
+    assert.equal(queries.filter(q => q.sql.includes('INFORMATION_SCHEMA')).length, 2);
+    assert.match(list.sql, /Paged AS/);
+    assert.match(list.sql, /FROM Paged n/);
+    assert.ok(!list.sql.includes('FROM Odeme o'));
+    assert.match(list.sql, /CAST\(NULL AS NVARCHAR\(40\)\) AS OdemeDurumu/);
+    assert.match(list.sql, /WHERE EXISTS \(SELECT 1 FROM #Rap r WHERE r.NkrID = x.RaporID\)/);
     assert.match(list.sql, /AND LTRIM\(RTRIM\(n.Grup\)\) = @grup/);
   }
   assert.equal((await api.GET({ url: 'https://test/reports?grup=invalid' })).status, 400);
@@ -65,6 +72,17 @@ function load(file) {
       const counts = await result.json();
       assert.equal(result.status, 200); assert.equal(counts.errors, undefined);
       console.log('PASS: real MySQL counts (read only):', JSON.stringify(counts.byGroupLab));
+      const reports = load('app/api/rapor-takip/route.ts');
+      for (const phase of ['lab', 'returned', 'approval']) {
+        const started = Date.now();
+        const response = await reports.GET({ url: 'https://test/reports?phase=' + phase + '&acceptedOnly=1&year=2026&limit=20' });
+        const body = await response.json();
+        assert.equal(response.status, 200, body.error);
+        assert.ok(Array.isArray(body.data));
+        assert.ok(body.data.length <= 20);
+        assert.ok(body.data.every(row => Object.hasOwn(row, 'OdemeDurumu')));
+        console.log('PASS: real MySQL list', phase, Date.now() - started, 'ms, rows:', body.data.length);
+      }
     } finally { await connection?.end(); }
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

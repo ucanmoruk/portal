@@ -42,54 +42,27 @@ export async function GET(request: Request) {
     const offset      = (page - 1) * limit;
 
     const pool = await cosmoPool;
-    const labFilter = phase === "lab" ? labScopeSql(await getLabScope(session)) : "";
+    const labFilter = ["lab", "returned", "approval"].includes(phase) ? labScopeSql(await getLabScope(session)) : "";
 
-    // NKR_LabKabul tablosu opsiyonel — yoksa acceptedOnly filtresi yok sayılır.
-    // Schema filtresi: Postgres mirror'da lowercase legacy tablolardan kaçınılır.
-    const labKabulTblCheck = await pool.request().query(`
-      SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
-      WHERE TABLE_NAME = 'NKR_LabKabul' AND TABLE_SCHEMA IN ('dbo', 'cosmoroot')
-    `);
-    const hasLabKabul = labKabulTblCheck.recordset.length > 0;
-
-    // NKR_RaporOnay (Onayla/Yayınla) opsiyonel
-    const raporOnayTblCheck = await pool.request().query(`
-      SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES
-      WHERE TABLE_NAME = 'NKR_RaporOnay' AND TABLE_SCHEMA IN ('dbo', 'cosmoroot')
-    `);
-    const hasRaporOnay = raporOnayTblCheck.recordset.length > 0;
-
-    // Migration 018: NKR_RaporOnay.DisRaporKodu — kolon yoksa null döner.
-    const disRaporKoduCheck = await pool.request().query(`
-      SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_NAME = 'NKR_RaporOnay' AND COLUMN_NAME = 'DisRaporKodu'
-    `);
-    const hasDisRaporKodu = hasRaporOnay && disRaporKoduCheck.recordset.length > 0;
-
-    // NOT: Postgres mirror'da public şemasında lowercase legacy tablolar olabilir;
-    // bizim hedeflediğimiz CamelCase kolonlu tablo dbo şemasındadır. Schema filtresi
-    // olmazsa "tablo var" sanılıp sonra `o.NkrID does not exist` hatası alınır.
-    const overrideTableCheck = await pool.request().query(`
-      SELECT 1 AS x
-      FROM INFORMATION_SCHEMA.TABLES
-      WHERE TABLE_NAME = 'NKR_RaporDurumOverride'
-        AND TABLE_SCHEMA IN ('dbo', 'cosmoroot')
-    `);
-    const hasOverrideTable = overrideTableCheck.recordset.length > 0;
-
-    // Sonuc kolonu var mi?
-    const sonucCheck = await pool.request().query(`
-      SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_NAME = 'NumuneX1' AND COLUMN_NAME = 'Sonuc'
-    `);
-    const hasSonuc = sonucCheck.recordset.length > 0;
-
-    // SonucKayitTarihi var mı? Saved-state'in yeni göstergesi
-    const kayitCheck = await pool.request().query(`
-      SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_NAME = 'NumuneX1' AND COLUMN_NAME = 'SonucKayitTarihi'
-    `);
-    const hasKayitTarihi = kayitCheck.recordset.length > 0;
+    // Two metadata reads replace seven sequential database round trips.
+    const [tables, columns] = await Promise.all([
+      pool.request().query(`SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA IN ('dbo', 'cosmoroot')
+        AND TABLE_NAME IN ('NKR_LabKabul', 'NKR_RaporOnay', 'NKR_RaporDurumOverride')`),
+      pool.request().query(`SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA IN ('dbo', 'cosmoroot')
+        AND TABLE_NAME IN ('NumuneX1', 'NKR_RaporOnay', 'NKR_RaporDurumOverride')`),
+    ]);
+    const hasTable = (name: string) => tables.recordset.some(r => String(r.TABLE_NAME).toLowerCase() === name.toLowerCase());
+    const hasColumn = (table: string, column: string) => columns.recordset.some(r =>
+      String(r.TABLE_NAME).toLowerCase() === table.toLowerCase() && String(r.COLUMN_NAME).toLowerCase() === column.toLowerCase());
+    const hasLabKabul = hasTable('NKR_LabKabul');
+    const hasRaporOnay = hasTable('NKR_RaporOnay');
+    const hasOverrideTable = hasTable('NKR_RaporDurumOverride');
+    const hasDisRaporKodu = hasRaporOnay && hasColumn('NKR_RaporOnay', 'DisRaporKodu');
+    const hasSonuc = hasColumn('NumuneX1', 'Sonuc');
+    const hasKayitTarihi = hasColumn('NumuneX1', 'SonucKayitTarihi');
+    const hasOverrideNotlar = hasOverrideTable && hasColumn('NKR_RaporDurumOverride', 'Notlar');
 
     // DisRaporKodu (UGAM/RR26/XXXX) NKR_RaporOnay tablosunda — n.ID üzerinden
     // EXISTS ile aranır. Kolon yoksa aramaya dahil edilmez.
@@ -170,17 +143,6 @@ export async function GET(request: Request) {
       ? "AND EffectiveDurum IN (N'Onayland\u0131', N'\u00d6deme bekliyor', N'Yay\u0131nland\u0131', N'Ar\u015fiv')"
       : "";
 
-    // Override tablosunda Notlar kolonu var mı? (Geri Gönder notu için)
-    let hasOverrideNotlar = false;
-    if (hasOverrideTable) {
-      const r = await pool.request().query(
-        `SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_SCHEMA IN ('dbo','cosmoroot')
-           AND TABLE_NAME='NKR_RaporDurumOverride' AND COLUMN_NAME='Notlar'`
-      );
-      hasOverrideNotlar = r.recordset.length > 0;
-    }
-
     // PERFORMANCE: Eski sürüm her satır için 8 correlated subquery çalıştırıyordu
     // → binlerce kabul'lü rapor olunca 30sn+ sürüp timeout veriyordu. Şimdi
     // istatistikler tek seferlik GROUP BY CTE'lerinde toplanıp Raporlar'a LEFT
@@ -250,8 +212,7 @@ export async function GET(request: Request) {
         p.Ad                                    AS ProjeAd,
         ${raporTuruExpr} AS RaporFormati,
         ${raporTuruNormExpr} AS NormFmt,
-        CONVERT(varchar(10), n.Tarih, 23) AS KabulTarihi,
-        ISNULL(${effectiveOdemeExpr}, N'Fatura Kesilmedi') AS OdemeDurumu
+        CONVERT(varchar(10), n.Tarih, 23) AS KabulTarihi
       INTO #Rap
       FROM NKR n
       LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f  ON f.ID = n.Firma_ID
@@ -273,7 +234,7 @@ export async function GET(request: Request) {
       INTO #HS
       FROM NumuneX1 x
       INNER JOIN StokAnalizListesi s ON s.ID = x.AnalizID
-      WHERE 1=1 ${labFilter}
+      WHERE EXISTS (SELECT 1 FROM #Rap r WHERE r.NkrID = x.RaporID) ${labFilter}
       GROUP BY x.RaporID, ${raporTuruExpr};
 
       ${hasRaporOnay ? `SELECT ro.NkrID, ${raporOnayNormExpr} AS NormFmt,
@@ -294,6 +255,7 @@ export async function GET(request: Request) {
         ,MAX(CASE WHEN NOT (${raporOnayIsEnglishExpr}) AND ro.Durum IN (N'Yayınlandı', N'Yayinlandi') THEN 1 ELSE 0 END) AS TrYayinlandi
       INTO #OS
       FROM NKR_RaporOnay ro
+      WHERE EXISTS (SELECT 1 FROM #Rap r WHERE r.NkrID = ro.NkrID)
       GROUP BY ro.NkrID, ${raporOnayNormExpr};` : ``}
 
       ${hasOverrideTable ? `SELECT o.NkrID, ${bucketSql("o.RaporFormati")} AS NormFmt,
@@ -301,6 +263,7 @@ export async function GET(request: Request) {
         MAX(o.Notlar) AS GeriGonderNotu` : ``}
       INTO #OV
       FROM NKR_RaporDurumOverride o
+      WHERE EXISTS (SELECT 1 FROM #Rap r WHERE r.NkrID = o.NkrID)
       GROUP BY o.NkrID, ${bucketSql("o.RaporFormati")};` : ``}
 
       WITH WithStats AS (
@@ -349,7 +312,8 @@ export async function GET(request: Request) {
           ${terminDateFilter}
           ${raporDurumuFilter}
           ${phaseFilter}
-      )
+      ),
+      Paged AS (
       SELECT *, COUNT(*) OVER() AS TotalCount
       FROM Filtered
       ORDER BY
@@ -359,7 +323,11 @@ export async function GET(request: Request) {
           ? `CASE WHEN OnayTarihi IS NULL THEN 1 ELSE 0 END, OnayTarihi DESC, RaporNo DESC,`
           : `RaporNo DESC,`}
         RaporFormati
-      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      )
+      SELECT n.*, ${["lab", "returned", "approval"].includes(phase) ? "CAST(NULL AS NVARCHAR(40))" : `ISNULL(${effectiveOdemeExpr.replaceAll("n.ID", "n.NkrID")}, N'Fatura Kesilmedi')`} AS OdemeDurumu
+      FROM Paged n
+      ORDER BY ${phase === "lab" ? "CASE WHEN MaxTermin IS NULL THEN 1 ELSE 0 END, MaxTermin ASC," : phase === "approved" ? "CASE WHEN OnayTarihi IS NULL THEN 1 ELSE 0 END, OnayTarihi DESC," : ""} RaporNo DESC, RaporFormati;
 
       DROP TABLE #Rap;
       DROP TABLE #HS;

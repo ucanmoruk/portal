@@ -176,7 +176,7 @@ export default function NumuneTakipLabClient() {
       }))
       .catch(() => { /* yoksay */ });
   }, [today]);
-  useEffect(() => { fetchCounts(); }, [mainTab, formatTab, fetchCounts]);
+  useEffect(() => { fetchCounts(); }, [fetchCounts]);
 
   useEffect(() => {
     if (globalTimer.current) clearTimeout(globalTimer.current);

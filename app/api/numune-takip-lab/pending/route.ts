@@ -1,3 +1,4 @@
+import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -52,6 +53,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const pool = await cosmoPool;
+    const labFilter = labScopeSql(await getLabScope(session));
 
     // NKR_LabKabul tablosu yok ise her kayıt "bekliyor" sayılır.
     // Schema filtresi: Postgres mirror'da public şemasında lowercase legacy
@@ -120,6 +122,7 @@ export async function GET(request: NextRequest) {
         INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
         ${notAcceptedJoin}
         WHERE n.Durum = 'Aktif'
+          ${labFilter}
           ${terminalOnayWhere}
           ${notAcceptedWhere}
           ${searchClause}

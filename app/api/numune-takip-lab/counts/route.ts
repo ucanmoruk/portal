@@ -122,6 +122,8 @@ export async function GET(request: NextRequest) {
     errors.columns = msg;
   }
 
+  const labFilter = labScopeSql(await getLabScope(session));
+
   // ── Kabul Bekleyenler ──
   let kabul = 0;
   try {
@@ -141,7 +143,7 @@ export async function GET(request: NextRequest) {
            INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
            INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
            LEFT JOIN NKR_LabKabul k ON k.NkrID = n.ID AND ${formatMatchesSql("k.RaporFormati", RAPOR_FORMAT_EXPR)}
-           WHERE n.Durum = 'Aktif'
+           WHERE n.Durum = 'Aktif' ${labFilter}
              ${terminalOnayWhere}
              AND (
                k.ID IS NULL
@@ -160,7 +162,7 @@ export async function GET(request: NextRequest) {
            FROM NKR n
            INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
            INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-           WHERE n.Durum = 'Aktif'
+           WHERE n.Durum = 'Aktif' ${labFilter}
              ${terminalOnayWhere}
          ) t`;
     const req = pool.request();
@@ -205,14 +207,13 @@ export async function GET(request: NextRequest) {
       // Önceki sürüm T-SQL #temp tabloları + IF OBJECT_ID kullanıyordu — MSSQL-only.
       // Production MySQL'de çevrilemiyor → sorgu sessizce patlıyor, tab badge'leri
       // 0 dönüyordu. Şimdi inline CTE'lerle hem MSSQL hem MySQL 8+ uyumlu.
-      // İki ayrı query: (1) EffDurum × NormFmt sayımı, (2) dailyLab.
-      const labFilter = labScopeSql(await getLabScope(session));
+      // Durum ve günlük sayaçlar aynı sorguda hesaplanır.
       const baseWith = `
         WITH Saved AS (
           SELECT x.RaporID AS NkrID, ${RAPOR_FORMAT_EXPR} AS RaporFormati, COUNT(*) AS SavedCount
           FROM NumuneX1 x
           INNER JOIN StokAnalizListesi s ON s.ID = x.AnalizID
-          WHERE ${savedWhere}
+          WHERE ${savedWhere} ${labFilter}
           GROUP BY x.RaporID, ${RAPOR_FORMAT_EXPR}
         ),
         Acc AS (
@@ -225,7 +226,7 @@ export async function GET(request: NextRequest) {
           INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
           INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
           INNER JOIN NKR_LabKabul k ON k.NkrID = n.ID AND ${bucketSql("k.RaporFormati")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
-          WHERE n.Durum = 'Aktif'
+          WHERE n.Durum = 'Aktif' ${labFilter}
           GROUP BY n.ID, LTRIM(RTRIM(n.Grup)), ${RAPOR_FORMAT_EXPR}, ${bucketSql(RAPOR_FORMAT_EXPR)}
         )${hasRaporOnay ? `,
         OS AS (
@@ -263,36 +264,28 @@ export async function GET(request: NextRequest) {
           FROM WithStatus
         )`;
 
-      // Query 1: EffDurum × NormFmt sayımı (Sonuç + Geri + Onay + byFormatLab)
+      const yearMatch = `(@year = 0
+        OR (EffDurum IN (N'Bekliyor', N'Analiz Devam Ediyor') AND YEAR(CONVERT(date, LabMaxTermin)) = @year)
+        OR (EffDurum NOT IN (N'Bekliyor', N'Analiz Devam Ediyor') AND YEAR(CONVERT(date, MaxTermin)) = @year))`;
+      const dailyMatch = `HasLabAccess=1 AND EffDurum IN (N'Bekliyor', N'Analiz Devam Ediyor')
+        ${terminDate ? "AND CONVERT(date, LabMaxTermin) = CONVERT(date, @terminDate)" : "AND (@year = 0 OR YEAR(CONVERT(date, LabMaxTermin)) = @year)"}`;
+      // Compute totals and today's counts from the same status aggregation.
       const effRes = await req.query(`
         ${baseWith}
-        SELECT EffDurum, HasLabAccess, Grup, NormFmt, COUNT(*) AS c
+        SELECT EffDurum, HasLabAccess, Grup, NormFmt,
+          SUM(CASE WHEN ${yearMatch} THEN 1 ELSE 0 END) AS c,
+          SUM(CASE WHEN ${dailyMatch} THEN 1 ELSE 0 END) AS DailyCount
         FROM Eff
-        WHERE (@year = 0
-          OR (EffDurum IN (N'Bekliyor', N'Analiz Devam Ediyor') AND YEAR(CONVERT(date, LabMaxTermin)) = @year)
-          OR (EffDurum NOT IN (N'Bekliyor', N'Analiz Devam Ediyor') AND YEAR(CONVERT(date, MaxTermin)) = @year))
+        WHERE ${yearMatch} OR (${dailyMatch})
         GROUP BY EffDurum, HasLabAccess, Grup, NormFmt
       `);
 
-      // Query 2: dailyLab — bekleyen + analiz devam (year veya terminDate filtreli)
-      const dailyReq = pool.request().input("year", year);
-      (dailyReq as unknown as { timeout?: number }).timeout = 60000;
-      if (terminDate) dailyReq.input("terminDate", terminDate);
-      const dailyRes = await dailyReq.query(`
-        ${baseWith}
-        SELECT Grup, COUNT(*) AS c
-        FROM Eff
-        WHERE HasLabAccess=1 AND EffDurum IN (N'Bekliyor', N'Analiz Devam Ediyor')
-          ${terminDate ? "AND LabMaxTermin IS NOT NULL AND CONVERT(date, LabMaxTermin) = CONVERT(date, @terminDate)" : "AND (@year = 0 OR (LabMaxTermin IS NOT NULL AND YEAR(CONVERT(date, LabMaxTermin)) = @year))"}
-        GROUP BY Grup
-      `);
-
-      type Row = { HasLabAccess: number; Grup: string; EffDurum: string; NormFmt: string; c: number | string };
+      type Row = { HasLabAccess: number; Grup: string; EffDurum: string; NormFmt: string; c: number | string; DailyCount: number | string };
       const effRows = (effRes.recordset || []) as Array<Row>;
-      for (const row of dailyRes.recordset) {
-        const c = Number(row.c ?? 0);
+      for (const row of effRows) {
+        const c = Number(row.DailyCount ?? 0);
         dailyLab += c;
-        if (byGroupLab[row.Grup]) byGroupLab[row.Grup].daily = c;
+        if (byGroupLab[row.Grup]) byGroupLab[row.Grup].daily += c;
       }
 
       const unknown: Array<{ d: string; c: number }> = [];
