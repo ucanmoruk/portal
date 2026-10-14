@@ -203,6 +203,8 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [replacementFile, setReplacementFile] = useState<File | null>(null);
+  const [fileSaving, setFileSaving] = useState(false);
   const [saveInfo, setSaveInfo] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [sections, setSections] = useState<Array<{ id: string; title: string }>>([]);
@@ -1022,6 +1024,26 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     if (ok) { loadedKeyRef.current = ""; await fetchDoc(); }
   }
 
+  async function replaceDocumentFile() {
+    if (!doc || !canEdit || !replacementFile || fileSaving) return;
+    setFileSaving(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.set("file", replacementFile);
+      const response = await fetch(`/api/kys/dokumanlar/${doc.id}/dosya`, { method: "PUT", body: form });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Dosya yüklenemedi.");
+      setReplacementFile(null);
+      await fetchDoc();
+      setSaveInfo("Doküman dosyası güncellendi.");
+    } catch (cause) {
+      setError(errorMessage(cause, "Dosya yüklenemedi."));
+    } finally {
+      setFileSaving(false);
+    }
+  }
+
   function openAksiyon(aksiyon: Aksiyon) {
     setAksiyonModal(aksiyon);
     setAksiyonNot("");
@@ -1452,6 +1474,19 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
 
         {activeTab === "kunye" && (
           <div className={styles.kunyePanel}>
+            {doc.hasDosya && (
+              <div className={tableStyles.formGroup}>
+                <label htmlFor="replacement-document">Doküman dosyası</label>
+                <a href={`/api/kys/dokumanlar/${doc.id}/dosya`} target="_blank" rel="noopener noreferrer">{doc.dosyaAdi}</a>
+                {canEdit ? <>
+                  <input id="replacement-document" key={doc.updatedAt} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" disabled={fileSaving || saving} onChange={event => setReplacementFile(event.target.files?.[0] || null)} />
+                  <span className={styles.flowHint}>PDF, Word veya Excel · En fazla 20 MB. Yeni dosya mevcut dosyanın yerini alır.</span>
+                  <button type="button" className={styles.publishButton} disabled={!replacementFile || fileSaving || saving} onClick={() => void replaceDocumentFile()}>
+                    <FileUp size={16} /> {fileSaving ? "Yükleniyor…" : "Dosyayı değiştir"}
+                  </button>
+                </> : <span className={styles.flowHint}>Dosyayı değiştirmek için düzenleme yetkisi ve düzenlenebilir bir doküman gerekir. Yayındaki doküman için revizyon başlatın.</span>}
+              </div>
+            )}
             <div className={tableStyles.formGrid}>
               <div className={tableStyles.formGroup}>
                 <label>Doküman kodu</label>

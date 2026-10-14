@@ -822,21 +822,33 @@ export async function saveKysDokumanDosya(
   user: DokumanKullanici,
 ) {
   await ensureKysDokumanSchema();
-  const row = await fetchDokumanRow(dokumanId);
-  if (!row) throw new Error("Doküman bulunamadı.");
   const pool = await cosmoPool;
-  await pool.request().input("DokumanID", dokumanId).query("DELETE FROM KysDokumanDosya WHERE DokumanID = @DokumanID");
-  await pool.request()
-    .input("DokumanID", dokumanId)
-    .input("DosyaAdi", file.name)
-    .input("MimeType", file.type)
-    .input("DosyaBoyutu", file.size)
-    .input("Dosya", file.buffer)
-    .query(`
-      INSERT INTO KysDokumanDosya (DokumanID, DosyaAdi, MimeType, DosyaBoyutu, Dosya)
-      VALUES (@DokumanID, @DosyaAdi, @MimeType, @DosyaBoyutu, @Dosya)
-    `);
-  await writeLog({ dokumanId, islem: "Dosya yüklendi", aciklama: file.name, user });
+  const tx = await pool.transaction();
+  await tx.begin();
+  try {
+    const row = (await tx.request().input("ID", dokumanId).query(hasMysqlConfig()
+      ? "SELECT ID,Durum FROM KysDokuman WHERE ID=@ID FOR UPDATE"
+      : "SELECT ID,Durum FROM KysDokuman WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
+    if (!row || row.Durum === "Silindi") throw new Error("Doküman bulunamadı.");
+    if (!DUZENLENEBILIR_DURUMLAR.includes(row.Durum)) {
+      throw new Error(`"${row.Durum}" durumundaki doküman düzenlenemez. Değişiklik için revizyon başlatın.`);
+    }
+    await tx.request().input("DokumanID", dokumanId).query("DELETE FROM KysDokumanDosya WHERE DokumanID = @DokumanID");
+    await tx.request()
+      .input("DokumanID", dokumanId).input("DosyaAdi", file.name)
+      .input("MimeType", file.type).input("DosyaBoyutu", file.size).input("Dosya", file.buffer)
+      .query(`INSERT INTO KysDokumanDosya (DokumanID, DosyaAdi, MimeType, DosyaBoyutu, Dosya)
+        VALUES (@DokumanID, @DosyaAdi, @MimeType, @DosyaBoyutu, @Dosya)`);
+    await tx.request().input("ID", dokumanId).query("UPDATE KysDokuman SET UpdatedAt = GETDATE() WHERE ID = @ID");
+    await tx.request().input("ID", dokumanId).input("Aciklama", file.name)
+      .input("UserID", user.userId).input("UserName", user.userName)
+      .query(`INSERT INTO KysDokumanLog (DokumanID,Islem,Aciklama,KullaniciID,KullaniciAd)
+        VALUES (@ID,'Dosya yüklendi',@Aciklama,@UserID,@UserName)`);
+    await tx.commit();
+  } catch (cause) {
+    await tx.rollback();
+    throw cause;
+  }
 }
 
 export async function getKysDokumanDosya(dokumanId: number) {
