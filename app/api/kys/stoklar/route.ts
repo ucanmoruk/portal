@@ -2,7 +2,7 @@ import { normalizeKysProduct } from "@/lib/kysProduct";
 import { kysStockSource } from "@/lib/kysStockSources";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { createKysStock, listKysStocks } from "@/lib/kysStore";
+import { createKysStockWithOpening, listKysStocks } from "@/lib/kysStore";
 import { type NextRequest } from "next/server";
 import { getPortalUser } from "@/lib/portalYetki";
 
@@ -44,7 +44,12 @@ export async function POST(request: Request) {
       try { body.urun = normalizeKysProduct(body.urun, firma); }
       catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Ürün bilgileri geçersiz." }, { status: 400 }); }
     }
-    const id = await createKysStock(body);
+    const { baslangicStok, ...stock } = body;
+    const id = await createKysStockWithOpening(stock, {
+      miktar: baslangicStok,
+      kullaniciId: (session.user as { userId?: string })?.userId || null,
+      kullaniciAd: session.user?.name || null,
+    });
     return Response.json({ id }, { status: 201 });
   } catch (e: unknown) {
     return Response.json({ error: e instanceof Error ? e.message : "Stok kaydedilemedi." }, { status: 500 });

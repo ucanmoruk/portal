@@ -739,6 +739,28 @@ export async function createKysStock(input: KysStockInput, executor?: any) {
   return Number(res.recordset[0]?.ID || res.recordset[0]?.id || 0);
 }
 
+/** Yeni kartı ilk stok girişiyle birlikte tek işlemde açar; giriş hareket geçmişinde "İlk stok kaydı" olarak görünür. */
+export async function createKysStockWithOpening(input: KysStockInput, opening: { miktar?: unknown; kullaniciId?: string | null; kullaniciAd?: string | null }) {
+  const raw = text(opening.miktar);
+  const miktar = raw ? numberValue(raw, Number.NaN) : 0;
+  if (!Number.isFinite(miktar) || miktar < 0) throw new Error("Başlangıç stok miktarı 0 veya pozitif bir sayı olmalıdır.");
+  if (!miktar) return createKysStock(input);
+  await ensureKysSchema();
+  const tx = await (await cosmoPool).transaction();
+  await tx.begin();
+  try {
+    const id = await createKysStock(input, tx);
+    await createKysStockMovement(id, {
+      hareketTipi: "Giriş", miktar, birim: text(input.birim) || "Adet",
+      marka: text((input.urun as { marka?: unknown } | undefined)?.marka) || undefined,
+      stokGirisTarihi: new Date().toISOString().slice(0, 10), aciklama: "İlk stok kaydı",
+      kullaniciId: opening.kullaniciId, kullaniciAd: opening.kullaniciAd,
+    }, tx);
+    await tx.commit();
+    return id;
+  } catch (error) { await tx.rollback(); throw error; }
+}
+
 export async function updateKysStock(id: number, input: KysStockInput) {
   await ensureKysSchema();
   const pool = await cosmoPool;

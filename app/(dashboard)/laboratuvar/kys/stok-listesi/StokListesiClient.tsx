@@ -94,6 +94,7 @@ export default function StokListesiClient({ products = false }: { products?: boo
   const [product, setProduct] = useState<ProductDraft>({ ...emptyKysProduct });
   const [productImages, setProductImages] = useState<File[]>([]);
   const [createdId, setCreatedId] = useState<number | null>(null);
+  const [baslangicStok, setBaslangicStok] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
   const [formError, setFormError] = useState("");
@@ -165,6 +166,7 @@ export default function StokListesiClient({ products = false }: { products?: boo
     setProduct({ ...emptyKysProduct });
     setProductImages([]);
     setCreatedId(null);
+    setBaslangicStok("");
     setImageFile(null);
     setFormError("");
     setModalOpen(true);
@@ -213,7 +215,7 @@ export default function StokListesiClient({ products = false }: { products?: boo
       const res = await fetch(url, {
         method: savedId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, kaynak: products ? form.kaynak : "Unique", ...(products ? { urun: product } : {}) }),
+        body: JSON.stringify({ ...form, kaynak: products ? form.kaynak : "Unique", ...(products ? { urun: product } : {}), ...(products && !savedId ? { baslangicStok } : {}) }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Kayıt tamamlanamadı.");
@@ -371,6 +373,11 @@ export default function StokListesiClient({ products = false }: { products?: boo
                     <input value={form.barkod} onChange={e => setForm(f => ({ ...f, barkod: e.target.value }))} />
                   </div>
                 )}
+                {products && mode === "add" && !createdId && <div className={styles.formGroup}>
+                  <label htmlFor="stock-opening">Başlangıç stok miktarı</label>
+                  <input id="stock-opening" inputMode="decimal" placeholder="0" value={baslangicStok} onChange={e => setBaslangicStok(e.target.value)} />
+                  <span className={kys.formHint}>{form.birim || "Adet"} cinsinden; stok hareketlerine &quot;İlk stok kaydı&quot; olarak girilir.</span>
+                </div>}
                 {products && <div className={styles.formGroup}>
                   <label htmlFor="stock-source">Kaynak</label>
                   <select id="stock-source" value={form.kaynak} onChange={e => setForm(f => ({ ...f, kaynak: e.target.value }))}>{KYS_STOCK_SOURCES.filter(source => source !== "Unique").map(source => <option key={source}>{source}</option>)}</select>
