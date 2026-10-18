@@ -101,14 +101,32 @@ function asDateTime(value: unknown): string | null {
   return String(value);
 }
 
-function generatedStockBarcode(): string {
-  const base = `869${String(Date.now()).slice(-7)}${String(Math.floor(Math.random() * 100)).padStart(2, "0")}`;
+function ean13CheckDigit(base: string): number {
   let sum = 0;
   for (let i = 0; i < base.length; i += 1) {
     sum += Number(base[i]) * (i % 2 === 0 ? 1 : 3);
   }
-  const checkDigit = (10 - (sum % 10)) % 10;
-  return `${base}${checkDigit}`;
+  return (10 - (sum % 10)) % 10;
+}
+
+export function isValidEan13(value: string): boolean {
+  return /^\d{13}$/.test(value) && ean13CheckDigit(value.slice(0, 12)) === Number(value[12]);
+}
+
+function generatedStockBarcode(): string {
+  const base = `869${String(Date.now()).slice(-7)}${String(Math.floor(Math.random() * 100)).padStart(2, "0")}`;
+  return `${base}${ean13CheckDigit(base)}`;
+}
+
+/** Ürün kartlarında (Unique dışı kaynaklar) barkod EAN-13 olmalı; boşsa yeni EAN-13 üretilir. */
+async function productBarcode(pool: any, value: unknown, excludeId = 0): Promise<string> {
+  const barkod = text(value).replace(/\s+/g, "");
+  if (!barkod) return generatedUniqueStockBarcode(pool);
+  if (!isValidEan13(barkod)) throw new Error("Barkod geçerli bir EAN-13 olmalıdır (13 hane, doğru kontrol hanesi). Boş bırakırsanız otomatik oluşturulur.");
+  const existing = await pool.request().input("Barkod", barkod).input("ID", excludeId)
+    .query("SELECT ID FROM KysStokKart WHERE Barkod = @Barkod AND ID <> @ID");
+  if (existing.recordset[0]) throw new Error("Bu barkod başka bir stok kartında kullanılıyor.");
+  return barkod;
 }
 
 async function generatedUniqueStockBarcode(pool: any): Promise<string> {
@@ -683,7 +701,9 @@ export async function createKysStock(input: KysStockInput, executor?: any) {
   const product = input.urun === undefined ? null : JSON.stringify(normalizeKysProduct(input.urun, source));
   const pool = executor || await cosmoPool;
   const res = await pool.request()
-    .input("Barkod", nullableText(input.barkod) || await generatedUniqueStockBarcode(pool))
+    .input("Barkod", source === "Unique"
+      ? nullableText(input.barkod) || await generatedUniqueStockBarcode(pool)
+      : await productBarcode(pool, input.barkod))
     .input("Kaynak", source)
     .input("UrunBilgileri", product)
     .input("MalzemeTuru", text(input.malzemeTuru) || "Sarf")
@@ -720,7 +740,7 @@ export async function updateKysStock(id: number, input: KysStockInput) {
   await pool.request()
     .input("ID", id)
     .input("UrunBilgileri", product)
-    .input("Barkod", nullableText(input.barkod))
+    .input("Barkod", source === "Unique" ? nullableText(input.barkod) : await productBarcode(pool, input.barkod, id))
     .input("Kaynak", input.kaynak === undefined ? null : kysStockSource(input.kaynak))
     .input("MalzemeTuru", text(input.malzemeTuru) || "Sarf")
     .input("Kod", text(input.kod))
@@ -1434,7 +1454,6 @@ export async function acceptKysRequestItem(talepId: number, input: any, executor
   }
   if (!stokId && !sale) {
     stokId = await createKysStock({
-      barkod: item.kod || undefined,
       kod: item.kod || `KYS-${kalemId}`,
       ad: item.malzemeAdi,
       kaynak: spektrotek ? detail!.talep.seri : "Unique",

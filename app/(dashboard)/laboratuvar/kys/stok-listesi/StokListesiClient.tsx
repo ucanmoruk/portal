@@ -55,6 +55,7 @@ const stockFormFields: Array<[string, keyof typeof emptyForm]> = [
   ["Kritik Limit", "kritikLimit"],
   ["Birim", "birim"],
 ];
+const productHiddenFields: Array<keyof typeof emptyForm> = ["casNo", "ambalaj", "kritikLimit"];
 const defaultMaterialTypes = ["Sarf", "Spektrotek", "Cihaz", "Kimyasal", "Referans Standart", "Ambalaj"];
 
 const pageNums = (page: number, totalPages: number) => {
@@ -349,9 +350,9 @@ export default function StokListesiClient({ products = false }: { products?: boo
             <div className={styles.modalBody}>
               {formError && <div className={styles.formError}>{formError}</div>}
               <div className={styles.formGrid3}>
-                {stockFormFields.map(([label, key]) => (
+                {stockFormFields.filter(([, key]) => !products || !productHiddenFields.includes(key)).map(([label, key]) => (
                   <div className={styles.formGroup} key={key}>
-                    <label>{label}{["kod", "ad"].includes(key) && <span className={styles.required}> *</span>}</label>
+                    <label>{products && key === "saklamaKosullari" ? "Depodaki Yeri" : label}{["kod", "ad"].includes(key) && <span className={styles.required}> *</span>}</label>
                     <input value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
                   </div>
                 ))}
@@ -377,7 +378,7 @@ export default function StokListesiClient({ products = false }: { products?: boo
                     {materialTypeOptions.map(type => <option key={type} value={type} />)}
                   </datalist>
                 </div>
-                {mode === "edit" && (
+                {mode === "edit" && !products && (
                   <div className={styles.formGroup}>
                     <label>Stok durumu</label>
                     <select value={form.stokDurumu} onChange={e => setForm(f => ({ ...f, stokDurumu: e.target.value }))}>

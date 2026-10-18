@@ -24,6 +24,7 @@ type Detail = {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const stockEditFields = [["kaynak", "Kaynak"], ["kod", "Kod"], ["ad", "Ürün adı"], ["name", "İngilizce adı"], ["barkod", "Barkod"], ["malzemeTuru", "Tür"], ["casNo", "CAS No"], ["ambalaj", "Ambalaj"], ["saklamaKosullari", "Saklama koşulları"], ["kritikLimit", "Kritik limit"], ["birim", "Birim"], ["stokDurumu", "Stok durumu"], ["ozellik", "Özellik"]] as const;
+const productHiddenEditFields: string[] = ["casNo", "ambalaj", "kritikLimit", "stokDurumu"];
 
 function fmt(value: number) {
   return Number(value || 0).toLocaleString("tr-TR", { maximumFractionDigits: 4 });
@@ -252,14 +253,12 @@ export default function StokDetayClient({ id, products = false }: { id: number; 
               ...(products ? [["Kaynak", s.kaynak]] : []),
               ["Malzeme türü", s.malzemeTuru],
               ["Kod", s.kod],
-              ["Cas No", s.casNo],
-              ["Ambalaj", s.ambalaj],
-              ["Saklama Koşulları", s.saklamaKosullari],
-              ["Kritik Limit", `${fmt(s.kritikLimit)} ${s.birim}`],
-              ["Stok Durumu", s.stokDurumu],
+              ...(products ? [] : [["Cas No", s.casNo], ["Ambalaj", s.ambalaj]]),
+              [products ? "Depodaki Yeri" : "Saklama Koşulları", s.saklamaKosullari],
+              ...(products ? [] : [["Kritik Limit", `${fmt(s.kritikLimit)} ${s.birim}`], ["Stok Durumu", s.stokDurumu]]),
               ["Birim", s.birim],
             ].map(([label, value]) => (
-              <div className={`${kys.detailItem} ${label === "Özellik" ? kys.stockInfoFull : ["Ürün adı", "İngilizce adı", "Saklama Koşulları"].includes(label) ? kys.stockInfoWide : ""}`} key={label}>
+              <div className={`${kys.detailItem} ${label === "Özellik" ? kys.stockInfoFull : ["Ürün adı", "İngilizce adı", "Saklama Koşulları", "Depodaki Yeri"].includes(label) ? kys.stockInfoWide : ""}`} key={label}>
                 <div className={kys.detailLabel}>{label}</div>
                 <div className={kys.detailValue}>{value || "-"}</div>
               </div>
@@ -279,12 +278,9 @@ export default function StokDetayClient({ id, products = false }: { id: number; 
                 ["Tedarik durumu", s.urun.tedarikDurumu], ["Teslim süresi", s.urun.teslimSuresi],
                 ["Web seçimi", s.urun.webSecili ? "Senkronizasyon için seçili" : "Seçilmedi"],
                 ["Web ürün kimliği", s.urun.webUrunId], ["Web adresi", s.urun.webSlug],
-                ["Referans fiyat (satış fiyatı değildir)", s.urun.referansFiyat],
               ].map(([label, value]) => <div className={kys.detailItem} key={label}><div className={kys.detailLabel}>{label}</div><div className={kys.detailValue}>{value || "—"}</div></div>)}
             </div>
             <div className={kys.productDescription}><strong>Kısa açıklama</strong><p>{s.urun.kisaAciklama || "—"}</p><strong>Ürün açıklaması</strong><p>{s.urun.urunAciklamasi || "—"}</p></div>
-            {s.urun.icNotlar && <div className={kys.productDescription}><strong>İç notlar</strong><p>{s.urun.icNotlar}</p></div>}
-            {s.urun.arastirmaKaynaklari?.length > 0 && <div className={kys.productDescription}><strong>Araştırma kaynakları</strong><ul>{s.urun.arastirmaKaynaklari.map((url: string) => <li key={url}><a href={url} target="_blank" rel="noopener noreferrer">{url}</a></li>)}</ul></div>}
             <p className={kys.formHint}>Web seçimi hazırlık içindir; henüz siteyle senkronizasyon yapılmıyor. SKU olarak stok kodu kullanılır.</p>
           </section>
           <KysProductGallery stockId={id} images={detail.images} hasOriginal={s.hasOriginalImage} onChanged={fetchDetail} />
@@ -397,11 +393,12 @@ export default function StokDetayClient({ id, products = false }: { id: number; 
             <div className={styles.modalBody}>
               {formError && <div role="alert" className={styles.formError}>{formError}</div>}
               <div className={`${styles.formGrid} ${kys.supplierGrid}`}>
-                {stockEditFields.filter(([key]) => products || key !== "kaynak").map(([key, label]) => <div key={key} className={`${styles.formGroup} ${["ad", "name", "ozellik", "saklamaKosullari"].includes(key) ? kys.supplierFullWidth : ""}`}>
-                  <label htmlFor={`stock-edit-${key}`}>{label}{["ad", "kod"].includes(key) && <span className={styles.required}> *</span>}</label>
+                {stockEditFields.filter(([key]) => products ? !productHiddenEditFields.includes(key) : key !== "kaynak").map(([key, label]) => <div key={key} className={`${styles.formGroup} ${["ad", "name", "ozellik", "saklamaKosullari"].includes(key) ? kys.supplierFullWidth : ""}`}>
+                  <label htmlFor={`stock-edit-${key}`}>{products && key === "saklamaKosullari" ? "Depodaki Yeri" : label}{["ad", "kod"].includes(key) && <span className={styles.required}> *</span>}</label>
                   {key === "stokDurumu" ? <select id={`stock-edit-${key}`} disabled={saving} value={editForm[key] || "Aktif"} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}><option>Aktif</option><option>Pasif</option></select>
                     : key === "kaynak" ? <select id={`stock-edit-${key}`} disabled={saving} aria-label="Kaynak" value={editForm[key] || "Unique"} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}>{KYS_STOCK_SOURCES.filter(source => source !== "Unique").map(source => <option key={source}>{source}</option>)}</select> : key === "ozellik" ? <textarea id={`stock-edit-${key}`} rows={3} disabled={saving} value={editForm[key] || ""} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} />
-                    : <input id={`stock-edit-${key}`} required={["ad", "kod"].includes(key)} disabled={saving} inputMode={key === "kritikLimit" ? "decimal" : undefined} value={editForm[key] || ""} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} />}
+                    : <input id={`stock-edit-${key}`} required={["ad", "kod"].includes(key)} disabled={saving} inputMode={key === "kritikLimit" ? "decimal" : products && key === "barkod" ? "numeric" : undefined} maxLength={products && key === "barkod" ? 13 : undefined} value={editForm[key] || ""} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} />}
+                  {products && key === "barkod" && <span className={kys.formHint}>EAN-13 (13 hane). Boş bırakılırsa otomatik oluşturulur.</span>}
                 </div>)}
               </div>
               {products && <KysProductFields value={product} onChange={setProduct} disabled={saving} />}
