@@ -1,5 +1,8 @@
 "use client";
 
+import KysProductFields, { emptyKysProduct, type ProductDraft } from "../urun-listesi/KysProductFields";
+import type { KysProduct } from "@/lib/kysProduct";
+import { KYS_STOCK_SOURCES } from "@/lib/kysStockSources";
 import Link from "next/link";
 import { Info, Printer } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -8,6 +11,8 @@ import kys from "../kys.module.css";
 
 type StockRow = {
   id: number;
+  kaynak: string;
+  urun: KysProduct;
   barkod: string;
   malzemeTuru: string;
   kod: string;
@@ -25,6 +30,7 @@ type StockRow = {
 };
 
 const emptyForm = {
+  kaynak: "Unique",
   barkod: "",
   malzemeTuru: "Sarf",
   kod: "",
@@ -64,10 +70,11 @@ function fmt(value: number) {
   return Number(value || 0).toLocaleString("tr-TR", { maximumFractionDigits: 4 });
 }
 
-export default function StokListesiClient() {
+export default function StokListesiClient({ products = false }: { products?: boolean }) {
   const [rows, setRows] = useState<StockRow[]>([]);
   const [search, setSearch] = useState("");
   const [malzemeTuru, setMalzemeTuru] = useState("");
+  const [kaynak, setKaynak] = useState("");
   const [durum, setDurum] = useState("");
   const [kritik, setKritik] = useState(false);
   const [sort, setSort] = useState("miktar-asc");
@@ -80,7 +87,10 @@ export default function StokListesiClient() {
   const [modalOpen, setModalOpen] = useState(false);
   const [mode, setMode] = useState<"add" | "edit">("add");
   const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState({ ...emptyForm, kaynak: products ? "Spektrotek" : "Unique" });
+  const [product, setProduct] = useState<ProductDraft>({ ...emptyKysProduct });
+  const [productImages, setProductImages] = useState<File[]>([]);
+  const [createdId, setCreatedId] = useState<number | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
   const [formError, setFormError] = useState("");
@@ -103,6 +113,8 @@ export default function StokListesiClient() {
     try {
       const qs = new URLSearchParams({
         search,
+        liste: products ? "urun" : "stok",
+        kaynak: products ? kaynak : "",
         malzemeTuru,
         durum,
         sort,
@@ -121,7 +133,7 @@ export default function StokListesiClient() {
     } finally {
       setLoading(false);
     }
-  }, [durum, kritik, limit, malzemeTuru, page, search, sort]);
+  }, [durum, kaynak, kritik, limit, malzemeTuru, page, products, search, sort]);
 
   useEffect(() => { fetchRows(); }, [fetchRows]);
 
@@ -144,13 +156,30 @@ export default function StokListesiClient() {
   function openAdd() {
     setMode("add");
     setEditId(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, kaynak: products ? "Spektrotek" : "Unique" });
+    setProduct({ ...emptyKysProduct });
+    setProductImages([]);
+    setCreatedId(null);
     setImageFile(null);
     setFormError("");
     setModalOpen(true);
   }
 
   async function uploadImage(stockId: number) {
+    if (products) {
+      let completed = 0;
+      try {
+        for (const file of productImages) {
+          const data = new FormData();
+          data.append("file", file);
+          const response = await fetch(`/api/kys/stoklar/${stockId}/gorseller`, { method: "POST", body: data });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || "Görsel yüklenemedi.");
+          completed++;
+        }
+      } finally { setProductImages(productImages.slice(completed)); }
+      return;
+    }
     if (!imageFile) return;
     const fd = new FormData();
     fd.append("file", imageFile);
@@ -160,28 +189,38 @@ export default function StokListesiClient() {
   }
 
   async function save() {
+    if (saving) return;
     if (!form.kod.trim() || !form.ad.trim()) {
       setFormError("Kod ve ad zorunludur.");
       return;
     }
+    const files = products ? productImages : imageFile ? [imageFile] : [];
+    if (files.length > 24 || files.some(file => file.size > 5 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(file.type))) {
+      setFormError("En fazla 24 JPG, PNG veya WebP görseli seçin; her dosya en fazla 5 MB olabilir.");
+      return;
+    }
     setSaving(true);
     setFormError("");
+    let saved = false;
     try {
-      const url = mode === "edit" ? `/api/kys/stoklar/${editId}` : "/api/kys/stoklar";
+      const savedId = createdId || editId;
+      const url = savedId ? `/api/kys/stoklar/${savedId}` : "/api/kys/stoklar";
       const res = await fetch(url, {
-        method: mode === "edit" ? "PATCH" : "POST",
+        method: savedId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, kaynak: products ? form.kaynak : "Unique", ...(products ? { urun: product } : {}) }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Kayıt tamamlanamadı.");
-      const stockId = Number(json.id || editId || 0);
+      const stockId = Number(json.id || savedId || 0);
+      if (!savedId && stockId) setCreatedId(stockId);
+      saved = true;
       if (stockId) await uploadImage(stockId);
       setModalOpen(false);
       setImageFile(null);
       fetchRows();
     } catch (e: unknown) {
-      setFormError(errorMessage(e, "Stok kaydedilemedi."));
+      setFormError(`${saved ? "Kart kaydedildi. Kalan görseller için tekrar Kaydet'e basabilirsiniz. " : ""}${errorMessage(e, "Stok kaydedilemedi.")}`);
     } finally {
       setSaving(false);
     }
@@ -197,14 +236,15 @@ export default function StokListesiClient() {
             </svg>
             <input className={styles.searchInput} placeholder="Barkod, kod, ad, CAS no ara..." value={search} onChange={e => handleSearch(e.target.value)} />
           </div>
-          <span className={styles.totalCount}>{total} stok kartı</span>
+          <span className={styles.totalCount}>{total} {products ? "ürün" : "stok kartı"}</span>
         </div>
         <div className={styles.toolbarRight}>
-          <button className={styles.addBtn} type="button" onClick={openAdd}>+ Stok kartı</button>
+          <button className={styles.addBtn} type="button" onClick={openAdd}>+ {products ? "Ürün" : "Stok kartı"}</button>
         </div>
       </div>
 
       <div className={kys.filterRow}>
+        {products && <select aria-label="Kaynak" className={kys.select} value={kaynak} onChange={e => { setKaynak(e.target.value); setPage(1); }}><option value="">Tüm kaynaklar</option>{KYS_STOCK_SOURCES.filter(source => source !== "Unique").map(source => <option key={source}>{source}</option>)}</select>}
         <select className={kys.select} value={malzemeTuru} onChange={e => { setMalzemeTuru(e.target.value); setPage(1); }}>
           <option value="">Tüm türler</option>
           <option>Sarf</option><option>Spektrotek</option>
@@ -235,18 +275,20 @@ export default function StokListesiClient() {
       <div className={styles.tableCard}>
         {error && <div className={styles.errorBar}>{error}</div>}
         <div className={styles.tableWrapper}>
-          <table className={`${styles.table} ${kys.stockFitTable}`}>
+          <table className={`${styles.table} ${products ? kys.productTable : kys.stockFitTable}`}>
             <thead>
               <tr>
                 <th>Barkod</th>
-                <th>Tür</th>
+                <th>{products ? "Kategori" : "Tür"}</th>
                 <th>Kod</th>
                 <th>Ad</th>
-                <th>Cas No</th>
-                <th>Ambalaj</th>
-                <th>Saklama</th>
-                <th>Kritik limit</th>
-                <th>Birim</th>
+                {products ? <th>Satış fiyatı</th> : <th>Cas No</th>}
+                {!products && <>
+                  <th>Ambalaj</th>
+                  <th>Saklama</th>
+                  <th>Kritik limit</th>
+                  <th>Birim</th>
+                </>}
                 <th>Stok durumu</th>
                 <th>İşlem</th>
               </tr>
@@ -254,21 +296,23 @@ export default function StokListesiClient() {
             <tbody>
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={i}><td colSpan={11}><div className={styles.skeleton} /></td></tr>
+                  <tr key={i}><td colSpan={products ? 7 : 11}><div className={styles.skeleton} /></td></tr>
                 ))
               ) : rows.length === 0 ? (
-                <tr><td colSpan={11}><div className={styles.empty}>Stok kaydı bulunamadı.</div></td></tr>
+                <tr><td colSpan={products ? 7 : 11}><div className={styles.empty}>Stok kaydı bulunamadı.</div></td></tr>
               ) : rows.map(row => (
                 <tr key={row.id}>
                   <td data-label="Barkod" className={`${styles.tdMono} ${kys.barcodeText}`}>{row.barkod || "-"}</td>
-                  <td data-label="Tür"><span className={kys.pill}>{row.malzemeTuru}</span></td>
+                  <td data-label={products ? "Kategori" : "Tür"}><span className={kys.pill}>{products ? row.urun.kategori || row.malzemeTuru || "—" : row.malzemeTuru}</span></td>
                   <td data-label="Kod" className={styles.tdMono}>{row.kod}</td>
                   <td data-label="Ad" className={styles.tdName}>{row.ad}</td>
-                  <td data-label="CAS No" className={styles.tdMono}>{row.casNo || "-"}</td>
-                  <td data-label="Ambalaj">{row.ambalaj || "-"}</td>
-                  <td data-label="Saklama">{row.saklamaKosullari || "-"}</td>
-                  <td data-label="Kritik limit" className={styles.tdMono}>{fmt(row.kritikLimit)}</td>
-                  <td data-label="Birim">{row.birim}</td>
+                  {products ? <td data-label="Satış fiyatı">{row.urun.satisFiyati == null ? "—" : `${fmt(row.urun.satisFiyati)} ${row.urun.paraBirimi}`}</td> : <td data-label="CAS No" className={styles.tdMono}>{row.casNo || "-"}</td>}
+                  {!products && <>
+                    <td data-label="Ambalaj">{row.ambalaj || "-"}</td>
+                    <td data-label="Saklama">{row.saklamaKosullari || "-"}</td>
+                    <td data-label="Kritik limit" className={styles.tdMono}>{fmt(row.kritikLimit)}</td>
+                    <td data-label="Birim">{row.birim}</td>
+                  </>}
                   <td data-label="Stok durumu">
                     <span className={`${kys.pill} ${row.kritikMi ? kys.pillDanger : kys.pillOk}`}>
                       <span className={row.kritikMi ? kys.lowStock : ""}>{fmt(row.stokMiktari)}</span> {row.birim}
@@ -276,7 +320,7 @@ export default function StokListesiClient() {
                   </td>
                   <td data-label="İşlem">
                     <div className={`${styles.actionBtns} ${kys.stockActions}`}>
-                      <Link className={`${styles.editBtn} ${kys.stockActionButton}`} title="Detay" aria-label={`${row.ad} stok detayını aç`} href={`/laboratuvar/kys/stok-listesi/${row.id}`}><Info size={14} aria-hidden="true" /></Link>
+                      <Link className={`${styles.editBtn} ${kys.stockActionButton}`} title="Detay" aria-label={`${row.ad} stok detayını aç`} href={`/laboratuvar/kys/${products ? "urun-listesi" : "stok-listesi"}/${row.id}`}><Info size={14} aria-hidden="true" /></Link>
                       <Link className={`${styles.editBtn} ${kys.stockActionButton}`} title="Yazdır" aria-label={`${row.ad} stok kartını yazdır`} href={`/laboratuvar/kys/stok-karti-yazdir/${row.id}`}><Printer size={14} aria-hidden="true" /></Link>
                     </div>
                   </td>
@@ -287,8 +331,8 @@ export default function StokListesiClient() {
         </div>
         <div className={styles.pagination}>
           <button className={styles.pageBtn} disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</button>
-          {pages.map((p, i) => p === "..." ? <span className={styles.pageDots} key={i}>...</span> : (
-            <button key={p} className={`${styles.pageBtn} ${p === page ? styles.pageBtnActive : ""}`} onClick={() => setPage(p)}>{p}</button>
+          {pages.map((p, i) => p === "..." ? <span className={styles.pageDots} key={`ellipsis-${i}`}>...</span> : (
+            <button key={`page-${p}`} className={`${styles.pageBtn} ${p === page ? styles.pageBtnActive : ""}`} onClick={() => setPage(p)}>{p}</button>
           ))}
           <button className={styles.pageBtn} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>›</button>
           <span className={styles.pageInfo}>Sayfa {page} / {totalPages}</span>
@@ -299,8 +343,8 @@ export default function StokListesiClient() {
         <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 860 }}>
             <div className={styles.modalHeader}>
-              <h2>{mode === "add" ? "Yeni stok kartı" : "Stok kartı düzenle"}</h2>
-              <button className={styles.modalClose} onClick={() => setModalOpen(false)}>×</button>
+              <h2>{products ? "Yeni ürün" : mode === "add" ? "Yeni stok kartı" : "Stok kartı düzenle"}</h2>
+              <button className={styles.modalClose} disabled={saving} aria-label="Kapat" onClick={() => setModalOpen(false)}>×</button>
             </div>
             <div className={styles.modalBody}>
               {formError && <div className={styles.formError}>{formError}</div>}
@@ -317,6 +361,10 @@ export default function StokListesiClient() {
                     <input value={form.barkod} onChange={e => setForm(f => ({ ...f, barkod: e.target.value }))} />
                   </div>
                 )}
+                {products && <div className={styles.formGroup}>
+                  <label htmlFor="stock-source">Kaynak</label>
+                  <select id="stock-source" value={form.kaynak} onChange={e => setForm(f => ({ ...f, kaynak: e.target.value }))}>{KYS_STOCK_SOURCES.filter(source => source !== "Unique").map(source => <option key={source}>{source}</option>)}</select>
+                </div>}
                 <div className={styles.formGroup}>
                   <label>Malzeme türü</label>
                   <input
@@ -339,7 +387,8 @@ export default function StokListesiClient() {
                 )}
                 <div className={styles.formGroup}>
                   <label>Ürün görseli</label>
-                  <input id="stock-image-file" className={kys.fileInput} type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] || null)} />
+                  <input id="stock-image-file" className={kys.fileInput} type="file" accept="image/jpeg,image/png,image/webp" multiple={products} onChange={e => { if (products) setProductImages(Array.from(e.target.files || [])); else setImageFile(e.target.files?.[0] || null); }} />
+                  {products && <span className={kys.formHint}>{productImages.length ? `${productImages.length} görsel: ${productImages.map(file => file.name).join(", ")}` : "Birden fazla görsel seçebilirsiniz; ilk görsel kapak olur."}</span>}
                   <label className={kys.fileButton} htmlFor="stock-image-file">Dosya seç</label>
                   {imagePreview ? (
                     <div className={kys.formImagePreviewWrap}>
@@ -359,9 +408,10 @@ export default function StokListesiClient() {
                   <textarea rows={3} value={form.ozellik} onChange={e => setForm(f => ({ ...f, ozellik: e.target.value }))} />
                 </div>
               </div>
+              {products && <KysProductFields value={product} onChange={setProduct} disabled={saving} />}
             </div>
             <div className={styles.modalFooter}>
-              <button className={styles.cancelBtn} onClick={() => setModalOpen(false)}>Vazgeç</button>
+              <button className={styles.cancelBtn} disabled={saving} onClick={() => setModalOpen(false)}>Vazgeç</button>
               <button className={styles.saveBtn} disabled={saving} onClick={save}>{saving ? "Kaydediliyor..." : "Kaydet"}</button>
             </div>
           </div>

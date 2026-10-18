@@ -99,6 +99,7 @@ const navGroups: NavGroup[] = [
       { label: "Doküman Yönetimi", href: "/laboratuvar/kys/dokuman-yonetimi", menuKey: "laboratuvar.kys.dokuman-yonetimi" },
       { label: "Dış Kaynaklı Doküman", href: "/laboratuvar/kys/dis-kaynakli-dokuman", menuKey: "laboratuvar.kys.dis-kaynakli-dokuman" },
       { label: "Stok Listesi", href: "/laboratuvar/kys/stok-listesi", menuKey: "laboratuvar.kys.stok-listesi" },
+      { label: "Ürün Listesi", href: "/laboratuvar/kys/urun-listesi", menuKey: "laboratuvar.kys.urun-listesi" },
       { label: "Stok Ekle / Düş", href: "/laboratuvar/kys/stok-hareketleri", menuKey: "laboratuvar.kys.stok-hareketleri" },
       { label: "Son Kullanım Listesi", href: "/laboratuvar/kys/son-kullanim", menuKey: "laboratuvar.kys.son-kullanim" },
       { label: "Talep Listesi", href: "/laboratuvar/kys/talep-listesi", menuKey: "laboratuvar.kys.talep-listesi" },

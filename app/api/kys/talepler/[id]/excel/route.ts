@@ -13,11 +13,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     const detail = await getKysRequestDetail(Number(id));
     if (!detail) return Response.json({ error: "Talep bulunamadı." }, { status: 404 });
+    if (!user.firmalar.includes(detail.talep.seri)) return Response.json({ error: "Bu firmanın talebine erişiminiz yok." }, { status: 403 });
     const t = detail.talep;
     const date = (value: string | null) => value ? value.slice(0, 10).split("-").reverse().join(".") : "";
     const rows = [
       ["Talep Detayı", t.talepNo],
-      ["Seri", t.seri], ["Talep türü", t.seri === "Spektrotek" && t.talepTuru !== "Sipariş" ? "Satın Alma" : t.talepTuru],
+      ["Seri", t.seri], ["Talep türü", ["Spektrotek", "Root"].includes(t.seri) && t.talepTuru !== "Sipariş" ? "Satın Alma" : t.talepTuru],
       ["Firma", t.firmaAdi], ["Durum", t.durum],
       ["Oluşturan", t.olusturanAd], ["Oluşturma tarihi", date(t.olusturmaTarihi)],
       ["Onaylayan", t.onaylayanAd], ["Onay tarihi", date(t.onayTarihi)],

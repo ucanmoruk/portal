@@ -75,6 +75,7 @@ export const MENU_TREE: MenuItem[] = [
       { key: "laboratuvar.kys.dis-kaynakli-dokuman", label: "Dış Kaynaklı Doküman", href: "/laboratuvar/kys/dis-kaynakli-dokuman" },
       { key: "laboratuvar.kys.dis-kaynakli-dokuman.kontrol", label: "Dış Kaynaklı Doküman Kontrol", href: "#", virtual: true },
       { key: "laboratuvar.kys.stok-listesi", label: "Stok Listesi", href: "/laboratuvar/kys/stok-listesi" },
+      { key: "laboratuvar.kys.urun-listesi", label: "Ürün Listesi", href: "/laboratuvar/kys/urun-listesi" },
       { key: "laboratuvar.kys.stok-hareketleri", label: "Stok Ekle / Düş", href: "/laboratuvar/kys/stok-hareketleri" },
       { key: "laboratuvar.kys.son-kullanim", label: "Son Kullanım Listesi", href: "/laboratuvar/kys/son-kullanim" },
       { key: "laboratuvar.kys.talep-listesi", label: "Talep Listesi", href: "/laboratuvar/kys/talep-listesi" },

@@ -8,6 +8,10 @@ import kys from "../kys.module.css";
 
 type PurchaseRow = {
   id: number;
+  islem: "Alış" | "Satış";
+  durum: string;
+  stokKaynak: string;
+  gonderilenMiktar: number;
   stokId: number | null;
   stokKod: string;
   malzemeAdi: string;
@@ -43,6 +47,7 @@ function money(value: number | null, currency: string) {
 export default function SatinAlmaGecmisiClient() {
   const [rows, setRows] = useState<PurchaseRow[]>([]);
   const [search, setSearch] = useState("");
+  const [islem, setIslem] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -59,7 +64,7 @@ export default function SatinAlmaGecmisiClient() {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ search, page: String(page), limit: "25" });
+      const params = new URLSearchParams({ search, islem, page: String(page), limit: "25" });
       const response = await fetch(`/api/kys/satin-almalar?${params.toString()}`, { cache: "no-store" });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error || "Satın alma geçmişi alınamadı.");
@@ -71,7 +76,7 @@ export default function SatinAlmaGecmisiClient() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, islem]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -131,33 +136,36 @@ export default function SatinAlmaGecmisiClient() {
         <div className={styles.toolbarLeft}>
           <div className={styles.searchBox}>
             <span className={styles.searchIcon}>⌕</span>
-            <input className={styles.searchInput} value={search} onChange={event => onSearch(event.target.value)} placeholder="Stok kodu, malzeme, tedarikçi, talep veya fatura ara..." />
+            <input className={styles.searchInput} value={search} onChange={event => onSearch(event.target.value)} placeholder="Ürün, tedarikçi, müşteri, talep, sipariş veya fatura ara..." />
           </div>
-          <span className={styles.totalCount}>{total} satın alma kaydı</span>
+          <span className={styles.totalCount}>{total} alış / satış kaydı</span>
         </div>
       </div>
+      <div className={kys.filterRow}><select className={kys.select} aria-label="İşlem türü" value={islem} onChange={e => {setIslem(e.target.value);setPage(1);}}><option value="">Alış ve satışlar</option><option>Alış</option><option>Satış</option></select></div>
       <div className={styles.tableCard}>
         {error && <div className={styles.errorBar}>{error}</div>}
         <div className={`${styles.tableWrapper} ${kys.purchaseTableWrapper}`}>
           <table className={`${styles.table} ${kys.purchaseHistoryTable}`}>
-            <colgroup><col style={{width:"7%"}}/><col style={{width:"7%"}}/><col style={{width:"15%"}}/><col style={{width:"11%"}}/><col style={{width:"8%"}}/><col style={{width:"11%"}}/><col style={{width:"10%"}}/><col style={{width:"10%"}}/><col style={{width:"8%"}}/><col style={{width:"9%"}}/><col style={{width:"4%"}}/></colgroup>
-            <thead><tr><th>Tarih</th><th>Stok</th><th>Malzeme</th><th>Tedarikçi</th><th>Miktar</th><th>Fatura no</th><th>Birim fiyat</th><th>Toplam</th><th>Talep</th><th>Kaydeden</th><th aria-label="İşlemler"></th></tr></thead>
+            <colgroup>{[7,5,7,7,16,11,7,8,6,7,7,8,4].map((width,index) => <col key={index} style={{width:`${width}%`}} />)}</colgroup>
+            <thead><tr><th>Tarih</th><th>İşlem</th><th>Durum</th><th>Stok</th><th>Malzeme</th><th>Tedarikçi / Müşteri</th><th>Miktar</th><th>Fatura no</th><th>Birim fiyat</th><th>Toplam</th><th>Talep / Sipariş</th><th>Kaydeden</th><th aria-label="İşlemler"></th></tr></thead>
             <tbody>
-              {loading ? <tr><td colSpan={11}><div className={styles.skeleton} /></td></tr> : rows.length === 0 ? (
-                <tr><td colSpan={11}><div className={styles.empty}>Satın alma kaydı bulunamadı.</div></td></tr>
+              {loading ? <tr><td colSpan={13}><div className={styles.skeleton} /></td></tr> : rows.length === 0 ? (
+                <tr><td colSpan={13}><div className={styles.empty}>Alış / satış kaydı bulunamadı.</div></td></tr>
               ) : rows.map(row => (
-                <tr key={row.id}>
+                <tr key={`${row.islem}-${row.id}`}>
                   <td>{dateFmt(row.satinAlmaTarihi)}</td>
-                  <td>{row.stokId ? <Link href={`/laboratuvar/kys/stok-listesi/${row.stokId}`} className={`${styles.tdMono} ${kys.purchaseStockLink}`}>{row.stokKod || `#${row.stokId}`}</Link> : <span className={styles.tdMono}>{row.stokKod || "-"}</span>}</td>
+                  <td><span className={`${kys.pill} ${row.islem === "Satış" ? kys.pillWarn : kys.pillOk}`}>{row.islem}</span></td>
+                  <td>{row.durum}</td>
+                  <td>{row.stokId ? <Link href={`/laboratuvar/kys/${row.stokKaynak && row.stokKaynak !== "Unique" ? "urun-listesi" : "stok-listesi"}/${row.stokId}`} className={`${styles.tdMono} ${kys.purchaseStockLink}`}>{row.stokKod || `#${row.stokId}`}</Link> : <span className={styles.tdMono}>{row.stokKod || "-"}</span>}</td>
                   <td className={styles.tdName}>{row.malzemeAdi}</td>
                   <td>{row.tedarikci || "-"}</td>
-                  <td>{row.miktar.toLocaleString("tr-TR")} {row.birim}</td>
+                  <td>{row.miktar.toLocaleString("tr-TR")} {row.birim}{row.islem === "Satış" && <small style={{display:"block"}}>Gönderilen: {row.gonderilenMiktar.toLocaleString("tr-TR")} {row.birim}</small>}</td>
                   <td className={kys.purchaseInvoiceNo} title={row.faturaNo || undefined}>{row.faturaNo || "-"}</td>
                   <td>{money(row.birimFiyat, row.paraBirimi)}</td>
                   <td><strong>{money(row.toplamTutar, row.paraBirimi)}</strong></td>
                   <td><Link className={kys.purchaseLink} href={`/laboratuvar/kys/talep-listesi/${row.talepId}`}>{row.talepNo}</Link></td>
                   <td>{row.satinAlanAd || "-"}</td>
-                  <td><button type="button" className={`${styles.editBtn} ${kys.iconButton}`} title="Satın alma bilgilerini düzenle" aria-label={`${row.malzemeAdi} satın alma bilgilerini düzenle`} onClick={() => openEdit(row)}><Pencil size={15} aria-hidden="true" /></button></td>
+                  <td>{row.islem === "Alış" && <button type="button" className={`${styles.editBtn} ${kys.iconButton}`} title="Satın alma bilgilerini düzenle" aria-label={`${row.malzemeAdi} satın alma bilgilerini düzenle`} onClick={() => openEdit(row)}><Pencil size={15} aria-hidden="true" /></button>}</td>
                 </tr>
               ))}
             </tbody>

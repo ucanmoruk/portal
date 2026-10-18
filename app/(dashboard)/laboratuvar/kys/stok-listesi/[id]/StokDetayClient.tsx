@@ -2,6 +2,10 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import KysProductFields, { emptyKysProduct, type ProductDraft } from "../../urun-listesi/KysProductFields";
+import KysProductGallery, { type StockPhoto } from "../../urun-listesi/KysProductGallery";
+import { useRouter } from "next/navigation";
+import { KYS_STOCK_SOURCES } from "@/lib/kysStockSources";
 import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
@@ -15,10 +19,11 @@ type Detail = {
   movements: any[];
   balances: any[];
   certificates: any[];
+  images: StockPhoto[];
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
-const stockEditFields = [["kod", "Kod"], ["ad", "Ürün adı"], ["name", "İngilizce adı"], ["barkod", "Barkod"], ["malzemeTuru", "Tür"], ["casNo", "CAS No"], ["ambalaj", "Ambalaj"], ["saklamaKosullari", "Saklama koşulları"], ["kritikLimit", "Kritik limit"], ["birim", "Birim"], ["stokDurumu", "Stok durumu"], ["ozellik", "Özellik"]] as const;
+const stockEditFields = [["kaynak", "Kaynak"], ["kod", "Kod"], ["ad", "Ürün adı"], ["name", "İngilizce adı"], ["barkod", "Barkod"], ["malzemeTuru", "Tür"], ["casNo", "CAS No"], ["ambalaj", "Ambalaj"], ["saklamaKosullari", "Saklama koşulları"], ["kritikLimit", "Kritik limit"], ["birim", "Birim"], ["stokDurumu", "Stok durumu"], ["ozellik", "Özellik"]] as const;
 
 function fmt(value: number) {
   return Number(value || 0).toLocaleString("tr-TR", { maximumFractionDigits: 4 });
@@ -30,7 +35,8 @@ function dateFmt(value?: string | null) {
   return m ? `${m[3]}.${m[2]}.${m[1]}` : String(value).slice(0, 10);
 }
 
-export default function StokDetayClient({ id }: { id: number }) {
+export default function StokDetayClient({ id, products = false }: { id: number; products?: boolean }) {
+  const router = useRouter();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [birimler, setBirimler] = useState<Birim[]>([]);
   const [tab, setTab] = useState<"bilgi" | "hareket" | "sertifika">("bilgi");
@@ -56,6 +62,7 @@ export default function StokDetayClient({ id }: { id: number }) {
   const [certMovementId, setCertMovementId] = useState("");
   const [certInputKey, setCertInputKey] = useState(0);
   const [imageUploading, setImageUploading] = useState(false);
+  const [product, setProduct] = useState<ProductDraft>({ ...emptyKysProduct });
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
@@ -68,6 +75,7 @@ export default function StokDetayClient({ id }: { id: number }) {
   }
 
   function openEdit() {
+    setProduct({ ...emptyKysProduct, ...detail?.stock.urun });
     setEditForm(Object.fromEntries(stockEditFields.map(([key]) => [key, String(detail?.stock[key] ?? "")])));
     setFormError("");
     setEditOpen(true);
@@ -77,7 +85,7 @@ export default function StokDetayClient({ id }: { id: number }) {
     if (saving) return;
     setSaving(true); setFormError("");
     try {
-      const r = await fetch(`/api/kys/stoklar/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editForm) });
+      const r = await fetch(`/api/kys/stoklar/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...editForm, ...(detail?.stock.kaynak !== "Unique" ? { urun: product } : {}) }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Stok kartı kaydedilemedi.");
       setEditOpen(false); await fetchDetail();
@@ -92,6 +100,9 @@ export default function StokDetayClient({ id }: { id: number }) {
       const res = await fetch(`/api/kys/stoklar/${id}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Stok detayı alınamadı.");
+      if ((json.stock.kaynak !== "Unique") !== products) {
+        router.replace(`/laboratuvar/kys/${json.stock.kaynak === "Unique" ? "stok-listesi" : "urun-listesi"}/${id}`);
+      }
       setDetail(json);
       setMoveForm(f => ({ ...f, birim: json.stock?.birim || "Adet" }));
     } catch (e: any) {
@@ -99,7 +110,7 @@ export default function StokDetayClient({ id }: { id: number }) {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, products, router]);
 
   useEffect(() => { fetchDetail(); }, [fetchDetail]);
   useEffect(() => {
@@ -183,7 +194,7 @@ export default function StokDetayClient({ id }: { id: number }) {
       {error && <div className={styles.errorBanner}>{error}</div>}
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
-          <Link href="/laboratuvar/kys/stok-listesi" className={styles.cancelBtn}>← Stok listesi</Link>
+          <Link href={`/laboratuvar/kys/${products ? "urun-listesi" : "stok-listesi"}`} className={styles.cancelBtn}>← {products ? "Ürün listesi" : "Stok listesi"}</Link>
           <span className={`${kys.pill} ${s.kritikMi ? kys.pillDanger : kys.pillOk}`}>
             {fmt(s.stokMiktari)} {s.birim}
           </span>
@@ -211,7 +222,7 @@ export default function StokDetayClient({ id }: { id: number }) {
           <div className={kys.stockInfoGrid}>
             <div className={kys.stockVisualPanel}>
               <div className={kys.stockVisualBox}>
-                {s.hasImage ? (
+                {(s.hasImage || detail.images.length > 0) ? (
                   <Image
                     src={`/api/kys/stoklar/${id}/gorsel?v=${encodeURIComponent(s.updatedAt || "")}`}
                     alt={s.ad || "Stok görseli"}
@@ -227,10 +238,10 @@ export default function StokDetayClient({ id }: { id: number }) {
               <div className={kys.stockVisualInfo}>
                 <div className={kys.detailLabel}>Ürün görseli</div>
                 <div className={kys.formHint}>Stok kartında ürüne ait fotoğrafı saklayabilirsiniz. JPG, PNG veya WebP gibi görseller desteklenir.</div>
-                <div className={kys.inlineActions}>
+                {!products && <div className={kys.inlineActions}>
                   <input className={kys.fileInput} aria-label="Ürün görseli seç" type="file" accept="image/*" onChange={e => uploadImage(e.target.files?.[0])} disabled={imageUploading} />
                   <span className={kys.formHint}>{imageUploading ? "Yükleniyor..." : s.gorselDosyaAdi || "Görsel seçin"}</span>
-                </div>
+                </div>}
               </div>
             </div>
             {[
@@ -238,6 +249,7 @@ export default function StokDetayClient({ id }: { id: number }) {
               ["İngilizce adı", s.name],
               ["Özellik", s.ozellik],
               ["Barkod", s.barkod],
+              ...(products ? [["Kaynak", s.kaynak]] : []),
               ["Malzeme türü", s.malzemeTuru],
               ["Kod", s.kod],
               ["Cas No", s.casNo],
@@ -254,6 +266,29 @@ export default function StokDetayClient({ id }: { id: number }) {
             ))}
           </div>
         )}
+
+        {tab === "bilgi" && products && <>
+          <section className={kys.productSection}>
+            <h2>Ürün ve web bilgileri</h2>
+            <div className={kys.detailGrid}>
+              {[
+                ["Kategori", s.urun.kategori], ["Marka", s.urun.marka],
+                ["Satış fiyatı (KDV hariç)", s.urun.satisFiyati == null ? "—" : `${fmt(s.urun.satisFiyati)} ${s.urun.paraBirimi}`],
+                ["Liste fiyatı (KDV hariç)", s.urun.listeFiyati == null ? "—" : `${fmt(s.urun.listeFiyati)} ${s.urun.paraBirimi}`],
+                ["KDV oranı", s.urun.kdvOrani == null ? "—" : `%${fmt(s.urun.kdvOrani)}`],
+                ["Tedarik durumu", s.urun.tedarikDurumu], ["Teslim süresi", s.urun.teslimSuresi],
+                ["Web seçimi", s.urun.webSecili ? "Senkronizasyon için seçili" : "Seçilmedi"],
+                ["Web ürün kimliği", s.urun.webUrunId], ["Web adresi", s.urun.webSlug],
+                ["Referans fiyat (satış fiyatı değildir)", s.urun.referansFiyat],
+              ].map(([label, value]) => <div className={kys.detailItem} key={label}><div className={kys.detailLabel}>{label}</div><div className={kys.detailValue}>{value || "—"}</div></div>)}
+            </div>
+            <div className={kys.productDescription}><strong>Kısa açıklama</strong><p>{s.urun.kisaAciklama || "—"}</p><strong>Ürün açıklaması</strong><p>{s.urun.urunAciklamasi || "—"}</p></div>
+            {s.urun.icNotlar && <div className={kys.productDescription}><strong>İç notlar</strong><p>{s.urun.icNotlar}</p></div>}
+            {s.urun.arastirmaKaynaklari?.length > 0 && <div className={kys.productDescription}><strong>Araştırma kaynakları</strong><ul>{s.urun.arastirmaKaynaklari.map((url: string) => <li key={url}><a href={url} target="_blank" rel="noopener noreferrer">{url}</a></li>)}</ul></div>}
+            <p className={kys.formHint}>Web seçimi hazırlık içindir; henüz siteyle senkronizasyon yapılmıyor. SKU olarak stok kodu kullanılır.</p>
+          </section>
+          <KysProductGallery stockId={id} images={detail.images} hasOriginal={s.hasOriginalImage} onChanged={fetchDetail} />
+        </>}
 
         {tab === "hareket" && (
           <div style={{ display: "grid", gap: 16 }}>
@@ -282,7 +317,7 @@ export default function StokDetayClient({ id }: { id: number }) {
                     <td>{h.kaynakBirimAd || "-"} → {h.hedefBirimAd || "-"}</td>
                     <td>{h.marka || "-"} / {h.lot || "-"} / {dateFmt(h.skt)}</td>
                     <td>{h.kullaniciAd || "-"}</td>
-                    <td>{h.aciklama || "-"}</td>
+                    <td>{h.talepId && h.siparis ? <Link className={kys.requestLink} href={`/laboratuvar/kys/talep-listesi/${h.talepId}`}>Sipariş: {h.talepNo}</Link> : h.aciklama || "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -362,13 +397,14 @@ export default function StokDetayClient({ id }: { id: number }) {
             <div className={styles.modalBody}>
               {formError && <div role="alert" className={styles.formError}>{formError}</div>}
               <div className={`${styles.formGrid} ${kys.supplierGrid}`}>
-                {stockEditFields.map(([key, label]) => <div key={key} className={`${styles.formGroup} ${["ad", "name", "ozellik", "saklamaKosullari"].includes(key) ? kys.supplierFullWidth : ""}`}>
+                {stockEditFields.filter(([key]) => products || key !== "kaynak").map(([key, label]) => <div key={key} className={`${styles.formGroup} ${["ad", "name", "ozellik", "saklamaKosullari"].includes(key) ? kys.supplierFullWidth : ""}`}>
                   <label htmlFor={`stock-edit-${key}`}>{label}{["ad", "kod"].includes(key) && <span className={styles.required}> *</span>}</label>
                   {key === "stokDurumu" ? <select id={`stock-edit-${key}`} disabled={saving} value={editForm[key] || "Aktif"} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}><option>Aktif</option><option>Pasif</option></select>
-                    : key === "ozellik" ? <textarea id={`stock-edit-${key}`} rows={3} disabled={saving} value={editForm[key] || ""} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} />
+                    : key === "kaynak" ? <select id={`stock-edit-${key}`} disabled={saving} aria-label="Kaynak" value={editForm[key] || "Unique"} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}>{KYS_STOCK_SOURCES.filter(source => source !== "Unique").map(source => <option key={source}>{source}</option>)}</select> : key === "ozellik" ? <textarea id={`stock-edit-${key}`} rows={3} disabled={saving} value={editForm[key] || ""} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} />
                     : <input id={`stock-edit-${key}`} required={["ad", "kod"].includes(key)} disabled={saving} inputMode={key === "kritikLimit" ? "decimal" : undefined} value={editForm[key] || ""} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))} />}
                 </div>)}
               </div>
+              {products && <KysProductFields value={product} onChange={setProduct} disabled={saving} />}
             </div>
             <div className={styles.modalFooter}><button type="button" disabled={saving} className={styles.cancelBtn} onClick={() => setEditOpen(false)}>Vazgeç</button><button type="submit" className={styles.saveBtn} disabled={saving}>{saving ? "Kaydediliyor…" : "Kaydet"}</button></div>
           </form>

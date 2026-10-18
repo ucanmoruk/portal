@@ -21,6 +21,8 @@ function dateFmt(value?: string | null) {
 }
 
 export default function TalepDetayClient({ id }: { id: number }) {
+  const [completingAll, setCompletingAll] = useState(false);
+  const [shipment, setShipment] = useState({ kabulTarihi: today(), hedefBirimId: "", genelDegerlendirme: "" });
   const [editing, setEditing] = useState(false);
   const [editingNumber, setEditingNumber] = useState(false);
   const [requestNumber, setRequestNumber] = useState("");
@@ -137,7 +139,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
       istenilenMiktardaGeldi:k.istenilenMiktardaGeldi,markaOzellikUygun:k.markaOzellikUygun,sktUygun:k.sktUygun,sertifikaGerekli:k.sertifikaGerekli,genelDegerlendirme:k.genelDegerlendirme||""}));
   }
   async function deleteAcceptance(k: any) {
-    if (saving || !confirm(detail?.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? "Sipariş kabulü silinecek, teslim edilen miktar stoğa geri eklenecek. Devam edilsin mi?" : "Bu kabul ve bağlı satın alma kaydı silinecek, gelen miktar stoktan geri alınacak. Devam edilsin mi?")) return;
+    if (saving || !confirm(["Spektrotek", "Root"].includes(detail?.talep.seri || "") && detail?.talep.talepTuru === "Sipariş" ? "Sipariş kabulü silinecek, teslim edilen miktar stoğa geri eklenecek. Devam edilsin mi?" : "Bu kabul ve bağlı satın alma kaydı silinecek, gelen miktar stoktan geri alınacak. Devam edilsin mi?")) return;
     setSaving(true); setError("");
     try {
       const res = await fetch(`/api/kys/talepler/${id}/kabul`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kabulId: k.id }) });
@@ -169,6 +171,19 @@ export default function TalepDetayClient({ id }: { id: number }) {
     }
   }
 
+  async function completeOrder() {
+    if (saving) return;
+    setSaving(true); setFormError("");
+    try {
+      const res = await fetch(`/api/kys/talepler/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...shipment, islem: "siparis-tamamla" }) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Sipariş tamamlanamadı.");
+      setCompletingAll(false); await fetchDetail();
+    } catch (err) { setFormError(err instanceof Error ? err.message : "Sipariş tamamlanamadı."); }
+    finally { setSaving(false); }
+  }
+
+  const isOrder = ["Spektrotek", "Root"].includes(detail?.talep.seri || "") && detail?.talep.talepTuru === "Sipariş";
   if (loading && !detail) return <div className={styles.tableCard}><div className={styles.empty}>Yükleniyor...</div></div>;
   if (error && !detail) return <div className={styles.errorBanner}>{error}</div>;
   if (!detail) return null;
@@ -178,13 +193,14 @@ export default function TalepDetayClient({ id }: { id: number }) {
       {error && <div className={styles.errorBanner}>{error}</div>}
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
-          <Link href="/laboratuvar/kys/talep-listesi" className={styles.cancelBtn}>← Talep listesi</Link>
+          <Link href={isOrder ? "/laboratuvar/kys/siparis-listesi" : "/laboratuvar/kys/talep-listesi"} className={styles.cancelBtn}>{isOrder ? "← Sipariş listesi" : "← Talep listesi"}</Link>
           <span className={kys.pill}>{detail.talep.talepNo}</span>
           <span className={kys.pill}>{detail.talep.durum}</span>
         </div>
         <div className={styles.toolbarRight}>
+          {isOrder && ["İşleme Alındı", "Kısmi Kabul"].includes(detail.talep.durum) && <button type="button" className={styles.addBtn} disabled={saving} onClick={() => { setFormError(""); setShipment({ kabulTarihi: today(), hedefBirimId: "", genelDegerlendirme: "" }); setCompletingAll(true); }}>Tüm siparişi tamamla</button>}
           <button type="button" className={styles.cancelBtn} disabled={exporting || loading} onClick={exportExcel}>{exporting ? "Hazırlanıyor…" : "Excel’e aktar"}</button>
-          {detail.talep.seri === "Spektrotek" && <button type="button" disabled={saving} className={styles.cancelBtn} onClick={() => {setRequestNumber(detail.talep.talepNo);setNumberError("");setEditingNumber(true);}}>Talep no düzenle</button>}
+          {["Spektrotek", "Root"].includes(detail.talep.seri) && <button type="button" disabled={saving} className={styles.cancelBtn} onClick={() => {setRequestNumber(detail.talep.talepNo);setNumberError("");setEditingNumber(true);}}>Talep no düzenle</button>}
           {detail.talep.durum === "Onay Bekliyor" && !detail.talep.onayTarihi && <button type="button" disabled={saving || loading || editing} className={styles.addBtn} onClick={() => setEditing(true)}><Pencil size={15} aria-hidden="true" /> Talebi düzenle</button>}
           <Link className={styles.cancelBtn} href={`/kys-talep-yazdir/${id}`} target="_blank">Yazdır</Link>
           {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("Onaylandı")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#e7f7ed",color:"#16713b",borderColor:"#a0d6b4"}} onClick={() => setStatus("Onaylandı")}>Onayla</button>}
@@ -196,7 +212,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
 
       <div className={styles.tableCard} style={{ padding: 16 }}>
         <div className={kys.detailGrid}>
-          <div className={kys.detailItem}><div className={kys.detailLabel}>{detail.talep.seri === "Spektrotek" ? "Firma adı" : "Talep türü"}</div><div className={kys.detailValue}>{detail.talep.seri === "Spektrotek" ? detail.talep.firmaAdi : detail.talep.talepTuru}</div></div>
+          <div className={kys.detailItem}><div className={kys.detailLabel}>{["Spektrotek", "Root"].includes(detail.talep.seri) ? "Firma adı" : "Talep türü"}</div><div className={kys.detailValue}>{["Spektrotek", "Root"].includes(detail.talep.seri) ? detail.talep.firmaAdi : detail.talep.talepTuru}</div></div>
           <div className={kys.detailItem}><div className={kys.detailLabel}>Oluşturan</div><div className={kys.detailValue}>{detail.talep.olusturanAd || "-"}</div></div>
           <div className={kys.detailItem}><div className={kys.detailLabel}>Tarih</div><div className={kys.detailValue}>{dateFmt(detail.talep.olusturmaTarihi)}</div></div>
           <div className={kys.detailItem}><div className={kys.detailLabel}>Not</div><div className={kys.detailValue}>{detail.talep.notlar || "-"}</div></div>
@@ -212,7 +228,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
       <div className={styles.tableCard}>
         <div className={styles.tableWrapper}>
           <table className={styles.table}>
-            <thead><tr><th>Kod</th><th>Malzeme</th><th>Miktar</th><th>Kabul</th><th>Marka</th><th>Not</th><th>Durum</th><th></th></tr></thead>
+            <thead><tr><th>Kod</th><th>Malzeme</th><th>Miktar</th><th>{isOrder ? "Gönderilen" : "Kabul"}</th><th>Marka</th><th>Not</th><th>Durum</th><th></th></tr></thead>
             <tbody>
               {detail.kalemler.map(item => (
                 <tr key={item.id}>
@@ -223,7 +239,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
                   <td>{item.marka || "-"}</td>
                   <td className={styles.tdAdres}>{item.kullaniciNotu || item.ozellik || "-"}</td>
                   <td><span className={kys.pill}>{item.durum}</span></td>
-                  <td>{["İşleme Alındı","Kısmi Kabul"].includes(detail.talep.durum)&&item.durum!=="Tamamlandı"&&<button type="button" className={styles.addBtn} onClick={() => openAccept(item)}>{detail.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? "Siparişi tamamla" : "Kabul et"}</button>}{item.durum==="Tamamlandı"&&<span className={kys.muted}>{detail.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? "Sipariş tamamlandı" : "Kabul tamamlandı"}</span>}</td>
+                  <td>{["İşleme Alındı","Kısmi Kabul"].includes(detail.talep.durum)&&item.durum!=="Tamamlandı"&&<button type="button" className={styles.addBtn} onClick={() => openAccept(item)}>{["Spektrotek", "Root"].includes(detail.talep.seri) && detail.talep.talepTuru === "Sipariş" ? "Siparişi tamamla" : "Kabul et"}</button>}{item.durum==="Tamamlandı"&&<span className={kys.muted}>{["Spektrotek", "Root"].includes(detail.talep.seri) && detail.talep.talepTuru === "Sipariş" ? "Sipariş tamamlandı" : "Kabul tamamlandı"}</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -234,7 +250,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
       <div className={styles.tableCard}>
         <div className={styles.tableWrapper}>
           <table className={`${styles.table} ${kys.acceptanceTable}`}>
-            <thead><tr><th>Kabul tarihi</th><th>Kalem</th><th>Gelen miktar</th>{detail.satinAlmaYetkisi && <th>Tedarikçi</th>}<th>Değerlendiren</th><th>Genel değerlendirme</th><th>Belge / Düzeltme</th></tr></thead>
+            <thead><tr><th>{isOrder ? "Gönderim tarihi" : "Kabul tarihi"}</th><th>Kalem</th><th>{isOrder ? "Gönderilen miktar" : "Gelen miktar"}</th>{detail.satinAlmaYetkisi && <th>Tedarikçi</th>}<th>Değerlendiren</th><th>Genel değerlendirme</th><th>Belge / Düzeltme</th></tr></thead>
             <tbody>
               {detail.kabuller.length === 0 ? <tr><td colSpan={detail.satinAlmaYetkisi ? 7 : 6}><div className={styles.empty}>Kabul kaydı yok.</div></td></tr> : detail.kabuller.map(k => {
                 const item = detail.kalemler.find(i => i.id === k.kalemId);
@@ -254,20 +270,30 @@ export default function TalepDetayClient({ id }: { id: number }) {
         <div className={styles.modalBody}>{numberError && <div role="alert" className={styles.formError}>{numberError}</div>}<div className={styles.formGroup}><label htmlFor="request-number">Talep numarası</label><input id="request-number" maxLength={40} value={requestNumber} onChange={e=>setRequestNumber(e.target.value)} /></div></div>
         <div className={styles.modalFooter}><button disabled={saving} className={styles.cancelBtn} onClick={()=>setEditingNumber(false)}>Vazgeç</button><button disabled={saving || !requestNumber.trim()} className={styles.saveBtn} onClick={saveNumber}>{saving ? "Kaydediliyor…" : "Kaydet"}</button></div>
       </div></div>}
+      {completingAll && <div className={styles.modalOverlay}><div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="complete-order-title">
+        <div className={styles.modalHeader}><h2 id="complete-order-title">Tüm siparişi tamamla</h2><button className={styles.modalClose} aria-label="Kapat" disabled={saving} onClick={() => setCompletingAll(false)}>×</button></div>
+        <div className={styles.modalBody}>
+          {formError && <div role="alert" className={styles.formError}>{formError}</div>}
+          <p>Siparişte kalan tüm miktarlar seçilen depodan düşülerek gönderim kaydı oluşturulur.</p>
+          <div className={styles.formGroup}><label htmlFor="shipment-date">Gönderim tarihi</label><input id="shipment-date" type="date" required value={shipment.kabulTarihi} onChange={e => setShipment(f => ({ ...f, kabulTarihi: e.target.value }))} /></div>
+          <div className={styles.formGroup}><label htmlFor="shipment-unit">Stoktan düşülecek depo/birim</label><select id="shipment-unit" value={shipment.hedefBirimId} onChange={e => setShipment(f => ({ ...f, hedefBirimId: e.target.value }))}><option value="">Seçiniz</option>{birimler.map(b => <option key={b.id} value={b.id}>{b.ad}</option>)}</select></div>
+          <div className={styles.formGroup}><label htmlFor="shipment-note">Gönderim notu</label><textarea id="shipment-note" value={shipment.genelDegerlendirme} onChange={e => setShipment(f => ({ ...f, genelDegerlendirme: e.target.value }))} /></div>
+        </div><div className={styles.modalFooter}><button disabled={saving} className={styles.cancelBtn} onClick={() => setCompletingAll(false)}>Vazgeç</button><button disabled={saving || !shipment.kabulTarihi || !shipment.hedefBirimId} className={styles.saveBtn} onClick={completeOrder}>{saving ? "Kaydediliyor…" : "Tüm siparişi tamamla"}</button></div>
+      </div></div>}
       {acceptItem && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 820 }}>
-            <div className={styles.modalHeader}><h2>{detail.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? (correcting ? "Sipariş düzeltme" : "Siparişi tamamla") : (correcting ? "Kabul düzeltme" : "Talep kabul")} - {acceptItem.malzemeAdi}</h2><button disabled={saving} className={styles.modalClose} onClick={() => setAcceptItem(null)}>×</button></div>
+            <div className={styles.modalHeader}><h2>{["Spektrotek", "Root"].includes(detail.talep.seri) && detail.talep.talepTuru === "Sipariş" ? (correcting ? "Sipariş düzeltme" : "Siparişi tamamla") : (correcting ? "Kabul düzeltme" : "Talep kabul")} - {acceptItem.malzemeAdi}</h2><button disabled={saving} className={styles.modalClose} onClick={() => setAcceptItem(null)}>×</button></div>
             <div className={styles.modalBody}>
               {formError && <div className={styles.formError}>{formError}</div>}
               <div className={styles.formGrid3}>
-                <div className={kys.quantityWithUnit}><div className={styles.formGroup}><label htmlFor="accept-quantity">{detail.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? "Teslim edilen miktar" : "Gelen miktar"}</label><input id="accept-quantity" inputMode="decimal" value={form.gelenMiktar} onChange={e => setForm(f => ({ ...f, gelenMiktar: e.target.value,toplamTutar:"" }))} /></div><div className={styles.formGroup}><label htmlFor="accept-unit">Birim</label><input id="accept-unit" readOnly value={acceptItem.birim || "Adet"} aria-label="Stok kartı birimi (sabit)" /></div></div>
-                <div className={styles.formGroup}><label>Kabul tarihi</label><input type="date" value={form.kabulTarihi} onChange={e => setForm(f => ({ ...f, kabulTarihi: e.target.value }))} /></div>
-                <div className={styles.formGroup}><label>{detail.talep.seri === "Spektrotek" && detail.talep.talepTuru === "Sipariş" ? "Stoktan düşülecek depo/birim" : "Depoya/Birime işle"}</label><select value={form.hedefBirimId} onChange={e => setForm(f => ({ ...f, hedefBirimId: e.target.value }))}><option value="">Seçiniz</option>{birimler.map(b => <option key={b.id} value={b.id}>{b.ad}</option>)}</select></div>
+                <div className={kys.quantityWithUnit}><div className={styles.formGroup}><label htmlFor="accept-quantity">{["Spektrotek", "Root"].includes(detail.talep.seri) && detail.talep.talepTuru === "Sipariş" ? "Teslim edilen miktar" : "Gelen miktar"}</label><input id="accept-quantity" inputMode="decimal" value={form.gelenMiktar} onChange={e => setForm(f => ({ ...f, gelenMiktar: e.target.value,toplamTutar:"" }))} /></div><div className={styles.formGroup}><label htmlFor="accept-unit">Birim</label><input id="accept-unit" readOnly value={acceptItem.birim || "Adet"} aria-label="Stok kartı birimi (sabit)" /></div></div>
+                <div className={styles.formGroup}><label>{isOrder ? "Gönderim tarihi" : "Kabul tarihi"}</label><input type="date" value={form.kabulTarihi} onChange={e => setForm(f => ({ ...f, kabulTarihi: e.target.value }))} /></div>
+                <div className={styles.formGroup}><label>{["Spektrotek", "Root"].includes(detail.talep.seri) && detail.talep.talepTuru === "Sipariş" ? "Stoktan düşülecek depo/birim" : "Depoya/Birime işle"}</label><select value={form.hedefBirimId} onChange={e => setForm(f => ({ ...f, hedefBirimId: e.target.value }))}><option value="">Seçiniz</option>{birimler.map(b => <option key={b.id} value={b.id}>{b.ad}</option>)}</select></div>
                 <div className={styles.formGroup}><label>Marka</label><input value={form.marka} onChange={e => setForm(f => ({ ...f, marka: e.target.value }))} /></div>
                 <div className={styles.formGroup}><label>Lot</label><input value={form.lot} onChange={e => setForm(f => ({ ...f, lot: e.target.value }))} /></div>
                 <div className={styles.formGroup}><label>SKT</label><input type="date" value={form.skt} onChange={e => setForm(f => ({ ...f, skt: e.target.value }))} /></div>
-                {[
+                {!isOrder && [
                   ["İstenilen miktarda geldi mi?", "istenilenMiktardaGeldi"],
                   ["İstenilen marka ve özelliklerde geldi mi?", "markaOzellikUygun"],
                   ["Son kullanım tarihi uygun mu?", "sktUygun"],
@@ -283,7 +309,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
                 {correcting&&<div className={`${styles.formGroup} ${styles.colSpan3}`}><label>Düzeltme açıklaması *</label><textarea required value={duzeltmeAciklamasi} onChange={e=>setDuzeltmeAciklamasi(e.target.value)}/><small className={kys.formHint}>Stok miktarına yalnızca eski ve yeni miktar arasındaki fark yansıtılır.</small></div>}
               </div>
             </div>
-            <div className={styles.modalFooter}><button disabled={saving} className={styles.cancelBtn} onClick={() => setAcceptItem(null)}>Vazgeç</button><button className={styles.saveBtn} disabled={saving||(!!correcting&&!duzeltmeAciklamasi.trim())} onClick={accept}>{saving ? "Kaydediliyor..." : correcting?"Düzeltmeyi kaydet":"Kabulü kaydet"}</button></div>
+            <div className={styles.modalFooter}><button disabled={saving} className={styles.cancelBtn} onClick={() => setAcceptItem(null)}>Vazgeç</button><button className={styles.saveBtn} disabled={saving||(!!correcting&&!duzeltmeAciklamasi.trim())} onClick={accept}>{saving ? "Kaydediliyor..." : correcting?"Düzeltmeyi kaydet":isOrder?"Gönderimi kaydet":"Kabulü kaydet"}</button></div>
           </div>
         </div>
       )}

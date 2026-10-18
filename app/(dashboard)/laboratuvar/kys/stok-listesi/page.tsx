@@ -16,7 +16,7 @@ export default async function StokListesiPage() {
         <div>
           <h1 className={styles.pageTitle}>Stok Listesi</h1>
           <p className={styles.pageSubtitle}>
-            Barkodlu stok kartları, kritik limit ve birim bazlı stok takibi.
+            Unique stok kartları, kritik limit ve birim bazlı stok takibi.
           </p>
         </div>
       </div>

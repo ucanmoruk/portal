@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const requestedFirma = body.seri === "Spektrotek" ? "Spektrotek" : "Unique";
+    const requestedFirma = ["Spektrotek", "Root"].includes(body.seri) ? body.seri : "Unique";
     const portalUser = await getPortalUser();
     if (!portalUser?.firmalar.includes(requestedFirma))
       return Response.json({ error: "Bu firma için talep oluşturma yetkiniz yok." }, { status: 403 });

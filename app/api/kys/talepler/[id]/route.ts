@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { updateKysOrderBilling, editSpektrotekRequestNumber, editKysRequest, getKysRequestDetail, updateKysRequestStatus } from "@/lib/kysStore";
+import { completeKysOrder, updateKysOrderBilling, editSpektrotekRequestNumber, editKysRequest, getKysRequestDetail, updateKysRequestStatus } from "@/lib/kysStore";
 import { getPortalUser } from "@/lib/portalYetki";
 import {
   deleteKysRequest,
@@ -59,6 +59,13 @@ export async function PATCH(
     if (!user.firmalar.includes(current.talep.seri))
       return Response.json({ error: "Bu firmanın talebini düzenleme yetkiniz yok." }, { status: 403 });
     const body = await request.json();
+    if (body.islem === "siparis-tamamla") {
+      return Response.json(await completeKysOrder(Number(id), {
+        kabulTarihi: body.kabulTarihi, hedefBirimId: body.hedefBirimId,
+        genelDegerlendirme: body.genelDegerlendirme,
+        degerlendirenId: user.userId, degerlendirenAd: user.userName,
+      }));
+    }
     if (body.islem === "siparis-fatura") { await updateKysOrderBilling(Number(id),body);return Response.json({ok:true}); }
     if (body.islem === "numara-duzenle") {
       await editSpektrotekRequestNumber(Number(id), body.talepNo);

@@ -1,3 +1,5 @@
+import { normalizeKysProduct } from "@/lib/kysProduct";
+import { kysStockSource } from "@/lib/kysStockSources";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getKysStockDetail, updateKysStock } from "@/lib/kysStore";
@@ -12,7 +14,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const detail = await getKysStockDetail(Number(id));
     if (!detail) return Response.json({ error: "Stok kartı bulunamadı" }, { status: 404 });
     const user = await getPortalUser();
-    const firma = detail.stock.malzemeTuru === "Spektrotek" ? "Spektrotek" : "Unique";
+    const firma = detail.stock.kaynak;
     if (!user?.firmalar.includes(firma)) return Response.json({ error: "Bu firmanın stok kartını görüntüleme yetkiniz yok." }, { status: 403 });
     return Response.json(detail);
   } catch (e: unknown) {
@@ -30,10 +32,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const current = await getKysStockDetail(Number(id));
     if (!current) return Response.json({ error: "Stok kartı bulunamadı" }, { status: 404 });
     const body = await request.json();
-    const currentFirma = current.stock.malzemeTuru === "Spektrotek" ? "Spektrotek" : "Unique";
-    const nextFirma = body.malzemeTuru === "Spektrotek" ? "Spektrotek" : "Unique";
+    const currentFirma = current.stock.kaynak;
+    const nextFirma = kysStockSource(body.kaynak ?? current.stock.kaynak);
     if (!user?.firmalar.includes(currentFirma) || !user.firmalar.includes(nextFirma))
       return Response.json({ error: "Bu firma için stok düzenleme yetkiniz yok." }, { status: 403 });
+    try { body.urun = normalizeKysProduct(body.urun ?? current.stock.urun, nextFirma); }
+    catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Ürün bilgileri geçersiz." }, { status: 400 }); }
     await updateKysStock(Number(id), body);
     return Response.json({ ok: true });
   } catch (e: unknown) {

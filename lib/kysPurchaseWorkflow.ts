@@ -421,7 +421,7 @@ export async function deleteKysAcceptance(talepId: number, kabulId: number, user
     const item = (await tx.request().input("ID", before.KalemID).input("TalepID", talepId)
       .query("SELECT * FROM KysTalepKalem WHERE ID=@ID AND TalepID=@TalepID")).recordset[0];
     const quantity = Number(before.GelenMiktar);
-    const manualOrderItem = parent.Seri === "Spektrotek" && parent.TalepTuru === "Sipariş" && before.StokID == null && before.HareketID == null;
+    const manualOrderItem = ["Spektrotek", "Root"].includes(parent.Seri) && parent.TalepTuru === "Sipariş" && before.StokID == null && before.HareketID == null;
     if (!item || !Number.isFinite(quantity) || quantity <= 0 || Number(item.KabulMiktari) - quantity < -0.00001 ||
         (!manualOrderItem && (!movement || !["Kabul", "Çıkış"].includes(movement.HareketTipi) || Number(movement.StokID) !== Number(before.StokID) || Math.abs(Number(movement.Miktar) - quantity) > 0.00001))) {
       throw new Error("Kabul ve stok kayıtları eşleşmiyor.");
@@ -498,7 +498,7 @@ export async function correctKysAcceptance(
         .input("ID", before.KalemID)
         .query("SELECT * FROM KysTalepKalem WHERE ID=@ID")
     ).recordset[0];
-    const manualOrderItem = parent.Seri === "Spektrotek" && parent.TalepTuru === "Sipariş" && before.StokID == null && before.HareketID == null;
+    const manualOrderItem = ["Spektrotek", "Root"].includes(parent.Seri) && parent.TalepTuru === "Sipariş" && before.StokID == null && before.HareketID == null;
     if (!item || (!movement && !manualOrderItem))
       throw new Error("Stok hareketi veya kalem bulunamadı.");
     const delta = quantity - Number(before.GelenMiktar);

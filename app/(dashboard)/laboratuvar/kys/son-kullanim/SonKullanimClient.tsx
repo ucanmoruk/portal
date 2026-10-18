@@ -105,7 +105,7 @@ export default function SonKullanimClient() {
         </div>
         <div className={styles.pagination}>
           <button className={styles.pageBtn} disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</button>
-          {pages.map((p, i) => p === "..." ? <span className={styles.pageDots} key={i}>...</span> : <button key={p} className={`${styles.pageBtn} ${p === page ? styles.pageBtnActive : ""}`} onClick={() => setPage(p)}>{p}</button>)}
+          {pages.map((p, i) => p === "..." ? <span className={styles.pageDots} key={`ellipsis-${i}`}>...</span> : <button key={`page-${p}`} className={`${styles.pageBtn} ${p === page ? styles.pageBtnActive : ""}`} onClick={() => setPage(p)}>{p}</button>)}
           <button className={styles.pageBtn} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>›</button>
         </div>
       </div>

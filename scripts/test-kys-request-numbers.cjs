@@ -4,7 +4,7 @@ async function run(mysql) {
   let records = [{ ID: 2, OlusturmaTarihi: "2026-01-02", TalepNo: "KYS-OLD2" }, { ID: 1, OlusturmaTarihi: "2026-01-01", TalepNo: "KYS-OLD1" }], counters = {}, locked;
   const request = () => { const p = {}; return { input(k, v) { p[k] = v; return this; }, async query(sql) {
     let rows = [];
-    if (sql.startsWith("SELECT ID,OlusturmaTarihi")) rows = records.filter(r=>!r.TalepNo.startsWith("S")).sort((a,b) => a.ID-b.ID);
+    if (sql.startsWith("SELECT ID,OlusturmaTarihi")) rows = records.filter(r=>!r.TalepNo.startsWith("S") && !r.TalepNo.startsWith("R")).sort((a,b) => a.ID-b.ID);
     else if (sql.startsWith("INSERT IGNORE") || sql.startsWith("IF NOT EXISTS")) counters[p.Y] ||= { SonNo: 1000, Hazir: 0 };
     else if (sql.startsWith("SELECT SonNo")) { locked = sql; rows = [counters[p.Y]]; }
     else if (sql.startsWith("UPDATE KysTalepSayac")) counters[p.Y] = { SonNo: p.N, Hazir: 1 };
@@ -25,6 +25,10 @@ async function run(mysql) {
   assert.equal(await api.nextSpektrotekRequestNumber(base,"Satın Alma"),"A1001");
   assert.equal(await api.nextSpektrotekRequestNumber(base,"Satın Alma"),"A1002");
   assert.equal(await api.nextSpektrotekRequestNumber(base,"Sipariş"),"S1003");
+  assert.equal(await api.nextSpektrotekRequestNumber(base,"Sipariş","Root"),"R1001");
+  assert.equal(await api.nextSpektrotekRequestNumber(base,"Sipariş","Root"),"R1002");
+  assert.equal(await api.nextSpektrotekRequestNumber(base,"Satın Alma","Root"),"RA1001");
+  assert.equal(await api.nextSpektrotekRequestNumber(base,"Sipariş"),"S1004");
   records = []; assert.equal(await api.nextKysRequestNumber(base, 2026), "2026-1004");
   assert.equal(await api.nextKysRequestNumber(base, 2027), "2027-1001");
   assert(locked.includes(mysql ? "FOR UPDATE" : "UPDLOCK,HOLDLOCK"));

@@ -1,3 +1,5 @@
+import { getPortalUser } from "@/lib/portalYetki";
+import { getKysStockSource, validateStockPhoto } from "@/lib/kysStockGallery";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getKysStockImage, updateKysStockImage } from "@/lib/kysStore";
@@ -8,6 +10,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   try {
     const { id } = await params;
+    const source = await getKysStockSource(Number(id));
+    if (!source) return Response.json({ error: "Stok kartı bulunamadı" }, { status: 404 });
+    const user = await getPortalUser();
+    if (!user?.firmalar.includes(source)) return Response.json({ error: "Bu stok için yetkiniz yok." }, { status: 403 });
     const image = await getKysStockImage(Number(id));
     if (!image) return Response.json({ error: "Görsel bulunamadı" }, { status: 404 });
     const data = Buffer.isBuffer(image.GorselData) ? image.GorselData : Buffer.from(image.GorselData);
@@ -29,16 +35,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   try {
     const { id } = await params;
+    const source = await getKysStockSource(Number(id));
+    if (!source) return Response.json({ error: "Stok kartı bulunamadı" }, { status: 404 });
+    const user = await getPortalUser();
+    if (!user?.firmalar.includes(source)) return Response.json({ error: "Bu stok için yetkiniz yok." }, { status: 403 });
     const fd = await request.formData();
     const file = fd.get("file");
     if (!(file instanceof File)) return Response.json({ error: "Görsel dosyası zorunludur." }, { status: 400 });
     if (!file.type.startsWith("image/")) return Response.json({ error: "Sadece görsel dosyası yüklenebilir." }, { status: 400 });
     if (file.size > 5 * 1024 * 1024) return Response.json({ error: "Görsel 5 MB'dan küçük olmalıdır." }, { status: 400 });
 
+    const data = Buffer.from(await file.arrayBuffer());
+    validateStockPhoto(data, file.type);
     await updateKysStockImage(Number(id), {
       fileName: file.name || "stok-gorseli",
       mimeType: file.type || "application/octet-stream",
-      data: Buffer.from(await file.arrayBuffer()),
+      data,
     });
     return Response.json({ ok: true });
   } catch (e: unknown) {

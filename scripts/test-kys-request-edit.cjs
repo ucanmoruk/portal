@@ -21,7 +21,7 @@ const pool = { async transaction() {
 } };
 const source = fs.readFileSync("lib/kysStore.ts", "utf8");
 const body = source.slice(source.indexOf("export async function editKysRequest"), source.indexOf("export async function getKysRequestDetail"));
-const compiled = ts.transpileModule(body, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+const compiled = ts.transpileModule(body, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
 const mod = { exports: {} };
 vm.runInNewContext(compiled, { module:mod, exports:mod.exports, ensureKysSchema:async()=>{}, cosmoPool:Promise.resolve(pool), hasMysqlConfig:()=>mysql,
   text:v=>String(v??"").trim(), nullableText:v=>String(v??"").trim()||null,

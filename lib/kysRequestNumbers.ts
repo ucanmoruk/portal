@@ -21,14 +21,14 @@ export function ensureKysRequestNumbers(base: any): Promise<void> {
     await base.request().query(hasMysqlConfig()
       ? "CREATE TABLE IF NOT EXISTS KysTalepSayac (Yil INT PRIMARY KEY,SonNo INT NOT NULL,Hazir INT NOT NULL DEFAULT 0)"
       : "IF OBJECT_ID('KysTalepSayac','U') IS NULL CREATE TABLE KysTalepSayac (Yil INT PRIMARY KEY,SonNo INT NOT NULL,Hazir INT NOT NULL DEFAULT 0)");
-    const records = (await base.request().query("SELECT ID,OlusturmaTarihi FROM KysTalep WHERE TalepNo NOT LIKE 'S%' AND Seri <> 'Spektrotek' ORDER BY OlusturmaTarihi,ID")).recordset;
+    const records = (await base.request().query("SELECT ID,OlusturmaTarihi FROM KysTalep WHERE TalepNo NOT LIKE 'S%' AND TalepNo NOT LIKE 'R%' AND Seri NOT IN ('Spektrotek','Root') ORDER BY OlusturmaTarihi,ID")).recordset;
     const years = [...new Set<number>([requestYear(new Date()), ...records.map((r: any) => requestYear(r.OlusturmaTarihi))])].sort();
     for (const year of years) {
       const tx = await base.transaction(); await tx.begin();
       try {
         const counter = await lockCounter(tx, year);
         if (!Number(counter.Hazir)) {
-          const current = (await tx.request().query("SELECT ID,OlusturmaTarihi FROM KysTalep WHERE TalepNo NOT LIKE 'S%' AND Seri <> 'Spektrotek' ORDER BY OlusturmaTarihi,ID")).recordset.filter((r: any) => requestYear(r.OlusturmaTarihi) === year);
+          const current = (await tx.request().query("SELECT ID,OlusturmaTarihi FROM KysTalep WHERE TalepNo NOT LIKE 'S%' AND TalepNo NOT LIKE 'R%' AND Seri NOT IN ('Spektrotek','Root') ORDER BY OlusturmaTarihi,ID")).recordset.filter((r: any) => requestYear(r.OlusturmaTarihi) === year);
           for (const row of current) await tx.request().input("ID", row.ID).input("No", "MIG-" + year + "-" + row.ID).query("UPDATE KysTalep SET TalepNo=@No WHERE ID=@ID");
           let number = 1000;
           for (const row of current) await tx.request().input("ID", row.ID).input("No", year + "-" + (++number)).query("UPDATE KysTalep SET TalepNo=@No WHERE ID=@ID");
@@ -47,10 +47,11 @@ export async function nextKysRequestNumber(tx: any, year = requestYear(new Date(
   return year + "-" + number;
 }
 
-// A separate counter key keeps the Spektrotek series independent of year changes.
-export async function nextSpektrotekRequestNumber(tx: any, type = "Sipariş"): Promise<string> {
-  const key = type === "Sipariş" ? 0 : -1;
-  const prefix = type === "Sipariş" ? "S" : "A";
+// Each company's order/purchase series has an independent durable counter.
+export async function nextSpektrotekRequestNumber(tx: any, type = "Sipariş", series = "Spektrotek"): Promise<string> {
+  const root = series === "Root";
+  const key = root ? (type === "Sipariş" ? -2 : -3) : (type === "Sipariş" ? 0 : -1);
+  const prefix = root ? (type === "Sipariş" ? "R" : "RA") : (type === "Sipariş" ? "S" : "A");
   const counter = await lockCounter(tx, key);
   const existingNumbers = (await tx.request()
     .input("Pattern", prefix + "%")

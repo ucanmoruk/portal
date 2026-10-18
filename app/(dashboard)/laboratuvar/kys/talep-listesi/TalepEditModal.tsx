@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import { useState } from "react";
 import styles from "@/app/styles/table.module.css";
 import kys from "../kys.module.css";
@@ -9,7 +10,7 @@ const emptyItem = { stokId:"",kod:"",malzemeAdi:"",miktar:"1",birim:"Adet",ozell
 type Item = typeof emptyItem;
 type Draft = {seri?:string;firmaAdi?:string;talepTuru:string;notlar:string;teknikSartname:string;kalemler:Item[]};
 export default function TalepEditModal({id,initial,onClose,onSaved}:{id:number;initial:Draft;onClose:()=>void;onSaved:()=>Promise<void>}) {
-const [form,setForm]=useState({...initial,talepTuru:initial.seri === "Spektrotek" && initial.talepTuru !== "Sipariş" ? "Satın Alma" : initial.talepTuru});
+const [form,setForm]=useState({...initial,talepTuru:["Spektrotek", "Root"].includes(initial.seri || "") && initial.talepTuru !== "Sipariş" ? "Satın Alma" : initial.talepTuru});
 const [saving,setSaving]=useState(false);
 const [formError,setFormError]=useState("");
   function updateItem(index: number, key: keyof typeof emptyItem, value: string) {
@@ -41,15 +42,15 @@ return (
         <div className={styles.modalOverlay}>
           <div className={styles.modal} style={{ maxWidth: 940 }} role="dialog" aria-modal="true" aria-labelledby="request-title">
             <div className={styles.modalHeader}><h2 id="request-title">Talebi düzenle</h2><button className={styles.modalClose} aria-label="Kapat" disabled={saving} onClick={() => onClose()}>×</button></div>
-            <div className={styles.modalBody}>
+            <div className={styles.modalBody}>{initial.seri === "Root" && <Image src="/root-logo.png" alt="Root Kozmetik A.Ş." width={1250} height={975} unoptimized style={{width:100,height:"auto",marginBottom:16}} />}
               {formError && <div role="alert" className={styles.formError}>{formError}</div>}
-              {initial.seri === "Spektrotek" ? <div className={kys.spektrotekHeader} style={{marginBottom:18}}><div className={styles.formGroup}><label htmlFor="spektrotek-type">Talep türü</label><select id="spektrotek-type" value={form.talepTuru} onChange={e=>setForm(f=>({...f,talepTuru:e.target.value,kalemler:e.target.value === "Sipariş" ? f.kalemler : f.kalemler.map(item=>({...item,stokId:""}))}))}><option>Satın Alma</option><option>Sipariş</option></select></div><div className={styles.formGroup}><label htmlFor="request-company">Firma adı</label><input id="request-company" maxLength={220} value={form.firmaAdi || ""} onChange={e=>setForm(f=>({...f,firmaAdi:e.target.value}))}/></div></div> : (              <div className={styles.formGroup} style={{ maxWidth: 280, marginBottom: 18 }}><label htmlFor="request-type">Talep türü</label><select id="request-type" value={form.talepTuru} onChange={e => setForm(f => ({ ...f, talepTuru: e.target.value }))}>{!KYS_REQUEST_TYPES.some(type => type === form.talepTuru) && <option>{form.talepTuru}</option>}{KYS_REQUEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></div>)}
+              {["Spektrotek", "Root"].includes(initial.seri || "") ? <div className={kys.spektrotekHeader} style={{marginBottom:18}}><div className={styles.formGroup}><label htmlFor="spektrotek-type">Talep türü</label><select id="spektrotek-type" value={form.talepTuru} onChange={e=>setForm(f=>({...f,talepTuru:e.target.value,kalemler:e.target.value === "Sipariş" ? f.kalemler : f.kalemler.map(item=>({...item,stokId:""}))}))}><option>Satın Alma</option><option>Sipariş</option></select></div><div className={styles.formGroup}><label htmlFor="request-company">Firma adı</label><input id="request-company" maxLength={220} value={form.firmaAdi || ""} onChange={e=>setForm(f=>({...f,firmaAdi:e.target.value}))}/></div></div> : (              <div className={styles.formGroup} style={{ maxWidth: 280, marginBottom: 18 }}><label htmlFor="request-type">Talep türü</label><select id="request-type" value={form.talepTuru} onChange={e => setForm(f => ({ ...f, talepTuru: e.target.value }))}>{!KYS_REQUEST_TYPES.some(type => type === form.talepTuru) && <option>{form.talepTuru}</option>}{KYS_REQUEST_TYPES.map(type => <option key={type}>{type}</option>)}</select></div>)}
               <div className={kys.requestItems}>
                 {form.kalemler.map((item, index) => (
                   <details key={index} open={index === form.kalemler.length - 1} className={kys.requestItem}>
                     <summary>Kalem {index + 1} · {item.malzemeAdi || "Yeni kalem"} · {item.miktar} {item.birim}</summary>
                     <div className={kys.requestItemGrid}>
-                      {(initial.seri !== "Spektrotek" || form.talepTuru === "Sipariş") && <div className={`${styles.formGroup} ${kys.itemStock}`}><label>{form.talepTuru === "Sipariş" ? "Stok kodu / adı (yoksa manuel girin)" : "Stok kodu / adı ara"}</label><KysStockPicker value={item.stokId ? `${item.kod} — ${item.malzemeAdi}` : ""} onPick={stock => pickStock(index, stock)} /></div>}
+                      {(!["Spektrotek", "Root"].includes(initial.seri || "") || form.talepTuru === "Sipariş") && <div className={`${styles.formGroup} ${kys.itemStock}`}><label>{form.talepTuru === "Sipariş" ? "Stok kodu / adı (yoksa manuel girin)" : "Stok kodu / adı ara"}</label><KysStockPicker productsOnly={["Spektrotek", "Root"].includes(initial.seri || "")} value={item.stokId ? `${item.kod} — ${item.malzemeAdi}` : ""} onPick={stock => pickStock(index, stock)} /></div>}
                       <div className={`${styles.formGroup} ${kys.itemCode}`}><label htmlFor={`item-code-${index}`}>Kod</label><input id={`item-code-${index}`} value={item.kod} onChange={e => updateItem(index, "kod", e.target.value)} /></div>
                       <div className={`${styles.formGroup} ${kys.itemName}`}><label htmlFor={`item-name-${index}`}>Malzeme / hizmet adı</label><input id={`item-name-${index}`} value={item.malzemeAdi} onChange={e => updateItem(index, "malzemeAdi", e.target.value)} /></div>
                       <div className={`${styles.formGroup} ${kys.itemQuantity}`}><label htmlFor={`item-quantity-${index}`}>Miktar</label><input id={`item-quantity-${index}`} inputMode="decimal" value={item.miktar} onChange={e => updateItem(index, "miktar", e.target.value)} /></div>

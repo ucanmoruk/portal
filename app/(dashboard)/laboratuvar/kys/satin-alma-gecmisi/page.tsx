@@ -15,7 +15,7 @@ export default async function SatinAlmaGecmisiPage() {
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Satın Alma Geçmişi</h1>
-          <p className={styles.pageSubtitle}>Stok malzemelerinin tedarikçi, tarih, miktar ve maliyet geçmişi.</p>
+          <p className={styles.pageSubtitle}>Ürünlerin kimden alındığı, kime satıldığı; miktar, tarih ve fatura geçmişi.</p>
         </div>
       </div>
       <SatinAlmaGecmisiClient />

@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const result = await listKysPurchases({
       search: url.searchParams.get("search") || "",
+      islem: url.searchParams.get("islem") || "",
       page: Number(url.searchParams.get("page") || 1),
       limit: Number(url.searchParams.get("limit") || 25),
       allowedFirmalar: user.firmalar,

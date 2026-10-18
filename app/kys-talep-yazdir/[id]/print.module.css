@@ -8,6 +8,7 @@
 .header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; padding-bottom: 24px; border-bottom: 2px solid #0071e3; }
 .header > div { min-width: 0; }
 .logo { width: 200px; height: auto; object-fit: contain; }
+.rootLogo { width: 130px; height: auto; object-fit: contain; }
 .header p { max-width: 350px; font-size: 10px; line-height: 1.5; margin: 7px 0 0; color: #6e6e73; }
 .title { text-align: right; flex-shrink: 0; }
 .title span { font-size: 9px; letter-spacing: 1px; color: #6e6e73; }
