@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PATH_PREFIXES = [
   "/api/integrations/customer-requests",
+  "/api/integrations/spektrotek", // kendi API anahtarı kontrolü route içinde
   "/api/auth",
   "/api/musteriler",
   "/rapordogrulama",

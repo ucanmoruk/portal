@@ -618,7 +618,8 @@ export async function listKysStocks(params: {
   const malzemeTuru = text(params.malzemeTuru);
   const durum = text(params.durum);
   const kategori = text(params.kategori);
-  const kategoriSql = "JSON_VALUE(UrunBilgileri, '$.kategori')";
+  // Listede kategorisi boş ürünler malzeme türüyle gösterildiği için filtre de aynı değeri kullanır.
+  const kategoriSql = "COALESCE(NULLIF(JSON_VALUE(UrunBilgileri, '$.kategori'), ''), MalzemeTuru)";
 
   let scope = "WHERE 1=1";
   if (params.liste === "stok") scope += " AND Kaynak = 'Unique'";

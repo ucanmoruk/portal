@@ -289,8 +289,8 @@ export default function StokListesiClient({ products = false }: { products?: boo
                 {!products && <th>Barkod</th>}
                 <th>{products ? "Kategori" : "Tür"}</th>
                 <th>Kod</th>
-                <th>Ad</th>
                 {products && <th>Marka</th>}
+                <th>Ad</th>
                 {products ? <th>Satış fiyatı</th> : <th>Cas No</th>}
                 {!products && <>
                   <th>Ambalaj</th>
@@ -314,8 +314,8 @@ export default function StokListesiClient({ products = false }: { products?: boo
                   {!products && <td data-label="Barkod" className={`${styles.tdMono} ${kys.barcodeText}`}>{row.barkod || "-"}</td>}
                   <td data-label={products ? "Kategori" : "Tür"}><span className={kys.pill}>{products ? row.urun.kategori || row.malzemeTuru || "—" : row.malzemeTuru}</span></td>
                   <td data-label="Kod" className={styles.tdMono}>{row.kod}</td>
-                  <td data-label="Ad" className={styles.tdName}>{row.ad}</td>
                   {products && <td data-label="Marka">{row.urun.marka || "—"}</td>}
+                  <td data-label="Ad" className={styles.tdName}>{row.ad}</td>
                   {products ? <td data-label="Satış fiyatı">{row.urun.satisFiyati == null ? "—" : `${fmt(row.urun.satisFiyati)} ${row.urun.paraBirimi}`}</td> : <td data-label="CAS No" className={styles.tdMono}>{row.casNo || "-"}</td>}
                   {!products && <>
                     <td data-label="Ambalaj">{row.ambalaj || "-"}</td>
