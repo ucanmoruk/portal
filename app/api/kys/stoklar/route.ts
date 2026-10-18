@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
       search: sp.get("search") || "",
       kaynak: sp.get("kaynak") || "",
       malzemeTuru: sp.get("malzemeTuru") || "",
+      kategori: sp.get("kategori") || "",
       durum: sp.get("durum") || "",
       kritik: sp.get("kritik") === "1",
       sort: sp.get("sort") || "",

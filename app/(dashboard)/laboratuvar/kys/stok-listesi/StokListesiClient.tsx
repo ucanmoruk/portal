@@ -75,6 +75,8 @@ export default function StokListesiClient({ products = false }: { products?: boo
   const [rows, setRows] = useState<StockRow[]>([]);
   const [search, setSearch] = useState("");
   const [malzemeTuru, setMalzemeTuru] = useState("");
+  const [kategori, setKategori] = useState("");
+  const [kategoriler, setKategoriler] = useState<string[]>([]);
   const [kaynak, setKaynak] = useState("");
   const [durum, setDurum] = useState("");
   const [kritik, setKritik] = useState(false);
@@ -116,7 +118,8 @@ export default function StokListesiClient({ products = false }: { products?: boo
         search,
         liste: products ? "urun" : "stok",
         kaynak: products ? kaynak : "",
-        malzemeTuru,
+        malzemeTuru: products ? "" : malzemeTuru,
+        kategori: products ? kategori : "",
         durum,
         sort,
         page: String(page),
@@ -127,6 +130,7 @@ export default function StokListesiClient({ products = false }: { products?: boo
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Stok listesi alınamadı.");
       setRows(json.data || []);
+      if (products) setKategoriler(json.kategoriler || []);
       setTotal(json.total || 0);
       setTotalPages(json.totalPages || 1);
     } catch (e: unknown) {
@@ -134,7 +138,7 @@ export default function StokListesiClient({ products = false }: { products?: boo
     } finally {
       setLoading(false);
     }
-  }, [durum, kaynak, kritik, limit, malzemeTuru, page, products, search, sort]);
+  }, [durum, kaynak, kategori, kritik, limit, malzemeTuru, page, products, search, sort]);
 
   useEffect(() => { fetchRows(); }, [fetchRows]);
 
@@ -246,14 +250,17 @@ export default function StokListesiClient({ products = false }: { products?: boo
 
       <div className={kys.filterRow}>
         {products && <select aria-label="Kaynak" className={kys.select} value={kaynak} onChange={e => { setKaynak(e.target.value); setPage(1); }}><option value="">Tüm kaynaklar</option>{KYS_STOCK_SOURCES.filter(source => source !== "Unique").map(source => <option key={source}>{source}</option>)}</select>}
-        <select className={kys.select} value={malzemeTuru} onChange={e => { setMalzemeTuru(e.target.value); setPage(1); }}>
+        {products ? <select aria-label="Kategori" className={kys.select} value={kategori} onChange={e => { setKategori(e.target.value); setPage(1); }}>
+          <option value="">Tüm kategoriler</option>
+          {kategoriler.map(item => <option key={item}>{item}</option>)}
+        </select> : <select className={kys.select} value={malzemeTuru} onChange={e => { setMalzemeTuru(e.target.value); setPage(1); }}>
           <option value="">Tüm türler</option>
           <option>Sarf</option><option>Spektrotek</option>
           <option>Cihaz</option>
           <option>Kimyasal</option>
           <option>Referans Standart</option>
           <option>Ambalaj</option>
-        </select>
+        </select>}
         <select className={kys.select} value={durum} onChange={e => { setDurum(e.target.value); setPage(1); }}>
           <option value="">Tüm durumlar</option>
           <option>Aktif</option>
@@ -279,10 +286,11 @@ export default function StokListesiClient({ products = false }: { products?: boo
           <table className={`${styles.table} ${products ? kys.productTable : kys.stockFitTable}`}>
             <thead>
               <tr>
-                <th>Barkod</th>
+                {!products && <th>Barkod</th>}
                 <th>{products ? "Kategori" : "Tür"}</th>
                 <th>Kod</th>
                 <th>Ad</th>
+                {products && <th>Marka</th>}
                 {products ? <th>Satış fiyatı</th> : <th>Cas No</th>}
                 {!products && <>
                   <th>Ambalaj</th>
@@ -303,10 +311,11 @@ export default function StokListesiClient({ products = false }: { products?: boo
                 <tr><td colSpan={products ? 7 : 11}><div className={styles.empty}>Stok kaydı bulunamadı.</div></td></tr>
               ) : rows.map(row => (
                 <tr key={row.id}>
-                  <td data-label="Barkod" className={`${styles.tdMono} ${kys.barcodeText}`}>{row.barkod || "-"}</td>
+                  {!products && <td data-label="Barkod" className={`${styles.tdMono} ${kys.barcodeText}`}>{row.barkod || "-"}</td>}
                   <td data-label={products ? "Kategori" : "Tür"}><span className={kys.pill}>{products ? row.urun.kategori || row.malzemeTuru || "—" : row.malzemeTuru}</span></td>
                   <td data-label="Kod" className={styles.tdMono}>{row.kod}</td>
                   <td data-label="Ad" className={styles.tdName}>{row.ad}</td>
+                  {products && <td data-label="Marka">{row.urun.marka || "—"}</td>}
                   {products ? <td data-label="Satış fiyatı">{row.urun.satisFiyati == null ? "—" : `${fmt(row.urun.satisFiyati)} ${row.urun.paraBirimi}`}</td> : <td data-label="CAS No" className={styles.tdMono}>{row.casNo || "-"}</td>}
                   {!products && <>
                     <td data-label="Ambalaj">{row.ambalaj || "-"}</td>

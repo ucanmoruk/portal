@@ -601,6 +601,7 @@ export async function listKysStocks(params: {
   liste?: "stok" | "urun";
   kaynak?: string;
   malzemeTuru?: string;
+  kategori?: string;
   durum?: string;
   kritik?: boolean;
   sort?: string;
@@ -616,19 +617,23 @@ export async function listKysStocks(params: {
   const search = text(params.search);
   const malzemeTuru = text(params.malzemeTuru);
   const durum = text(params.durum);
+  const kategori = text(params.kategori);
+  const kategoriSql = "JSON_VALUE(UrunBilgileri, '$.kategori')";
 
-  let where = "WHERE 1=1";
-  if (search) where += " AND (Kod LIKE @search OR Ad LIKE @search OR Name LIKE @search OR Barkod LIKE @search OR CasNo LIKE @search)";
-  if (malzemeTuru) where += " AND MalzemeTuru = @malzemeTuru";
-  if (durum) where += " AND StokDurumu = @durum";
-  if (params.kritik) where += " AND StokMiktari <= KritikLimit";
-  if (params.liste === "stok") where += " AND Kaynak = 'Unique'";
-  if (params.liste === "urun") where += " AND Kaynak IN ('Root','Spektrotek')";
-  if (params.kaynak) where += " AND Kaynak = @kaynak";
+  let scope = "WHERE 1=1";
+  if (params.liste === "stok") scope += " AND Kaynak = 'Unique'";
+  if (params.liste === "urun") scope += " AND Kaynak IN ('Root','Spektrotek')";
   if (params.allowedFirmalar) {
     const visibleSources = KYS_STOCK_SOURCES.filter(source => params.allowedFirmalar!.includes(source));
-    where += visibleSources.length ? ` AND Kaynak IN (${visibleSources.map(source => `'${source}'`).join(",")})` : " AND 1 = 0";
+    scope += visibleSources.length ? ` AND Kaynak IN (${visibleSources.map(source => `'${source}'`).join(",")})` : " AND 1 = 0";
   }
+  let where = scope;
+  if (search) where += " AND (Kod LIKE @search OR Ad LIKE @search OR Name LIKE @search OR Barkod LIKE @search OR CasNo LIKE @search)";
+  if (malzemeTuru) where += " AND MalzemeTuru = @malzemeTuru";
+  if (kategori) where += ` AND ${kategoriSql} = @kategori`;
+  if (durum) where += " AND StokDurumu = @durum";
+  if (params.kritik) where += " AND StokMiktari <= KritikLimit";
+  if (params.kaynak) where += " AND Kaynak = @kaynak";
   const order =
     params.sort === "miktar-asc" ? "StokMiktari ASC, Ad ASC" :
     params.sort === "miktar-desc" ? "StokMiktari DESC, Ad ASC" :
@@ -638,9 +643,14 @@ export async function listKysStocks(params: {
     .input("search", `%${search}%`)
     .input("kaynak", text(params.kaynak))
     .input("malzemeTuru", malzemeTuru)
+    .input("kategori", kategori)
     .input("durum", durum);
 
   const countRes = await bind(pool.request()).query(`SELECT COUNT(*) AS total FROM KysStokKart ${where}`);
+  const kategoriler = params.liste === "urun"
+    ? (await pool.request().query(`SELECT DISTINCT ${kategoriSql} AS kategori FROM KysStokKart ${scope} AND ${kategoriSql} <> ''`)).recordset
+      .map((r: AnyRow) => text(r.kategori ?? r.KATEGORI)).filter(Boolean).sort((a: string, b: string) => a.localeCompare(b, "tr"))
+    : [];
   const dataRes = await bind(pool.request())
     .input("offset", offset)
     .input("limit", limit)
@@ -656,6 +666,7 @@ export async function listKysStocks(params: {
   const total = Number(countRes.recordset[0]?.total || 0);
   return {
     data: dataRes.recordset.map(mapStock),
+    kategoriler,
     total,
     page,
     limit,
