@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { loadDotenvOnce } from "@/lib/loadDotenv";
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { getAllSettings } from "@/lib/settings";
@@ -11,6 +12,7 @@ import { dueInvoice, istanbulDate, paymentReportRecipients, type DueInvoice } fr
 
 let schema: Promise<void> | undefined;
 export function ensureReminderSchema() {
+  loadDotenvOnce();
   return schema ??= (async () => {
     const pool = await cosmoPool;
     const columns = `DeliveryKey VARCHAR(160) NOT NULL PRIMARY KEY, State VARCHAR(20) NOT NULL,
@@ -49,6 +51,7 @@ export async function listDueInvoices(today = istanbulDate()) {
 }
 
 async function mailer() {
+  loadDotenvOnce();
   const cfg = await getAllSettings();
   const setting = (key: string, fallback = "") => cfg[key] || process.env[key] || fallback;
   const host = setting("MAIL_HOST").trim().replace(/^[a-z]+:\/\//i, "").replace(/\/.*$/, "");

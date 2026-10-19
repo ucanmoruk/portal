@@ -6,7 +6,7 @@ const ts = require("typescript");
 function load(file, dependencies = {}) {
   const module = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(file, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText;
-  vm.runInNewContext(code, { module, exports: module.exports, require: name => dependencies[name] || require(name), process, console, Buffer, URL, __dirname: process.cwd() }, { filename: file });
+  vm.runInNewContext(code, { module, exports: module.exports, require: name => dependencies[name] || require(name), process, console, Buffer, URL, Request, Response, __dirname: process.cwd() }, { filename: file });
   return module.exports;
 }
 
@@ -53,6 +53,7 @@ async function main() {
       sent.push(message); return { messageId: "test-message", rejected: [] };
     } }; } },
     "@/lib/db": { cosmoPool: Promise.resolve(pool) },
+    "@/lib/loadDotenv": { loadDotenvOnce() {} },
     "@/lib/mysqlCompat": { hasMysqlConfig: () => true },
     "@/lib/settings": { getAllSettings: async () => ({ MAIL_HOST: "smtp.example.com", MAIL_USER: "user", MAIL_PASS: "fake" }) },
     "@/lib/paymentReminderRules": rules,
@@ -98,6 +99,18 @@ async function main() {
   assert.equal(failedOverview.configuration.portalReady, false);
   assert.ok(failedOverview.deliveries.some(item => item.type === "run" && item.state === "failed"));
   if (previousUrl === undefined) delete process.env.PAYMENT_PORTAL_URL; else process.env.PAYMENT_PORTAL_URL = previousUrl;
+  const previousSecret = process.env.PAYMENT_REPORT_CRON_SECRET;
+  delete process.env.PAYMENT_REPORT_CRON_SECRET;
+  let reportCalls = 0;
+  const secret = "a".repeat(64);
+  const route = load("app/api/cron/payment-report/route.ts", {
+    "@/lib/loadDotenv": { loadDotenvOnce() { process.env.PAYMENT_REPORT_CRON_SECRET = secret; } },
+    "@/lib/paymentReminders": { async sendDailyPaymentReport() { reportCalls++; return [{ state: "sent" }]; } },
+  });
+  assert.equal((await route.GET(new Request("https://portal.example.com/api/cron/payment-report", { headers: { Authorization: `Bearer ${secret}` } }))).status, 200, "Cron must load the server environment before checking the secret");
+  assert.equal((await route.GET(new Request("https://portal.example.com/api/cron/payment-report", { headers: { Authorization: "Bearer wrong" } }))).status, 401);
+  assert.equal(reportCalls, 1, "Wrong secrets must not trigger report delivery");
+  if (previousSecret === undefined) delete process.env.PAYMENT_REPORT_CRON_SECRET; else process.env.PAYMENT_REPORT_CRON_SECRET = previousSecret;
   console.log("Payment reminder tests passed: dates, balances, exclusions, address validation, stale approval, concurrent duplicate protection, partial report failure, retry protection, monitoring and failed-run tracking.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

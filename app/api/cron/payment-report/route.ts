@@ -1,10 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
 import { sendDailyPaymentReport } from "@/lib/paymentReminders";
+import { loadDotenvOnce } from "@/lib/loadDotenv";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  loadDotenvOnce();
   const secret = process.env.PAYMENT_REPORT_CRON_SECRET;
   const token = request.headers.get("authorization") || "";
   const expected = Buffer.from(`Bearer ${secret}`);
