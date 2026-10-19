@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { getAllSettings } from "@/lib/settings";
@@ -17,6 +18,9 @@ export function ensureReminderSchema() {
     await pool.request().query(hasMysqlConfig()
       ? `CREATE TABLE IF NOT EXISTS PaymentReminderDelivery (${columns}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
       : `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='PaymentReminderDelivery') CREATE TABLE PaymentReminderDelivery (${columns})`);
+    await pool.request().query(hasMysqlConfig()
+      ? "ALTER TABLE PaymentReminderDelivery ADD COLUMN IF NOT EXISTS UpdatedAt VARCHAR(30) NULL"
+      : "IF COL_LENGTH('PaymentReminderDelivery','UpdatedAt') IS NULL ALTER TABLE PaymentReminderDelivery ADD UpdatedAt VARCHAR(30) NULL");
   })().catch(error => { schema = undefined; throw error; });
 }
 
@@ -59,10 +63,11 @@ async function mailer() {
 // remain claimed: retries must never silently send a second copy.
 async function claim(key: string, recipient: string, approvedBy: string | null, details: unknown) {
   const pool = await cosmoPool;
+  const at = new Date().toISOString();
   try {
     await pool.request().input("key", key).input("recipient", recipient).input("approvedBy", approvedBy)
-      .input("details", JSON.stringify({ at: new Date().toISOString(), data: details }))
-      .query("INSERT INTO PaymentReminderDelivery (DeliveryKey,State,Recipient,ApprovedBy,Details) VALUES (@key,'sending',@recipient,@approvedBy,@details)");
+      .input("details", JSON.stringify({ at, data: details })).input("at", at)
+      .query("INSERT INTO PaymentReminderDelivery (DeliveryKey,State,Recipient,ApprovedBy,Details,UpdatedAt) VALUES (@key,'sending',@recipient,@approvedBy,@details,@at)");
     return true;
   } catch (error) {
     const existing = await pool.request().input("key", key).query("SELECT State FROM PaymentReminderDelivery WHERE DeliveryKey=@key");
@@ -73,8 +78,9 @@ async function claim(key: string, recipient: string, approvedBy: string | null, 
 
 async function finish(key: string, state: string, details: unknown) {
   const pool = await cosmoPool;
-  await pool.request().input("key", key).input("state", state).input("details", JSON.stringify({ at: new Date().toISOString(), data: details }))
-    .query("UPDATE PaymentReminderDelivery SET State=@state, Details=@details WHERE DeliveryKey=@key");
+  const at = new Date().toISOString();
+  await pool.request().input("key", key).input("state", state).input("details", JSON.stringify({ at, data: details })).input("at", at)
+    .query("UPDATE PaymentReminderDelivery SET State=@state, Details=@details, UpdatedAt=@at WHERE DeliveryKey=@key");
 }
 
 const money = (value: number) => `${value.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
@@ -83,6 +89,20 @@ const headings = ["Firma", "Fatura", "Vade", "Gecikme (gün)", "Açık bakiye", 
 const invoiceRow = (invoice: DueInvoice) => [invoice.company, invoice.invoiceNo, displayDate(invoice.dueDate), String(invoice.daysLate), money(invoice.balance), invoice.email || "Geçerli e-posta yok"];
 
 export async function sendDailyPaymentReport() {
+  await ensureReminderSchema();
+  const key = `run:${istanbulDate()}:${randomUUID()}`;
+  await claim(key, "daily-payment-report", null, { action: "daily-report" });
+  try {
+    const results = await sendDailyPaymentReportCurrent();
+    await finish(key, results.some(result => result.state === "uncertain") ? "uncertain" : "completed", { results });
+    return results;
+  } catch (error) {
+    await finish(key, "failed", { error: "Günlük rapor tamamlanamadı. Sunucu günlüklerini kontrol edin." });
+    throw error;
+  }
+}
+
+async function sendDailyPaymentReportCurrent() {
   const today = istanbulDate();
   const invoices = await listDueInvoices(today);
   const mail = await mailer();
@@ -114,6 +134,45 @@ export async function sendDailyPaymentReport() {
     }
   }
   return results;
+}
+
+export async function getPaymentAutomationOverview() {
+  await ensureReminderSchema();
+  const pool = await cosmoPool;
+  const [cfg, reportRows, reminderRows, runRows] = await Promise.all([
+    getAllSettings(),
+    pool.request().query("SELECT TOP 100 DeliveryKey, State, Recipient, ApprovedBy, Details FROM PaymentReminderDelivery WHERE DeliveryKey LIKE 'report:%' ORDER BY UpdatedAt DESC, DeliveryKey DESC"),
+    pool.request().query("SELECT TOP 100 DeliveryKey, State, Recipient, ApprovedBy, Details FROM PaymentReminderDelivery WHERE DeliveryKey LIKE 'reminder:%' ORDER BY UpdatedAt DESC, DeliveryKey DESC"),
+    pool.request().query("SELECT TOP 30 DeliveryKey, State, Recipient, ApprovedBy, Details FROM PaymentReminderDelivery WHERE DeliveryKey LIKE 'run:%' ORDER BY UpdatedAt DESC, DeliveryKey DESC"),
+  ]);
+  const deliveries = [...reportRows.recordset, ...reminderRows.recordset, ...runRows.recordset].map(row => {
+    let details: { at?: string; data?: { invoice?: DueInvoice; count?: number; error?: string } } = {};
+    try { details = JSON.parse(String(row.Details || "{}")); } catch { /* Old or incomplete records still remain visible. */ }
+    const key = String(row.DeliveryKey);
+    const parts = key.split(":");
+    const invoice = details.data?.invoice;
+    return {
+      key, type: parts[0] as "report" | "reminder" | "run", date: parts[1], state: String(row.State),
+      recipient: parts[0] === "run" ? "" : String(row.Recipient), approvedBy: row.ApprovedBy ? String(row.ApprovedBy) : null,
+      at: details.at || null, invoiceNo: invoice?.invoiceNo || (parts[0] === "reminder" ? `#${parts[2]}` : ""),
+      company: invoice?.company || "", balance: invoice?.balance ?? null,
+      note: row.State === "uncertain" ? "Gönderim sonucu doğrulanamadı; otomatik tekrar gönderilmez." : row.State === "failed" ? "Günlük rapor tamamlanamadı. Sunucu günlüklerini kontrol edin." : "",
+    };
+  }).sort((a, b) => (b.at || b.date).localeCompare(a.at || a.date));
+  const setting = (key: string) => cfg[key] || process.env[key] || "";
+  const base = process.env.PAYMENT_PORTAL_URL || process.env.NEXTAUTH_URL || "";
+  let portalReady = false;
+  try { portalReady = new URL(base).protocol === "https:"; } catch { /* Show missing setup without disclosing environment values. */ }
+  return {
+    today: istanbulDate(), recipients: paymentReportRecipients, schedule: "Her gün 09.00", timeZone: "Europe/Istanbul",
+    configuration: {
+      smtpReady: Boolean(setting("MAIL_HOST") && setting("MAIL_USER") && setting("MAIL_PASS")),
+      portalReady, cronSecretReady: (process.env.PAYMENT_REPORT_CRON_SECRET?.length || 0) >= 32,
+    },
+    lastRun: deliveries.find(item => item.type === "run") || null,
+    todayReports: paymentReportRecipients.map(recipient => ({ recipient, state: deliveries.find(item => item.type === "report" && item.date === istanbulDate() && item.recipient === recipient)?.state || "missing" })),
+    deliveries,
+  };
 }
 
 export async function sendApprovedReminder(id: number, fingerprint: string, approvedBy: string) {

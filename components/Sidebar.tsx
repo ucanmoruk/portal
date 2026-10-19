@@ -403,10 +403,17 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
                     Finans
                   </Link>
                   <Link href="/admin/ayarlar"
-                    className={`${styles.navSubLink} ${pathname.startsWith("/admin/ayarlar") ? styles.navSubLinkActive : ""}`}
+                    className={`${styles.navSubLink} ${pathname === "/admin/ayarlar" ? styles.navSubLinkActive : ""}`}
                   >
                     <span className={styles.navSubDot} />
                     Ayarlar
+                  </Link>
+                  <Link href="/admin/ayarlar/otomasyonlar"
+                    className={`${styles.navSubLink} ${pathname.startsWith("/admin/ayarlar/otomasyonlar") ? styles.navSubLinkActive : ""}`}
+                    style={{ paddingLeft: 36 }}
+                  >
+                    <span className={styles.navSubDot} />
+                    Otomasyonlar
                   </Link>
                 </div>
               )}

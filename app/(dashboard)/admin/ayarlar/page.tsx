@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { getAllSettings } from "@/lib/settings";
 import AyarlarForm from "./AyarlarForm";
+import Link from "next/link";
 
 export const metadata = { title: "Ayarlar" };
 
@@ -13,7 +14,7 @@ export default async function AyarlarPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
-  const uid = String((session.user as any)?.userId ?? "");
+  const uid = String(session.user?.userId ?? "");
   if (!ADMIN_IDS.has(uid)) redirect("/");
 
   const settings = await getAllSettings();
@@ -24,6 +25,10 @@ export default async function AyarlarPage() {
       <p style={{ color: "var(--color-text-secondary)", fontSize: 14, marginBottom: 32 }}>
         Şirket bilgileri ve mail (SMTP) yapılandırması
       </p>
+      <Link href="/admin/ayarlar/otomasyonlar" style={{ display: "block", maxWidth: 720, padding: 20, marginBottom: 28, border: "1px solid var(--color-border)", borderRadius: 10, textDecoration: "none", color: "var(--color-text-primary)" }}>
+        <strong>Otomasyonlar →</strong>
+        <span style={{ display: "block", marginTop: 8, color: "var(--color-text-secondary)", fontSize: 13 }}>Günlük vade raporlarını, kurulum durumunu ve onaylı ödeme hatırlatmalarını takip edin.</span>
+      </Link>
       <AyarlarForm initial={settings} />
     </div>
   );

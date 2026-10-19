@@ -42,6 +42,18 @@ için yeniden onay gerekir.
 
 ## Gönderim günlüğü
 
+Admin → Ayarlar → Otomasyonlar (`/admin/ayarlar/otomasyonlar`) ekranında
+rapor alıcıları, planlanan saat, SMTP/portal/zamanlayıcı anahtarı yapılandırma
+durumu, son çalışma, bugünkü iki alıcıya gönderim sonuçları ve geçmiş kayıtlar
+görülebilir. Ekran yalnızca yöneticiye açıktır; gizli ayar değerlerini döndürmez.
+Zamanlayıcının sunucuda etkin olduğunu varsaymaz. Yenile düğmesi güncel
+kayıtları alır, işlem türü filtresi geçmişi daraltır. Bu ekrandan hatırlatma
+onay sayfasına da geçilir.
+
+Günlük rapor görevi çağrıldığında ayrı çalışma kaydı açılır; hazırlık veya SMTP
+ayarı hataları da başarısız çalışma olarak görünür. Veritabanı erişilemiyorsa
+çalışma kaydı yazılamayacağından sunucu/zamanlayıcı günlükleri kontrol edilir.
+
 `PaymentReminderDelivery` tablosunun benzersiz `DeliveryKey` anahtarı aynı
 faturaya aynı gün çift gönderimi ve aynı raporun aynı alıcıya tekrarını engeller.
 `ApprovedBy` onaylayan kullanıcıyı, `Recipient` alıcıyı, `Details` zaman,
