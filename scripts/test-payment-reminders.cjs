@@ -110,6 +110,14 @@ async function main() {
   assert.equal((await route.GET(new Request("https://portal.example.com/api/cron/payment-report", { headers: { Authorization: `Bearer ${secret}` } }))).status, 200, "Cron must load the server environment before checking the secret");
   assert.equal((await route.GET(new Request("https://portal.example.com/api/cron/payment-report", { headers: { Authorization: "Bearer wrong" } }))).status, 401);
   assert.equal(reportCalls, 1, "Wrong secrets must not trigger report delivery");
+  const proxy = load("proxy.ts", {
+    "next-auth/jwt": { async getToken() { return null; } },
+    "next/server": { NextResponse: { next: () => new Response(null, { status: 204 }), json: (body, init) => Response.json(body, init) } },
+  }).default;
+  const proxyRequest = pathname => ({ nextUrl: { pathname, search: "" }, url: `https://portal.example.com${pathname}` });
+  assert.equal((await proxy(proxyRequest("/api/cron/payment-report"))).status, 204, "Scheduler requests must reach the route's own Bearer authentication without a session cookie");
+  assert.equal((await proxy(proxyRequest("/api/cron/payment-report-other"))).status, 401, "Only the exact cron endpoint may bypass session authentication");
+  assert.equal((await proxy(proxyRequest("/api/admin/otomasyonlar"))).status, 401, "Automation monitoring must continue requiring a session");
   if (previousSecret === undefined) delete process.env.PAYMENT_REPORT_CRON_SECRET; else process.env.PAYMENT_REPORT_CRON_SECRET = previousSecret;
   console.log("Payment reminder tests passed: dates, balances, exclusions, address validation, stale approval, concurrent duplicate protection, partial report failure, retry protection, monitoring and failed-run tracking.");
 }
