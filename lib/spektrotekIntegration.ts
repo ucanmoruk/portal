@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { cosmoPool } from "@/lib/db";
 import { readKysProduct } from "@/lib/kysProduct";
 import { ensureKysSchema } from "@/lib/kysStore";
+import { loadDotenvOnce } from "@/lib/loadDotenv";
 
 type AnyRow = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -13,6 +14,7 @@ const hash = (value: string) => createHash("sha256").update(value).digest();
 
 /** Spektrotek mağazası `x-api-key` veya `Authorization: Bearer` başlığıyla SPEKTROTEK_INTEGRATION_KEY gönderir. */
 export function assertSpektrotekKey(request: Request) {
+  loadDotenvOnce();
   const secret = (process.env.SPEKTROTEK_INTEGRATION_KEY || "").trim();
   if (secret.length < 32) throw new IntegrationError("Spektrotek entegrasyon anahtarı sunucuda tanımlı değil.", 503);
   const bearer = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
