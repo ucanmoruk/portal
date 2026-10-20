@@ -86,6 +86,30 @@ async function finish(key: string, state: string, details: unknown) {
     .query("UPDATE PaymentReminderDelivery SET State=@state, Details=@details, UpdatedAt=@at WHERE DeliveryKey=@key");
 }
 
+// Internal reports may be retried after an ambiguous SMTP outcome. Customer
+// reminders intentionally keep their separate, non-retryable approval claim.
+async function claimReport(key: string, recipient: string, count: number) {
+  if (await claim(key, recipient, null, { count })) return true;
+  const pool = await cosmoPool;
+  const at = new Date().toISOString();
+  const cutoff = new Date(Date.now() - 5 * 60_000).toISOString();
+  const result = await pool.request().input("key", key).input("at", at).input("cutoff", cutoff)
+    .input("details", JSON.stringify({ at, data: { count, retry: true } }))
+    .query(`UPDATE PaymentReminderDelivery SET State='sending', Details=@details, UpdatedAt=@at
+      WHERE DeliveryKey=@key AND State IN ('uncertain','failed','sending')
+      AND (UpdatedAt IS NULL OR UpdatedAt<=@cutoff)`);
+  return result.rowsAffected[0] === 1;
+}
+
+export async function paymentReportComplete(today = istanbulDate()) {
+  await ensureReminderSchema();
+  const pool = await cosmoPool;
+  const result = await pool.request().input("prefix", `report:${today}:%`)
+    .query("SELECT DeliveryKey, State FROM PaymentReminderDelivery WHERE DeliveryKey LIKE @prefix");
+  return paymentReportRecipients.every(recipient => result.recordset.some(row =>
+    row.DeliveryKey === `report:${today}:${recipient}` && row.State === "sent"));
+}
+
 const money = (value: number) => `${value.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TL`;
 const displayDate = (value: string) => value.split("-").reverse().join(".");
 const headings = ["Firma", "Fatura", "Vade", "Gecikme (gün)", "Açık bakiye", "Alıcı"];
@@ -100,7 +124,7 @@ export async function sendDailyPaymentReport() {
     await finish(key, results.some(result => result.state === "uncertain") ? "uncertain" : "completed", { results });
     return results;
   } catch (error) {
-    await finish(key, "failed", { error: "Günlük rapor tamamlanamadı. Sunucu günlüklerini kontrol edin." });
+    await finish(key, "failed", { error: error instanceof Error ? error.message : "Günlük rapor tamamlanamadı." });
     throw error;
   }
 }
@@ -121,7 +145,7 @@ async function sendDailyPaymentReportCurrent() {
   const results = [];
   for (const recipient of paymentReportRecipients) {
     const key = `report:${today}:${recipient}`;
-    if (!await claim(key, recipient, null, { count: invoices.length })) {
+    if (!await claimReport(key, recipient, invoices.length)) {
       const pool = await cosmoPool;
       const previous = await pool.request().input("key", key).query("SELECT State FROM PaymentReminderDelivery WHERE DeliveryKey=@key");
       results.push({ recipient, state: previous.recordset[0]?.State === "sent" ? "already-sent" : "uncertain" });
@@ -129,6 +153,7 @@ async function sendDailyPaymentReportCurrent() {
     }
     try {
       const info = await mail.transporter.sendMail({ from: mail.from, to: recipient, subject: `Günlük Vade Raporu — ${displayDate(today)}`, html, attachments: mail.attachments });
+      if (info.rejected?.length) throw new Error("Rapor alıcısı SMTP sunucusu tarafından reddedildi.");
       await finish(key, "sent", { messageId: info.messageId, count: invoices.length });
       results.push({ recipient, state: "sent" });
     } catch (error) {
@@ -159,7 +184,7 @@ export async function getPaymentAutomationOverview() {
       recipient: parts[0] === "run" ? "" : String(row.Recipient), approvedBy: row.ApprovedBy ? String(row.ApprovedBy) : null,
       at: details.at || null, invoiceNo: invoice?.invoiceNo || (parts[0] === "reminder" ? `#${parts[2]}` : ""),
       company: invoice?.company || "", balance: invoice?.balance ?? null,
-      note: row.State === "uncertain" ? "Gönderim sonucu doğrulanamadı; otomatik tekrar gönderilmez." : row.State === "failed" ? "Günlük rapor tamamlanamadı. Sunucu günlüklerini kontrol edin." : "",
+      note: row.State === "uncertain" ? (parts[0] === "reminder" ? "Gönderim sonucu doğrulanamadı; otomatik tekrar gönderilmez." : "İç rapor yeniden denenecek; belirsiz gönderimlerde tekrar e-posta gelebilir.") : row.State === "failed" ? "Günlük rapor tamamlanamadı; yeniden denenecek." : "",
     };
   }).sort((a, b) => (b.at || b.date).localeCompare(a.at || a.date));
   const setting = (key: string) => cfg[key] || process.env[key] || "";

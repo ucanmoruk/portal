@@ -3,10 +3,10 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const ts = require("typescript");
 
-function load(file, dependencies = {}) {
+function load(file, dependencies = {}, globals = {}) {
   const module = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(file, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText;
-  vm.runInNewContext(code, { module, exports: module.exports, require: name => dependencies[name] || require(name), process, console, Buffer, URL, Request, Response, __dirname: process.cwd() }, { filename: file });
+  vm.runInNewContext(code, { module, exports: module.exports, require: name => dependencies[name] || require(name), process, console, Buffer, URL, Request, Response, __dirname: process.cwd(), ...globals }, { filename: file });
   return module.exports;
 }
 
@@ -26,7 +26,7 @@ async function main() {
   assert.equal(rules.reminderAddresses("a@example.com\r\nBcc: other@example.com").length, 0);
   assert.notEqual(rules.dueInvoice(row, today).fingerprint, rules.dueInvoice({ ...row, FirmaEmail: "changed@example.com" }, today).fingerprint);
 
-  let current = { ...row }, sent = [], delivery = new Map(), failRecipient = "";
+  let current = { ...row }, sent = [], delivery = new Map(), failRecipient = "", rejectRecipient = "";
   const pool = { request() {
     const params = {};
     return { input(key, value) { params[key] = value; return this; }, async query(sql) {
@@ -35,11 +35,21 @@ async function main() {
       if (sql.includes("WHERE DeliveryKey LIKE @prefix")) return { recordset: [...delivery].map(([DeliveryKey, value]) => ({ DeliveryKey, State: value.state })) };
       if (sql.startsWith("INSERT INTO PaymentReminderDelivery")) {
         if (delivery.has(params.key)) throw new Error("duplicate primary key");
-        delivery.set(params.key, { state: "sending", approvedBy: params.approvedBy, recipient: params.recipient, details: params.details });
+        delivery.set(params.key, { state: "sending", approvedBy: params.approvedBy, recipient: params.recipient, details: params.details, at: params.at });
         return { recordset: [] };
       }
       if (sql.startsWith("SELECT State")) return { recordset: delivery.has(params.key) ? [{ State: delivery.get(params.key).state }] : [] };
-      if (sql.startsWith("UPDATE PaymentReminderDelivery")) { Object.assign(delivery.get(params.key), { state: params.state, details: params.details }); return { recordset: [] }; }
+      if (sql.startsWith("SELECT DeliveryKey, State")) return { recordset: [...delivery].filter(([key]) => key.startsWith(params.prefix.slice(0, -1))).map(([DeliveryKey, value]) => ({ DeliveryKey, State: value.state })) };
+      if (sql.startsWith("UPDATE PaymentReminderDelivery")) {
+        const existing = delivery.get(params.key);
+        if (sql.includes("State='sending'")) {
+          if (!existing || !["uncertain", "failed", "sending"].includes(existing.state) || existing.at > params.cutoff) return { rowsAffected: [0] };
+          Object.assign(existing, { state: "sending", details: params.details, at: params.at });
+          return { rowsAffected: [1] };
+        }
+        Object.assign(existing, { state: params.state, details: params.details, at: params.at });
+        return { recordset: [] };
+      }
       if (sql.startsWith("SELECT TOP")) {
         const type = sql.includes("LIKE 'report:%'") ? "report:" : sql.includes("LIKE 'reminder:%'") ? "reminder:" : "run:";
         return { recordset: [...delivery].filter(([key]) => key.startsWith(type)).map(([DeliveryKey, value]) => ({ DeliveryKey, State: value.state, Recipient: value.recipient, ApprovedBy: value.approvedBy, Details: value.details })) };
@@ -50,7 +60,7 @@ async function main() {
   const service = load("lib/paymentReminders.ts", {
     nodemailer: { createTransport() { return { async sendMail(message) {
       if (message.to === failRecipient) throw new Error("SMTP connection lost");
-      sent.push(message); return { messageId: "test-message", rejected: [] };
+      sent.push(message); return { messageId: "test-message", rejected: message.to === rejectRecipient ? [message.to] : [] };
     } }; } },
     "@/lib/db": { cosmoPool: Promise.resolve(pool) },
     "@/lib/loadDotenv": { loadDotenvOnce() {} },
@@ -71,6 +81,15 @@ async function main() {
   assert.equal(delivery.get(`reminder:${today}:7`).approvedBy, "2");
   current.OdemeDurumu = "Ödendi";
   assert.equal((await service.sendApprovedReminder(7, fingerprint, "2")).state, "changed");
+
+  current = { ...row, ID: 8 };
+  failRecipient = current.FirmaEmail;
+  const customerFingerprint = rules.dueInvoice(current, today).fingerprint;
+  assert.equal((await service.sendApprovedReminder(8, customerFingerprint, "2")).state, "uncertain");
+  delivery.get(`reminder:${today}:8`).at = new Date(Date.now() - 6 * 60_000).toISOString();
+  failRecipient = "";
+  assert.equal((await service.sendApprovedReminder(8, customerFingerprint, "2")).state, "already-claimed", "Ambiguous customer reminders must still never retry automatically");
+  assert.equal(sent.length, 1);
 
   current = { ...row }; sent = []; delivery = new Map();
   const previousUrl = process.env.PAYMENT_PORTAL_URL;
@@ -93,6 +112,24 @@ async function main() {
   assert.ok(overview.deliveries.some(item => item.type === "run"));
   assert.equal(overview.deliveries.filter(item => item.type === "report").length, 2);
   assert.ok(!JSON.stringify(overview).includes('"MAIL_PASS"'), "Monitor must never expose SMTP secrets");
+  assert.equal(await service.paymentReportComplete(), false);
+  const retryKey = `report:${today}:${rules.paymentReportRecipients[1]}`;
+  delivery.get(retryKey).at = new Date(Date.now() - 6 * 60_000).toISOString();
+  failRecipient = "";
+  const recovered = await Promise.all([service.sendDailyPaymentReport(), service.sendDailyPaymentReport()]);
+  assert.equal(sent.length, 2, "Only the failed recipient is retried, even across concurrent runs");
+  assert.ok(recovered.some(results => results[1].state === "sent"));
+  assert.equal(await service.paymentReportComplete(), true);
+  await service.sendDailyPaymentReport();
+  assert.equal(sent.length, 2, "Confirmed internal reports are not needlessly resent");
+  delivery.get(retryKey).state = "sending";
+  delivery.get(retryKey).at = new Date(Date.now() - 6 * 60_000).toISOString();
+  rejectRecipient = rules.paymentReportRecipients[1];
+  assert.equal((await service.sendDailyPaymentReport())[1].state, "uncertain", "A rejected SMTP recipient is not marked sent");
+  rejectRecipient = "";
+  delivery.get(retryKey).at = new Date(Date.now() - 6 * 60_000).toISOString();
+  assert.equal((await service.sendDailyPaymentReport())[1].state, "sent", "An abandoned sending claim or rejected email can recover");
+
   process.env.PAYMENT_PORTAL_URL = "http://localhost:3000";
   await assert.rejects(service.sendDailyPaymentReport(), /HTTPS/);
   const failedOverview = await service.getPaymentAutomationOverview();

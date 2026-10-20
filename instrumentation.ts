@@ -9,5 +9,7 @@ export async function register() {
   if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build") {
     const { startNotificationWorker } = await import("./lib/customerRequestNotifications");
     startNotificationWorker();
+    const { startPaymentReportWorker } = await import("./lib/paymentReportWorker");
+    startPaymentReportWorker();
   }
 }

@@ -46,7 +46,7 @@ export default function AutomationMonitor() {
           <div><span>Rapor alıcıları</span>{overview.recipients.map(recipient => <strong key={recipient}>{recipient}</strong>)}</div>
           <div><span>Son çalışma</span><strong>{time(overview.lastRun?.at || null)}</strong><small>{overview.lastRun ? stateLabel(overview.lastRun.state) : "Henüz zamanlayıcı çalışma kaydı yok"}</small></div>
         </div>
-        <p className={styles.notice}>Zamanlayıcının sunucuda etkinleştirildiği bu ekrandan doğrulanamaz. Çalışma kayıtları, rapor görevi çağrıldığında oluşur; yapılandırmanın hazır olması günlük gönderimin başladığı anlamına gelmez.</p>
+        <p className={styles.notice}>Günlük cron'a ek olarak uygulama çalışırken Türkiye saatiyle 09.00'dan sonra eksik raporlar 5 dakikada bir yeniden denenir. Uygulama kapalıyken sunucu cron'u gerekir. Sonucu belirsiz iç raporlar tekrar gönderilebilir.</p>
         <ul className={styles.checks}>
           <li><span>E-posta ayarları</span><strong>{overview.configuration.smtpReady ? "Tanımlı" : "Eksik"}</strong></li>
           <li><span>Portal bağlantısı</span><strong>{overview.configuration.portalReady ? "Tanımlı" : "Eksik"}</strong></li>
@@ -67,7 +67,7 @@ export default function AutomationMonitor() {
             <td><span className={styles.badge} data-state={item.state}>{stateLabel(item.state)}</span>{item.note && <small>{item.note}</small>}</td><td>{item.approvedBy === "2" ? "Oğuzhan · onaylı" : item.approvedBy ? `Kullanıcı #${item.approvedBy}` : "Otomatik rapor"}</td>
           </tr>) : <tr><td colSpan={5}>Henüz kayıt bulunmuyor.</td></tr>}
         </tbody></table></div>
-        <p className={styles.muted}>Son 100 rapor, 100 müşteri hatırlatması ve 30 çalışma kaydı listelenir. Sonucu belirsiz gönderimler çift e-posta oluşmaması için otomatik tekrarlanmaz.</p>
+        <p className={styles.muted}>Son 100 rapor, 100 müşteri hatırlatması ve 30 çalışma kaydı listelenir. Başarısız veya sonucu belirsiz iç raporlar yeniden denenir. Müşteri hatırlatmaları otomatik tekrarlanmaz.</p>
       </section>
     </>}
   </>;

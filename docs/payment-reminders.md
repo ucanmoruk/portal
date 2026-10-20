@@ -25,6 +25,27 @@ faturalar dahil edilmez. Açık fatura yoksa da günlük bilgi e-postası gönde
 Bu değişiklik tek başına canlı sunucuyu veya zamanlayıcıyı etkinleştirmez.
 Rapor adresleri `lib/paymentReminderRules.ts` içinde tanımlıdır.
 
+### Geçici hatalardan toparlanma
+
+Üretim uygulaması çalışırken, zamanlayıcı anahtarı tanımlıysa iç rapor işçisi
+Türkiye saatiyle 09.00'dan sonra eksik raporları kontrol eder. Başarısız
+hazırlık, veritabanı veya SMTP işlemleri beş dakika sonra yeniden denenir.
+İşçi HTTP geçidine bağlı değildir; cron isteği 502 alsa bile çalışan uygulama
+eksik gönderimi tamamlayabilir. Uygulama uyutulmuş veya durmuşsa harici cron
+gereklidir. Gün içinde yeniden başlayan uygulama eksik raporu tamamlar.
+
+Başarılı alıcıya tekrar gönderilmez. Başarısız, sonucu belirsiz veya beş
+dakikadan uzun süredir işlemde kalan **iç rapor** kaydı atomik olarak yeniden
+alınabilir. SMTP sonucu belirsizse aynı iç rapor ikinci kez ulaşabilir;
+bu davranış raporu kaçırmamak için bilerek tercih edilmiştir. Müşteri
+hatırlatmalarının onay ve tekrar koruması değişmez.
+
+Harici cron için önerilen komut (sunucu Türkiye saatindeyken `0 9 * * *`):
+
+```bash
+curl --fail --silent --show-error --retry 3 --retry-delay 60 --connect-timeout 20 --max-time 180 --config /home/uniqueanalyse/.payment-report.curl >> /home/uniqueanalyse/payment-report.log 2>&1
+```
+
 ## Onay
 
 Fatura Takip → Ödeme hatırlatmalarını incele ve onayla bağlantısı veya rapordaki
@@ -60,7 +81,7 @@ faturaya aynı gün çift gönderimi ve aynı raporun aynı alıcıya tekrarın�
 fatura bilgileri ve SMTP sonucunu kaydeder. `sent` SMTP sunucusunun kabulünü
 ifade eder; posta kutusuna teslimat veya okunma garantisi değildir.
 
-`sending` durumunda takılan veya `uncertain` görünen gönderimler otomatik
+`sending` durumunda takılan veya `uncertain` görünen müşteri hatırlatmaları otomatik
 yeniden denenmez. SMTP sunucusu kabul ettikten sonra bağlantı kopmuş olabilir.
 Bu kayıtları yeniden göndermeden önce SMTP günlükleri ve alıcı adresi
 kontrol edilmelidir. Rapor alıcıları ayrı ayrı kaydedildiğinden bir alıcıdaki
