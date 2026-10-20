@@ -91,6 +91,11 @@ export async function POST(request: Request) {
     const { id, hammadde } = body;
     if (!id) return Response.json({ error: "ID gerekli" }, { status: 400 });
 
+    // An empty numeric field must clear the value rather than send an empty string.
+    const noael = typeof hammadde.Noael2 === "string"
+      ? hammadde.Noael2.trim() || null
+      : hammadde.Noael2 ?? null;
+
     const pool = await poolPromise;
     
     // rHammadde kaydı varsa güncelle, yoksa ekle (cID üzerinden)
@@ -102,7 +107,7 @@ export async function POST(request: Request) {
         .input("id", id)
         .input("Mix", hammadde.Mix)
         .input("GenelAd", hammadde.GenelAd)
-        .input("Noael2", hammadde.Noael2)
+        .input("Noael2", noael)
         .input("Fizikokimya", hammadde.Fizikokimya)
         .input("Toksikoloji", hammadde.Toksikoloji)
         .input("Kaynak", hammadde.Kaynak)
@@ -119,7 +124,7 @@ export async function POST(request: Request) {
         .input("id", id)
         .input("Mix", hammadde.Mix)
         .input("GenelAd", hammadde.GenelAd)
-        .input("Noael2", hammadde.Noael2)
+        .input("Noael2", noael)
         .input("Fizikokimya", hammadde.Fizikokimya)
         .input("Toksikoloji", hammadde.Toksikoloji)
         .input("Kaynak", hammadde.Kaynak)

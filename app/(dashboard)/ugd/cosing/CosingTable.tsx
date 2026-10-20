@@ -19,7 +19,7 @@ interface Cosing {
 interface Hammadde {
   Mix: string;
   GenelAd: string;
-  Noael2: string | number;
+  Noael2: string | number | null;
   Fizikokimya: string;
   Toksikoloji: string;
   Kaynak: string;
@@ -122,7 +122,10 @@ export default function CosingTable() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: activeID, hammadde: detailData.hammadde }),
       });
-      if (!res.ok) throw new Error("Güncelleme başarısız");
+      if (!res.ok) {
+        const result = await res.json().catch(() => null);
+        throw new Error(result?.error || "Güncelleme başarısız");
+      }
       alert("Başarıyla güncellendi!");
     } catch (e: any) {
       alert(e.message);
@@ -273,7 +276,7 @@ export default function CosingTable() {
                         <input value={detailData.hammadde.GenelAd} onChange={e => setDetailData({...detailData, hammadde: {...detailData.hammadde, GenelAd: e.target.value}})} />
                       </div>
                       <div className={styles.formGroup}><label>Noael</label>
-                         <input placeholder="Noael" value={detailData.hammadde.Noael2} onChange={e => setDetailData({...detailData, hammadde: {...detailData.hammadde, Noael2: e.target.value}})} />
+                         <input placeholder="Noael" value={detailData.hammadde.Noael2 ?? ""} onChange={e => setDetailData({...detailData, hammadde: {...detailData.hammadde, Noael2: e.target.value}})} />
                       </div>
                       <div className={styles.formGroup}><label>Yönetmelik (Annex)</label>
                         <input readOnly value={detailData.cosing.Regulation || ""} />
