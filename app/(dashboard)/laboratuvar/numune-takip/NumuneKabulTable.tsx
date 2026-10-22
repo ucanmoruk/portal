@@ -8,6 +8,7 @@ import { printBarcodes, type BarcodeNumune } from "../yeni-numune/printBarcode";
 import EvrakDetayModal from "./EvrakDetayModal";
 import KabulMailModal from "./KabulMailModal";
 import FirmaNotBilgiModal from "./FirmaNotBilgiModal";
+import offerStyles from "./invoiceOffers.module.css";
 
 const upperTr = (value?: string | null) => value ? value.toLocaleUpperCase("tr-TR") : "";
 
@@ -54,6 +55,7 @@ interface TeklifOpt {
   TeklifNo: number | null;
   RevNo: number;
   MusteriAd: string;
+  DisTeklifKodu?: string | null;
 }
 
 // Fatura kesilmiş = ödeme aşamasına geçmiş durumlar; diğerleri (null dahil) → Faturalandır aktif
@@ -154,6 +156,12 @@ export default function NumuneKabulTable() {
   const [invoiceTeklifId, setInvoiceTeklifId] = useState("");
   const [invoiceOffers, setInvoiceOffers] = useState<TeklifOpt[]>([]);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceSearch, setInvoiceSearch] = useState("");
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [invoiceOfferTotal, setInvoiceOfferTotal] = useState(0);
+  const [invoiceOfferError, setInvoiceOfferError] = useState("");
+  const [invoiceSelectedOffer, setInvoiceSelectedOffer] = useState<TeklifOpt | null>(null);
+  const [invoiceRetry, setInvoiceRetry] = useState(0);
   const [durumSaving, setDurumSaving] = useState<Record<string, boolean>>({});
   const [firmaNotGroup, setFirmaNotGroup] = useState<EvrakGroup | null>(null);
 
@@ -369,23 +377,44 @@ export default function NumuneKabulTable() {
     window.open(`/musteriler/proforma-listesi/${id}/duzenle`, "_blank", "noopener,noreferrer");
   };
 
-  const loadInvoiceOffers = async () => {
-    setInvoiceOffers([]);
+  useEffect(() => {
+    if (!invoiceGroup) return;
+    const controller = new AbortController();
     setInvoiceLoading(true);
-    try {
-      const res = await fetch("/api/teklifler?page=1&limit=100");
-      const json = await res.json();
-      setInvoiceOffers(json.data || []);
-    } finally {
-      setInvoiceLoading(false);
-    }
-  };
+    setInvoiceOfferError("");
+    const timer = setTimeout(async () => {
+      try {
+        const query = invoiceSearch.trim().replace(/^ROT(\d+)(?:\/\d+)?$/i, "$1");
+        const params = new URLSearchParams({ search: query, page: String(invoicePage), limit: "30" });
+        const res = await fetch(`/api/teklifler?${params}`, { signal: controller.signal });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Teklifler alınamadı.");
+        if (!controller.signal.aborted) {
+          setInvoiceOffers(json.data || []);
+          setInvoiceOfferTotal(Number(json.total) || 0);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setInvoiceOffers([]);
+          setInvoiceOfferError(error instanceof Error ? error.message : "Teklifler alınamadı.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setInvoiceLoading(false);
+      }
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [invoiceGroup, invoiceSearch, invoicePage, invoiceRetry]);
 
   const openInvoice = async (group: EvrakGroup, nkrIds: number[] = []) => {
     setInvoiceGroup(group);
     setInvoiceNkrIds(nkrIds);
     setInvoiceTeklifId("");
-    await loadInvoiceOffers();
+    setInvoiceSelectedOffer(null);
+    setInvoiceSearch("");
+    setInvoicePage(1);
+    setInvoiceOffers([]);
+    setInvoiceOfferTotal(0);
+    setInvoiceLoading(true);
   };
 
   const openSelectedInvoice = async () => {
@@ -430,7 +459,7 @@ export default function NumuneKabulTable() {
   };
 
   const teklifLabel = (t: TeklifOpt) =>
-    `${t.TeklifNo ? `ROT${t.TeklifNo}${t.RevNo > 0 ? `/${t.RevNo}` : ""}` : `Teklif #${t.ID}`} - ${t.MusteriAd || "Firma yok"}`;
+    `${t.TeklifNo ? `ROT${t.TeklifNo}${t.RevNo > 0 ? `/${t.RevNo}` : ""}` : `Teklif #${t.ID}`} - ${t.MusteriAd || "Firma yok"}${t.DisTeklifKodu ? ` · ${t.DisTeklifKodu}` : ""}`;
 
   // ── Sayfalama ────────────────────────────────────────────────
   const goTo = (p: number) => { if (p >= 1 && p <= totalPages) setPage(p); };
@@ -1105,21 +1134,44 @@ export default function NumuneKabulTable() {
               <p style={{ marginTop: 0, color: "var(--color-text-secondary)" }}>
                 Evrak No <strong>{invoiceGroup.evrakNo}</strong> için proforma hazırlanacak. İstersen mevcut bir fiyat teklifini seçebilir veya manuel fiyat girişiyle devam edebilirsin.
               </p>
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13, fontWeight: 600 }}>
+              <div className={offerStyles.searchSection}>
+                <label htmlFor="invoice-offer-search" className={offerStyles.label}>Teklif ara</label>
+                <div className={offerStyles.searchBox}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="18" height="18" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+                  <input id="invoice-offer-search" type="search" autoFocus value={invoiceSearch}
+                    placeholder="Firma adı, ROT numarası veya UGAM kodu"
+                    onChange={e => { setInvoiceSearch(e.target.value); setInvoicePage(1); setInvoiceLoading(true); }} />
+                </div>
+                <p className={offerStyles.hint}>Tüm teklifler içinde arayın; ardından aşağıdaki listeden seçin.</p>
+              </div>
+              {invoiceOfferError && <div role="alert" className={offerStyles.error}>{invoiceOfferError} <button type="button" onClick={() => setInvoiceRetry(value => value + 1)}>Tekrar dene</button></div>}
+              <label className={offerStyles.label}>
                 Fiyat teklifi
                 <select
                   className={styles.pageSizeSelect}
                   value={invoiceTeklifId}
-                  onChange={e => setInvoiceTeklifId(e.target.value)}
+                  onChange={e => {
+                    setInvoiceTeklifId(e.target.value);
+                    setInvoiceSelectedOffer(invoiceOffers.find(t => String(t.ID) === e.target.value) || (String(invoiceSelectedOffer?.ID) === e.target.value ? invoiceSelectedOffer : null));
+                  }}
                   disabled={invoiceLoading}
                   style={{ width: "100%", height: 38 }}
                 >
                   <option value="">{invoiceLoading ? "Teklifler yükleniyor..." : "Manuel fiyat gireceğim"}</option>
+                  {invoiceSelectedOffer && !invoiceOffers.some(t => t.ID === invoiceSelectedOffer.ID) && <option value={invoiceSelectedOffer.ID}>{teklifLabel(invoiceSelectedOffer)}</option>}
                   {invoiceOffers.map(t => (
                     <option key={t.ID} value={t.ID}>{teklifLabel(t)}</option>
                   ))}
                 </select>
               </label>
+              <div className={offerStyles.results}>
+                <span role="status">{invoiceLoading ? "Teklifler aranıyor…" : invoiceOfferError ? "Liste yüklenemedi" : invoiceOfferTotal ? `${invoiceOfferTotal} teklif · Sayfa ${invoicePage} / ${Math.ceil(invoiceOfferTotal / 30)}` : "Aramanızla eşleşen teklif bulunamadı."}</span>
+                <div className={offerStyles.pages}>
+                  <button type="button" aria-label="Önceki teklif sayfası" disabled={invoiceLoading || !!invoiceOfferError || invoicePage <= 1} onClick={() => { setInvoicePage(value => value - 1); setInvoiceLoading(true); }}>Önceki</button>
+                  <button type="button" aria-label="Sonraki teklif sayfası" disabled={invoiceLoading || !!invoiceOfferError || invoicePage * 30 >= invoiceOfferTotal} onClick={() => { setInvoicePage(value => value + 1); setInvoiceLoading(true); }}>Sonraki</button>
+                </div>
+              </div>
+              {invoiceSelectedOffer && <p className={offerStyles.selected}>Seçili teklif: <strong>{teklifLabel(invoiceSelectedOffer)}</strong></p>}
             </div>
             <div className={styles.modalFooter}>
               <button className={styles.cancelBtn} onClick={() => { setInvoiceGroup(null); setInvoiceNkrIds([]); }}>Vazgeç</button>
