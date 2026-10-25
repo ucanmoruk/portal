@@ -5,7 +5,7 @@ import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import { SidebarProvider } from "@/components/SidebarProvider";
 import styles from "./dashboard-layout.module.css";
-import poolPromise from "@/lib/db";
+import { getPermissionPool } from "@/lib/permissionStore";
 
 // Admin yetkisi olan kullanıcı ID'leri (Oğuzhan Eker: 2)
 const ADMIN_USER_IDS = new Set(["2"]);
@@ -28,7 +28,7 @@ export default async function DashboardLayout({
   let allowedKeys: string[] | null = isAdmin ? null : [];
   if (!isAdmin) {
     try {
-      const pool   = await poolPromise;
+      const pool   = await getPermissionPool();
       const result = await pool.request()
         .input("userId", userId ? parseInt(userId) : 0)
         .query("SELECT MenuKey FROM PortalYetki WHERE KullaniciID = @userId");

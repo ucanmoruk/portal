@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { getPermissionPool } from "@/lib/permissionStore";
 
 export type AccessLevel = "edit" | "view";
 
@@ -28,7 +28,7 @@ export async function loadEurolabAccess(): Promise<EurolabAccessSnapshot> {
   if (!userId) return { isAdmin: false, levels: {} };
 
   try {
-    const pool = await poolPromise;
+    const pool = await getPermissionPool();
     const result = await pool.request()
       .input("userId", parseInt(userId))
       .query(`SELECT MenuKey, Yetki FROM PortalYetki WHERE KullaniciID = @userId AND MenuKey LIKE 'eurolab%'`);

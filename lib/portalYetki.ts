@@ -4,7 +4,7 @@
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { getPermissionPool } from "@/lib/permissionStore";
 
 // Admin yetkisi olan kullanıcı ID'leri (Oğuzhan Eker: 2) — (dashboard)/layout.tsx ile aynı
 const ADMIN_USER_IDS = new Set(["2"]);
@@ -34,7 +34,7 @@ export async function getPortalUser(): Promise<PortalUser | null> {
   let keys: string[] = [];
   if (!isAdmin && userId) {
     try {
-      const pool = await poolPromise;
+      const pool = await getPermissionPool();
       const res = await pool.request()
         .input("userId", parseInt(userId, 10) || 0)
         .query("SELECT MenuKey FROM PortalYetki WHERE KullaniciID = @userId");

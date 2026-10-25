@@ -35,7 +35,11 @@ export default function YetkiTable() {
 
   useEffect(() => {
     fetch("/api/admin/kullanicilar")
-      .then(r => r.json())
+      .then(async r => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || "Kullanıcı listesi alınamadı.");
+        return data;
+      })
       .then(data => { setUsers(data); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
   }, []);
@@ -45,14 +49,18 @@ export default function YetkiTable() {
     setSaveMsg("");
     setSaveErr("");
     setModalLoading(true);
+    setCheckedKeys(new Set());
+    setAccessLevels({});
     try {
       const res  = await fetch(`/api/admin/yetki?userId=${user.ID}`);
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Yetkiler alınamadı.");
       setCheckedKeys(new Set(data.keys || []));
       setAccessLevels(data.levels || {});
-    } catch {
-      setCheckedKeys(new Set());
-      setAccessLevels({});
+    } catch (error) {
+      setSaveErr(error instanceof Error ? error.message : "Yetkiler alınamadı.");
+      setSelected(null);
+      setError(error instanceof Error ? error.message : "Yetkiler alınamadı.");
     } finally {
       setModalLoading(false);
     }

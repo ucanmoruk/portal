@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import poolPromise from "@/lib/db";
+import { getPermissionPool } from "@/lib/permissionStore";
 import { firstAllowedHref } from "@/lib/menuConfig";
 import {
   getDashboardOverview,
@@ -341,7 +341,7 @@ export default async function DashboardPage({
   if (!isAdmin) {
     let allowedKeys: string[] = [];
     try {
-      const pool = await poolPromise;
+      const pool = await getPermissionPool();
       const result = await pool.request()
         .input("userId", userId ? parseInt(userId) : 0)
         .query("SELECT MenuKey FROM PortalYetki WHERE KullaniciID = @userId");

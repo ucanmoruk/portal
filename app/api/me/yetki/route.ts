@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { getPermissionPool } from "@/lib/permissionStore";
 
 // GET /api/me/yetki
 // Mevcut kullanıcının yetki anahtarlarını döner.
@@ -21,7 +21,7 @@ export async function GET() {
   }
 
   try {
-    const pool = await poolPromise;
+    const pool = await getPermissionPool();
     const r = await pool.request()
       .input("userId", userIdNum)
       .query(`SELECT MenuKey FROM PortalYetki WHERE KullaniciID = @userId`);

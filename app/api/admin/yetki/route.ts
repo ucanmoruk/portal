@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import poolPromise from "@/lib/db";
+import { getPermissionPool } from "@/lib/permissionStore";
 import { type NextRequest } from "next/server";
 import { allMenuKeys } from "@/lib/menuConfig";
 
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   if (!userId) return Response.json({ error: "userId gerekli" }, { status: 400 });
 
   try {
-    const pool = await poolPromise;
+    const pool = await getPermissionPool();
     const result = await pool.request()
       .input("userId", parseInt(userId))
       .query(`SELECT MenuKey, Yetki FROM PortalYetki WHERE KullaniciID = @userId`);
@@ -63,8 +63,8 @@ export async function POST(request: Request) {
     const safeKeys = (keys || []).filter(k => valid.has(k));
     const safeLevels = levels || {};
 
-    const pool = await poolPromise;
-    const tx = pool.transaction();
+    const pool = await getPermissionPool();
+    const tx = await pool.transaction();
     await tx.begin();
 
     try {
