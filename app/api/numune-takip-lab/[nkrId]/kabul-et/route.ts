@@ -1,3 +1,4 @@
+import { checkNumuneWorkspace } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -37,6 +38,8 @@ export async function POST(
 
   try {
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
+    if (workspaceError) return workspaceError;
 
     // NKR_LabKabul tablo mu var? (dbo/cosmoroot şemasında)
     const tblCheck = await pool.request().query(
@@ -174,7 +177,7 @@ export async function POST(
 
 // DELETE — kabul iptali (opsiyonel)
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ nkrId: string }> },
 ) {
   const session = await getServerSession(authOptions);
@@ -185,7 +188,7 @@ export async function DELETE(
   if (!Number.isFinite(nkrIdNum)) {
     return Response.json({ error: "Geçersiz NkrID" }, { status: 400 });
   }
-  const url = new URL(_request.url);
+  const url = new URL(request.url);
   const raporFormati = (url.searchParams.get("raporFormati") || "").trim();
   if (!raporFormati) {
     return Response.json({ error: "raporFormati gerekli" }, { status: 400 });
@@ -193,6 +196,8 @@ export async function DELETE(
 
   try {
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
+    if (workspaceError) return workspaceError;
     await pool.request()
       .input("NkrID", nkrIdNum)
       .input("RaporFormati", raporFormati)

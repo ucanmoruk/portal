@@ -1,4 +1,5 @@
 "use client";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import styles from "@/app/styles/table.module.css";
@@ -210,7 +211,7 @@ export default function SonucGirisTable() {
       const params = new URLSearchParams({ page: p.toString(), limit: l.toString(), search: s, year: y });
       if (df !== "Tümü") params.set("durum", df);
 
-      const res = await fetch(`/api/sonuc-giris?${params}`, { signal: ctrl.signal });
+      const res = await workspaceFetch(`/api/sonuc-giris?${params}`, { signal: ctrl.signal });
       if (reqId !== latestReqId.current) return;
       if (!res.ok) throw new Error((await res.json()).error || "Hata");
       const json = await res.json();
@@ -328,7 +329,7 @@ export default function SonucGirisTable() {
     if (!edit || (!edit.dirty && !opts.force)) return;
     setEditMap(prev => ({ ...prev, [x1Id]: { ...prev[x1Id], saving: true, saveError: "" } }));
     try {
-      const res = await fetch(`/api/sonuc-giris/${x1Id}`, {
+      const res = await workspaceFetch(`/api/sonuc-giris/${x1Id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -374,7 +375,7 @@ export default function SonucGirisTable() {
     if (!revizyon || !revizyon.text.trim()) return;
     setRevizyon(r => r ? { ...r, saving: true, error: "" } : null);
     try {
-      const res = await fetch(`/api/sonuc-giris/${revizyon.x1Id}`, {
+      const res = await workspaceFetch(`/api/sonuc-giris/${revizyon.x1Id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ durum: "Devam", revizyon: revizyon.text.trim(), nkrId: revizyon.nkrId }),

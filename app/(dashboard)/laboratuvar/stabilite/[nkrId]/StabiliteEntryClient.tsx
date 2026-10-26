@@ -1,4 +1,5 @@
 "use client";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useEffect, useRef, useState } from "react";
 import styles from "@/app/styles/table.module.css";
@@ -116,7 +117,7 @@ export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number;
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    fetch(`/api/rapor-takip/${nkrId}/stabilite?format=${encodeURIComponent(format)}`, { cache: "no-store" })
+    workspaceFetch(`/api/rapor-takip/${nkrId}/stabilite?format=${encodeURIComponent(format)}`, { cache: "no-store" })
       .then(r => r.json())
       .then(j => {
         if (j.veri && typeof j.veri === "object" && Array.isArray(j.veri.testler)) {
@@ -169,7 +170,7 @@ export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number;
     searchTimer.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const r = await fetch(`/api/teklifler/lookup?type=hizmetler&q=${encodeURIComponent(val)}`);
+        const r = await workspaceFetch(`/api/teklifler/lookup?type=hizmetler&q=${encodeURIComponent(val)}`);
         const j = await r.json();
         setOpts(j.data || []);
       } finally { setSearching(false); }
@@ -200,7 +201,7 @@ export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number;
     }));
 
   const kaydetVeri = async (): Promise<void> => {
-    const r = await fetch(`/api/rapor-takip/${nkrId}/stabilite`, {
+    const r = await workspaceFetch(`/api/rapor-takip/${nkrId}/stabilite`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ format, veri }),
@@ -226,7 +227,7 @@ export default function StabiliteEntryClient({ nkrId, format }: { nkrId: number;
     setGonderiliyor(true); setErr(""); setMsg("");
     try {
       await kaydetVeri();
-      const r = await fetch(`/api/rapor-takip/${nkrId}/tamamla`, {
+      const r = await workspaceFetch(`/api/rapor-takip/${nkrId}/tamamla`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ format, durum: "Onay Bekleniyor" }),

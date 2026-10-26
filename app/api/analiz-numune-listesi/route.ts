@@ -1,3 +1,4 @@
+import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -6,6 +7,7 @@ import { type NextRequest } from "next/server";
 // GET /api/analiz-numune-listesi
 // Numunelere atanmış analiz hizmetlerini hizmet bazlı listeler.
 export async function GET(request: NextRequest) {
+  const workspaceFilter = numuneWorkspaceSql(request);
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
 
@@ -56,7 +58,7 @@ export async function GET(request: NextRequest) {
           SELECT ID, Firma_Adi AS Ad
           FROM Firma
         ) f ON f.ID = n.Firma_ID
-        WHERE n.Durum = 'Aktif'
+        WHERE n.Durum = 'Aktif' AND ${workspaceFilter}
           ${searchClause}
           ${filterClause}
       )

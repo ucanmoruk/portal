@@ -1,3 +1,4 @@
+import { groupMatchesWorkspace } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { nkr, detay, hizmetler = [], formul = [], raporMetinleri = {} } = body;
+    if (!groupMatchesWorkspace(request, nkr?.Grup)) return Response.json({ error: "Bu çalışma alanı için geçersiz numune grubu." }, { status: 400 });
 
     if (!nkr?.Evrak_No?.trim())   return Response.json({ error: "Evrak No zorunludur."   }, { status: 400 });
     if (!nkr?.RaporNo?.trim())    return Response.json({ error: "Rapor No zorunludur."   }, { status: 400 });

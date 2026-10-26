@@ -1,3 +1,4 @@
+import { checkNumuneWorkspace } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { type NextRequest } from "next/server";
@@ -134,6 +135,8 @@ export async function GET(
 
     // "Diğer" formatında: kayıtlı Ek-1 PDF'i ilk sayfanın arkasına ekle (merge).
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
+    if (workspaceError) return workspaceError;
     const merged = await maybeMergeEk(pool, pdf, nkrIdNum, format);
 
     // PAdES dijital imza göm (self-signed köprü sertifika) — Ek-1 dahil tüm belgeye.

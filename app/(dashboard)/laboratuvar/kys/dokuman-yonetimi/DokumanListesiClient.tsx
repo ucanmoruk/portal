@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Download, Eye, FilePlus2, Network, Printer, RotateCw, Search, Trash2, Upload, X } from "lucide-react";
+import { hasKysPdfPreview } from "@/lib/kysFilePreview";
+import UploadedPdfPreview from "./[id]/onizleme/UploadedPdfPreview";
 import tableStyles from "@/app/styles/table.module.css";
 import kys from "../kys.module.css";
 import styles from "./dokumanYonetimi.module.css";
@@ -77,6 +79,7 @@ export default function DokumanListesiClient() {
   const kodDokunuldu = useRef(false);
 
   const [previewId, setPreviewId] = useState<number | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<DokumanOzet | null>(null);
   const [previewDoc, setPreviewDoc] = useState<DokumanDetay | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
@@ -149,8 +152,8 @@ export default function DokumanListesiClient() {
 
   async function openPreview(id: number) {
     const row = rows.find(item => item.id === id);
-    if (row?.hasDosya) {
-      window.open(`/api/kys/dokumanlar/${id}/dosya`, "_blank", "noopener,noreferrer");
+    if (row && hasKysPdfPreview(row)) {
+      setPdfPreview(row);
       return;
     }
     setPreviewId(id);
@@ -461,23 +464,25 @@ export default function DokumanListesiClient() {
                     <td className={tableStyles.tdSecondary}>{formatDateTime(doc.updatedAt)}</td>
                     <td>
                       <div className={tableStyles.actionBtns}>
-                        <button
+                        {doc.hasDosya && !hasKysPdfPreview(doc) ? (
+                          <a href={`/api/kys/dokumanlar/${doc.id}/dosya?download=1`} className={tableStyles.editBtn} title="Dosyayı indir" aria-label={`${doc.baslik} dosyasını indir`}><Download size={15} /></a>
+                        ) : <button
                           type="button"
                           className={tableStyles.editBtn}
-                          title={doc.hasDosya ? (doc.dosyaMimeType === "application/pdf" ? "Dosyayı önizle" : "Dosyayı indir") : "Önizle"}
+                          title="Önizle"
                           onClick={() => void openPreview(doc.id)}
                         >
-                          {doc.hasDosya && doc.dosyaMimeType !== "application/pdf" ? <Download size={15} /> : <Eye size={15} />}
-                        </button>
-                        <Link
-                          href={doc.hasDosya ? `/api/kys/dokumanlar/${doc.id}/dosya` : `/laboratuvar/kys/dokuman-yonetimi/${doc.id}/onizleme`}
+                          <Eye size={15} />
+                        </button>}
+                        {!doc.hasDosya && <Link
+                          href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}/onizleme`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className={tableStyles.editBtn}
                           title="Yeni sekmede aç"
                         >
                           <ArrowUpRight size={15} />
-                        </Link>
+                        </Link>}
                         {yetki.sil && (
                           <button
                             type="button"
@@ -624,6 +629,7 @@ export default function DokumanListesiClient() {
         </div>
       )}
 
+      {pdfPreview && <UploadedPdfPreview id={pdfPreview.id} title={pdfPreview.baslik} code={pdfPreview.kod} revision={pdfPreview.revizyonEtiket} onClose={() => setPdfPreview(null)} />}
       {previewId != null && (
         <div className={styles.previewBackdrop} role="dialog" aria-modal="true" aria-label="Doküman önizleme" onClick={() => setPreviewId(null)}>
           <div className={styles.previewModal} onClick={event => event.stopPropagation()}>

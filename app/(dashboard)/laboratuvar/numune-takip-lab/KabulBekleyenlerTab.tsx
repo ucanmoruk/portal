@@ -1,4 +1,5 @@
 "use client";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "@/app/styles/table.module.css";
@@ -105,7 +106,7 @@ export default function KabulBekleyenlerTab({ onAccepted }: Props = {}) {
       const params = new URLSearchParams({
         page: p.toString(), limit: l.toString(), search: s,
       });
-      const res = await fetch(`/api/numune-takip-lab/pending?${params}`, { signal: ctrl.signal });
+      const res = await workspaceFetch(`/api/numune-takip-lab/pending?${params}`, { signal: ctrl.signal });
       if (reqId !== latestReqId.current) return;
       if (!res.ok) throw new Error((await res.json()).error || "Hata");
       const json = await res.json();
@@ -150,7 +151,7 @@ export default function KabulBekleyenlerTab({ onAccepted }: Props = {}) {
     if (!wasOpen && !hizmetMap[key]) {
       setLoadingKey(key);
       try {
-        const res = await fetch(
+        const res = await workspaceFetch(
           `/api/numune-takip-lab/${row.NkrID}/hizmetler?raporFormati=${encodeURIComponent(row.RaporFormati)}`
         );
         if (!res.ok) throw new Error((await res.json()).error || "Hizmetler yüklenemedi");
@@ -169,7 +170,7 @@ export default function KabulBekleyenlerTab({ onAccepted }: Props = {}) {
     setAcceptingKey(key);
     setError("");
     try {
-      const res = await fetch(`/api/numune-takip-lab/${row.NkrID}/kabul-et`, {
+      const res = await workspaceFetch(`/api/numune-takip-lab/${row.NkrID}/kabul-et`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ raporFormati: row.RaporFormati }),
@@ -223,7 +224,7 @@ export default function KabulBekleyenlerTab({ onAccepted }: Props = {}) {
       const row = targets[i];
       const key = rowKey(row);
       try {
-        const res = await fetch(`/api/numune-takip-lab/${row.NkrID}/kabul-et`, {
+        const res = await workspaceFetch(`/api/numune-takip-lab/${row.NkrID}/kabul-et`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ raporFormati: row.RaporFormati }),

@@ -1,3 +1,4 @@
+import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -72,6 +73,7 @@ function normKey(s: string): string {
 // Her bucket bağımsız try/catch'te — biri patlasa diğerleri yine doğru sayıyı
 // döner. Hatalar response.errors içinde + console.error ile loglanır.
 export async function GET(request: NextRequest) {
+  const workspaceFilter = numuneWorkspaceSql(request);
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz" }, { status: 401 });
 
@@ -143,7 +145,7 @@ export async function GET(request: NextRequest) {
            INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
            INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
            LEFT JOIN NKR_LabKabul k ON k.NkrID = n.ID AND ${formatMatchesSql("k.RaporFormati", RAPOR_FORMAT_EXPR)}
-           WHERE n.Durum = 'Aktif' ${labFilter}
+           WHERE n.Durum = 'Aktif' AND ${workspaceFilter} ${labFilter}
              ${terminalOnayWhere}
              AND (
                k.ID IS NULL
@@ -162,7 +164,7 @@ export async function GET(request: NextRequest) {
            FROM NKR n
            INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
            INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
-           WHERE n.Durum = 'Aktif' ${labFilter}
+           WHERE n.Durum = 'Aktif' AND ${workspaceFilter} ${labFilter}
              ${terminalOnayWhere}
          ) t`;
     const req = pool.request();
@@ -190,6 +192,7 @@ export async function GET(request: NextRequest) {
   const byGroupLab: Record<string, { total: number; daily: number; byFormat: Record<string, number> }> = {
     "Özel": { total: 0, daily: 0, byFormat: {} },
     "K.D.": { total: 0, daily: 0, byFormat: {} },
+    "Belge": { total: 0, daily: 0, byFormat: {} },
   };
   if (hasLabKabul) {
     try {
@@ -226,7 +229,7 @@ export async function GET(request: NextRequest) {
           INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
           INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
           INNER JOIN NKR_LabKabul k ON k.NkrID = n.ID AND ${bucketSql("k.RaporFormati")} = ${bucketSql(RAPOR_FORMAT_EXPR)}
-          WHERE n.Durum = 'Aktif' ${labFilter}
+          WHERE n.Durum = 'Aktif' AND ${workspaceFilter} ${labFilter}
           GROUP BY n.ID, LTRIM(RTRIM(n.Grup)), ${RAPOR_FORMAT_EXPR}, ${bucketSql(RAPOR_FORMAT_EXPR)}
         )${hasRaporOnay ? `,
         OS AS (

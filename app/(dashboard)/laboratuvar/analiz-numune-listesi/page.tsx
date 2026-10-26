@@ -1,3 +1,4 @@
+import NumuneWorkspaceNotice from "@/components/NumuneWorkspaceNotice";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import styles from "@/app/styles/table.module.css";
@@ -10,6 +11,7 @@ export default async function AnalizNumuneListesiPage() {
 
   return (
     <div className={styles.page} style={{ width: "100%", maxWidth: 1300 }}>
+      <NumuneWorkspaceNotice />
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Analiz - Numune Listesi</h1>

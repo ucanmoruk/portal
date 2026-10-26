@@ -1,3 +1,4 @@
+import UploadedPdfPreview from "./UploadedPdfPreview";
 import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 import { getPortalUser } from "@/lib/portalYetki";
@@ -49,7 +50,12 @@ export default async function DokumanOnizlemePage({ params, searchParams }: { pa
   if (!Number.isInteger(documentId) || documentId <= 0) notFound();
   const doc = await getKysDokuman(documentId);
   if (!doc) notFound();
-  if (doc.hasDosya) redirect(`/api/kys/dokumanlar/${doc.id}/dosya`);
+  if (doc.hasDosya) {
+    if (doc.dosyaMimeType === "application/pdf" || (doc.tur === "Form" && /(?:word|\.docx?$)/i.test(`${doc.dosyaMimeType} ${doc.dosyaAdi}`))) {
+      return <UploadedPdfPreview id={doc.id} title={doc.baslik} code={doc.kod} revision={doc.revizyonEtiket} />;
+    }
+    redirect(`/api/kys/dokumanlar/${doc.id}/dosya`);
+  }
   if ((await searchParams).print === "1") redirect(`/kys-dokuman-yazdir/${doc.id}?print=1`);
   const { content, headings } = prepareContent(doc.icerik || "");
 

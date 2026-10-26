@@ -1,3 +1,4 @@
+import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -42,6 +43,7 @@ const formatMatchesSql = (leftExpr: string, rightExpr: string) => `
 // Her (NKR.ID, RaporFormati) kombinasyonu için 1 satır döner — eğer henüz
 // NKR_LabKabul tablosunda bu kombinasyon için kayıt yoksa.
 export async function GET(request: NextRequest) {
+  const workspaceFilter = numuneWorkspaceSql(request);
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
 
@@ -121,7 +123,7 @@ export async function GET(request: NextRequest) {
         INNER JOIN NumuneX1         x1 ON x1.RaporID = n.ID
         INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
         ${notAcceptedJoin}
-        WHERE n.Durum = 'Aktif'
+        WHERE n.Durum = 'Aktif' AND ${workspaceFilter}
           ${labFilter}
           ${terminalOnayWhere}
           ${notAcceptedWhere}

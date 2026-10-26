@@ -1,4 +1,5 @@
 "use client";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useEffect, useState } from "react";
 import styles from "@/app/styles/table.module.css";
@@ -48,7 +49,7 @@ export default function RaporMailLogTable() {
       setError("");
       try {
         const params = new URLSearchParams({ page: String(page), limit: "25", search, status });
-        const response = await fetch(`/api/rapor-takip/mail-log?${params}`, { cache: "no-store" });
+        const response = await workspaceFetch(`/api/rapor-takip/mail-log?${params}`, { cache: "no-store" });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "Loglar yüklenemedi.");
         if (!cancelled) {

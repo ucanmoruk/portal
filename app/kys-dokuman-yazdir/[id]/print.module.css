@@ -36,7 +36,7 @@
 .printButton { position: fixed; right: 24px; bottom: 24px; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; border: 0; border-radius: 999px; padding: 0 18px; background: #066bd8; color: #fff; box-shadow: 0 8px 24px #0f172a33; font: inherit; font-size: .84rem; font-weight: 750; cursor: pointer; }
 @media print {
   @page { size: A4; }
-  :global(html), :global(body) { background: #fff !important; }
+  :global(html):has(.screen), :global(body):has(.screen) { background: #fff !important; }
   .screen { min-height: 100%; padding: 0; background: #fff !important; }
   .document { width: 100%; min-height: 100%; margin: 0; padding: 0; background: #fff !important; box-shadow: none; }
   .header { position: fixed; top: 0; left: 14mm; right: 14mm; margin: 0; min-height: 24mm; padding: 2mm 0; }

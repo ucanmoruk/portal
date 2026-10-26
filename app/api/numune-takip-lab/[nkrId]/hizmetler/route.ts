@@ -1,3 +1,4 @@
+import { checkNumuneWorkspace } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -27,6 +28,8 @@ export async function GET(
 
   try {
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
+    if (workspaceError) return workspaceError;
     const labFilter = labScopeSql(await getLabScope(session));
 
     // BolumID kolonu opsiyonel

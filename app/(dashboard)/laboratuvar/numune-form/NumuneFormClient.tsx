@@ -1,4 +1,6 @@
 "use client";
+import { useNumuneWorkspace } from "@/lib/numuneWorkspaceClient";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -16,7 +18,7 @@ const TABS = ["Numune bilgileri", "Hizmetler", "Ürün geçmişi"] as const;
 async function uploadFoto(nkrId: number, file: File) {
   const fd = new FormData();
   fd.set("file", file);
-  const res = await fetch(`/api/numune-form/${nkrId}/foto`, { method: "POST", body: fd });
+  const res = await workspaceFetch(`/api/numune-form/${nkrId}/foto`, { method: "POST", body: fd });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Foto yüklenemedi");
   return data.path as string;
@@ -109,10 +111,11 @@ function mapHizmetler(rows: Record<string, unknown>[]): HizmetRow[] {
 }
 
 export default function NumuneFormClient({ recordId }: { recordId?: string }) {
+  const { basePath, groups: allowedGroups } = useNumuneWorkspace();
   const router = useRouter();
   const [tab, setTab]       = useState(0);
   const [lookup, setLookup] = useState<LookupData>({ grupTurleri: [], rUGDTipler: [], paketler: [] });
-  const [form, setForm]     = useState<NkrFormData>(() => emptyForm());
+  const [form, setForm]     = useState<NkrFormData>(() => ({ ...emptyForm(), Grup: allowedGroups[0] }));
   const [hizmetler, setHizmetler] = useState<HizmetRow[]>([]);
   const [loadingNos, setLoadingNos] = useState(false);
   const [loadErr, setLoadErr]       = useState("");
@@ -138,7 +141,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
   const tabsUnlocked = isEdit || tab1Saved;
 
   useEffect(() => {
-    fetch("/api/numune-form/lookup")
+    workspaceFetch("/api/numune-form/lookup")
       .then(r => r.json())
       .then((data: LookupData) => {
         if (data.grupTurleri) setLookup(data);
@@ -150,7 +153,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
     if (!recordId) return;
     let cancelled = false;
     setLoadErr("");
-    fetch(`/api/numune-form/${recordId}`)
+    workspaceFetch(`/api/numune-form/${recordId}`)
       .then(r => r.json())
       .then(data => {
         if (cancelled) return;
@@ -172,7 +175,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
     (async () => {
       setLoadingNos(true);
       try {
-        const r = await fetch(`/api/numune-form/next-no?grup=${encodeURIComponent(form.Grup)}`);
+        const r = await workspaceFetch(`/api/numune-form/next-no?grup=${encodeURIComponent(form.Grup)}`);
         const j = await r.json();
         if (cancelled || !r.ok) return;
         setForm(f => ({ ...f, Evrak_No: j.evrakNo, RaporNo: j.raporNo }));
@@ -251,7 +254,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
     setSaving(true);
     try {
       if (isEdit) {
-        const res = await fetch(`/api/numune-form/${effectiveId}`, {
+        const res = await workspaceFetch(`/api/numune-form/${effectiveId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -269,7 +272,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
             "Kayıt güncellendi. Aynı evrak ve firma bilgileriyle yeni ürün (yeni rapor no) eklemek ister misiniz?"
           );
           if (addMore) {
-            const nr = await fetch(`/api/numune-form/next-no?grup=${encodeURIComponent(form.Grup || "Özel")}`);
+            const nr = await workspaceFetch(`/api/numune-form/next-no?grup=${encodeURIComponent(form.Grup || "Özel")}`);
             const j = await nr.json();
             setForm(f => ({
               ...emptyForm(),
@@ -294,11 +297,11 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
             setCreatedId(null);
             setTab1Saved(false);
             setTab(0);
-            window.history.replaceState(null, "", "/laboratuvar/numune-form");
+            window.history.replaceState(null, "", `${basePath}/numune-form`);
           }
         }
       } else {
-        const res = await fetch("/api/numune-form", {
+        const res = await workspaceFetch("/api/numune-form", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -312,7 +315,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
         // Numune bilgileri kaydedildi; URL'yi güncelle ve Hizmetler sekmesine geç
         setCreatedId(newId);
         setTab1Saved(true);
-        window.history.replaceState(null, "", `/laboratuvar/numune-form/${newId}`);
+        window.history.replaceState(null, "", `${basePath}/numune-form/${newId}`);
         setTab(1); // Hizmetler sekmesine otomatik geç
       }
     } catch (e: unknown) {
@@ -351,7 +354,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
     setRevizeBusy(true);
     setRevizeError("");
     try {
-      const res = await fetch(`/api/rapor-takip/${effectiveId}/revize`, {
+      const res = await workspaceFetch(`/api/rapor-takip/${effectiveId}/revize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ format: editLock.raporFormati, aciklama, sebep }),
@@ -379,7 +382,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
     return (
       <div className={styles.page}>
         <div className={nf.err}>{loadErr}</div>
-        <Link href="/laboratuvar/numune-takip" className={nf.backLink}>← Numune kabul listesine dön</Link>
+        <Link href={`${basePath}/numune-takip`} className={nf.backLink}>← Numune kabul listesine dön</Link>
       </div>
     );
   }
@@ -392,7 +395,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
           <p>Detaylı kayıt — sekmeler arasında gezinin; kayıt için alttaki Kaydet’i kullanın.</p>
         </div>
         <div className={nf.actions}>
-          <Link href="/laboratuvar/numune-takip" className={nf.backLink}>← Listeye dön</Link>
+          <Link href={`${basePath}/numune-takip`} className={nf.backLink}>← Listeye dön</Link>
         </div>
       </div>
 
@@ -417,7 +420,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
               setSaving(true);
               setSaveErr("");
               try {
-                const res = await fetch(`/api/numune-form/${effectiveId}`, {
+                const res = await workspaceFetch(`/api/numune-form/${effectiveId}`, {
                   method: "PATCH", headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ evrakNo: form.Evrak_No }),
                 });
@@ -490,7 +493,7 @@ export default function NumuneFormClient({ recordId }: { recordId?: string }) {
             style={{ background: "var(--color-surface)", color: "var(--color-text-primary)", border: "1px solid var(--color-border)", marginRight: 8 }}
             onClick={async () => {
               try {
-                const r = await fetch(`/api/numune-form/barcode-data?ids=${effectiveId}`);
+                const r = await workspaceFetch(`/api/numune-form/barcode-data?ids=${effectiveId}`);
                 const j = await r.json();
                 if (!r.ok) throw new Error(j.error || "Barkod verisi alınamadı");
                 const mod = await import("../yeni-numune/printBarcode");

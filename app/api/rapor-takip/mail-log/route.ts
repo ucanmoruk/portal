@@ -1,3 +1,4 @@
+import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
     const pool = await cosmoPool;
     await ensureRaporMailLogTable(pool);
 
-    const filter = `WHERE (@search = '' OR
+    const filter = `WHERE EXISTS (SELECT 1 FROM NKR n WHERE n.ID = NKR_RaporMailLog.NkrID AND ${numuneWorkspaceSql(request)}) AND (@search = '' OR
         EvrakNo LIKE @searchLike OR FirmaAdi LIKE @searchLike OR
         MailAdresi LIKE @searchLike OR CAST(NkrID AS NVARCHAR(30)) LIKE @searchLike)
       AND (@status = '' OR Durum = @status)`;
@@ -47,6 +48,7 @@ export async function GET(request: Request) {
                  l.GonderimTarihi, l.Durum, l.Aciklama, l.Gonderen, l.MessageId, d.DeliveryKey
           FROM NKR_RaporMailLog l
           INNER JOIN Deliveries d ON COALESCE(NULLIF(l.MessageId, ''), l.LogID) = d.DeliveryKey
+          WHERE EXISTS (SELECT 1 FROM NKR n WHERE n.ID = l.NkrID AND ${numuneWorkspaceSql(request)})
           ORDER BY d.LastID DESC, l.ID DESC
         `),
     ]);

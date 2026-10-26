@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { Download } from "lucide-react";
+import { hasKysPdfPreview } from "@/lib/kysFilePreview";
+import UploadedPdfPreview from "./[id]/onizleme/UploadedPdfPreview";
 import { convertTextCase, type TextCaseMode } from "@/lib/kysTextCase";
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type ReactNode } from "react";
 import {
@@ -207,6 +210,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   const [fileSaving, setFileSaving] = useState(false);
   const [saveInfo, setSaveInfo] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const [sections, setSections] = useState<Array<{ id: string; title: string }>>([]);
   const [aksiyonModal, setAksiyonModal] = useState<Aksiyon | null>(null);
   const [aksiyonNot, setAksiyonNot] = useState("");
@@ -828,9 +832,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     const range = currentSelectionInsideEditor() || savedRangeRef.current;
     const target = yayinDokumanlari.find(item => String(item.id) === targetId);
     if (!target) return;
-    const url = target.hasDosya
-      ? `/api/kys/dokumanlar/${target.id}/dosya`
-      : `/laboratuvar/kys/dokuman-yonetimi/${target.id}/onizleme`;
+    const url = `/laboratuvar/kys/dokuman-yonetimi/${target.id}/onizleme`;
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.target = "_blank";
@@ -1107,7 +1109,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
 
   function printDocument() {
     if (doc?.hasDosya) {
-      window.open(`/api/kys/dokumanlar/${doc.id}/dosya`, "_blank", "noopener,noreferrer");
+      setPdfPreviewOpen(true);
       return;
     }
     window.open(`/kys-dokuman-yazdir/${doc?.id}?print=1`, "_blank", "noopener,noreferrer");
@@ -1148,10 +1150,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   }
 
   function openPreviewInNewTab() {
-    const url = doc?.hasDosya
-      ? `/api/kys/dokumanlar/${doc.id}/dosya`
-      : `/laboratuvar/kys/dokuman-yonetimi/${doc?.id}/onizleme`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    if (doc && hasKysPdfPreview(doc)) setPdfPreviewOpen(true);
   }
 
   // ── Görünüm ────────────────────────────────────────────────────────────────
@@ -1243,14 +1242,14 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 {saving ? "Kaydediliyor..." : dirty ? "Kaydet" : "Kaydedildi"}
               </button>
             )}
-            <button type="button" className={styles.ghostButton} onClick={() => doc.hasDosya ? openPreviewInNewTab() : setPreviewOpen(true)}>
+            {doc.hasDosya && !hasKysPdfPreview(doc) ? <a href={`/api/kys/dokumanlar/${doc.id}/dosya?download=1`} className={styles.ghostButton}><Download size={15} /> İndir</a> : <button type="button" className={styles.ghostButton} onClick={() => doc.hasDosya ? openPreviewInNewTab() : setPreviewOpen(true)}>
               <Eye size={15} />
               Önizle
-            </button>
-            <button type="button" className={styles.ghostButton} onClick={printDocument}>
+            </button>}
+            {!doc.hasDosya && <button type="button" className={styles.ghostButton} onClick={printDocument}>
               <Printer size={15} />
               Yazdır / PDF
-            </button>
+            </button>}
             {canEdit && (
               <button type="button" className={styles.publishButton} onClick={() => openAksiyon("onaya-gonder")}>
                 <Send size={16} />
@@ -1477,7 +1476,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
             {doc.hasDosya && (
               <div className={tableStyles.formGroup}>
                 <label htmlFor="replacement-document">Doküman dosyası</label>
-                <a href={`/api/kys/dokumanlar/${doc.id}/dosya`} target="_blank" rel="noopener noreferrer">{doc.dosyaAdi}</a>
+                {hasKysPdfPreview(doc) ? <button type="button" className={styles.ghostButton} onClick={() => setPdfPreviewOpen(true)}><Eye size={15} /> {doc.dosyaAdi}</button> : <a href={`/api/kys/dokumanlar/${doc.id}/dosya?download=1`}><Download size={15} /> İndir · {doc.dosyaAdi}</a>}
                 {canEdit ? <>
                   <input id="replacement-document" key={doc.updatedAt} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" disabled={fileSaving || saving} onChange={event => setReplacementFile(event.target.files?.[0] || null)} />
                   <span className={styles.flowHint}>PDF, Word veya Excel · En fazla 20 MB. Yeni dosya mevcut dosyanın yerini alır.</span>
@@ -1706,6 +1705,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
         )}
       </section>
 
+      {pdfPreviewOpen && <UploadedPdfPreview id={doc.id} title={doc.baslik} code={doc.kod} revision={doc.revizyonEtiket} onClose={() => setPdfPreviewOpen(false)} />}
       {previewOpen && (
         <div className={styles.previewBackdrop} role="dialog" aria-modal="true" aria-label="Doküman önizleme" onClick={() => setPreviewOpen(false)}>
           <div className={styles.previewModal} onClick={event => event.stopPropagation()}>

@@ -1,4 +1,6 @@
 "use client";
+import { useNumuneWorkspace } from "@/lib/numuneWorkspaceClient";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import type { BilesenSonuc } from "@/lib/altParametre";
@@ -209,7 +211,7 @@ export default function RaporTakipTable({
   onRefresh,
 }: {
   fixedRaporTuru?: string;
-  fixedGrup?: "Özel" | "K.D.";
+  fixedGrup?: "Özel" | "K.D." | "Belge";
   /** true → sadece NKR_LabKabul'da kayıtlı (laboratuvar tarafından kabul edilmiş) raporları göster */
   acceptedOnly?: boolean;
   /** "lab"      = Sonuç Girişi (Bekliyor + Analiz Devam Ediyor + Onay Bekleniyor)
@@ -229,6 +231,7 @@ export default function RaporTakipTable({
       Dış sayfa tab sayıları gibi türevleri tazelemek için kullanır. */
   onRefresh?: () => void;
 } = {}) {
+  const { basePath } = useNumuneWorkspace();
   const router = useRouter();
   const [rows, setRows]           = useState<RaporRow[]>([]);
   const [total, setTotal]         = useState(0);
@@ -312,7 +315,7 @@ export default function RaporTakipTable({
       if (acceptedOnly) params.set("acceptedOnly", "1");
       if (phase) params.set("phase", phase);
       if (fixedGrup) params.set("grup", fixedGrup);
-      const res = await fetch(
+      const res = await workspaceFetch(
         `/api/rapor-takip?${params}`,
         { signal: ctrl.signal, cache: "no-store" },
       );
@@ -353,7 +356,7 @@ export default function RaporTakipTable({
   // ── Accordion ──────────────────────────────────────────────────────────────
   const toggleRow = async (row: RaporRow) => {
     if (isUgdrFormat(row.RaporFormati)) {
-      router.push(`/laboratuvar/rapor-takip/ugdr/${row.RaporNo || row.NkrID}`);
+      router.push(`${basePath}/rapor-takip/ugdr/${row.RaporNo || row.NkrID}`);
       return;
     }
 
@@ -370,7 +373,7 @@ export default function RaporTakipTable({
     if (!wasOpen && !hizmetMap[key]) {
       setLoadingKey(key);
       try {
-        const res = await fetch(
+        const res = await workspaceFetch(
           `/api/rapor-takip/${row.NkrID}/hizmetler?raporFormati=${encodeURIComponent(row.RaporFormati)}`,
         );
         const data = await readApiJson<HizmetDetay[]>(res, "Hizmetler yüklenemedi");
@@ -446,7 +449,7 @@ export default function RaporTakipTable({
     setSaveError(prev => ({ ...prev, [key]: "" }));
 
     try {
-      const res = await fetch(`/api/rapor-takip/${row.NkrID}/hizmetler`, {
+      const res = await workspaceFetch(`/api/rapor-takip/${row.NkrID}/hizmetler`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -501,7 +504,7 @@ export default function RaporTakipTable({
     setSaveError(prev => ({ ...prev, [key]: "" }));
 
     try {
-      const res = await fetch(`/api/rapor-takip/${row.NkrID}/hizmetler`, {
+      const res = await workspaceFetch(`/api/rapor-takip/${row.NkrID}/hizmetler`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ updates, raporFormati: row.RaporFormati }),
@@ -563,7 +566,7 @@ export default function RaporTakipTable({
     setGonderLoading(true);
     setGonderError("");
     try {
-      const res = await fetch(`/api/rapor-gonder/${gonderRow.NkrID}`, {
+      const res = await workspaceFetch(`/api/rapor-gonder/${gonderRow.NkrID}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -633,7 +636,7 @@ export default function RaporTakipTable({
     setError("");
     try {
       for (const row of selectedRows) {
-        const res = await fetch(`/api/rapor-takip/${row.NkrID}/onayla`, {
+        const res = await workspaceFetch(`/api/rapor-takip/${row.NkrID}/onayla`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ format: row.RaporFormati }),
@@ -671,7 +674,7 @@ export default function RaporTakipTable({
         if (acceptedOnly) params.set("acceptedOnly", "1");
         if (phase) params.set("phase", phase);
         if (fixedGrup) params.set("grup", fixedGrup);
-        const res = await fetch(`/api/rapor-takip?${params}`, { cache: "no-store" });
+        const res = await workspaceFetch(`/api/rapor-takip?${params}`, { cache: "no-store" });
         const json = await readApiJson<{ data: RaporRow[] }>(res, "Export alinamadi");
         allRows.push(...(json.data || []));
       }
@@ -715,7 +718,7 @@ export default function RaporTakipTable({
     // Bekliyor/Analiz Devam Ediyor iken "Onaya Gönder" → /tamamla (Onay Bekleniyor)
     try {
       if (row.RaporDurumu === "Onay Bekleniyor") {
-        const res = await fetch(`/api/rapor-takip/${row.NkrID}/geri-gonder`, {
+        const res = await workspaceFetch(`/api/rapor-takip/${row.NkrID}/geri-gonder`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ format: row.RaporFormati }),
@@ -723,14 +726,14 @@ export default function RaporTakipTable({
         await readApiJson<{ ok: boolean }>(res, "Geri gönderilemedi");
         // Liste yenilensin — bu satır artık Geri Gönderildi durumunda, mevcut tab'tan düşer
       } else if (directApprovalMode) {
-        const res = await fetch(`/api/rapor-takip/${row.NkrID}/onayla`, {
+        const res = await workspaceFetch(`/api/rapor-takip/${row.NkrID}/onayla`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ format: row.RaporFormati }),
         });
         await readApiJson<{ ok: boolean }>(res, "Rapor onaylanamadı");
       } else {
-        const res = await fetch(`/api/rapor-takip/${row.NkrID}/tamamla`, {
+        const res = await workspaceFetch(`/api/rapor-takip/${row.NkrID}/tamamla`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ format: row.RaporFormati, durum: "Onay Bekleniyor" }),
@@ -753,8 +756,8 @@ export default function RaporTakipTable({
 
     try {
       const [formRes, formulRes] = await Promise.all([
-        fetch(`/api/laboratuvar/ugdr/${row.NkrID}`),
-        fetch(`/api/laboratuvar/ugdr/${row.NkrID}/formul`),
+        workspaceFetch(`/api/laboratuvar/ugdr/${row.NkrID}`),
+        workspaceFetch(`/api/laboratuvar/ugdr/${row.NkrID}/formul`),
       ]);
       if (!formRes.ok) throw new Error("UGDR detay verisi alinamadi");
       if (!formulRes.ok) throw new Error("UGDR formul verisi alinamadi");
@@ -764,7 +767,7 @@ export default function RaporTakipTable({
       const firmaAd = form?.FirmaAd || row.FirmaAd || "";
       const endpointFormat = "pdf";
 
-      const reportRes = await fetch(`/api/urunler/rapor-sablon?format=${endpointFormat}&language=tr&profile=lab`, {
+      const reportRes = await workspaceFetch(`/api/urunler/rapor-sablon?format=${endpointFormat}&language=tr&profile=lab`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ form, formulResults, firmaAd, language: "tr", profile: "lab" }),
@@ -1134,7 +1137,7 @@ export default function RaporTakipTable({
                   {isUgdrFormat(row.RaporFormati) ? (
                     <button
                       type="button"
-                      onClick={() => window.open(`/laboratuvar/rapor-takip/ugdr/${row.RaporNo || row.NkrID}`, "_blank", "noopener,noreferrer")}
+                      onClick={() => window.open(`${basePath}/rapor-takip/ugdr/${row.RaporNo || row.NkrID}`, "_blank", "noopener,noreferrer")}
                       style={{
                         border: "none",
                         background: "transparent",
@@ -1152,7 +1155,7 @@ export default function RaporTakipTable({
                   ) : isStabiliteFormat(row.RaporFormati) ? (
                     <button
                       type="button"
-                      onClick={() => window.open(`/laboratuvar/stabilite/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}`, "_blank", "noopener,noreferrer")}
+                      onClick={() => window.open(`${basePath}/stabilite/${row.NkrID}?format=${encodeURIComponent(row.RaporFormati)}`, "_blank", "noopener,noreferrer")}
                       style={{
                         border: "none",
                         background: "transparent",

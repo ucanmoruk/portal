@@ -1,8 +1,9 @@
+import NumuneWorkspaceNotice from "@/components/NumuneWorkspaceNotice";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import OnayliRaporTable from "./OnayliRaporTable";
 import styles from "@/app/styles/table.module.css";
-import Link from "next/link";
+import Link from "@/components/NumuneWorkspaceLink";
 
 export const metadata = {
   title: "Rapor Takip — ÜGD Portal",
@@ -13,6 +14,7 @@ export default async function RaporTakipPage() {
 
   return (
     <div className={styles.page}>
+      <NumuneWorkspaceNotice />
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Rapor Takip</h1>

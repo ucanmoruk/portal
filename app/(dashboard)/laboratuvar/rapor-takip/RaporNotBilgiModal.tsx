@@ -1,4 +1,5 @@
 "use client";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useCallback, useEffect, useState } from "react";
 import styles from "@/app/styles/table.module.css";
@@ -22,7 +23,7 @@ export default function RaporNotBilgiModal({ target, onClose }: { target: RaporN
     if (!firma.id || cache[key]) return;
     setLoading(true); setError("");
     try {
-      const response = await fetch(`/api/firmalar/${firma.id}/genel-notlar`, { cache: "no-store" });
+      const response = await workspaceFetch(`/api/firmalar/${firma.id}/genel-notlar`, { cache: "no-store" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Firma notları alınamadı.");
       setCache(previous => ({ ...previous, [key]: Array.isArray(body.data) ? body.data : [] }));

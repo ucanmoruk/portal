@@ -155,6 +155,11 @@ const navGroups: NavGroup[] = [
       </svg>
     ),
     items: [
+      { label: "Numune Kabul", href: "/laboratuvar/root-kozmetik/numune-takip", menuKey: "laboratuvar.numune-takip" },
+      { label: "Numune Takip", href: "/laboratuvar/root-kozmetik/numune-takip-lab", menuKey: "laboratuvar.numune-takip-lab" },
+      { label: "Sonuç Girişi", href: "/laboratuvar/root-kozmetik/sonuc-giris", menuKey: "laboratuvar.sonuc-giris" },
+      { label: "Rapor Takip", href: "/laboratuvar/root-kozmetik/rapor-takip", menuKey: "laboratuvar.rapor-takip" },
+      { label: "Analiz - Numune Listesi", href: "/laboratuvar/root-kozmetik/analiz-numune-listesi", menuKey: "laboratuvar.analiz-numune-listesi" },
       { label: "Teklif Listesi", href: "/laboratuvar/root-kozmetik/teklif-listesi", menuKey: "laboratuvar.root-kozmetik.teklif-listesi" },
     ],
   },

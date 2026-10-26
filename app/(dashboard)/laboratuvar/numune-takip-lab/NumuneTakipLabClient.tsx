@@ -1,4 +1,6 @@
 "use client";
+import { useNumuneWorkspace } from "@/lib/numuneWorkspaceClient";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -146,6 +148,7 @@ function durumColor(durum: string): { bg: string; fg: string } {
 }
 
 export default function NumuneTakipLabClient() {
+  const { basePath, isRoot } = useNumuneWorkspace();
   const searchParams = useSearchParams();
   const [mainTab, setMainTab] = useState<MainKey>("kabul");
   const [formatTab, setFormatTab] = useState<ResultTab>("Tümü");
@@ -163,7 +166,7 @@ export default function NumuneTakipLabClient() {
 
   const fetchCounts = useCallback(() => {
     const params = new URLSearchParams({ year: "2026", terminDate: today });
-    fetch(`/api/numune-takip-lab/counts?${params}`, { cache: "no-store" })
+    workspaceFetch(`/api/numune-takip-lab/counts?${params}`, { cache: "no-store" })
       .then(r => r.json())
       .then((j: Counts) => setCounts({
         kabul: Number(j.kabul ?? 0),
@@ -193,7 +196,7 @@ export default function NumuneTakipLabClient() {
     setGlobalError("");
     setGlobalOpen(true);
     globalTimer.current = setTimeout(() => {
-      fetch(`/api/numune-takip-lab/global-search?search=${encodeURIComponent(q)}`, {
+      workspaceFetch(`/api/numune-takip-lab/global-search?search=${encodeURIComponent(q)}`, {
         cache: "no-store",
         signal: ctrl.signal,
       })
@@ -254,7 +257,7 @@ export default function NumuneTakipLabClient() {
     setGlobalOpen(false);
   };
 
-  const resultGroup = mainTab === "sonuc-kd" ? "K.D." : "Özel";
+  const resultGroup = isRoot ? (mainTab === "sonuc-kd" ? "K.D." : "Belge") : "Özel";
   const resultCounts = counts.byGroupLab?.[resultGroup];
 
   return (
@@ -262,10 +265,10 @@ export default function NumuneTakipLabClient() {
       {/* Ana tablar */}
       <div style={topBar}>
         <div style={{ ...tabContainer, minWidth: 0, flex: "0 1 auto" }}>
-          {MAIN_TABS.map(t => {
+          {MAIN_TABS.filter(t => isRoot || t.key !== "sonuc-kd").map(t => {
             // counts byFormatLab Record alanını da içerdiği için number'a daralt
             const v = t.key === "sonuc" || t.key === "sonuc-kd"
-              ? counts.byGroupLab?.[t.key === "sonuc-kd" ? "K.D." : "Özel"]?.total
+              ? counts.byGroupLab?.[t.key === "sonuc-kd" ? "K.D." : isRoot ? "Belge" : "Özel"]?.total
               : counts[t.key as keyof Counts];
             const n: number = typeof v === "number" ? v : 0;
             const active = mainTab === t.key;
@@ -277,7 +280,7 @@ export default function NumuneTakipLabClient() {
                 style={tabBtn(active)}
               >
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-                  {t.label}
+                  {t.key === "sonuc" && isRoot ? "Sonuç Girişi (Belge)" : t.label}
                   <span style={{
                     padding: "1px 7px", borderRadius: 9,
                     background: active ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.08)",
@@ -404,7 +407,7 @@ export default function NumuneTakipLabClient() {
                         </button>
                       )}
                       <Link
-                        href={`/laboratuvar/numune-form/${row.NkrID}`}
+                        href={`${basePath}/numune-form/${row.NkrID}`}
                         style={{
                           textDecoration: "none",
                           border: "none",

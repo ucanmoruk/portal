@@ -1,5 +1,7 @@
 "use client";
-import { NUMUNE_GRUPLARI } from "@/lib/numuneGroups";
+import { useNumuneWorkspace } from "@/lib/numuneWorkspaceClient";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
+
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -120,6 +122,7 @@ const RAPOR_DURUM_STYLE: Record<string, { bg: string; color: string; border: str
 
 // ── Ana bileşen ─────────────────────────────────────────────────
 export default function NumuneKabulTable() {
+  const { basePath, groups: allowedGroups } = useNumuneWorkspace();
   const router = useRouter();
   const [groups, setGroups]         = useState<EvrakGroup[]>([]);
   const [total, setTotal]           = useState(0);
@@ -183,7 +186,7 @@ export default function NumuneKabulTable() {
     });
 
   const handlePrint = (ids: number[], lang: "tr" | "en") => {
-    window.open(`/laboratuvar/rapor-yazdir?ids=${ids.join(",")}&lang=${lang}`, "_blank", "noopener,noreferrer");
+    window.open(`${basePath}/rapor-yazdir?ids=${ids.join(",")}&lang=${lang}`, "_blank", "noopener,noreferrer");
     setPrintMenuEvrak(null);
   };
 
@@ -193,7 +196,7 @@ export default function NumuneKabulTable() {
     if (ids.length === 0 || barcodeBusy) return;
     setBarcodeBusy(true);
     try {
-      const res = await fetch(`/api/numune-form/barcode-data?ids=${ids.join(",")}`);
+      const res = await workspaceFetch(`/api/numune-form/barcode-data?ids=${ids.join(",")}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Barkod verisi alınamadı");
       const data: BarcodeNumune[] = (json.data || []).map((d: any) => ({
@@ -253,7 +256,7 @@ export default function NumuneKabulTable() {
         (fr.odeme       ? `&odeme=${encodeURIComponent(fr.odeme)}` : "") +
         (fr.raporDurumu ? `&raporDurumu=${encodeURIComponent(fr.raporDurumu)}` : "") +
         (fr.grup        ? `&grup=${encodeURIComponent(fr.grup)}` : "");
-      const res = await fetch(
+      const res = await workspaceFetch(
         `/api/numune-kabul?page=${p}&limit=${l}&search=${encodeURIComponent(s)}${filterQs}`,
         { signal: ctrl.signal }
       );
@@ -329,7 +332,7 @@ export default function NumuneKabulTable() {
     setGroups(prev => prev.map(g => g.evrakNo === group.evrakNo ? { ...g, raporDurumu } : g));
     setDurumSaving(prev => ({ ...prev, [group.evrakNo]: true }));
     try {
-      const res = await fetch("/api/numune-kabul", {
+      const res = await workspaceFetch("/api/numune-kabul", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ evrakNo: group.evrakNo, raporDurumu }),
@@ -361,7 +364,7 @@ export default function NumuneKabulTable() {
     if (!deleteId) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/numune-kabul/${deleteId}`, { method: "DELETE" });
+      const res = await workspaceFetch(`/api/numune-kabul/${deleteId}`, { method: "DELETE" });
       if (!res.ok) throw new Error((await res.json()).error || "Silinemedi");
       setDeleteId(null);
       fetchData(page, search, limit, { clearFirst: false });
@@ -369,9 +372,9 @@ export default function NumuneKabulTable() {
     finally { setDeleting(false); }
   };
 
-  const openNew = () => { router.push("/laboratuvar/numune-form"); };
+  const openNew = () => { router.push(`${basePath}/numune-form`); };
   const openEdit = (n: NumuneItem) => {
-    window.open(`/laboratuvar/numune-form/${n.ID}`, "_blank", "noopener,noreferrer");
+    window.open(`${basePath}/numune-form/${n.ID}`, "_blank", "noopener,noreferrer");
   };
   const openProforma = (id: number) => {
     window.open(`/musteriler/proforma-listesi/${id}/duzenle`, "_blank", "noopener,noreferrer");
@@ -386,7 +389,7 @@ export default function NumuneKabulTable() {
       try {
         const query = invoiceSearch.trim().replace(/^ROT(\d+)(?:\/\d+)?$/i, "$1");
         const params = new URLSearchParams({ search: query, page: String(invoicePage), limit: "30" });
-        const res = await fetch(`/api/teklifler?${params}`, { signal: controller.signal });
+        const res = await workspaceFetch(`/api/teklifler?${params}`, { signal: controller.signal });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Teklifler alınamadı.");
         if (!controller.signal.aborted) {
@@ -577,7 +580,7 @@ export default function NumuneKabulTable() {
         </div>
         <div className={styles.toolbarRight} style={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button className={styles.addBtn}
-            onClick={() => router.push("/laboratuvar/yeni-numune")} >
+            onClick={() => router.push(`${basePath}/yeni-numune`)} >
             Çoklu Giriş
           </button>
           <button className={styles.addBtn} onClick={openNew}>
@@ -611,7 +614,7 @@ export default function NumuneKabulTable() {
         <select value={grupFilter} onChange={e => applyFilters({ grup: e.target.value })}
           style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 12, background: "var(--color-bg-elevated, #fff)", color: "inherit", cursor: "pointer" }}>
           <option value="">Grup: Tümü</option>
-          {NUMUNE_GRUPLARI.map(grup => <option key={grup} value={grup}>{grup}</option>)}
+          {allowedGroups.map(grup => <option key={grup} value={grup}>{grup}</option>)}
         </select>
         <select value={raporDurumFilter} onChange={e => applyFilters({ raporDurumu: e.target.value })}
           style={{
@@ -990,7 +993,7 @@ export default function NumuneKabulTable() {
                             </td>
                             <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
                               <a
-                                href={`/laboratuvar/numune-form/${n.ID}`}
+                                href={`${basePath}/numune-form/${n.ID}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{

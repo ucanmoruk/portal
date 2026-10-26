@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise from "@/lib/db";
 import styles from "@/app/styles/table.module.css";
-import Link from "next/link";
+import Link from "@/components/NumuneWorkspaceLink";
 
 export const metadata = {
   title: "Numune Hamveri — ÜGD Portal",

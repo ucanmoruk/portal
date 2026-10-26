@@ -1,4 +1,5 @@
 "use client";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 import { useEffect, useRef, useState } from "react";
 import { CHALLENGE_ASSESSMENTS, type ChallengeAssessment, type ChallengeData } from "@/lib/challengeImport";
 import styles from "./challengeImport.module.css";
@@ -18,7 +19,7 @@ export default function ChallengeImportPanel({ nkrId, format, onSaved }: { nkrId
   const url = `/api/rapor-takip/${nkrId}/challenge`;
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`${url}?format=${encodeURIComponent(format)}`, { signal: controller.signal })
+    workspaceFetch(`${url}?format=${encodeURIComponent(format)}`, { signal: controller.signal })
       .then(async response => { const result = await response.json(); if (!response.ok) throw new Error(result.error); return result; })
       .then(result => { if (result.veri) { setData(result.veri); setAssessment(result.veri.assessment); } })
       .catch(error => { if (error.name !== "AbortError") setError(error.message || "Kayıtlı sonuçlar alınamadı."); })
@@ -31,7 +32,7 @@ export default function ChallengeImportPanel({ nkrId, format, onSaved }: { nkrId
     try {
       if (!/\.xlsx$/i.test(file.name) || file.size > 10 * 1024 * 1024) throw new Error("En fazla 10 MB boyutunda .xlsx dosyası seçin.");
       const body = new FormData(); body.append("file", file); body.append("format", format);
-      const response = await fetch(url, { method: "POST", body });
+      const response = await workspaceFetch(url, { method: "POST", body });
       const result = await response.json(); if (!response.ok) throw new Error(result.error || "Excel okunamadı.");
       const previews: SheetPreview[] = result.sheets;
       setSheets(previews); setAssessment("");
@@ -50,7 +51,7 @@ export default function ChallengeImportPanel({ nkrId, format, onSaved }: { nkrId
     actionInProgress.current = true; setBusy(true); setError(""); setNotice("");
     try {
       const veri: ChallengeData = { ...data, assessment };
-      const response = await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ format, veri, onayaGonder: submit }) });
+      const response = await workspaceFetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ format, veri, onayaGonder: submit }) });
       const result = await response.json(); if (!response.ok) throw new Error(result.error || "Sonuçlar kaydedilemedi.");
       setNotice(submit ? "Challenge sonuçları kaydedildi ve onaya gönderildi." : "Challenge sonuçları kaydedildi.");
       onSaved(veri);

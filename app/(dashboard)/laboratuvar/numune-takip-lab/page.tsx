@@ -1,3 +1,4 @@
+import NumuneWorkspaceNotice from "@/components/NumuneWorkspaceNotice";
 import { Suspense } from "react";
 import NumuneTakipLabClient from "./NumuneTakipLabClient";
 import styles from "@/app/styles/table.module.css";
@@ -9,6 +10,7 @@ export const metadata = {
 export default function NumuneTakipLabPage() {
   return (
     <div className={styles.page}>
+      <NumuneWorkspaceNotice />
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Numune Takip</h1>

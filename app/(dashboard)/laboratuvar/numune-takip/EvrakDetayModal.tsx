@@ -1,4 +1,5 @@
 "use client";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -114,7 +115,7 @@ function SeciciModal({
         const t = tur === "AnalizTalep" ? "Analiz" : "Destek";
         url = `/api/talepler?tur=${t}&limit=30&search=${encodeURIComponent(search)}`;
       }
-      const r = await fetch(url);
+      const r = await workspaceFetch(url);
       const j = await r.json();
       setRows(j.data || []);
     } catch { setRows([]); } finally { setLoading(false); }
@@ -215,7 +216,7 @@ export default function EvrakDetayModal({ evrakNo, onClose }: { evrakNo: string;
   const load = useCallback(async () => {
     setLoading(true); setErr("");
     try {
-      const r = await fetch(`/api/evrak/${encodeURIComponent(evrakNo)}/eslestirme`);
+      const r = await workspaceFetch(`/api/evrak/${encodeURIComponent(evrakNo)}/eslestirme`);
       if (!r.ok) throw new Error((await r.json()).error || "Yüklenemedi");
       setData(await r.json());
     } catch (e: any) { setErr(e.message); }
@@ -227,7 +228,7 @@ export default function EvrakDetayModal({ evrakNo, onClose }: { evrakNo: string;
   const handleSeciliKayit = async ({ id, kod }: { id: number; kod: string }) => {
     if (!secici) return;
     try {
-      const r = await fetch(`/api/evrak/${encodeURIComponent(evrakNo)}/eslestirme`, {
+      const r = await workspaceFetch(`/api/evrak/${encodeURIComponent(evrakNo)}/eslestirme`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tur: secici, hedefId: id, hedefKod: kod }),
       });
@@ -244,7 +245,7 @@ export default function EvrakDetayModal({ evrakNo, onClose }: { evrakNo: string;
   const remove = async (id: number) => {
     if (!confirm("Bu eşleştirme kaldırılsın mı?")) return;
     try {
-      const r = await fetch(`/api/evrak/${encodeURIComponent(evrakNo)}/eslestirme?id=${id}`, { method: "DELETE" });
+      const r = await workspaceFetch(`/api/evrak/${encodeURIComponent(evrakNo)}/eslestirme?id=${id}`, { method: "DELETE" });
       if (!r.ok) { alert("Kaldırılamadı."); return; }
       load();
     } catch (e: any) { alert(e?.message || "Kaldırılamadı."); }
@@ -257,7 +258,7 @@ export default function EvrakDetayModal({ evrakNo, onClose }: { evrakNo: string;
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const r = await fetch(`/api/evrak/${encodeURIComponent(evrakNo)}/dosya`, { method: "POST", body: fd });
+      const r = await workspaceFetch(`/api/evrak/${encodeURIComponent(evrakNo)}/dosya`, { method: "POST", body: fd });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { alert(j.error || "Yüklenemedi."); return; }
       load();

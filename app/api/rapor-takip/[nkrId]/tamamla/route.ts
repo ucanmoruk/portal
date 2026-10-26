@@ -1,3 +1,4 @@
+import { checkNumuneWorkspace } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -29,6 +30,8 @@ export async function POST(
     if (!allowed.has(durum)) return Response.json({ error: "Gecersiz durum" }, { status: 400 });
 
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
+    if (workspaceError) return workspaceError;
 
     await pool.request()
       .input("nkrId", nkrIdNum)

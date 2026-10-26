@@ -1,3 +1,5 @@
+import { groupMatchesWorkspace } from "@/lib/numuneWorkspace";
+import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -145,6 +147,7 @@ async function backfillRecentProformaLinksUncached(pool: any) {
 //               odemeDurumu, numuneler: NumuneItem[] }
 // ----------------------------------------------------------------
 export async function GET(request: NextRequest) {
+  const workspaceFilter = numuneWorkspaceSql(request);
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
 
@@ -273,7 +276,7 @@ export async function GET(request: NextRequest) {
     const baseJoin = `
       FROM NKR n
       LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) f ON f.ID = n.Firma_ID
-      WHERE n.Durum = 'Aktif' ${searchClause} ${filterClause}
+      WHERE n.Durum = 'Aktif' AND ${workspaceFilter} ${searchClause} ${filterClause}
     `;
 
     const signal = request.signal;
@@ -342,7 +345,7 @@ export async function GET(request: NextRequest) {
               SELECT TOP 1 nd.ProjeID
               FROM NKR n2
               INNER JOIN NumuneDetay nd ON nd.RaporID = n2.ID
-              WHERE n2.Evrak_No = n.Evrak_No AND n2.Durum = 'Aktif'
+              WHERE n2.Evrak_No = n.Evrak_No AND n2.Durum = 'Aktif' AND ${numuneWorkspaceSql(request, 'n2')}
                 AND nd.ProjeID IS NOT NULL
             )                                         AS ProjeFirmaID,
             (
@@ -350,7 +353,7 @@ export async function GET(request: NextRequest) {
               FROM   NKR n2
               LEFT JOIN NumuneDetay nd ON nd.RaporID = n2.ID
               LEFT JOIN (SELECT ID, Firma_Adi AS Ad, Adres, Mail AS Email, Telefon, Vergi_Dairesi AS VergiDairesi, Vergi_No AS VergiNo, Yetkili FROM Firma) rt ON nd.ProjeID = rt.ID
-              WHERE  n2.Evrak_No = n.Evrak_No AND n2.Durum = 'Aktif'
+              WHERE  n2.Evrak_No = n.Evrak_No AND n2.Durum = 'Aktif' AND ${numuneWorkspaceSql(request, 'n2')}
                 AND  rt.Ad IS NOT NULL
             )                                         AS ProjeAd,
             CAST(CASE WHEN EXISTS (
@@ -414,7 +417,7 @@ export async function GET(request: NextRequest) {
             ELSE N'Onay Bekliyor'
           END AS Asama
         FROM NKR n
-        WHERE n.Durum = 'Aktif'
+        WHERE n.Durum = 'Aktif' AND ${workspaceFilter}
           AND n.Evrak_No IN (${inParams})
           ${grup ? "AND n.Grup = @grup" : ""}
         ORDER BY n.Evrak_No DESC, n.RaporNo DESC
@@ -484,6 +487,7 @@ export async function PATCH(request: Request) {
         UPDATE NKR
         SET Rapor_Durumu = @Rapor_Durumu
         WHERE Evrak_No = @Evrak_No
+          AND ${numuneWorkspaceSql(request, "NKR")}
           AND Durum = 'Aktif'
       `);
 
@@ -503,6 +507,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { Tarih, Evrak_No, RaporNo, Firma_ID, Numune_Adi, Grup } = body;
+    if (!groupMatchesWorkspace(request, Grup)) return Response.json({ error: "Bu çalışma alanı için geçersiz numune grubu." }, { status: 400 });
 
     if (!Evrak_No?.trim())   return Response.json({ error: "Evrak No zorunludur."   }, { status: 400 });
     if (!RaporNo?.trim())    return Response.json({ error: "Rapor No zorunludur."   }, { status: 400 });

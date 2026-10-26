@@ -1,3 +1,4 @@
+import { checkNumuneWorkspace, groupMatchesWorkspace } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -19,7 +20,10 @@ export async function PUT(
     const { Tarih, Evrak_No, RaporNo, Firma_ID, Numune_Adi, Grup } = body;
 
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(id));
+    if (workspaceError) return workspaceError;
     const nkrId = Number(id);
+    if (!groupMatchesWorkspace(request, Grup)) return Response.json({ error: "Bu çalışma alanı için geçersiz numune grubu." }, { status: 400 });
     const previousReference = (await pool.request()
       .input("id", nkrId)
       .query(`SELECT TOP 1 Evrak_No, RaporNo FROM NKR WHERE ID = @id`)).recordset?.[0];
@@ -61,7 +65,7 @@ export async function PUT(
 // DELETE /api/numune-kabul/[id]  (soft-delete: Durum = 'Pasif')
 // ----------------------------------------------------------------
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);

@@ -1,3 +1,4 @@
+import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -6,6 +7,7 @@ import { loadBilesenSonuclar } from "@/lib/altParametre";
 
 // ── GET /api/sonuc-giris — Numune bazlı gruplu liste ─────────────────────────
 export async function GET(request: Request) {
+  const workspaceFilter = numuneWorkspaceSql(request);
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
 
@@ -50,7 +52,7 @@ export async function GET(request: Request) {
       : "1";
 
     // WHERE koşulları
-    const whereClauses: string[] = ["n.Durum = 'Aktif'"];
+    const whereClauses: string[] = ["n.Durum = 'Aktif'", workspaceFilter];
 
     if (search) {
       whereClauses.push(`(

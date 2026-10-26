@@ -1,4 +1,5 @@
 "use client";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useEffect, useState } from "react";
 import styles from "@/app/styles/table.module.css";
@@ -32,7 +33,7 @@ export default function Tab4Gecmis({ recordId }: Props) {
     
     console.log("Loading logs for recordId:", recordId); // Debug
     
-    fetch(`/api/numune-form/${recordId}/log`)
+    workspaceFetch(`/api/numune-form/${recordId}/log`)
       .then(r => {
         console.log("Response status:", r.status); // Debug
         return r.json();

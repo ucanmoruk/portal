@@ -2,6 +2,7 @@ import { getPortalUser } from "@/lib/portalYetki";
 import { dokumanYetkileri } from "@/lib/kysDokumanYetki";
 import path from "node:path";
 import { getKysDokuman, getKysDokumanDosya, saveKysDokumanDosya } from "@/lib/kysDokumanStore";
+import { isWordFile } from "@/lib/officePdf";
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getPortalUser();
@@ -46,7 +47,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   ]);
   if (!file) return fail("Doküman dosyası bulunamadı.", 404);
 
-  const download = new URL(request.url).searchParams.get("download") === "1" || file.type !== "application/pdf";
+  const requestedDownload = new URL(request.url).searchParams.get("download") === "1";
+  if (!requestedDownload && (file.type === "application/pdf" || (document?.tur === "Form" && isWordFile(file.type, file.name)))) {
+    return Response.redirect(new URL(`/laboratuvar/kys/dokuman-yonetimi/${documentId}/onizleme`, request.url));
+  }
+  const download = requestedDownload || file.type !== "application/pdf";
   const extension = path.extname(file.name);
   const requestedName = document
     ? `${document.kod} ${document.baslik}${extension}`

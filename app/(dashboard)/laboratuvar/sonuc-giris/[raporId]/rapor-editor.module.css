@@ -357,7 +357,7 @@
   .aksiyonBar { display: none !important; }
   .printOnly { display: block !important; }
 
-  body { background: #fff; font-family: Arial, sans-serif; }
+  :global(body):has(.pageWrapper) { background: #fff; font-family: Arial, sans-serif; }
 
   .printHeader {
     display: flex;

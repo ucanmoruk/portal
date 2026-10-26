@@ -1,3 +1,4 @@
+import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getLabScope, assertLabServices, LabAccessError } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -27,6 +28,10 @@ export async function PATCH(
     const birimEn = (body.birimEn || "").trim() || null;
 
     const pool = await cosmoPool;
+    if (new URL(request.url).searchParams.has("workspace")) {
+      const scoped = await pool.request().input("workspaceX1Id", x1Id).query(`SELECT x.ID FROM NumuneX1 x INNER JOIN NKR n ON n.ID = x.RaporID WHERE x.ID = @workspaceX1Id AND ${numuneWorkspaceSql(request)}`);
+      if (!scoped.recordset.length) return Response.json({ error: "Analiz bu çalışma alanında bulunamadı." }, { status: 404 });
+    }
     await assertLabServices(await getLabScope(session), null, [x1Id]);
 
     // Hangi opsiyonel kolonlar var?

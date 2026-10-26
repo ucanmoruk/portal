@@ -1,3 +1,4 @@
+import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -21,6 +22,7 @@ const bucketSql = (expr: string) => `
 // Her (NKR.ID, RaporFormati) kombinasyonu icin bir satir doner.
 // Ayni rapor numarasina ait birden fazla rapor formati varsa birden fazla satir gelir.
 export async function GET(request: Request) {
+  const workspaceFilter = numuneWorkspaceSql(request);
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz erisim" }, { status: 401 });
 
@@ -38,7 +40,7 @@ export async function GET(request: Request) {
     //        "approval" → Onaya Gönder'le gelmiş kayıtlar (Onay Bekleniyor)
     const phase = (searchParams.get("phase") || "").trim();
     const grup = searchParams.get("grup")?.trim() || "";
-    if (grup && grup !== "Özel" && grup !== "K.D.") return Response.json({ error: "Geçersiz numune kabul türü" }, { status: 400 });
+    if (grup && grup !== "Özel" && grup !== "K.D." && grup !== "Belge") return Response.json({ error: "Geçersiz numune kabul türü" }, { status: 400 });
     const offset      = (page - 1) * limit;
 
     const pool = await cosmoPool;
@@ -221,7 +223,7 @@ export async function GET(request: Request) {
       INNER JOIN NumuneX1         x1 ON x1.RaporID  = n.ID
       INNER JOIN StokAnalizListesi s  ON s.ID = x1.AnalizID
       ${hasLabKabul ? `${acceptedOnly ? "INNER" : "LEFT"} JOIN NKR_LabKabul lk ON lk.NkrID = n.ID AND ${bucketSql("lk.RaporFormati")} = ${raporTuruNormExpr}` : ""}
-      WHERE n.Durum = 'Aktif'
+      WHERE n.Durum = 'Aktif' AND ${workspaceFilter}
         ${labFilter}
         ${grup ? 'AND LTRIM(RTRIM(n.Grup)) = @grup' : ''}
         ${searchFilter}

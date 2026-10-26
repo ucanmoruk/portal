@@ -1,3 +1,4 @@
+import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -22,6 +23,7 @@ const bucketSql = (expr: string) => `
 `;
 
 export async function GET(request: NextRequest) {
+  const workspaceFilter = numuneWorkspaceSql(request);
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz erişim" }, { status: 401 });
 
@@ -103,7 +105,7 @@ export async function GET(request: NextRequest) {
       INNER JOIN NumuneX1 x1 ON x1.RaporID = n.ID
       INNER JOIN StokAnalizListesi s ON s.ID = x1.AnalizID
       ${hasLabKabul ? `LEFT JOIN NKR_LabKabul lk ON lk.NkrID = n.ID AND ${bucketSql("lk.RaporFormati")} = ${bucketSql(RAPOR_FORMAT_EXPR)}` : ""}
-      WHERE n.Durum = 'Aktif'
+      WHERE n.Durum = 'Aktif' AND ${workspaceFilter}
         AND (
           LOWER(COALESCE(CAST(n.Evrak_No AS NVARCHAR), '')) LIKE LOWER(@search)
           OR LOWER(COALESCE(CAST(n.RaporNo AS NVARCHAR), '')) LIKE LOWER(@search)

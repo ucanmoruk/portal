@@ -1,5 +1,6 @@
 "use client";
-import { NUMUNE_GRUPLARI } from "@/lib/numuneGroups";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
+import { useNumuneWorkspace } from "@/lib/numuneWorkspaceClient";
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import styles from "@/app/styles/table.module.css";
@@ -71,7 +72,7 @@ function FirmaSearch({
     timer.current = setTimeout(async () => {
       if (val.trim().length < 1) { setRes([]); setOpen(false); return; }
       try {
-        const r = await fetch(`/api/numune-form/firmalar?q=${encodeURIComponent(val)}`);
+        const r = await workspaceFetch(`/api/numune-form/firmalar?q=${encodeURIComponent(val)}`);
         const data = await r.json();
         setRes(data);
         setOpen(data.length > 0);
@@ -85,7 +86,7 @@ function FirmaSearch({
     setCreating(true);
     setCreateError("");
     try {
-      const response = await fetch("/api/firmalar", {
+      const response = await workspaceFetch("/api/firmalar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...newFirma, Ad: ad }),
@@ -233,8 +234,9 @@ function WebcamModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => v
 const BIRIMLER = ["g", "mL", "L", "Adet"];
 const KARALAR  = ["Basit Karar Kuralı", "Müşteri Lehine", "Müşteri Aleyhine"];
 const DILLER   = ["Türkçe", "İngilizce", "Hem Türkçe Hem İngilizce"];
-const GRUPLAR = NUMUNE_GRUPLARI;
+
 export default function Tab1Bilgiler({ form, onChange, lookup, loadingNos }: Props) {
+  const { groups: GRUPLAR } = useNumuneWorkspace();
   const fileRef         = useRef<HTMLInputElement>(null);
   const [webcam, setWC] = useState(false);
 

@@ -1,5 +1,5 @@
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPortalUser } from "@/lib/portalYetki";
 import { dokumanYetkileri } from "@/lib/kysDokumanYetki";
 import { getKysDokuman } from "@/lib/kysDokumanStore";
+import { getUploadedKysPdf } from "@/lib/kysDokumanPdf";
+import { isWordFile } from "@/lib/officePdf";
 import { renderUrlToPdf } from "@/lib/chromiumPdf";
 import { getRaporPdfBaseUrl } from "@/lib/raporPdfBaseUrl";
 
@@ -38,9 +40,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!Number.isInteger(documentId) || documentId <= 0) return NextResponse.json({ error: "Geçersiz doküman." }, { status: 400 });
   const doc = await getKysDokuman(documentId);
   if (!doc) return NextResponse.json({ error: "Doküman bulunamadı." }, { status: 404 });
-  if (doc.hasDosya) return NextResponse.redirect(new URL(`/api/kys/dokumanlar/${doc.id}/dosya`, req.url));
-
   try {
+    const disposition = req.nextUrl.searchParams.get("download") === "1" ? "attachment" : "inline";
+    if (doc.hasDosya) {
+      if (doc.dosyaMimeType !== "application/pdf" && !(doc.tur === "Form" && isWordFile(doc.dosyaMimeType || "", doc.dosyaAdi || ""))) {
+        return NextResponse.json({ error: "Bu dosya PDF veya Word formu değil." }, { status: 415 });
+      }
+      const pdf = await getUploadedKysPdf(doc.id);
+      return new Response(new Uint8Array(pdf), { headers: {
+        "Content-Type": "application/pdf",
+        "Content-Length": String(pdf.length),
+        "Content-Disposition": contentDisposition(downloadFileName(doc.kod, doc.baslik, "pdf"), disposition),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, no-store",
+      } });
+    }
     const logo = await readFile(path.join(process.cwd(), "public", "kys-document-logo.png"));
     const logoData = `data:image/png;base64,${logo.toString("base64")}`;
     const origin = getRaporPdfBaseUrl(req);
@@ -80,7 +94,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return new Response(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": contentDisposition(downloadFileName(doc.kod, doc.baslik, "pdf")),
+        "Content-Disposition": contentDisposition(downloadFileName(doc.kod, doc.baslik, "pdf"), disposition),
         "Cache-Control": "private, no-store",
       },
     });

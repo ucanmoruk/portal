@@ -1,3 +1,4 @@
+import { checkNumuneWorkspace } from "@/lib/numuneWorkspace";
 import { getLabScope, labScopeSql, assertLabServices, LabAccessError } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -50,6 +51,8 @@ export async function GET(
 
   try {
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
+    if (workspaceError) return workspaceError;
     const labScope = await getLabScope(session);
 
     // Hangi opsiyonel kolonlar mevcut?
@@ -158,6 +161,8 @@ export async function PATCH(
     if (updates.length === 0) return Response.json({ ok: true });
 
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
+    if (workspaceError) return workspaceError;
     const labScope = await getLabScope(session);
 
     await assertLabServices(labScope, nkrIdNum, updates.map(u => Number(u.x1Id)));

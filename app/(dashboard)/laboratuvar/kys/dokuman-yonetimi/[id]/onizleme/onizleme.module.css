@@ -32,10 +32,10 @@
 @media(max-width:800px){.header{grid-template-columns:1fr}.header h1{text-align:left}.body{grid-template-columns:1fr}.body aside{position:static}.shell>footer{position:static}}
 @media print {
   @page { size: A4; margin: 32mm 14mm 22mm; }
-  :global(html), :global(body), :global(body.kys-printing) { margin: 0 !important; background: #fff !important; }
-  :global(body.kys-printing [data-dashboard-sidebar]), :global(body.kys-printing [data-dashboard-header]) { display: none !important; }
-  :global(body.kys-printing [data-dashboard-main]) { margin-left: 0 !important; min-height: 0 !important; background: #fff !important; }
-  :global(body.kys-printing [data-dashboard-content]) { padding: 0 !important; }
+  :global(html):has(.shell), :global(body):has(.shell) { margin: 0 !important; background: #fff !important; }
+  :global(body.kys-printing):has(.shell) :global([data-dashboard-sidebar]), :global(body.kys-printing):has(.shell) :global([data-dashboard-header]) { display: none !important; }
+  :global(body.kys-printing):has(.shell) :global([data-dashboard-main]) { margin-left: 0 !important; min-height: 0 !important; background: #fff !important; }
+  :global(body.kys-printing):has(.shell) :global([data-dashboard-content]) { padding: 0 !important; }
   .shell { position: static !important; inset: auto !important; display: block !important; width: 100% !important; min-height: 0 !important; overflow: visible !important; background: #fff !important; color: #111 !important; }
   .header { position: fixed; top: -27mm; left: 0; right: 0; min-height: 24mm; padding: 2mm 0; grid-template-columns: 42mm 1fr 55mm; box-shadow: none; }
   .header img { width: 40mm; height: auto; }

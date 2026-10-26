@@ -1,4 +1,5 @@
 "use client";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { buildKabulMail, type KabulMailData } from "@/lib/numuneKabulMailTemplate";
@@ -23,7 +24,7 @@ export default function KabulMailModal({ ids, onClose }: { ids: number[]; onClos
   }, []);
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/numune-kabul/bilgi-maili", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "preview", ids }), signal: controller.signal })
+    workspaceFetch("/api/numune-kabul/bilgi-maili", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "preview", ids }), signal: controller.signal })
       .then(async res => { const json = await res.json(); if (!res.ok) throw new Error(json.error); return json; })
       .then(json => { setData(json); setTo(json.email); setKonu(json.konu); setMesaj(json.mesaj); })
       .catch(e => { if (e.name !== "AbortError") setError(e.message || "Önizleme alınamadı"); });
@@ -33,7 +34,7 @@ export default function KabulMailModal({ ids, onClose }: { ids: number[]; onClos
     if (sending.current) return;
     sending.current = true; setBusy(true); setError("");
     try {
-      const res = await fetch("/api/numune-kabul/bilgi-maili", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", ids, to, cc, konu, mesaj }) });
+      const res = await workspaceFetch("/api/numune-kabul/bilgi-maili", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", ids, to, cc, konu, mesaj }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Gönderilemedi");
       setSent(true);

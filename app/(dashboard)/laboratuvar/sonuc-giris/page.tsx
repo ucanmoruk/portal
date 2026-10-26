@@ -1,3 +1,4 @@
+import NumuneWorkspaceNotice from "@/components/NumuneWorkspaceNotice";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import styles from "@/app/styles/table.module.css";
@@ -9,6 +10,7 @@ export default async function SonucGirisPage() {
   await getServerSession(authOptions);
   return (
     <div className={styles.page}>
+      <NumuneWorkspaceNotice />
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Sonuç Girişi</h1>

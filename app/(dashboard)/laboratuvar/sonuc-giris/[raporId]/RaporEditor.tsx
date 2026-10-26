@@ -1,4 +1,5 @@
 "use client";
+import { useNumuneWorkspace } from "@/lib/numuneWorkspaceClient";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -156,6 +157,7 @@ function SeksiyonBaslik({ fmt, label, count }: { fmt: string; label: string; cou
 
 // ── Ana Bileşen ──────────────────────────────────────────────────
 export default function RaporEditor({ raporId }: { raporId: string }) {
+  const { basePath } = useNumuneWorkspace();
   const router = useRouter();
   const [baslik] = useState<RaporBaslik>(MOCK_BASLIK);
   const [standartRows, setStandartRows] = useState<StandartSatir[]>(MOCK_STANDART);
@@ -201,7 +203,7 @@ export default function RaporEditor({ raporId }: { raporId: string }) {
     <div className={ed.pageWrapper}>
       {/* ── Üst navigasyon ── */}
       <div className={ed.navBar}>
-        <button className={ed.backBtn} onClick={() => router.push("/laboratuvar/sonuc-giris")}>
+        <button className={ed.backBtn} onClick={() => router.push(`${basePath}/sonuc-giris`)}>
           <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
             <path fillRule="evenodd" d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clipRule="evenodd" />
           </svg>
@@ -451,7 +453,7 @@ export default function RaporEditor({ raporId }: { raporId: string }) {
           </button>
           <button
             className={styles.cancelBtn}
-            onClick={() => router.push("/laboratuvar/sonuc-giris")}
+            onClick={() => router.push(`${basePath}/sonuc-giris`)}
           >
             Vazgeç
           </button>

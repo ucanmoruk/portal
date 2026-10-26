@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import Link from "next/link";
+import Link from "@/components/NumuneWorkspaceLink";
 import styles from "@/app/styles/table.module.css";
 import RaporMailLogTable from "./RaporMailLogTable";
 

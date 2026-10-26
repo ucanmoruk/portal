@@ -8,5 +8,5 @@ export const metadata: Metadata = { title: "Root Kozmetik" };
 export default async function RootKozmetikPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
-  redirect("/laboratuvar/root-kozmetik/teklif-listesi");
+  redirect("/laboratuvar/root-kozmetik/numune-takip");
 }

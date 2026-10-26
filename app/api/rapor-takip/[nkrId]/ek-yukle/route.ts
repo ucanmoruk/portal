@@ -1,3 +1,4 @@
+import { checkNumuneWorkspace } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -27,6 +28,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { nkrIdNum, format, ok } = parse(request, nkrId);
   if (!ok) return Response.json({ error: "Geçersiz istek" }, { status: 400 });
   const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
+    if (workspaceError) return workspaceError;
   const ek = await getRaporEk(pool, nkrIdNum, format);
   return Response.json({ ek });
 }
@@ -59,6 +62,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const token = genToken();
     const up = await uploadRaporPdfToFtp({ pdfBuffer: buf, token });
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
+    if (workspaceError) return workspaceError;
     await setRaporEk(pool, nkrIdNum, format, up.publicUrl, token, userId);
     return Response.json({ ok: true, ek: { ekUrl: up.publicUrl, ekToken: token } });
   } catch (e: any) {
@@ -75,6 +80,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const { nkrIdNum, format, ok } = parse(request, nkrId);
   if (!ok) return Response.json({ error: "Geçersiz istek" }, { status: 400 });
   const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
+    if (workspaceError) return workspaceError;
   await deleteRaporEk(pool, nkrIdNum, format);
   return Response.json({ ok: true });
 }

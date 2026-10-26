@@ -1,3 +1,4 @@
+import { checkNumuneWorkspace } from "@/lib/numuneWorkspace";
 import { getLabScope, assertLabFormat, LabAccessError } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -84,6 +85,8 @@ export async function GET(
 
   try {
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
+    if (workspaceError) return workspaceError;
     await assertLabFormat(await getLabScope(session), nkrIdNum, format);
     const json = await getStabiliteVeriJson(pool, nkrIdNum, format);
     return Response.json({ veri: json ? JSON.parse(json) : null });
@@ -111,6 +114,8 @@ export async function PUT(
 
   try {
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
+    if (workspaceError) return workspaceError;
     await assertLabFormat(await getLabScope(session), nkrIdNum, format);
     const previousJson = await getStabiliteVeriJson(pool, nkrIdNum, format);
     const nextJson = JSON.stringify(body.veri);

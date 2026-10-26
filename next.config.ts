@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["nodemailer", "mssql", "mysql2", "jszip", "docx", "pizzip", "docxtemplater", "mammoth", "pdf-parse", "pdfjs-dist"],
   outputFileTracingIncludes: {
+    "/api/kys/pdf-worker": ["./node_modules/pdfjs-dist/build/pdf.mjs", "./node_modules/pdfjs-dist/build/pdf.worker.min.mjs"],
+    "/api/kys/dokumanlar/[id]/pdf": ["./scripts/convert-word-to-pdf.ps1"],
     "/api/urunler/rapor-sablon": ["./node_modules/@sparticuz/chromium/bin/**/*"],
     "/api/eurolab/validations/[id]/pdf": ["./node_modules/@sparticuz/chromium/bin/**/*"],
     // Rapor Takip — imzalı PDF indirme ve toplu mail (her ikisi de Chromium ile

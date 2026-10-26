@@ -1,5 +1,7 @@
 "use client";
-import { NUMUNE_GRUPLARI } from "@/lib/numuneGroups";
+import { useNumuneWorkspace } from "@/lib/numuneWorkspaceClient";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
+
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
@@ -50,7 +52,7 @@ interface NumuneCard {
   error: string;
 }
 
-const GRUPLAR = NUMUNE_GRUPLARI;
+
 const BIRIMLER = ["g", "mL", "L", "Adet"];
 const KARALAR = ["Basit Karar Kuralı", "Müşteri Lehine", "Müşteri Aleyhine"];
 const DILLER = ["Türkçe", "İngilizce", "Hem Türkçe Hem İngilizce"];
@@ -126,7 +128,7 @@ function FirmaSearch({ label, value, displayValue, onChange, placeholder, allowC
     timer.current = setTimeout(async () => {
       if (val.trim().length < 1) { setRes([]); setOpen(false); return; }
       try {
-        const r = await fetch(`/api/numune-form/firmalar?q=${encodeURIComponent(val)}`);
+        const r = await workspaceFetch(`/api/numune-form/firmalar?q=${encodeURIComponent(val)}`);
         const data = await r.json();
         setRes(data); setOpen(data.length > 0);
       } catch { setRes([]); }
@@ -139,7 +141,7 @@ function FirmaSearch({ label, value, displayValue, onChange, placeholder, allowC
     setCreating(true);
     setCreateError("");
     try {
-      const response = await fetch("/api/firmalar", {
+      const response = await workspaceFetch("/api/firmalar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...newFirma, Ad: ad }),
@@ -246,7 +248,7 @@ function HizmetPanel({ tarih, rows, onChange }: { tarih: string; rows: HizmetRow
     timer.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const r = await fetch(`/api/teklifler/lookup?type=hizmetler&q=${encodeURIComponent(val)}`);
+        const r = await workspaceFetch(`/api/teklifler/lookup?type=hizmetler&q=${encodeURIComponent(val)}`);
         const j = await r.json();
         setOpts(j.data || []);
       } finally { setSearching(false); }
@@ -256,7 +258,7 @@ function HizmetPanel({ tarih, rows, onChange }: { tarih: string; rows: HizmetRow
   const loadPaketler = async () => {
     setPaketLoading(true);
     try {
-      const r = await fetch("/api/teklifler/lookup?type=paketler");
+      const r = await workspaceFetch("/api/teklifler/lookup?type=paketler");
       const j = await r.json();
       setPaketler(j.data || []);
     } finally { setPaketLoading(false); }
@@ -288,7 +290,7 @@ function HizmetPanel({ tarih, rows, onChange }: { tarih: string; rows: HizmetRow
   const addPaket = async (x3id: number) => {
     setLoadingPaketId(x3id);
     try {
-      const r = await fetch(`/api/numune-form/paket-items?x3id=${x3id}`);
+      const r = await workspaceFetch(`/api/numune-form/paket-items?x3id=${x3id}`);
       const raw = r.ok ? await r.json() : [];
       const items: any[] = Array.isArray(raw) ? raw : [];
       const next = [...rows];
@@ -499,12 +501,13 @@ function CameraCapture({ onCapture, onClose }: {
 
 // ── Ana bileşen ────────────────────────────────────────────
 export default function YeniNumuneClient() {
+  const { basePath, groups: GRUPLAR } = useNumuneWorkspace();
   const today = new Date().toISOString().split("T")[0]!;
 
   const [evrak, setEvrak] = useState<EvrakForm>({
     Tarih: today, Evrak_No: "", Teklif_No: "", Talep_No: "",
     Karar: "Basit Karar Kuralı", Dil: "Türkçe",
-    Firma_ID: null, FirmaAd: "", ProjeID: null, ProjeAd: "Diğer", Grup: "Özel",
+    Firma_ID: null, FirmaAd: "", ProjeID: null, ProjeAd: "Diğer", Grup: GRUPLAR[0],
   });
   const [evrakOpen, setEvrakOpen] = useState(true);
   const [evrakSaved, setEvrakSaved] = useState(false);
@@ -515,7 +518,7 @@ export default function YeniNumuneClient() {
 
   // Load lookup data
   useEffect(() => {
-    fetch("/api/numune-form/lookup").then(r => r.json()).then((d: LookupData) => { if (d.grupTurleri) setLookup(d); }).catch(() => {});
+    workspaceFetch("/api/numune-form/lookup").then(r => r.json()).then((d: LookupData) => { if (d.grupTurleri) setLookup(d); }).catch(() => {});
   }, []);
 
   const patchEvrak = (u: Partial<EvrakForm>) => setEvrak(e => ({ ...e, ...u }));
@@ -563,7 +566,7 @@ export default function YeniNumuneClient() {
     let assignedRaporNo = card.RaporNo.trim();
     if (!card.savedId && (!assignedEvrakNo || !assignedRaporNo)) {
       try {
-        const numberRes = await fetch(`/api/numune-form/next-no?grup=${encodeURIComponent(evrak.Grup || "Özel")}`);
+        const numberRes = await workspaceFetch(`/api/numune-form/next-no?grup=${encodeURIComponent(evrak.Grup || "Özel")}`);
         const numbers = await numberRes.json();
         if (!numberRes.ok) throw new Error(numbers.error || "Numaralar oluşturulamadı");
         assignedEvrakNo ||= String(numbers.evrakNo || "");
@@ -613,7 +616,7 @@ export default function YeniNumuneClient() {
     const method = card.savedId ? "PUT" : "POST";
 
     try {
-      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await workspaceFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Kaydedilemedi");
       const newSavedId = card.savedId ?? (data.id as number);
@@ -622,7 +625,7 @@ export default function YeniNumuneClient() {
       if (card.FotoFile) {
         const photoData = new FormData();
         photoData.append("file", card.FotoFile);
-        const photoRes = await fetch(`/api/numune-form/${newSavedId}/foto`, { method: "POST", body: photoData });
+        const photoRes = await workspaceFetch(`/api/numune-form/${newSavedId}/foto`, { method: "POST", body: photoData });
         const photoJson = await photoRes.json().catch(() => ({}));
         if (!photoRes.ok) {
           patchCard(card.cardId, { saving: false, saved: true, savedId: newSavedId, open: true, RaporNo: assignedRaporNo });
@@ -649,7 +652,7 @@ export default function YeniNumuneClient() {
           <div className={yn.title}>Yeni Numune Girişi <span style={{ fontSize: "0.7rem", verticalAlign: "middle", padding: "2px 8px", background: "#0071e320", color: "#0071e3", borderRadius: 8, marginLeft: 6 }}>Önizleme</span></div>
           <div className={yn.subtitle}>Tek evrak için birden fazla numune ekleyebilirsiniz.</div>
         </div>
-        <Link href="/laboratuvar/numune-takip" className={yn.backLink}>← Listeye dön</Link>
+        <Link href={`${basePath}/numune-takip`} className={yn.backLink}>← Listeye dön</Link>
       </div>
 
       {/* ── Evrak Bilgileri ── */}

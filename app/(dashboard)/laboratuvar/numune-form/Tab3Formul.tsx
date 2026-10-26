@@ -1,4 +1,5 @@
 "use client";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
@@ -192,7 +193,7 @@ export default function Tab3Formul({ rows, onChange, form, onFormChange, lookup 
     setError("");
     try {
       const items = rows.map(r => ({ name: r.INCIName, amount: r.Miktar || "0" }));
-      const res = await fetch("/api/formul-kontrol/match", {
+      const res = await workspaceFetch("/api/formul-kontrol/match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items }),

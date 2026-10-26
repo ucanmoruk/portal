@@ -1,4 +1,5 @@
 "use client";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import styles from "@/app/styles/table.module.css";
@@ -186,7 +187,7 @@ async function fetchJsonWithTimeout<T>(
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { ...init, signal: controller.signal });
+    const res = await workspaceFetch(url, { ...init, signal: controller.signal });
     const json = (await res.json().catch(() => ({}))) as { error?: string };
     if (!res.ok) {
       throw new Error(json.error || `İstek başarısız oldu (HTTP ${res.status}).`);
@@ -269,7 +270,7 @@ export default function OnayliRaporTable() {
         phase: "approved",   // sadece Onaylandı + Yayınlandı
         acceptedOnly: "1",   // KabulTarihi join
       });
-      const res = await fetch(`/api/rapor-takip?${params}`, { signal: ctrl.signal, cache: "no-store" });
+      const res = await workspaceFetch(`/api/rapor-takip?${params}`, { signal: ctrl.signal, cache: "no-store" });
       if (reqId !== latestReqId.current) return;
       if (!res.ok) throw new Error((await res.json()).error || "Hata");
       const json = await res.json();
@@ -314,7 +315,7 @@ export default function OnayliRaporTable() {
     setError("");
     try {
       const url = `/api/rapor-takip/${row.NkrID}/imzali-pdf?format=${encodeURIComponent(row.RaporFormati)}`;
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await workspaceFetch(url, { cache: "no-store" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || "İmzalı PDF indirilemedi");
@@ -397,7 +398,7 @@ export default function OnayliRaporTable() {
     setRevizeBusy(true);
     setRevizeError("");
     try {
-      const res = await fetch(`/api/rapor-takip/${row.NkrID}/revize`, {
+      const res = await workspaceFetch(`/api/rapor-takip/${row.NkrID}/revize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ format: row.RaporFormati, aciklama }),
@@ -477,7 +478,7 @@ export default function OnayliRaporTable() {
   };
 
   const downloadPdfItem = async (item: { nkrId: number; raporFormati: string; row?: RaporRow }) => {
-    const res = await fetch(
+    const res = await workspaceFetch(
       `/api/rapor-takip/${item.nkrId}/imzali-pdf?format=${encodeURIComponent(item.raporFormati)}`,
       { cache: "no-store" },
     );
@@ -592,7 +593,7 @@ export default function OnayliRaporTable() {
     setBulkBusy("arsivle");
     setError("");
     try {
-      const res = await fetch("/api/rapor-takip/arsivle", {
+      const res = await workspaceFetch("/api/rapor-takip/arsivle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items }),
@@ -614,7 +615,7 @@ export default function OnayliRaporTable() {
     setBulkBusy("odeme");
     setError("");
     try {
-      const res = await fetch("/api/rapor-takip/durum", {
+      const res = await workspaceFetch("/api/rapor-takip/durum", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items, durum: "Ödeme bekliyor" }),
@@ -649,7 +650,7 @@ export default function OnayliRaporTable() {
     setBulkBusy("mail");
     setMailError("");
     try {
-      const res = await fetch("/api/rapor-takip/mail-gonder", {
+      const res = await workspaceFetch("/api/rapor-takip/mail-gonder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items, to, cc, konu: mailKonu, mesaj: mailMesaj }),

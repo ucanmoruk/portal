@@ -1,4 +1,5 @@
 "use client";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
@@ -172,7 +173,7 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
     hizmetTimer.current = setTimeout(async () => {
       setHizmetLoading(true);
       try {
-        const r = await fetch(`/api/teklifler/lookup?type=hizmetler&q=${encodeURIComponent(val)}`);
+        const r = await workspaceFetch(`/api/teklifler/lookup?type=hizmetler&q=${encodeURIComponent(val)}`);
         const j = await r.json();
         setHizmetOpts(j.data || []);
       } finally {
@@ -184,7 +185,7 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
   async function loadPaketler() {
     setPaketLoading(true);
     try {
-      const r = await fetch("/api/teklifler/lookup?type=paketler");
+      const r = await workspaceFetch("/api/teklifler/lookup?type=paketler");
       const j = await r.json();
       setPaketler(j.data || []);
     } finally {
@@ -231,7 +232,7 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
   const addPaketHizmetler = async (x3id: number, onlySelected: boolean = false) => {
     setLoadingPaketId(x3id);
     try {
-      const r = await fetch(`/api/numune-form/paket-items?x3id=${x3id}`);
+      const r = await workspaceFetch(`/api/numune-form/paket-items?x3id=${x3id}`);
       const raw = r.ok ? await r.json() : [];
       const items = Array.isArray(raw) ? raw : [];
       const next = [...rows];
@@ -340,7 +341,7 @@ export default function Tab2Hizmetler({ tarih, rows, onChange }: Props) {
     
     setLoadingDetayId(x3id);
     try {
-      const r = await fetch(`/api/numune-form/paket-items?x3id=${x3id}`);
+      const r = await workspaceFetch(`/api/numune-form/paket-items?x3id=${x3id}`);
       const raw = r.ok ? await r.json() : [];
       const items = Array.isArray(raw) ? raw : [];
       setPaketDetaylari(prev => ({ ...prev, [x3id]: items }));

@@ -1,3 +1,4 @@
+import NumuneWorkspaceNotice from "@/components/NumuneWorkspaceNotice";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import NumuneKabulTable from "./NumuneKabulTable";
@@ -10,6 +11,7 @@ export default async function NumuneKabulPage() {
 
   return (
     <div className={styles.page} style={{ width: "100%", maxWidth: 1180 }}>
+      <NumuneWorkspaceNotice />
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Numune Kabul</h1>

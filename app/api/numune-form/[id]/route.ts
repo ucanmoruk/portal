@@ -1,10 +1,11 @@
+import { groupMatchesWorkspace, checkNumuneWorkspace } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { nkrUgdTipFkColumn } from "@/lib/nkrUgdTipColumn";
 import { hasNkrFormulTable, hasNkrLogTable, nkrHasColumn } from "@/lib/numuneFormTables";
 import { loadLabUgdrTexts, saveLabUgdrTexts } from "@/lib/labUgdrStorage";
-import { ensureDisRaporKodlari } from "@/lib/disKod";
+import { ensureDisRaporKodlari } from "@/lib/disKodAllocation";
 import { getNkrEditLock } from "@/lib/nkrEditLock";
 import { syncNkrCommercialReferences } from "@/lib/nkrCommercialReferenceSync";
 import { getPortalUser } from "@/lib/portalYetki";
@@ -24,6 +25,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ error: "Yalnız geçerli Evrak No gönderilmelidir." }, { status: 400 });
   }
   const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, nkrId);
+    if (workspaceError) return workspaceError;
   const tx = await pool.transaction();
   await tx.begin();
   try {
@@ -75,7 +78,7 @@ function computeDegerlendirmeEn(degerlendirme: string | null): string | null {
 // Tam kaydı döner: NKR + NumuneDetay + NumuneX1 + NKR_Formul + Fotograf
 // ----------------------------------------------------------------
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
@@ -86,6 +89,8 @@ export async function GET(
 
   try {
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, nkrId);
+    if (workspaceError) return workspaceError;
     const [ugdCol, doFormul] = await Promise.all([
       nkrUgdTipFkColumn(pool),
       hasNkrFormulTable(pool),
@@ -191,12 +196,15 @@ export async function PUT(
   try {
     const body = await request.json();
     const { nkr, detay, hizmetler = [], formul = [], raporMetinleri = {} } = body;
+    if (!groupMatchesWorkspace(request, nkr?.Grup)) return Response.json({ error: "Bu çalışma alanı için geçersiz numune grubu." }, { status: 400 });
 
     if (!nkr?.Evrak_No?.trim())   return Response.json({ error: "Evrak No zorunludur."   }, { status: 400 });
     if (!nkr?.RaporNo?.trim())    return Response.json({ error: "Rapor No zorunludur."   }, { status: 400 });
     if (!nkr?.Numune_Adi?.trim()) return Response.json({ error: "Numune Adı zorunludur." }, { status: 400 });
 
     const pool = await cosmoPool;
+    const workspaceError = await checkNumuneWorkspace(pool, request, nkrId);
+    if (workspaceError) return workspaceError;
     const editLock = await getNkrEditLock(pool, nkrId);
     if (editLock.locked) {
       return Response.json(

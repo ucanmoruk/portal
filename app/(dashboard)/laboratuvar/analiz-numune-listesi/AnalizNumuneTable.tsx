@@ -1,5 +1,6 @@
 "use client";
-import { NUMUNE_GRUPLARI } from "@/lib/numuneGroups";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
+import { useNumuneWorkspace } from "@/lib/numuneWorkspaceClient";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
@@ -34,6 +35,8 @@ const formatDate = (value: string | null) => {
 };
 
 export default function AnalizNumuneTable() {
+  const { groups: NUMUNE_GRUPLARI } = useNumuneWorkspace();
+  const { basePath } = useNumuneWorkspace();
   const [rows, setRows] = useState<AnalizNumuneRow[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -79,7 +82,7 @@ export default function AnalizNumuneTable() {
       if (nextTarihBit) params.set("tarihBit", nextTarihBit);
       if (nextGrup) params.set("grup", nextGrup);
 
-      const res = await fetch(`/api/analiz-numune-listesi?${params}`, {
+      const res = await workspaceFetch(`/api/analiz-numune-listesi?${params}`, {
         signal: ctrl.signal,
         cache: "no-store",
       });
@@ -250,7 +253,7 @@ export default function AnalizNumuneTable() {
                   <td className={styles.tdMono}>
                     {row.RaporNo ? (
                       <a
-                        href={`/laboratuvar/numune-form/${row.NkrID}`}
+                        href={`${basePath}/numune-form/${row.NkrID}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{ color: "var(--color-accent)", textDecoration: "none", fontWeight: 700 }}

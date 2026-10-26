@@ -1,4 +1,6 @@
 "use client";
+import { useNumuneWorkspace } from "@/lib/numuneWorkspaceClient";
+import { workspaceFetch } from "@/lib/numuneWorkspaceClient";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -51,6 +53,7 @@ const formatDateTime = (s: string | null | undefined) => {
 };
 
 export default function OnayClient({ nkrId, format }: { nkrId: string; format: string }) {
+  const { basePath } = useNumuneWorkspace();
   const router = useRouter();
   const [data, setData]       = useState<ApiData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,7 +66,7 @@ export default function OnayClient({ nkrId, format }: { nkrId: string; format: s
   const [canApprove, setCanApprove] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch("/api/me/yetki")
+    workspaceFetch("/api/me/yetki")
       .then(r => r.json())
       .then((j: { isAdmin?: boolean; keys?: string[] }) => {
         const ok = j.isAdmin || (j.keys || []).includes("laboratuvar.rapor-onayla");
@@ -75,7 +78,7 @@ export default function OnayClient({ nkrId, format }: { nkrId: string; format: s
   const fetchData = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const r = await fetch(`/api/rapor-takip/${nkrId}/onay-durum?format=${encodeURIComponent(format)}`);
+      const r = await workspaceFetch(`/api/rapor-takip/${nkrId}/onay-durum?format=${encodeURIComponent(format)}`);
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Veri alınamadı");
       setData(j);
@@ -109,7 +112,7 @@ export default function OnayClient({ nkrId, format }: { nkrId: string; format: s
     if (busy) return;
     setBusy("onayla"); setError("");
     try {
-      const r = await fetch(`/api/rapor-takip/${nkrId}/onayla`, {
+      const r = await workspaceFetch(`/api/rapor-takip/${nkrId}/onayla`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ format }),
@@ -126,14 +129,14 @@ export default function OnayClient({ nkrId, format }: { nkrId: string; format: s
     if (!confirm("Rapor 'Kabul Bekleyenler' sekmesine geri gönderilecek. Onay ve kabul kaydı silinecek. Emin misiniz?")) return;
     setBusy("geri"); setError("");
     try {
-      const r = await fetch(`/api/rapor-takip/${nkrId}/geri-gonder`, {
+      const r = await workspaceFetch(`/api/rapor-takip/${nkrId}/geri-gonder`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ format, notlar: geriNotlar || undefined }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Geri gönderilemedi");
-      router.push("/laboratuvar/numune-takip-lab?tab=geri");
+      router.push(`${basePath}/numune-takip-lab?tab=geri`);
     } catch (e: any) {
       setError(e.message);
       setBusy(null);
@@ -144,7 +147,7 @@ export default function OnayClient({ nkrId, format }: { nkrId: string; format: s
     if (busy) return;
     setBusy("yayinla"); setError("");
     try {
-      const r = await fetch(`/api/rapor-takip/${nkrId}/yayinla`, {
+      const r = await workspaceFetch(`/api/rapor-takip/${nkrId}/yayinla`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ format, yayinUrl: yayinUrlInput || undefined }),
@@ -176,7 +179,7 @@ export default function OnayClient({ nkrId, format }: { nkrId: string; format: s
     return (
       <div className={styles.page}>
         <div className={styles.errorBar}>{error || "Veri yok"}</div>
-        <Link href="/laboratuvar/rapor-takip" className={styles.editBtn}>← Rapor Takip'e dön</Link>
+        <Link href={`${basePath}/rapor-takip`} className={styles.editBtn}>← Rapor Takip'e dön</Link>
       </div>
     );
   }
@@ -197,7 +200,7 @@ export default function OnayClient({ nkrId, format }: { nkrId: string; format: s
             {data.rapor.Tarih && <> · {formatTarih(String(data.rapor.Tarih))}</>}
           </p>
         </div>
-        <Link href="/laboratuvar/rapor-takip" className={styles.editBtn}
+        <Link href={`${basePath}/rapor-takip`} className={styles.editBtn}
           style={{ width: "auto", padding: "0 12px" }}>
           ← Rapor Takip
         </Link>
