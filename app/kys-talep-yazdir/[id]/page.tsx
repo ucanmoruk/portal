@@ -21,10 +21,15 @@ export default async function RequestPrintPage({ params }: { params: Promise<{ i
   if (!Number.isSafeInteger(Number(id)) || Number(id) <= 0) notFound();
   const detail = await getKysRequestDetail(Number(id));
   if (!detail) notFound();
-  const cfg = await getAllSettings();
   if (!user.firmalar.includes(detail.talep.seri)) return <p>Bu firmanın talebini görüntüleme yetkiniz yok.</p>;
   const brand = kysRequestCompany(detail.talep.seri);
   const spektrotek = Boolean(brand);
+  // These brands already contain their company details. Optional legacy settings
+  // must not prevent a request stored in the laboratory database from printing.
+  const cfg: Record<string, string> = brand ? {} : await getAllSettings().catch((error: unknown) => {
+    console.warn("KYS talep yazdırma: şirket ayarları alınamadı, varsayılan şirket adı kullanılacak.", error instanceof Error ? error.message : "");
+    return {};
+  });
   const english = spektrotek && detail.talep.talepTuru !== "Sipariş";
   const label = (tr:string,en:string) => english ? en : tr;
   const unit = (value:string) => english ? ({Adet:"pcs",Kutu:"box",Paket:"pack",Şişe:"bottle",Litre:"L",Gram:"g",Kilogram:"kg"} as Record<string,string>)[value] || value : value;
