@@ -7,6 +7,10 @@ on:
         description: Signal Passenger only when the deployed build marker matches main
         type: boolean
         default: false
+      expected_build:
+        description: Full deployed commit SHA required for a restart signal
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -26,6 +30,7 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
           RESTART: ${{ inputs.restart }}
+          EXPECTED_BUILD: ${{ inputs.expected_build }}
         run: |
           set -euo pipefail
           base="${FTP_SERVER_DIR%/}"
@@ -40,8 +45,8 @@ jobs:
             open ftp://$FTP_SERVER;
             user '$FTP_USERNAME' '$FTP_PASSWORD';
             cd '$incoming';
-            cls -l deploy.tar.gz* extract-deploy* .lock;
             set cmd:fail-exit no;
+            cls -l deploy.tar.gz* extract-deploy* .lock;
             get extract-deploy.log -o readiness/extract-deploy.log;
             get ../tmp/restart.txt -o readiness/restart.txt;
             get ../.next/BUILD_ID -o readiness/build-id.txt;
@@ -55,9 +60,10 @@ jobs:
           echo '--- Storage route present ---'
           test -s readiness/storage-route.js && echo yes || echo no
           if [[ "$RESTART" == true ]]; then
+            [[ "$EXPECTED_BUILD" =~ ^[0-9a-f]{40}$ ]]
             test -s readiness/storage-route.js
-            grep -F "build:${GITHUB_SHA}" readiness/restart.txt
-            printf '%s build:%s readiness-restart\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$GITHUB_SHA" > readiness/restart-signal.txt
+            grep -F "build:${EXPECTED_BUILD}" readiness/restart.txt
+            printf '%s build:%s readiness-restart\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$EXPECTED_BUILD" > readiness/restart-signal.txt
             lftp -c "
               set cmd:fail-exit yes;
               set ftp:ssl-allow no;
