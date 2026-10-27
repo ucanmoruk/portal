@@ -2,6 +2,12 @@
 
 Scope: the application PostgreSQL database (`UGD_POSTGRESS_URL` / `UGD_POSTGRES_URL`), including Formula Control, UGD details, supplier/product records, portal settings, finance and sample photo blobs. Eurolab uses `lib/db_eurolab.ts`; its connection, tables and data are unchanged.
 
+## Completed migration — 2026-10-27
+
+117 tables were copied and verified by row count and content hash. The baseline contained 706,861 rows; final reconciliation captured 346 changes made while preparation was running, including a new product, formula rows, report text and saved report designs. All 111 identity counters were preserved. Source PKs, declared unique constraints and foreign keys were retained.
+
+Production readiness confirms `migrationRuntime=2` and `storage=mysql`. Formula/UGD handlers, complete product details, finance, settings, photos and printing passed verification; formula results matched the source exactly. Two concurrent formula writers were tested inside rolled-back transactions and serialized correctly. Existing laboratory/Root flows passed 16 API and 14 page checks. The PostgreSQL originals remain fenced against writes. Private snapshots and activation reports remain under the output directory below and are not committed.
+
 ## Isolation and routing
 
 The migrated tables use `ng_<source-schema>_<source-table>` names in the existing MySQL database. `dbo.rUGDFormül` and `cosmoroot.rUGDFormul` are separate tables. Existing laboratory/customer/user tables and their IDs are never overwritten or merged. `lib/neonMysqlTables.json` contains schema names only, without credentials or row data.
