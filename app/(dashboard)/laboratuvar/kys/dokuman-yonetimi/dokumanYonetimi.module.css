@@ -509,29 +509,45 @@
   cursor: not-allowed;
 }
 
-.externalDocumentTable {
+table.externalDocumentTable {
   width: 100%;
-  min-width: 0;
+  min-width: 1160px;
   table-layout: fixed;
-  font-size: 0.76rem;
+  font-size: 0.82rem;
 }
 
-.externalDocumentTable th,
-.externalDocumentTable td {
-  padding-right: 8px;
-  padding-left: 8px;
+.listShell .externalDocumentTable th,
+.listShell .externalDocumentTable td {
+  padding: 12px 10px;
+  white-space: normal;
   overflow-wrap: anywhere;
+  vertical-align: top;
 }
 
 .externalDocumentTable .documentTitleLink {
-  display: -webkit-box;
-  min-width: 0;
-  overflow: hidden;
+  display: block;
+  overflow: visible;
   white-space: normal;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  line-height: 1.35;
+  text-overflow: clip;
+  line-height: 1.5;
+}
+
+.externalDocumentTable .documentSubText {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.externalDocumentTable td:last-child > div {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.externalDocumentTable td:last-child button {
+  width: 28px;
+  min-width: 28px;
+  flex: 0 0 28px;
+  padding: 0;
 }
 
 .pdfPreviewOverlay {

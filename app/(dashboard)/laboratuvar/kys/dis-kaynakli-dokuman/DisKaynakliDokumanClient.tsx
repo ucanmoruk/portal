@@ -297,7 +297,7 @@ export default function DisKaynakliDokumanClient() {
         <div className={tableStyles.tableCard}>
           {error && <div className={tableStyles.errorBar}>{error}</div>}
           <div className={tableStyles.tableWrapper}>
-            <table className={`${tableStyles.table} ${styles.documentTable} ${styles.externalDocumentTable}`}>
+            <table className={`${tableStyles.table} ${styles.externalDocumentTable}`}>
               <thead>
                 <tr>
                   <th style={{ width: 34 }}>
