@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       yayinLinki: String(formData.get("yayinLinki") || ""),
       pdfPath: publicUrl,
       pdfOriginalName,
-    });
+    }, user);
     return Response.json(created, { status: 201 });
   } catch (e: unknown) {
     return fail(errorText(e, "Dış kaynaklı doküman kaydedilemedi."), 400);

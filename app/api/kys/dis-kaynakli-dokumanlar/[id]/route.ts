@@ -3,6 +3,7 @@ import { getPortalUser } from "@/lib/portalYetki";
 import {
   deleteDisKaynakliDokuman,
   getDisKaynakliDokuman,
+  listDisKaynakliDokumanHistory,
   updateDisKaynakliDokuman,
 } from "@/lib/kysDisKaynakliDokumanStore";
 import { deleteDisKaynakliPdfFromFtp, safePdfName, uploadDisKaynakliPdfToFtp } from "@/lib/kysDisKaynakliFtpUpload";
@@ -18,9 +19,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   try {
     const { id } = await params;
+    if (!Number.isSafeInteger(Number(id)) || Number(id) <= 0) return fail("Geçersiz doküman ID",400);
     const doc = await getDisKaynakliDokuman(Number(id));
     if (!doc) return fail("Doküman bulunamadı.", 404);
-    return Response.json({ data: doc });
+    return Response.json({ data: doc, kayitlar: await listDisKaynakliDokumanHistory(Number(id)) });
   } catch (e: unknown) {
     return fail(errorText(e, "Doküman alınamadı."), 500);
   }
@@ -63,7 +65,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       yayinTarihi: String(formData.get("yayinTarihi") || ""),
       yayinLinki: String(formData.get("yayinLinki") || ""),
       ...(pdfPath ? { pdfPath, pdfOriginalName } : {}),
-    });
+    }, user);
 
     // PDF gerçekten değiştiyse eski dosyayı FTP'den temizle (best-effort, sessiz).
     if (result.previousPdfPath) {

@@ -1599,3 +1599,16 @@ table.externalDocumentTable {
   .documentTable th:nth-child(5) { width: 23%; }
   .documentTable th:nth-child(9) { width: 100px; }
 }
+
+.externalHistoryTabs { display:flex; gap:8px; padding:12px 20px; border-bottom:1px solid var(--color-border-light); flex-wrap:wrap; }
+.externalHistoryTabs button { border:1px solid var(--color-border-light); border-radius:var(--radius-sm); padding:9px 12px; background:var(--color-surface); color:var(--color-text-secondary); font:inherit; font-size:.83rem; cursor:pointer; }
+.externalHistoryTabs button[aria-selected="true"] { background:var(--color-accent-light); border-color:var(--color-accent); color:var(--color-accent); font-weight:700; }
+.externalHistoryTabs button:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; }
+.externalHistory { display:grid; gap:16px; font-size:.85rem; line-height:1.6; }
+.externalHistory > p { margin:0; color:var(--color-text-secondary); }
+.externalHistory ol { margin:0; padding:0; list-style:none; display:grid; gap:12px; }
+.externalHistory li { border:1px solid var(--color-border-light); border-left:3px solid var(--color-accent); border-radius:var(--radius-sm); padding:14px; overflow-wrap:anywhere; }
+.externalHistory li p { margin:6px 0; }
+.externalHistory li > span,.externalHistory small { display:block; color:var(--color-text-secondary); }
+.externalHistoryHeading { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+.externalHistoryHeading time { color:var(--color-text-tertiary); font-size:.78rem; }

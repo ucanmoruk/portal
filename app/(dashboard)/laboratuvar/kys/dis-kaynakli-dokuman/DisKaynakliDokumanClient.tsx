@@ -22,6 +22,8 @@ type Row = {
   updatedAt: string | null;
 };
 
+type HistoryEntry = { id:number; islem:string; kullaniciAd:string; tarih:string | null; dokumanKodu:string; dokumanAdi:string; yayinTarihi:string; aciklama:string; aktarildi:boolean };
+
 const emptyForm = {
   birim: "Kalite",
   dokumanKodu: "",
@@ -35,11 +37,11 @@ function errorMessage(e: unknown, fallback: string) {
   return e instanceof Error ? e.message : fallback;
 }
 
-function formatDateTime(value: string | null) {
+function formatDateTime(value: string | null, withSeconds = false) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
+  return date.toLocaleString("tr-TR", { dateStyle: "short", timeStyle: withSeconds ? "medium" : "short" });
 }
 
 export default function DisKaynakliDokumanClient() {
@@ -59,6 +61,10 @@ export default function DisKaynakliDokumanClient() {
   const [selected, setSelected] = useState<number[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+  const [modalTab, setModalTab] = useState<"bilgi" | "kontrol">("bilgi");
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   const [editCurrentPdf, setEditCurrentPdf] = useState<{ path: string; name: string } | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -120,6 +126,17 @@ export default function DisKaynakliDokumanClient() {
     return () => window.removeEventListener("keydown", onKey);
   }, [modalOpen, saving, deleteTarget, deleting, previewTarget]);
 
+  useEffect(() => {
+    if (!modalOpen || !editId) return;
+    const controller = new AbortController();
+    fetch(`/api/kys/dis-kaynakli-dokumanlar/${editId}`, { signal:controller.signal, cache:"no-store" })
+      .then(async response => { const json = await response.json(); if (!response.ok) throw new Error(json.error || "Kontrol kayıtları alınamadı."); return json; })
+      .then(json => { if (!controller.signal.aborted) setHistory(json.kayitlar || []); })
+      .catch(error => { if (!controller.signal.aborted) setHistoryError(errorMessage(error,"Kontrol kayıtları alınamadı.")); })
+      .finally(() => { if (!controller.signal.aborted) setHistoryLoading(false); });
+    return () => controller.abort();
+  }, [modalOpen,editId]);
+
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const visibleIds = useMemo(() => rows.map(row => row.id), [rows]);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedSet.has(id));
@@ -139,6 +156,7 @@ export default function DisKaynakliDokumanClient() {
   }
 
   function openAdd() {
+    setModalTab("bilgi");
     setEditId(null);
     setEditCurrentPdf(null);
     setForm(emptyForm);
@@ -148,6 +166,7 @@ export default function DisKaynakliDokumanClient() {
   }
 
   function openEdit(row: Row) {
+    setModalTab("bilgi"); setHistory([]); setHistoryError(""); setHistoryLoading(true);
     setEditId(row.id);
     setEditCurrentPdf(row.pdfPath ? { path: row.pdfPath, name: row.pdfOriginalName || "Mevcut PDF" } : null);
     setForm({
@@ -440,7 +459,25 @@ export default function DisKaynakliDokumanClient() {
               <h2>{editId ? "Dış kaynaklı dokümanı düzenle" : "Yeni dış kaynaklı doküman"}</h2>
               <button type="button" className={tableStyles.modalClose} onClick={() => setModalOpen(false)} aria-label="Kapat">×</button>
             </div>
-            <div className={tableStyles.modalBody}>
+            {editId && <div className={styles.externalHistoryTabs} role="tablist" aria-label="Doküman sekmeleri">
+              <button id="external-info-tab" type="button" role="tab" aria-selected={modalTab === "bilgi"} aria-controls="external-document-panel" onClick={() => setModalTab("bilgi")}>Doküman Bilgileri</button>
+              <button id="external-history-tab" type="button" role="tab" aria-selected={modalTab === "kontrol"} aria-controls="external-document-panel" onClick={() => setModalTab("kontrol")}>Kontrol Kayıtları</button>
+            </div>}
+            <div className={tableStyles.modalBody} id="external-document-panel" role={editId ? "tabpanel" : undefined} aria-labelledby={editId ? modalTab === "bilgi" ? "external-info-tab" : "external-history-tab" : undefined}>
+              {editId && modalTab === "kontrol" ? <div className={styles.externalHistory}>
+                <p>Oluşturma, güncelleme ve kontrol işlemleri en yeniden eskiye gösterilir. Önceki sistemde yalnızca son kontrol saklandığı için daha eski kontrol kayıtları geri getirilemez.</p>
+                {historyError ? <div className={tableStyles.formError} role="alert">{historyError}</div> : historyLoading ? <p role="status">Kayıtlar yükleniyor…</p> : !history.length ? <p>Henüz kayıt yok.</p> : <ol>
+                  {history.map(entry => <li key={entry.id}>
+                    <div className={styles.externalHistoryHeading}><strong>{entry.islem}</strong><time dateTime={entry.tarih || undefined}>{formatDateTime(entry.tarih,true)}</time></div>
+                    <span>{entry.kullaniciAd || "Kullanıcı bilgisi kayıtlı değil"}</span>
+                    <p><strong>{entry.dokumanKodu}</strong> — {entry.dokumanAdi}</p>
+                    {entry.yayinTarihi && <p>Yayın tarihi: {entry.yayinTarihi}</p>}
+                    {entry.aciklama && <small>{entry.aciklama}</small>}
+                    {entry.aktarildi && <small>Mevcut kayıttan aktarılan bilgi</small>}
+                  </li>)}
+                </ol>}
+              </div> : <>
+
               {formError && <div className={tableStyles.formError}>{formError}</div>}
               <div className={tableStyles.formGrid}>
                 <div className={tableStyles.formGroup}>
@@ -490,12 +527,13 @@ export default function DisKaynakliDokumanClient() {
                   ) : null}
                 </div>
               </div>
+              </>}
             </div>
             <div className={tableStyles.modalFooter}>
-              <button type="button" className={tableStyles.cancelBtn} disabled={saving} onClick={() => setModalOpen(false)}>Vazgeç</button>
-              <button type="button" className={tableStyles.saveBtn} disabled={saving} onClick={() => void save()}>
+              <button type="button" className={tableStyles.cancelBtn} disabled={saving} onClick={() => setModalOpen(false)}>{modalTab === "kontrol" ? "Kapat" : "Vazgeç"}</button>
+              {modalTab === "bilgi" && <button type="button" className={tableStyles.saveBtn} disabled={saving} onClick={() => void save()}>
                 {saving ? "Kaydediliyor..." : editId ? "Güncelle" : "Kaydet"}
-              </button>
+              </button>}
             </div>
           </div>
         </div>

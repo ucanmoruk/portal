@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { randomUUID } from "node:crypto";
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 
@@ -127,6 +128,51 @@ async function createSchema() {
     `);
     await pool.request().query("IF COL_LENGTH('KysDisKaynakliDokuman', 'Birim') IS NULL ALTER TABLE KysDisKaynakliDokuman ADD Birim NVARCHAR(80) NOT NULL CONSTRAINT DF_KysDisKaynakliDokuman_Birim DEFAULT 'Kalite'");
   }
+  await pool.request().query(hasMysqlConfig() ? `CREATE TABLE IF NOT EXISTS KysDisKaynakliDokumanLog (
+    ID INT AUTO_INCREMENT PRIMARY KEY, DokumanID INT NOT NULL, KaynakAnahtar VARCHAR(100) NOT NULL,
+    Islem VARCHAR(60) NOT NULL, KullaniciID VARCHAR(80) NULL, KullaniciAd VARCHAR(160) NULL,
+    Tarih DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, DokumanKodu VARCHAR(80) NOT NULL,
+    DokumanAdi VARCHAR(260) NOT NULL, YayinTarihi VARCHAR(80) NULL, Aciklama VARCHAR(500) NULL,
+    Aktarildi INT NOT NULL DEFAULT 0, UNIQUE KEY UX_DisDokumanLog_Kaynak (KaynakAnahtar),
+    KEY IX_DisDokumanLog_Dokuman (DokumanID,Tarih)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci` : `
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='KysDisKaynakliDokumanLog')
+    CREATE TABLE KysDisKaynakliDokumanLog (
+      ID INT IDENTITY(1,1) PRIMARY KEY, DokumanID INT NOT NULL, KaynakAnahtar NVARCHAR(100) NOT NULL UNIQUE,
+      Islem NVARCHAR(60) NOT NULL, KullaniciID NVARCHAR(80) NULL, KullaniciAd NVARCHAR(160) NULL,
+      Tarih DATETIME NOT NULL DEFAULT GETDATE(), DokumanKodu NVARCHAR(80) NOT NULL,
+      DokumanAdi NVARCHAR(260) NOT NULL, YayinTarihi NVARCHAR(80) NULL, Aciklama NVARCHAR(500) NULL,
+      Aktarildi INT NOT NULL DEFAULT 0)`);
+  const insert = hasMysqlConfig() ? "INSERT IGNORE" : "INSERT";
+  const key = (prefix: string) => hasMysqlConfig() ? `CONCAT('${prefix}',d.ID)` : `'${prefix}'+CAST(d.ID AS NVARCHAR(20))`;
+  await pool.request().query(`${insert} INTO KysDisKaynakliDokumanLog
+    (DokumanID,KaynakAnahtar,Islem,Tarih,DokumanKodu,DokumanAdi,YayinTarihi,Aciklama,Aktarildi)
+    SELECT d.ID,${key("created:")},N'Oluşturuldu',d.CreatedAt,d.DokumanKodu,d.DokumanAdi,d.YayinTarihi,N'Mevcut kayıttan aktarıldı.',1
+    FROM KysDisKaynakliDokuman d WHERE NOT EXISTS (SELECT 1 FROM KysDisKaynakliDokumanLog h WHERE h.KaynakAnahtar=${key("created:")})`);
+  await pool.request().query(`${insert} INTO KysDisKaynakliDokumanLog
+    (DokumanID,KaynakAnahtar,Islem,KullaniciID,KullaniciAd,Tarih,DokumanKodu,DokumanAdi,YayinTarihi,Aciklama,Aktarildi)
+    SELECT d.ID,${key("legacy-check:")},N'Kontrol edildi',d.KontrolEdenID,d.KontrolEdenAd,d.KontrolTarihi,d.DokumanKodu,d.DokumanAdi,d.YayinTarihi,N'Önceki sistemde saklanan son kontrol kaydı.',1
+    FROM KysDisKaynakliDokuman d WHERE d.KontrolTarihi IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM KysDisKaynakliDokumanLog h WHERE h.DokumanID=d.ID AND h.Islem=N'Kontrol edildi')`);
+
+}
+
+async function appendDocumentLog(executor: any, id: number, islem: string, user?: DisKaynakliDokumanKullanici, aciklama = "") {
+  await executor.request().input("ID",id).input("Key",islem === "Oluşturuldu" ? `created:${id}` : randomUUID())
+    .input("Islem",islem).input("UserID",user?.userId || null).input("UserName",user?.userName || null).input("Note",aciklama)
+    .query(`INSERT INTO KysDisKaynakliDokumanLog (DokumanID,KaynakAnahtar,Islem,KullaniciID,KullaniciAd,Tarih,DokumanKodu,DokumanAdi,YayinTarihi,Aciklama)
+      SELECT ID,@Key,@Islem,@UserID,@UserName,CASE WHEN @Islem=N'Kontrol edildi' THEN KontrolTarihi ELSE GETDATE() END,DokumanKodu,DokumanAdi,YayinTarihi,@Note
+      FROM KysDisKaynakliDokuman WHERE ID=@ID`);
+}
+
+export async function listDisKaynakliDokumanHistory(id: number) {
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Geçersiz doküman ID.");
+  await ensureKysDisKaynakliDokumanSchema();
+  const pool = await cosmoPool;
+  const result = await pool.request().input("ID",id).query(`SELECT ID,Islem,KullaniciAd,Tarih,DokumanKodu,DokumanAdi,YayinTarihi,Aciklama,Aktarildi
+    FROM KysDisKaynakliDokumanLog WHERE DokumanID=@ID ORDER BY Tarih DESC,ID DESC`);
+  return result.recordset.map((row: AnyRow) => ({ id:rowNumber(row,"ID"), islem:rowString(row,"Islem"), kullaniciAd:rowString(row,"KullaniciAd"), tarih:asDateTime(row.Tarih ?? row.tarih),
+    dokumanKodu:rowString(row,"DokumanKodu"), dokumanAdi:rowString(row,"DokumanAdi"), yayinTarihi:rowString(row,"YayinTarihi"), aciklama:rowString(row,"Aciklama"), aktarildi:rowBool(row,"Aktarildi") }));
 }
 
 function mapRow(row: AnyRow) {
@@ -219,7 +265,7 @@ export async function listDisKaynakliDokumanlar(params: {
   };
 }
 
-export async function createDisKaynakliDokuman(input: DisKaynakliDokumanInput) {
+export async function createDisKaynakliDokuman(input: DisKaynakliDokumanInput, user?: DisKaynakliDokumanKullanici) {
   await ensureKysDisKaynakliDokumanSchema();
   const dokumanKodu = text(input.dokumanKodu);
   const dokumanAdi = text(input.dokumanAdi);
@@ -227,25 +273,32 @@ export async function createDisKaynakliDokuman(input: DisKaynakliDokumanInput) {
   if (!dokumanAdi) throw new Error("Doküman adı zorunludur.");
   const birim = validateBirim(input.birim);
   const pool = await cosmoPool;
-  const res = await pool.request()
-    .input("Birim", birim)
-    .input("DokumanKodu", dokumanKodu)
-    .input("DokumanAdi", dokumanAdi)
-    .input("Yayincisi", nullableText(input.yayincisi))
-    .input("YayinTarihi", nullableText(input.yayinTarihi))
-    .input("YayinLinki", cleanUrl(input.yayinLinki))
-    .input("PdfPath", nullableText(input.pdfPath))
-    .input("PdfOriginalName", nullableText(input.pdfOriginalName))
-    .query(`
-      INSERT INTO KysDisKaynakliDokuman
-        (Birim, DokumanKodu, DokumanAdi, Yayincisi, YayinTarihi, YayinLinki, PdfPath, PdfOriginalName)
-      OUTPUT INSERTED.ID
-      VALUES (@Birim, @DokumanKodu, @DokumanAdi, @Yayincisi, @YayinTarihi, @YayinLinki, @PdfPath, @PdfOriginalName)
-    `);
+  const transaction = await pool.transaction();
+  await transaction.begin();
+  try {
+    const res = await transaction.request()
+      .input("Birim", birim)
+      .input("DokumanKodu", dokumanKodu)
+      .input("DokumanAdi", dokumanAdi)
+      .input("Yayincisi", nullableText(input.yayincisi))
+      .input("YayinTarihi", nullableText(input.yayinTarihi))
+      .input("YayinLinki", cleanUrl(input.yayinLinki))
+      .input("PdfPath", nullableText(input.pdfPath))
+      .input("PdfOriginalName", nullableText(input.pdfOriginalName))
+      .query(`
+        INSERT INTO KysDisKaynakliDokuman
+          (Birim, DokumanKodu, DokumanAdi, Yayincisi, YayinTarihi, YayinLinki, PdfPath, PdfOriginalName)
+        OUTPUT INSERTED.ID
+        VALUES (@Birim, @DokumanKodu, @DokumanAdi, @Yayincisi, @YayinTarihi, @YayinLinki, @PdfPath, @PdfOriginalName)
+      `);
 
-  return {
-    id: Number(res.recordset[0]?.ID ?? res.recordset[0]?.id ?? 0),
-  };
+    const id = Number(res.recordset[0]?.ID ?? res.recordset[0]?.id ?? 0);
+    if (!id) throw new Error("Doküman oluşturulamadı.");
+    await appendDocumentLog(transaction,id,"Oluşturuldu",user);
+    await transaction.commit();
+    return { id };
+  } catch (error) { await transaction.rollback(); throw error; }
+
 }
 
 export async function getDisKaynakliDokuman(id: number) {
@@ -266,7 +319,7 @@ export async function getDisKaynakliDokuman(id: number) {
  * Dönüşteki `previousPdfPath`, PDF gerçekten değiştiyse eski dosyanın FTP'den
  * silinebilmesi için route'a iletilir (store kendisi FTP'ye dokunmaz).
  */
-export async function updateDisKaynakliDokuman(id: number, input: DisKaynakliDokumanInput) {
+export async function updateDisKaynakliDokuman(id: number, input: DisKaynakliDokumanInput, user?: DisKaynakliDokumanKullanici) {
   await ensureKysDisKaynakliDokumanSchema();
   const pool = await cosmoPool;
   const existingRes = await pool.request().input("ID", id).query(
@@ -286,23 +339,30 @@ export async function updateDisKaynakliDokuman(id: number, input: DisKaynakliDok
   const nextPdfOriginalName = pdfReplaced ? nullableText(input.pdfOriginalName) : rowString(existing, "PdfOriginalName");
   const birim = validateBirim(input.birim);
 
-  await pool.request()
-    .input("ID", id)
-    .input("Birim", birim)
-    .input("DokumanKodu", dokumanKodu)
-    .input("DokumanAdi", dokumanAdi)
-    .input("Yayincisi", nullableText(input.yayincisi))
-    .input("YayinTarihi", nullableText(input.yayinTarihi))
-    .input("YayinLinki", cleanUrl(input.yayinLinki))
-    .input("PdfPath", nextPdfPath)
-    .input("PdfOriginalName", nextPdfOriginalName)
-    .query(`
-      UPDATE KysDisKaynakliDokuman SET
-        Birim = @Birim, DokumanKodu = @DokumanKodu, DokumanAdi = @DokumanAdi,
-        Yayincisi = @Yayincisi, YayinTarihi = @YayinTarihi, YayinLinki = @YayinLinki,
-        PdfPath = @PdfPath, PdfOriginalName = @PdfOriginalName, UpdatedAt = GETDATE()
-      WHERE ID = @ID
-    `);
+  const transaction = await pool.transaction();
+  await transaction.begin();
+  try {
+    await transaction.request()
+      .input("ID", id)
+      .input("Birim", birim)
+      .input("DokumanKodu", dokumanKodu)
+      .input("DokumanAdi", dokumanAdi)
+      .input("Yayincisi", nullableText(input.yayincisi))
+      .input("YayinTarihi", nullableText(input.yayinTarihi))
+      .input("YayinLinki", cleanUrl(input.yayinLinki))
+      .input("PdfPath", nextPdfPath)
+      .input("PdfOriginalName", nextPdfOriginalName)
+      .query(`
+        UPDATE KysDisKaynakliDokuman SET
+          Birim = @Birim, DokumanKodu = @DokumanKodu, DokumanAdi = @DokumanAdi,
+          Yayincisi = @Yayincisi, YayinTarihi = @YayinTarihi, YayinLinki = @YayinLinki,
+          PdfPath = @PdfPath, PdfOriginalName = @PdfOriginalName, UpdatedAt = GETDATE()
+        WHERE ID = @ID
+      `);
+
+    await appendDocumentLog(transaction,id,"Güncellendi",user,pdfReplaced ? "PDF dosyası değiştirildi." : "Doküman bilgileri güncellendi.");
+    await transaction.commit();
+  } catch (error) { await transaction.rollback(); throw error; }
 
   return { id, previousPdfPath: pdfReplaced && previousPdfPath !== nextPdfPath ? previousPdfPath : null };
 }
@@ -323,23 +383,21 @@ export async function deleteDisKaynakliDokuman(id: number) {
 
 export async function markDisKaynakliDokumanChecked(ids: number[], user: DisKaynakliDokumanKullanici) {
   await ensureKysDisKaynakliDokumanSchema();
-  const cleanIds = Array.from(new Set(ids.map(Number).filter(id => Number.isFinite(id) && id > 0)));
+  if (!Array.isArray(ids) || ids.length > 200 || ids.some(id => !Number.isSafeInteger(Number(id)) || Number(id) <= 0)) throw new Error("Geçersiz doküman seçimi (en fazla 200 kayıt).");
+  const cleanIds = [...new Set(ids.map(Number))];
   if (!cleanIds.length) throw new Error("Kontrol edilecek doküman seçilmedi.");
-
   const pool = await cosmoPool;
-  const placeholders = cleanIds.map((_, index) => `@id${index}`).join(", ");
-  const req = pool.request()
-    .input("KontrolEdenID", user.userId || null)
-    .input("KontrolEdenAd", user.userName || null);
-  cleanIds.forEach((id, index) => req.input(`id${index}`, id));
-  await req.query(`
-    UPDATE KysDisKaynakliDokuman SET
-      KontrolEdildi = 1,
-      KontrolTarihi = GETDATE(),
-      KontrolEdenID = @KontrolEdenID,
-      KontrolEdenAd = @KontrolEdenAd,
-      UpdatedAt = GETDATE()
-    WHERE ID IN (${placeholders})
-  `);
-  return { count: cleanIds.length };
+  const transaction = await pool.transaction();
+  await transaction.begin();
+  try {
+    for (const id of cleanIds) {
+      const existing = await transaction.request().input("ID",id).query("SELECT ID FROM KysDisKaynakliDokuman WHERE ID=@ID");
+      if (!existing.recordset.length) throw new Error("Seçili dokümanlardan biri bulunamadı. Listeyi yenileyin.");
+      await transaction.request().input("ID",id).input("UserID",user.userId).input("UserName",user.userName).query(`
+        UPDATE KysDisKaynakliDokuman SET KontrolEdildi=1,KontrolTarihi=GETDATE(),KontrolEdenID=@UserID,KontrolEdenAd=@UserName,UpdatedAt=GETDATE() WHERE ID=@ID`);
+      await appendDocumentLog(transaction,id,"Kontrol edildi",user);
+    }
+    await transaction.commit();
+    return { count:cleanIds.length };
+  } catch (error) { await transaction.rollback(); throw error; }
 }
