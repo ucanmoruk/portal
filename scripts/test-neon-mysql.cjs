@@ -25,6 +25,7 @@ async function main() {
   assert.ok(rewriteNeonSql('SELECT * FROM UGD_CanliRaporEdits').includes('`ng_public_ugd_canliraporedits`'));
   assert.ok(rewriteNeonSql("SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rCosing'").includes("TABLE_NAME = 'ng_dbo_rCosing'"));
   assert.throws(()=>rewriteNeonSql('INSERT INTO KysTalep (ID) VALUES (1)'),/eşlemesi/);
+  assert.ok(rewriteNeonSql('INSERT INTO PortalAyarlar (Anahtar,Deger) VALUES (@K,@V) ON DUPLICATE KEY UPDATE Deger = VALUES(Deger)').includes('UPDATE Deger = VALUES(Deger)'));
   assert.equal(rewriteNeonFinanceSql("SELECT FirmaID, 'FirmaID' FROM PortalFinansKayit"),"SELECT firma_id, 'FirmaID' FROM ng_public_portal_finans_kayit");
   let response='mysql';let fail;
   const fake={query:async()=>{if(fail)throw fail;return [[{Backend:response}]];}};

@@ -63,6 +63,10 @@ async function connect() {
   const pg=require('@vercel/postgres').createPool({connectionString:process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL});
   const my=await mysql.createConnection({host:process.env.MYSQL_HOST,port:Number(process.env.MYSQL_PORT || 3306),user:process.env.MYSQL_USER,password:process.env.MYSQL_PASSWORD,database:process.env.MYSQL_DATABASE,dateStrings:true,supportBigNumbers:true,bigNumberStrings:true,charset:'utf8mb4_bin',timezone:'Z'});
   await my.query("SET time_zone = '+00:00'");
+  const [[{ acquired }]]=await my.query("SELECT GET_LOCK('portal.neon-mysql-migration',0) AS acquired");
+  if(Number(acquired)!==1){await my.end();await pg.end();throw Error('Another migration is already running');}
+  const keepalive=setInterval(()=>{my.ping().catch(()=>{});},30000);keepalive.unref();
+  my.on('end',()=>clearInterval(keepalive));
   return {pg,my};
 }
 async function inventory(pg) {
@@ -162,8 +166,11 @@ async function constraints(pg,my,tables) {
 async function sequences(pg,my,tables) {
   const report=[];
   for(const t of tables)for(const c of t.columns)if(/nextval\(/.test(c.column_default||'')) {
-    const seq=(await pg.query('SELECT pg_get_serial_sequence($1,$2) AS name',[`${qi(t.schema)}.${qi(t.name)}`,c.column_name])).rows[0]?.name;
+    const seq=(await pg.query('SELECT pg_get_serial_sequence($1,$2) AS name',[`${qi(t.schema)}.${qi(t.name)}`,c.column_name])).rows[0]?.name
+      || c.column_default.match(/nextval\('((?:[^']|'')+)'::regclass\)/)?.[1].replaceAll("''", "'");
     if(!seq)throw Error('Sequence not found '+t.target+'.'+c.column_name);
+    const increment=(await pg.query('SELECT seqincrement::text AS n FROM pg_sequence WHERE seqrelid=$1::regclass',[seq])).rows[0]?.n;
+    if(increment!=='1')throw Error('Non-unit sequence needs explicit mapping '+seq);
     const v=(await pg.query(`SELECT last_value::text AS value,is_called FROM ${seq}`)).rows[0];
     const next=BigInt(v.value)+(v.is_called?1n:0n);
     await my.query(`ALTER TABLE ${mi(t.target)} AUTO_INCREMENT = ${next}`);
@@ -209,7 +216,7 @@ async function resume(my,pg) {
 async function sync(pg,my,{activate=false}={}) {
   if(!fs.existsSync(path.join(ROOT,'prepared.json')))throw Error('Baseline not verified');
   const state=await control(my);if(state.Backend!=='postgres')throw Error('Target already active; reverse sync is prohibited');
-  if(activate && (!state.ProductionSeenAt || state.RuntimeVersion!==1 || Date.now()-new Date(state.ProductionSeenAt+'Z').getTime()>180000))throw Error('Production migration-aware runtime has not checked in recently');
+  if(activate && (!state.ProductionSeenAt || state.RuntimeVersion!==2 || Date.now()-new Date(state.ProductionSeenAt+'Z').getTime()>180000))throw Error('Production migration-aware runtime has not checked in recently');
   const m=JSON.parse(fs.readFileSync(path.join(ROOT,'manifest.json'),'utf8'));
   const client=await pg.connect();let fenced=false,activated=false;
   try {

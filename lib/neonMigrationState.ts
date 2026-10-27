@@ -24,7 +24,7 @@ export async function isNeonMigrated(): Promise<boolean> {
     throw error;
   }
   if (process.env.NODE_ENV === "production" && Date.now() - productionCheckin > 15000) {
-    await db.query("UPDATE NeonMigrationControl SET RuntimeVersion=1,ProductionSeenAt=UTC_TIMESTAMP(6) WHERE ID=1");
+    await db.query("UPDATE NeonMigrationControl SET RuntimeVersion=2,ProductionSeenAt=UTC_TIMESTAMP(6) WHERE ID=1");
     productionCheckin = Date.now();
   }
   return rows[0]?.Backend === "mysql";

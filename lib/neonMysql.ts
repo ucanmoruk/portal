@@ -13,7 +13,9 @@ const refs = new RegExp(`(\\b(?:FROM|JOIN|UPDATE|INTO|REFERENCES|TABLE)\\s+(?:IF
 export function rewriteNeonSql(sql: string): string {
   return sql.split(/('(?:[^']|'')*'|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)/g).map((part, index) => {
     if (index % 2) return part;
-    return part.replace(refs, (match, prefix: string, first: string, second?: string) => {
+    return part.replace(refs, (match, prefix: string, first: string, second: string | undefined, offset: number, input: string) => {
+      // In an upsert UPDATE is followed by a column assignment, not a table.
+      if (/\bUPDATE\s+$/i.test(prefix) && /^\s*=/.test(input.slice(offset + match.length))) return match;
       const a=unquote(first), b=second ? unquote(second) : undefined;
       if (/^(?:information_schema|sys|tempdb)$/i.test(a)) return match;
       if (a.startsWith("ng_") || a.startsWith("#")) return match;

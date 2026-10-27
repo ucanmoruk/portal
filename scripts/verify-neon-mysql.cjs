@@ -47,6 +47,7 @@ async function main() {
  if(fs.existsSync(baseline)){assert.deepEqual(JSON.parse(JSON.stringify(matched)),JSON.parse(fs.readFileSync(baseline,'utf8')));console.log('PASS exact source/target formula API parity (including NOAEL, regulation limits and profiles)');}
  const tx=await db.transaction();await tx.begin();
  try {
+  await tx.request().input('K','__migration_verification__').input('V','not persisted').query('INSERT INTO PortalAyarlar (Anahtar,Deger) VALUES (@K,@V) ON DUPLICATE KEY UPDATE Deger = VALUES(Deger)');
   const before=(await tx.request().input('id',id).query('SELECT COUNT(*) AS n FROM rUGDFormul WHERE UrunID=@id')).recordset[0].n;
   await load('lib/ugdPersistence.ts').saveUgdFormulaRows(tx,id,[{INCIName:'MIGRATION ROLLBACK CHECK',inputAmount:'0,01',dap:100}]);
   const inside=(await tx.request().input('id',id).query('SELECT COUNT(*) AS n FROM rUGDFormul WHERE UrunID=@id')).recordset[0].n;assert.equal(Number(inside),1);
@@ -54,5 +55,16 @@ async function main() {
   const after=(await db.request().input('id',id).query('SELECT COUNT(*) AS n FROM rUGDFormul WHERE UrunID=@id')).recordset[0].n;assert.equal(String(after),String(before));
   console.log('PASS atomic formula replacement, product row lock and rollback (no saved changes)');
  }catch(e){try{await tx.rollback();}catch{}throw e;}
+ const first=await db.transaction(),second=await db.transaction();await first.begin();await second.begin();
+ try {
+  const save=load('lib/ugdPersistence.ts').saveUgdFormulaRows;
+  await save(first,id,[{INCIName:'MIGRATION LOCK A',inputAmount:'0.01'}]);
+  let finished=false;const waiting=save(second,id,[{INCIName:'MIGRATION LOCK B',inputAmount:'0.02'}]).then(()=>{finished=true;});
+  await new Promise(resolve=>setTimeout(resolve,300));assert.equal(finished,false,'Second formula writer bypassed product lock');
+  await first.rollback();await waiting;
+  const rows=(await second.request().input('id',id).query('SELECT INCIName FROM rUGDFormul WHERE UrunID=@id')).recordset;
+  assert.equal(rows.length,1);assert.equal(rows[0].INCIName,'MIGRATION LOCK B');await second.rollback();
+  console.log('PASS concurrent formula writers serialize without mixed rows (both tests rolled back)');
+ }catch(e){try{await first.rollback();}catch{}try{await second.rollback();}catch{}throw e;}
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{await Promise.all(pools.map(p=>p.end()));});
