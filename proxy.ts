@@ -17,6 +17,8 @@ const PUBLIC_PATH_PREFIXES = [
 
 function isPublicPath(pathname: string) {
   return (
+    // Storage readiness exposes only backend/version, never application data.
+    pathname === "/api/health/storage" ||
     // This cron route authenticates its own Bearer secret, without a login cookie.
     pathname === "/api/cron/payment-report" ||
     PUBLIC_PATH_PREFIXES.some((path) => pathname.startsWith(path)) ||

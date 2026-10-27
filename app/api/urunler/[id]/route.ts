@@ -83,7 +83,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
                l.Uygulama, l.Hedef, l.A, l.RaporDurum,
                g.UygulamaBolgesi, g.UygulamaBolgesiEn, g.Siklik, g.SiklikEn
         FROM rUGDListe l
-        LEFT JOIN rUGDTip g ON NULLIF(l.Tip2, '')::int = g.ID
+        LEFT JOIN rUGDTip g ON CAST(NULLIF(l.Tip2, '') AS INT) = g.ID
         WHERE l.ID = @id AND l.Durum = 'Aktif'
       `);
 

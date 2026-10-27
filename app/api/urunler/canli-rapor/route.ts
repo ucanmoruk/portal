@@ -21,6 +21,7 @@ function rowValue(row: Record<string, any>, ...keys: string[]) {
 async function ensureTable() {
   if (ensured) return;
   const pool = await poolPromise;
+  if ((pool as unknown as { config?: { __mysql?: boolean } }).config?.__mysql) return;
 
   if (isPostgres) {
     await pool.request().query(`

@@ -2,6 +2,8 @@ import mssql from "mssql";
 import { createPool, type VercelPoolClient } from "@vercel/postgres";
 import { installSocketGuard } from "./socketGuard";
 import { MysqlCompatPool, hasMysqlConfig } from "./mysqlCompat";
+import { isNeonMigrated, waitForNeonCutover } from "./neonMigrationState";
+import { neonMysqlPool } from "./neonMysql";
 
 type InputValue = string | number | boolean | Date | null | undefined | Buffer;
 
@@ -519,7 +521,15 @@ class PgCompatRequest {
       console.log("PG SQL:", translated.sql, translated.values);
     }
 
-    const result = await (this.connection || getPgPool()).query(translated.sql, translated.values);
+    let result;
+    try { result = await (this.connection || getPgPool()).query(translated.sql, translated.values); }
+    catch (error) {
+      if ((error as { code?: string }).code !== "P7501" || this.connection) throw error;
+      await waitForNeonCutover();
+      const request = neonMysqlPool.request();
+      for (const [name,value] of Object.entries(this.inputs)) request.input(name,value);
+      return request.query(sql);
+    }
     const recordset = result.rows.map((row) => {
       const next: Record<string, unknown> = { ...row };
       for (const alias of translated.aliases) {
@@ -595,13 +605,11 @@ class PgCompatPool {
 
 const poolPromise: PromiseLike<mssql.ConnectionPool> = {
   then: (onfulfilled, onrejected) => {
-    if (usePostgres) {
-      return Promise.resolve(new PgCompatPool() as any).then(onfulfilled, onrejected);
-    }
-    // MSSQL dalı da resilient (lazy retry) — varsayılan DB_NAME üzerinden.
-    return Promise.resolve(
-      new ResilientPool(process.env.DB_NAME || "") as unknown as mssql.ConnectionPool,
-    ).then(onfulfilled, onrejected);
+    return (async () => {
+      if (await isNeonMigrated()) return neonMysqlPool as unknown as mssql.ConnectionPool;
+      if (usePostgres) return new PgCompatPool() as unknown as mssql.ConnectionPool;
+      return new ResilientPool(process.env.DB_NAME || "") as unknown as mssql.ConnectionPool;
+    })().then(onfulfilled, onrejected);
   },
 };
 
@@ -636,11 +644,7 @@ export const legacyCosmoPool: PromiseLike<mssql.ConnectionPool> = {
 /** Eski RootKullanici kaynağı; yalnız ilk MySQL veri taşımasında kullanılır. */
 export const legacyRootPool: PromiseLike<mssql.ConnectionPool> = {
   then: (onfulfilled, onrejected) =>
-    Promise.resolve(
-      (usePostgres
-        ? new PgCompatPool()
-        : new ResilientPool(MSSQL_ROOT_DB)) as unknown as mssql.ConnectionPool,
-    ).then(onfulfilled, onrejected),
+    (async () => (await isNeonMigrated() ? neonMysqlPool : usePostgres ? new PgCompatPool() : new ResilientPool(MSSQL_ROOT_DB)) as unknown as mssql.ConnectionPool)().then(onfulfilled, onrejected),
 };
 
 /** Portal kullanıcıları ve personel lookup'ları → MySQL; yerelde eski kaynağa düşer. */
@@ -655,9 +659,8 @@ export const rootPool: PromiseLike<mssql.ConnectionPool> = {
     ).then(onfulfilled, onrejected),
 };
 
-/** Formül Kontrol + ÜGD + Root Kozmetik → Neon Postgres (compat).
- *  Global bayraktan BAĞIMSIZ — her zaman Postgres döner. */
+/** Formül Kontrol + ÜGD: verified migration control selects the isolated MySQL copy. */
 export const ugdPool: PromiseLike<mssql.ConnectionPool> = {
   then: (onfulfilled, onrejected) =>
-    Promise.resolve(new PgCompatPool() as unknown as mssql.ConnectionPool).then(onfulfilled, onrejected),
+    (async () => (await isNeonMigrated() ? neonMysqlPool : new PgCompatPool()) as unknown as mssql.ConnectionPool)().then(onfulfilled, onrejected),
 };

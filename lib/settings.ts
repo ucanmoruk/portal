@@ -1,4 +1,5 @@
 import poolPromise from "./db";
+import { isNeonMigrated } from "./neonMigrationState";
 
 const isPostgres = Boolean(process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL);
 
@@ -7,6 +8,7 @@ let tableEnsured = false;
 async function ensureTable() {
   if (tableEnsured) return;
   const pool = await poolPromise;
+  if (await isNeonMigrated()) { tableEnsured = true; return; }
   if (isPostgres) {
     // PG: native CREATE TABLE IF NOT EXISTS — translator pass-through
     await pool.request().query(`
@@ -49,6 +51,10 @@ export async function getSetting(key: string, fallback = ""): Promise<string> {
 export async function setSetting(key: string, value: string): Promise<void> {
   await ensureTable();
   const pool = await poolPromise;
+  if (await isNeonMigrated()) {
+    await pool.request().input("K", key).input("V", value).query("INSERT INTO PortalAyarlar (Anahtar, Deger) VALUES (@K, @V) ON DUPLICATE KEY UPDATE Deger = VALUES(Deger)");
+    return;
+  }
   if (isPostgres) {
     // PG upsert — ON CONFLICT
     await pool.request()

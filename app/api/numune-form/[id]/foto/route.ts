@@ -2,34 +2,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import sql from "mssql";
-import { createPool } from "@vercel/postgres";
+import { ensureNumunePhotoStore, readNumunePhoto, saveNumunePhoto } from "@/lib/numunePhotoStore";
+import { isNeonMigrated } from "@/lib/neonMigrationState";
 import { isNumuneFtpConfigured, uploadNumuneFotoToFtp } from "@/lib/numuneFotoUpload";
 import { getNkrEditLock } from "@/lib/nkrEditLock";
 
 const MAX_BYTES = 8 * 1024 * 1024;
-const usesPostgresCompat = () => Boolean(process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL);
-let pgPool: ReturnType<typeof createPool> | undefined;
-
-const getPgPool = () => {
-  const connectionString = process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL;
-  if (!connectionString) throw new Error("PostgreSQL bağlantısı bulunamadı.");
-  pgPool ??= createPool({ connectionString });
-  return pgPool;
-};
-
-async function ensurePgFotoTable() {
-  await getPgPool().query(`
-    CREATE TABLE IF NOT EXISTS "NumuneFotoBlob" (
-      "RaporID" integer PRIMARY KEY,
-      "FotoData" bytea NOT NULL,
-      "MimeType" text NOT NULL DEFAULT 'image/jpeg',
-      "UpdatedAt" timestamptz NOT NULL DEFAULT now()
-    )
-  `);
-}
-
+const usesBlobStore = async () => await isNeonMigrated() || Boolean(process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL);
 async function ensureFotografBinaryColumns() {
-  if (usesPostgresCompat()) return;
+  if ((await usesBlobStore())) return;
   const pool = await cosmoPool;
   await pool.request().query(`
     IF COL_LENGTH('Fotograf', 'FotoData') IS NULL
@@ -49,20 +30,16 @@ export async function GET(
   if (!nkrId) return Response.json({ error: "Geçersiz ID" }, { status: 400 });
 
   try {
-    if (usesPostgresCompat()) await ensurePgFotoTable();
+    if ((await usesBlobStore())) await ensureNumunePhotoStore();
     else await ensureFotografBinaryColumns();
 
-    if (usesPostgresCompat()) {
-      const blobRes = await getPgPool().query(
-        `SELECT "FotoData", "MimeType" FROM "NumuneFotoBlob" WHERE "RaporID" = $1`,
-        [nkrId],
-      );
-      const blobRow = blobRes.rows[0] as { FotoData?: Buffer; fotodata?: Buffer; MimeType?: string; mimetype?: string } | undefined;
-      const data = blobRow?.FotoData || blobRow?.fotodata;
+    if ((await usesBlobStore())) {
+      const blobRow = await readNumunePhoto(nkrId);
+      const data = blobRow?.FotoData;
       if (data) {
         return new Response(new Uint8Array(data), {
           headers: {
-            "Content-Type": blobRow?.MimeType || blobRow?.mimetype || "image/jpeg",
+            "Content-Type": blobRow?.MimeType || "image/jpeg",
             "Cache-Control": "public, max-age=31536000, immutable",
           },
         });
@@ -70,7 +47,7 @@ export async function GET(
     }
 
     const pool = await cosmoPool;
-    const res = usesPostgresCompat()
+    const res = (await usesBlobStore())
       ? await pool.request()
           .input("id", nkrId)
           .query("SELECT Path FROM Fotograf WHERE RaporID = @id")
@@ -145,7 +122,7 @@ export async function POST(
         ? (file as File).type
         : "image/jpeg";
 
-    if (usesPostgresCompat()) await ensurePgFotoTable();
+    if ((await usesBlobStore())) await ensureNumunePhotoStore();
     else await ensureFotografBinaryColumns();
 
     const raporRes = await pool.request().input("id", nkrId).query("SELECT RaporNo FROM NKR WHERE ID = @id");
@@ -162,13 +139,8 @@ export async function POST(
       rel = pathForDb;
     } else {
       rel = `/api/numune-form/${nkrId}/foto`;
-      if (usesPostgresCompat()) {
-        await getPgPool().query(`
-          INSERT INTO "NumuneFotoBlob" ("RaporID", "FotoData", "MimeType", "UpdatedAt")
-          VALUES ($1, $2, $3, now())
-          ON CONFLICT ("RaporID")
-          DO UPDATE SET "FotoData" = EXCLUDED."FotoData", "MimeType" = EXCLUDED."MimeType", "UpdatedAt" = now()
-        `, [nkrId, buf, mimeType]);
+      if ((await usesBlobStore())) {
+        await saveNumunePhoto(nkrId, buf, mimeType);
       }
     }
 
@@ -180,7 +152,7 @@ export async function POST(
       const req = pool.request()
         .input("id", nkrId)
         .input("path", rel);
-      if (usesPostgresCompat()) {
+      if ((await usesBlobStore())) {
         await req.query("UPDATE Fotograf SET Path = @path WHERE RaporID = @id");
       } else if (isNumuneFtpConfigured()) {
         await req.query("UPDATE Fotograf SET Path = @path, FotoData = NULL, MimeType = NULL WHERE RaporID = @id");
@@ -194,7 +166,7 @@ export async function POST(
       const req = pool.request()
         .input("id", nkrId)
         .input("path", rel);
-      if (usesPostgresCompat()) {
+      if ((await usesBlobStore())) {
         await req.query("INSERT INTO Fotograf (RaporID, Path) VALUES (@id, @path)");
       } else if (isNumuneFtpConfigured()) {
         await req.query("INSERT INTO Fotograf (RaporID, Path, FotoData, MimeType) VALUES (@id, @path, NULL, NULL)");

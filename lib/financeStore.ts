@@ -2,6 +2,8 @@ import mssql from "mssql";
 import mysql from "mysql2/promise";
 import { createPool as createPgPool } from "@vercel/postgres";
 import poolPromise from "@/lib/db";
+import { isNeonMigrated } from "./neonMigrationState";
+import { rewriteNeonFinanceSql } from "./neonMysql";
 
 type SqlDialect = "postgres" | "mysql" | "mssql";
 type FinanceRow = Record<string, unknown>;
@@ -75,7 +77,8 @@ let pgPool: ReturnType<typeof createPgPool> | null = null;
 let mysqlPool: mysql.Pool | null = null;
 let schemaReady: Promise<void> | null = null;
 
-function getDialect(): SqlDialect {
+async function getDialect(): Promise<SqlDialect> {
+  if (await isNeonMigrated()) return "mysql";
   if (process.env.UGD_POSTGRESS_URL || process.env.UGD_POSTGRES_URL) return "postgres";
   if (process.env.MYSQL_HOST && process.env.MYSQL_USER && process.env.MYSQL_DATABASE) return "mysql";
   return "mssql";
@@ -106,13 +109,19 @@ function getMysqlPool() {
   return mysqlPool;
 }
 
+async function mysqlQuery<T extends mysql.QueryResult = mysql.QueryResult>(sql: string, values?: unknown[]) {
+  const migrated = await isNeonMigrated();
+  return getMysqlPool().query<T>(migrated ? rewriteNeonFinanceSql(sql) : sql, values);
+}
+
 async function ensureSchema() {
   if (!schemaReady) schemaReady = createSchema();
   return schemaReady;
 }
 
 async function createSchema() {
-  const dialect = getDialect();
+  if (await isNeonMigrated()) return; // Schema, defaults and existing rows were verified before activation.
+  const dialect = await getDialect();
 
   if (dialect === "postgres") {
     const pg = getPgPool();
@@ -367,13 +376,13 @@ function normalizeEntry(input: FinanceEntryInput, partial = false) {
 
 export async function listFinanceCompanies(): Promise<FinanceCompany[]> {
   await ensureSchema();
-  const dialect = getDialect();
+  const dialect = await getDialect();
   if (dialect === "postgres") {
     const r = await getPgPool().query("SELECT id, ad, durum FROM portal_finans_firma WHERE durum = 'Aktif' ORDER BY ad");
     return r.rows.map(mapCompany);
   }
   if (dialect === "mysql") {
-    const [rows] = await getMysqlPool().query("SELECT ID, Ad, Durum FROM PortalFinansFirma WHERE Durum = 'Aktif' ORDER BY Ad");
+    const [rows] = await mysqlQuery("SELECT ID, Ad, Durum FROM PortalFinansFirma WHERE Durum = 'Aktif' ORDER BY Ad");
     return (rows as FinanceRow[]).map(mapCompany);
   }
   const pool = await poolPromise;
@@ -385,7 +394,7 @@ export async function createFinanceCompany(name: string): Promise<FinanceCompany
   const clean = name.trim();
   if (!clean) throw new Error("Firma adı zorunludur.");
   await ensureSchema();
-  const dialect = getDialect();
+  const dialect = await getDialect();
 
   if (dialect === "postgres") {
     const r = await getPgPool().query(
@@ -395,7 +404,7 @@ export async function createFinanceCompany(name: string): Promise<FinanceCompany
     return mapCompany(r.rows[0]);
   }
   if (dialect === "mysql") {
-    const [result] = await getMysqlPool().query<mysql.ResultSetHeader>(
+    const [result] = await mysqlQuery<mysql.ResultSetHeader>(
       "INSERT INTO PortalFinansFirma (Ad) VALUES (?)",
       [clean],
     );
@@ -410,7 +419,7 @@ export async function createFinanceCompany(name: string): Promise<FinanceCompany
 
 export async function listFinanceEntries(): Promise<FinanceEntry[]> {
   await ensureSchema();
-  const dialect = getDialect();
+  const dialect = await getDialect();
   if (dialect === "postgres") {
     const r = await getPgPool().query(`
       SELECT id, firma_id, firma_ad, tur, baslik, tutar, odenen_tutar, para_birimi, vade_tarihi,
@@ -422,7 +431,7 @@ export async function listFinanceEntries(): Promise<FinanceEntry[]> {
     return r.rows.map(mapEntry);
   }
   if (dialect === "mysql") {
-    const [rows] = await getMysqlPool().query(`
+    const [rows] = await mysqlQuery(`
       SELECT ID, FirmaID, FirmaAd, Tur, Baslik, Tutar, OdenenTutar, ParaBirimi, VadeTarihi,
              TaksitNo, TaksitToplam, Tekrar, OtomatikOdeme, BildirimTarihi,
              BildirimSaati, Durum, OdemeTarihi, Notlar, CreatedAt, UpdatedAt
@@ -444,7 +453,7 @@ export async function listFinanceEntries(): Promise<FinanceEntry[]> {
 
 export async function listFinancePayments(): Promise<FinancePayment[]> {
   await ensureSchema();
-  const dialect = getDialect();
+  const dialect = await getDialect();
   if (dialect === "postgres") {
     const r = await getPgPool().query(`
       SELECT id, kayit_id, tutar, odeme_tarihi, notlar, created_at
@@ -454,7 +463,7 @@ export async function listFinancePayments(): Promise<FinancePayment[]> {
     return r.rows.map(mapPayment);
   }
   if (dialect === "mysql") {
-    const [rows] = await getMysqlPool().query(`
+    const [rows] = await mysqlQuery(`
       SELECT ID, KayitID, Tutar, OdemeTarihi, Notlar, CreatedAt
       FROM PortalFinansOdeme
       ORDER BY OdemeTarihi ASC, ID ASC
@@ -484,7 +493,7 @@ export async function createFinancePayment(input: FinancePaymentInput): Promise<
   if (!current) throw new Error("Kayıt bulunamadı.");
 
   const previousPayments = (await listFinancePayments()).filter((item) => item.entryId === entryId);
-  const dialect = getDialect();
+  const dialect = await getDialect();
   let payment: FinancePayment;
   if (dialect === "postgres") {
     const r = await getPgPool().query(`
@@ -494,7 +503,7 @@ export async function createFinancePayment(input: FinancePaymentInput): Promise<
     `, [entryId, amount, paidDate, note]);
     payment = mapPayment(r.rows[0]);
   } else if (dialect === "mysql") {
-    const [result] = await getMysqlPool().query<mysql.ResultSetHeader>(`
+    const [result] = await mysqlQuery<mysql.ResultSetHeader>(`
       INSERT INTO PortalFinansOdeme (KayitID, Tutar, OdemeTarihi, Notlar)
       VALUES (?,?,?,?)
     `, [entryId, amount, paidDate, note]);
@@ -531,7 +540,7 @@ export async function createFinancePayment(input: FinancePaymentInput): Promise<
 export async function createFinanceEntry(input: FinanceEntryInput): Promise<FinanceEntry> {
   const item = normalizeEntry(input);
   await ensureSchema();
-  const dialect = getDialect();
+  const dialect = await getDialect();
 
   if (dialect === "postgres") {
     const r = await getPgPool().query(`
@@ -550,7 +559,7 @@ export async function createFinanceEntry(input: FinanceEntryInput): Promise<Fina
   }
 
   if (dialect === "mysql") {
-    const [result] = await getMysqlPool().query<mysql.ResultSetHeader>(`
+    const [result] = await mysqlQuery<mysql.ResultSetHeader>(`
       INSERT INTO PortalFinansKayit
         (FirmaID, FirmaAd, Tur, Baslik, Tutar, OdenenTutar, ParaBirimi, VadeTarihi, TaksitNo,
          TaksitToplam, Tekrar, OtomatikOdeme, BildirimTarihi, BildirimSaati,
@@ -598,13 +607,13 @@ export async function createFinanceEntry(input: FinanceEntryInput): Promise<Fina
 
 export async function getFinanceEntry(id: number): Promise<FinanceEntry | null> {
   await ensureSchema();
-  const dialect = getDialect();
+  const dialect = await getDialect();
   if (dialect === "postgres") {
     const r = await getPgPool().query("SELECT * FROM portal_finans_kayit WHERE id = $1", [id]);
     return r.rows[0] ? mapEntry(r.rows[0]) : null;
   }
   if (dialect === "mysql") {
-    const [rows] = await getMysqlPool().query("SELECT * FROM PortalFinansKayit WHERE ID = ?", [id]);
+    const [rows] = await mysqlQuery("SELECT * FROM PortalFinansKayit WHERE ID = ?", [id]);
     const first = (rows as FinanceRow[])[0];
     return first ? mapEntry(first) : null;
   }
@@ -616,7 +625,7 @@ export async function getFinanceEntry(id: number): Promise<FinanceEntry | null> 
 export async function updateFinanceEntry(id: number, input: FinanceEntryInput): Promise<FinanceEntry | null> {
   const item = normalizeEntry(input, true);
   await ensureSchema();
-  const dialect = getDialect();
+  const dialect = await getDialect();
 
   if (dialect === "postgres") {
     const r = await getPgPool().query(`
@@ -637,7 +646,7 @@ export async function updateFinanceEntry(id: number, input: FinanceEntryInput): 
   }
 
   if (dialect === "mysql") {
-    await getMysqlPool().query(`
+    await mysqlQuery(`
       UPDATE PortalFinansKayit SET
         FirmaID=?, FirmaAd=?, Tur=?, Baslik=?, Tutar=?, OdenenTutar=?, ParaBirimi=?,
         VadeTarihi=?, TaksitNo=?, TaksitToplam=?, Tekrar=?,
@@ -687,13 +696,13 @@ export async function updateFinanceEntry(id: number, input: FinanceEntryInput): 
 
 export async function deleteFinanceEntry(id: number): Promise<void> {
   await ensureSchema();
-  const dialect = getDialect();
+  const dialect = await getDialect();
   if (dialect === "postgres") {
     await getPgPool().query("DELETE FROM portal_finans_kayit WHERE id = $1", [id]);
     return;
   }
   if (dialect === "mysql") {
-    await getMysqlPool().query("DELETE FROM PortalFinansKayit WHERE ID = ?", [id]);
+    await mysqlQuery("DELETE FROM PortalFinansKayit WHERE ID = ?", [id]);
     return;
   }
   const pool = await poolPromise;

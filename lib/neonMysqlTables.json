@@ -1,0 +1,2080 @@
+[
+  {
+    "schema": "cosmoroot",
+    "name": "Blog",
+    "target": "ng_cosmoroot_Blog",
+    "columns": [
+      "ID",
+      "Site",
+      "Baslik",
+      "Aciklama",
+      "OdakKelime",
+      "AnahtarKelime",
+      "Kategori",
+      "Tarih",
+      "Gorsel",
+      "Metin",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "NKR_Formul",
+    "target": "ng_cosmoroot_NKR_Formul",
+    "columns": [
+      "ID",
+      "NKRID",
+      "HammaddeID",
+      "INCIName",
+      "Miktar",
+      "DaP",
+      "Noael"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "NKR_Log",
+    "target": "ng_cosmoroot_NKR_Log",
+    "columns": [
+      "ID",
+      "NKRID",
+      "Tarih",
+      "KullaniciID",
+      "Eylem",
+      "Aciklama",
+      "KullaniciAdi"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "PortalAyarlar",
+    "target": "ng_cosmoroot_PortalAyarlar",
+    "columns": [
+      "Anahtar",
+      "Deger"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "PortalYetki",
+    "target": "ng_cosmoroot_PortalYetki",
+    "columns": [
+      "ID",
+      "KullaniciID",
+      "MenuKey",
+      "Yetki"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "ProformaX1",
+    "target": "ng_cosmoroot_ProformaX1",
+    "columns": [
+      "ID",
+      "ProformaNo",
+      "EvrakNo",
+      "TeklifID",
+      "FirmaID",
+      "Tarih",
+      "Durum",
+      "KdvOran",
+      "GenelIskonto",
+      "AraToplam",
+      "IskontoTutar",
+      "KdvTutar",
+      "GenelToplam",
+      "Notlar",
+      "KID",
+      "SilindiMi"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "ProformaX2",
+    "target": "ng_cosmoroot_ProformaX2",
+    "columns": [
+      "ID",
+      "ProformaID",
+      "HizmetID",
+      "HizmetKodu",
+      "HizmetAdi",
+      "RaporNoListesi",
+      "NumuneListesi",
+      "Adet",
+      "BirimFiyat",
+      "ParaBirimi",
+      "Iskonto",
+      "Tutar",
+      "Kaynak"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "QuoteTokens",
+    "target": "ng_cosmoroot_QuoteTokens",
+    "columns": [
+      "ID",
+      "QuoteID",
+      "Token",
+      "ExpiresAt",
+      "CreatedAt",
+      "IsUsed"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "RootKozTeklif",
+    "target": "ng_cosmoroot_RootKozTeklif",
+    "columns": [
+      "ID",
+      "TeklifNo",
+      "RevNo",
+      "Tarih",
+      "MusteriAdi",
+      "MusteriEmail",
+      "MusteriTelefon",
+      "MarkaAdi",
+      "UrunKategorisi",
+      "SKUSayisi",
+      "UretimMiktari",
+      "HedefPazar",
+      "OdemeTuru",
+      "KDVOran",
+      "GenelIskonto",
+      "ToplamTutar",
+      "Durum",
+      "Notlar",
+      "KID",
+      "OlusturmaTarihi",
+      "GuncellenmeTarihi",
+      "SilindiMi"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "RootKozTeklifKalem",
+    "target": "ng_cosmoroot_RootKozTeklifKalem",
+    "columns": [
+      "ID",
+      "TeklifID",
+      "Bolum",
+      "HizmetAdi",
+      "Sure",
+      "Miktar",
+      "BirimFiyat",
+      "ParaBirimi",
+      "Iskonto",
+      "Dahil",
+      "Sira",
+      "Notlar"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "RootTedarikci_Yedek",
+    "target": "ng_cosmoroot_RootTedarikci_Yedek",
+    "columns": [
+      "ID",
+      "Ad",
+      "Adres",
+      "Tur",
+      "Yetkili",
+      "Telefon",
+      "Email",
+      "Web",
+      "Durum",
+      "Durumu",
+      "Tur2",
+      "VergiDairesi",
+      "VergiNo",
+      "Kimin",
+      "Notlar",
+      "Logo"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "SSatinAlim",
+    "target": "ng_cosmoroot_SSatinAlim",
+    "columns": [
+      "ID",
+      "TalepID",
+      "TedarikciID",
+      "OlusturanID",
+      "Tarih",
+      "Aciklama",
+      "Malzeme",
+      "Fiyat",
+      "Stok",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "SSatinAlim_Log",
+    "target": "ng_cosmoroot_SSatinAlim_Log",
+    "columns": [
+      "ID",
+      "TalepID",
+      "TedarikciID",
+      "OlusturanID",
+      "Tarih",
+      "Aciklama",
+      "Malzeme",
+      "Fiyat",
+      "Stok",
+      "Durum",
+      "Sebep",
+      "OlusturmaTarih"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "STalepListe_Yedek",
+    "target": "ng_cosmoroot_STalepListe_Yedek",
+    "columns": [
+      "ID",
+      "TalepNo",
+      "Tarih",
+      "Onem",
+      "Durum",
+      "OlusturanID",
+      "AtananID",
+      "Tur",
+      "GenelDurum",
+      "FirmaID",
+      "Mail",
+      "Kategori",
+      "Detay",
+      "TeklifID",
+      "FaturaNo",
+      "Odeme",
+      "Distributor",
+      "Kaynak"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "rRPList",
+    "target": "ng_cosmoroot_rRPList",
+    "columns": [
+      "ID",
+      "UrunID",
+      "TR",
+      "EU",
+      "UK",
+      "US",
+      "IL"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "rTeklifDetay",
+    "target": "ng_cosmoroot_rTeklifDetay",
+    "columns": [
+      "ID",
+      "UrunID",
+      "TeklifID",
+      "Durum",
+      "Miktar",
+      "Fiyat",
+      "KDV",
+      "Tutar",
+      "KDVTutar",
+      "GTutar",
+      "Birim"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "rTeklifListe",
+    "target": "ng_cosmoroot_rTeklifListe",
+    "columns": [
+      "ID",
+      "TeklifNo",
+      "Tarih",
+      "YetkiliID",
+      "FirmaID",
+      "Toplam",
+      "TeklifNot",
+      "Parabirimi",
+      "IskontoOran",
+      "Durum",
+      "GenelDurum",
+      "FaturaNo",
+      "FaturaDurumu",
+      "KDV",
+      "TeslimTarihi",
+      "Iskonto",
+      "Tur"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "rUGDFormul",
+    "target": "ng_cosmoroot_rUGDFormul",
+    "columns": [
+      "ID",
+      "UrunID",
+      "HammaddeID",
+      "INCIName",
+      "Miktar",
+      "DaP",
+      "Noael",
+      "NKRID"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "rUGDFormul_Backup",
+    "target": "ng_cosmoroot_rUGDFormul_Backup",
+    "columns": [
+      "ID",
+      "UrunID",
+      "HammaddeID",
+      "INCIName",
+      "Miktar",
+      "DaP",
+      "Noael",
+      "NKRID"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "rUGDFormul_Backup_Once",
+    "target": "ng_cosmoroot_rUGDFormul_Backup_Once",
+    "columns": [
+      "ID",
+      "UrunID",
+      "HammaddeID",
+      "INCIName",
+      "Miktar",
+      "DaP",
+      "Noael",
+      "NKRID"
+    ]
+  },
+  {
+    "schema": "cosmoroot",
+    "name": "rpHammadde",
+    "target": "ng_cosmoroot_rpHammadde",
+    "columns": [
+      "ID",
+      "cID",
+      "Mix",
+      "Durum",
+      "Noael",
+      "Referans",
+      "Other",
+      "Toksikoloji"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "CrmMusteri",
+    "target": "ng_dbo_CrmMusteri",
+    "columns": [
+      "ID",
+      "PlasiyerID",
+      "FirmaID",
+      "Yetkili",
+      "Iletisim",
+      "Tarih",
+      "Tur",
+      "Konu",
+      "Mesaj",
+      "Durum",
+      "Durumu",
+      "Firma",
+      "FirmaAd",
+      "Adres",
+      "Kategori",
+      "Bolge"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "DokumanMaster",
+    "target": "ng_dbo_DokumanMaster",
+    "columns": [
+      "ID",
+      "Tur",
+      "Kod",
+      "Ad",
+      "YayinTarihi",
+      "RevNo",
+      "Durumu",
+      "Path",
+      "Durum",
+      "RevTarihi"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "Fatura",
+    "target": "ng_dbo_Fatura",
+    "columns": [
+      "ID",
+      "Fatura_No",
+      "Tutar",
+      "KDV",
+      "Toplam",
+      "Odenen_Tutar",
+      "Proje_ID",
+      "RaporFirmaID",
+      "FaturaFirmaID",
+      "Tarih",
+      "Durum",
+      "Aciklama",
+      "ProformaNo",
+      "FaturaKesenID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "FaturaDetay",
+    "target": "ng_dbo_FaturaDetay",
+    "columns": [
+      "ID",
+      "Aciklama",
+      "Miktar",
+      "Birim",
+      "BirimFiyat",
+      "ParaBirimi",
+      "KurTl",
+      "BirimFiyatTl",
+      "ToplamFiyat",
+      "Iskonto",
+      "GenelFiyat",
+      "ProformaNo",
+      "TeklifNo",
+      "FaturaFirmaID",
+      "UrunGrubu",
+      "Tarih",
+      "KDV"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "Fotograf",
+    "target": "ng_dbo_Fotograf",
+    "columns": [
+      "ID",
+      "RaporID",
+      "Path"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NKR",
+    "target": "ng_dbo_NKR",
+    "columns": [
+      "ID",
+      "Firma_ID",
+      "Evrak_No",
+      "Numune_Adi3",
+      "Adet",
+      "Tarih",
+      "Tur",
+      "Grup",
+      "Analiz",
+      "Rapor_Durumu",
+      "Aciklama",
+      "RaporNo",
+      "Akreditasyon",
+      "Revno",
+      "Servis",
+      "Durum",
+      "Karar",
+      "Dil",
+      "Numune_Adi",
+      "Barkod",
+      "Teklif_No",
+      "Talep_No",
+      "Numune_Adi_En",
+      "TesteMiktar",
+      "TesteMiktarBirim",
+      "Urun_Tipi",
+      "UGDTip_ID",
+      "Hedef_Grup"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NKRDermatoloji",
+    "target": "ng_dbo_NKRDermatoloji",
+    "columns": [
+      "ID",
+      "Kabul",
+      "Tdate",
+      "Rdate",
+      "EvrakNo",
+      "RaporNo",
+      "RaporFirmaID",
+      "ProjeFirmaID",
+      "NumAd",
+      "Marka",
+      "Appearance",
+      "Package",
+      "Amount",
+      "Lot",
+      "Uretim",
+      "SKT",
+      "Durum",
+      "Fatura",
+      "Aciklama"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NKRFatura",
+    "target": "ng_dbo_NKRFatura",
+    "columns": [
+      "ID",
+      "FaturaID",
+      "EvrakNo"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NKR_LabKabul",
+    "target": "ng_dbo_NKR_LabKabul",
+    "columns": [
+      "ID",
+      "NkrID",
+      "RaporFormati",
+      "BolumID",
+      "KabulEdenID",
+      "KabulTarihi",
+      "Notlar"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NKR_RaporDurumOverride",
+    "target": "ng_dbo_NKR_RaporDurumOverride",
+    "columns": [
+      "NkrID",
+      "RaporFormati",
+      "Durum",
+      "UpdatedAt",
+      "Notlar"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NKR_RaporOnay",
+    "target": "ng_dbo_NKR_RaporOnay",
+    "columns": [
+      "ID",
+      "NkrID",
+      "RaporFormati",
+      "KarekodToken",
+      "Durum",
+      "OnaylayanID",
+      "OnayTarihi",
+      "YayinTarihi",
+      "YayinUrl",
+      "Notlar",
+      "ImzaHash",
+      "ImzaTarihi",
+      "ImzaSurum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NumuneDetay",
+    "target": "ng_dbo_NumuneDetay",
+    "columns": [
+      "ID",
+      "RaporID",
+      "MiktarEx",
+      "MarkaEx",
+      "Model",
+      "BasvuruNo",
+      "SeriNo",
+      "UretimTarihi",
+      "SKT",
+      "AliciFirma",
+      "ProjeID",
+      "Miktar",
+      "Birim",
+      "Marka"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NumuneDetay2",
+    "target": "ng_dbo_NumuneDetay2",
+    "columns": [
+      "ID",
+      "RaporID",
+      "YetkiliID",
+      "DenetciID",
+      "Yetkili"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NumuneDurum",
+    "target": "ng_dbo_NumuneDurum",
+    "columns": [
+      "ID",
+      "RaporNo",
+      "Durum",
+      "Kim"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NumuneImha",
+    "target": "ng_dbo_NumuneImha",
+    "columns": [
+      "ID",
+      "RaporNo",
+      "Tarih",
+      "pID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NumuneTeslim",
+    "target": "ng_dbo_NumuneTeslim",
+    "columns": [
+      "ID",
+      "RaporNo",
+      "Kim",
+      "Tarih",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NumuneX1",
+    "target": "ng_dbo_NumuneX1",
+    "columns": [
+      "ID",
+      "RaporID",
+      "AnalizID",
+      "x3ID",
+      "Termin",
+      "Yetkili",
+      "Durum",
+      "HizmetDurum",
+      "Birim",
+      "Sonuc",
+      "Degerlendirme",
+      "LimitEn",
+      "BirimEn",
+      "LOQ",
+      "LOQEn",
+      "Limit",
+      "SonucEn",
+      "DegerlendirmeEn",
+      "SonucKayitTarihi"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NumuneX2",
+    "target": "ng_dbo_NumuneX2",
+    "columns": [
+      "ID",
+      "RaporID",
+      "AnalizID",
+      "Aciklama",
+      "Kod",
+      "Tarih",
+      "KID",
+      "x3ID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NumuneX3",
+    "target": "ng_dbo_NumuneX3",
+    "columns": [
+      "ID",
+      "Aciklama",
+      "Tarih",
+      "Durum",
+      "KID",
+      "ListeAdi"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NumuneX4",
+    "target": "ng_dbo_NumuneX4",
+    "columns": [
+      "ID",
+      "x3ID",
+      "AltAnalizID",
+      "Limit",
+      "Birim",
+      "ListeID",
+      "HizmetID",
+      "LimitDeger",
+      "LimitBirimi",
+      "Notlar",
+      "LimitDegerEn",
+      "LimitBirimiEn",
+      "LOQ",
+      "LOQEn"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "NumuneX5",
+    "target": "ng_dbo_NumuneX5",
+    "columns": [
+      "ID",
+      "x2ID",
+      "AltAnalizID",
+      "Limit",
+      "Birim",
+      "Degerlendirme",
+      "Durum",
+      "Tarih",
+      "PersonelID",
+      "Sonuc"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "Numune_Grup",
+    "target": "ng_dbo_Numune_Grup",
+    "columns": [
+      "ID",
+      "Tur",
+      "Grup"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "Odeme",
+    "target": "ng_dbo_Odeme",
+    "columns": [
+      "ID",
+      "Odeme_Durumu",
+      "Fatura_ID",
+      "Evrak_No",
+      "Banka",
+      "Tarih"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "ProformaDurum",
+    "target": "ng_dbo_ProformaDurum",
+    "columns": [
+      "ID",
+      "ProformaNo",
+      "Durum",
+      "Total",
+      "TeklifNo",
+      "FirmaID",
+      "OnaylayanID",
+      "Tarih",
+      "Dipnot",
+      "OlusturanID",
+      "OlusturmaTarih",
+      "FaturaNo",
+      "FaturaTarih",
+      "Odeme"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "Rapor",
+    "target": "ng_dbo_Rapor",
+    "columns": [
+      "ID",
+      "RaporNo",
+      "FirmaAd",
+      "Proje",
+      "NumuneTur",
+      "NumuneAd",
+      "Tarih",
+      "Yol",
+      "TalepNo",
+      "FirmaID",
+      "ProjeID",
+      "Durum",
+      "RaporID",
+      "YukleyenID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "Rapor_Durum",
+    "target": "ng_dbo_Rapor_Durum",
+    "columns": [
+      "ID",
+      "RaporNo",
+      "RaporID",
+      "Durum",
+      "Tarih",
+      "TanimlayanID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootCihazBakim",
+    "target": "ng_dbo_RootCihazBakim",
+    "columns": [
+      "ID",
+      "CihazID",
+      "PfSiklik",
+      "PfDetay",
+      "BakimSiklik",
+      "BakimDetay",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootCihazIslem",
+    "target": "ng_dbo_RootCihazIslem",
+    "columns": [
+      "ID",
+      "CihazID",
+      "Tur",
+      "FirmaID",
+      "PersonelID",
+      "Tarih1",
+      "Tarih2",
+      "Aciklama",
+      "Path",
+      "Durum",
+      "Finout"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootCihazKalibrasyon",
+    "target": "ng_dbo_RootCihazKalibrasyon",
+    "columns": [
+      "ID",
+      "CihazID",
+      "KalTip",
+      "KalSiklik",
+      "AraSiklik",
+      "Calisma",
+      "Kalibrasyon",
+      "Kaynak",
+      "KabulKriteri",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootCihazListesi",
+    "target": "ng_dbo_RootCihazListesi",
+    "columns": [
+      "ID",
+      "Kod",
+      "Ad",
+      "Marka",
+      "Seri",
+      "FirmaID",
+      "BirimID",
+      "TalimatID",
+      "Tarih",
+      "Ozellik",
+      "Durumu",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootCihazMaliyet",
+    "target": "ng_dbo_RootCihazMaliyet",
+    "columns": [
+      "ID",
+      "CihazID",
+      "FirmaID",
+      "Tarih",
+      "Aciklama",
+      "Tl",
+      "Dolar",
+      "Euro",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootFatura",
+    "target": "ng_dbo_RootFatura",
+    "columns": [
+      "ID",
+      "Tur",
+      "Kategori",
+      "Tarih",
+      "FaturaNo",
+      "Firma",
+      "Tutar",
+      "KDV",
+      "Toplam",
+      "Banka",
+      "Odeme",
+      "Aciklama",
+      "Durum",
+      "Kim",
+      "Nezaman",
+      "Guncelleyen",
+      "Guncelleme",
+      "oTarih"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootFirma",
+    "target": "ng_dbo_RootFirma",
+    "columns": [
+      "ID",
+      "FirmaAd",
+      "Adres",
+      "SPath",
+      "KPath",
+      "Logo"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootFirmaBirim",
+    "target": "ng_dbo_RootFirmaBirim",
+    "columns": [
+      "ID",
+      "FirmaID",
+      "Birim",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootKullanici",
+    "target": "ng_dbo_RootKullanici",
+    "columns": [
+      "ID",
+      "FirmaID",
+      "BirimID",
+      "Kadi",
+      "Ad",
+      "Soyad",
+      "Gorev",
+      "Email",
+      "Telefon",
+      "Parola",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootMesaj",
+    "target": "ng_dbo_RootMesaj",
+    "columns": [
+      "ID",
+      "PersonelID",
+      "Tarih",
+      "Konu",
+      "Duyuru",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootMesajDurum",
+    "target": "ng_dbo_RootMesajDurum",
+    "columns": [
+      "ID",
+      "DuyuruID",
+      "PersonelID",
+      "Tarih",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootRecete",
+    "target": "ng_dbo_RootRecete",
+    "columns": [
+      "ID",
+      "AnalizID",
+      "StokID",
+      "Alt",
+      "Ust",
+      "Tam",
+      "Birim",
+      "Durum",
+      "ReceteID",
+      "BirimFiyat",
+      "ParaBirimi",
+      "Yuzde"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootStokHareket",
+    "target": "ng_dbo_RootStokHareket",
+    "columns": [
+      "ID",
+      "StokID",
+      "Marka",
+      "Lot",
+      "Miktar",
+      "Birim",
+      "SKT",
+      "Tarih",
+      "Hareket",
+      "BirimID",
+      "Durum",
+      "UretimID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootStokListesi",
+    "target": "ng_dbo_RootStokListesi",
+    "columns": [
+      "ID",
+      "Tur",
+      "Ad",
+      "AdEn",
+      "AdInci",
+      "Cas",
+      "Ambalaj",
+      "Ozellik",
+      "Saklama",
+      "Limit",
+      "Miktar",
+      "Birim",
+      "Durum",
+      "Kod"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootStokMaliyet",
+    "target": "ng_dbo_RootStokMaliyet",
+    "columns": [
+      "ID",
+      "StokID",
+      "TedarikciID",
+      "Tarih",
+      "Adet",
+      "ToplamFiyat",
+      "ParaBirimi",
+      "BirimFiyat",
+      "Dipnot",
+      "Durum",
+      "Tur"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootTalepDegerlendirme",
+    "target": "ng_dbo_RootTalepDegerlendirme",
+    "columns": [
+      "ID",
+      "TalepNo",
+      "TalepStokKod",
+      "KabulEdenID",
+      "GelisTarihi",
+      "Miktar",
+      "Marka",
+      "Tarih",
+      "Sertifika",
+      "KabulDurum",
+      "Durumu"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootTalepDetay",
+    "target": "ng_dbo_RootTalepDetay",
+    "columns": [
+      "ID",
+      "TalepNo",
+      "StokKod",
+      "Miktar",
+      "Birim",
+      "Marka",
+      "Ozellik",
+      "Durum",
+      "Durumu"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootTalepListe",
+    "target": "ng_dbo_RootTalepListe",
+    "columns": [
+      "ID",
+      "TalepNo",
+      "TalepEdenID",
+      "OnaylayanID",
+      "IsleyenID",
+      "Durum",
+      "Olusturma",
+      "Onaylama",
+      "Isleme",
+      "Aktif"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootTedarikci",
+    "target": "ng_dbo_RootTedarikci",
+    "columns": [
+      "ID",
+      "Ad",
+      "Adres",
+      "Tur",
+      "Yetkili",
+      "Telefon",
+      "Email",
+      "Web",
+      "Durum",
+      "Durumu",
+      "Tur2",
+      "VergiDairesi",
+      "VergiNo",
+      "Kimin",
+      "Notlar",
+      "Logo"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootTedarikciPuan",
+    "target": "ng_dbo_RootTedarikciPuan",
+    "columns": [
+      "ID",
+      "FirmaID",
+      "Puan",
+      "Tarih",
+      "Durum",
+      "PersonelID",
+      "Aciklama"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootUrunHareket",
+    "target": "ng_dbo_RootUrunHareket",
+    "columns": [
+      "ID",
+      "UrunID",
+      "BirimID",
+      "Hareket",
+      "Miktar",
+      "Aciklama",
+      "Tarih",
+      "Fiyat",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootUrunListesi",
+    "target": "ng_dbo_RootUrunListesi",
+    "columns": [
+      "ID",
+      "Kod",
+      "Kategori",
+      "Marka",
+      "Ad",
+      "Fotograf",
+      "Ozellik",
+      "Miktar",
+      "Fiyat",
+      "Durum",
+      "Barkod",
+      "Seri",
+      "Hacim",
+      "TESF"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "RootUrunRecete",
+    "target": "ng_dbo_RootUrunRecete",
+    "columns": [
+      "ID",
+      "Tarih",
+      "Olusturan",
+      "Ad",
+      "Kategori",
+      "Durum",
+      "No",
+      "GenelDurum",
+      "Dipnot"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "SDistributor",
+    "target": "ng_dbo_SDistributor",
+    "columns": [
+      "ID",
+      "FirmaID",
+      "Marka",
+      "Kategori",
+      "CatNo",
+      "Name",
+      "Description",
+      "Price",
+      "Discount",
+      "DPrice",
+      "ParaBirimi",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "SStokHareket",
+    "target": "ng_dbo_SStokHareket",
+    "columns": [
+      "ID",
+      "StokID",
+      "Miktar",
+      "Tarih",
+      "Hareket",
+      "Kullanici"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "SStokListe",
+    "target": "ng_dbo_SStokListe",
+    "columns": [
+      "ID",
+      "Kategori",
+      "Kod",
+      "Barkod",
+      "Ad",
+      "Marka",
+      "Stok",
+      "Birim",
+      "Durum",
+      "Ekleyen",
+      "Tarih",
+      "Lot",
+      "Notlar",
+      "Satis",
+      "ParaBirimi",
+      "KDV"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "SStokListesiLog",
+    "target": "ng_dbo_SStokListesiLog",
+    "columns": [
+      "ID",
+      "Kategori",
+      "Kod",
+      "Ad",
+      "Barkod",
+      "Marka",
+      "Stok",
+      "Birim",
+      "Durum",
+      "Ekleyen",
+      "Tarih",
+      "Lot",
+      "Notlar",
+      "Satis",
+      "ParaBirimi",
+      "KDV",
+      "Logtur",
+      "LogTarih",
+      "LogID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "SStokMaliyet",
+    "target": "ng_dbo_SStokMaliyet",
+    "columns": [
+      "ID",
+      "StokID",
+      "TedarikciID",
+      "KDV",
+      "Alis",
+      "Satis",
+      "ParaBirimi",
+      "Gecerlilik",
+      "Ekleme",
+      "Belge"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "STalepListe",
+    "target": "ng_dbo_STalepListe",
+    "columns": [
+      "ID",
+      "TalepNo",
+      "Tarih",
+      "Onem",
+      "Durum",
+      "OlusturanID",
+      "AtananID",
+      "Tur",
+      "GenelDurum",
+      "FirmaID",
+      "Mail",
+      "Kategori",
+      "Detay",
+      "TeklifID",
+      "FaturaNo",
+      "Odeme",
+      "Distributor",
+      "Kaynak"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "STalepListeLog",
+    "target": "ng_dbo_STalepListeLog",
+    "columns": [
+      "ID",
+      "TalepNo",
+      "Tarih",
+      "Onem",
+      "Durum",
+      "OlusturanID",
+      "AtananID",
+      "Tur",
+      "GenelDurum",
+      "logtur",
+      "logKisiID",
+      "logTarih",
+      "Kaynak",
+      "FirmaID",
+      "Mail",
+      "Kategori",
+      "Detay",
+      "TeklifID",
+      "FaturaNo",
+      "Odeme",
+      "Distributor"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "STalepNot",
+    "target": "ng_dbo_STalepNot",
+    "columns": [
+      "ID",
+      "TalepID",
+      "Notlar",
+      "YetkiliID",
+      "Tarih"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "STeklifDetay",
+    "target": "ng_dbo_STeklifDetay",
+    "columns": [
+      "ID",
+      "TeklifID",
+      "StokID",
+      "StokDurumu",
+      "Miktar",
+      "Birim",
+      "Fiyat",
+      "KDV",
+      "Tutar",
+      "Durum",
+      "KDVTutar",
+      "GTutar",
+      "Aciklama"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "STeklifListe",
+    "target": "ng_dbo_STeklifListe",
+    "columns": [
+      "ID",
+      "TeklifNo",
+      "FirmaID",
+      "Rev",
+      "Tarih",
+      "Gecerlilik",
+      "YetkiliID",
+      "Toplam",
+      "BelgeAdres",
+      "TeklifNot",
+      "Durum",
+      "Iskonto",
+      "ParaBirimi",
+      "GenelDurum",
+      "TalepNo",
+      "MusteriYanit",
+      "MusteriYanitTarihi",
+      "MusteriYanitNotu"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "StokAnalizDetay",
+    "target": "ng_dbo_StokAnalizDetay",
+    "columns": [
+      "ID",
+      "AnalizID",
+      "Aciklama",
+      "AciklamaEn",
+      "CasNo",
+      "Loq",
+      "Birim",
+      "Tur",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "StokAnalizListesi",
+    "target": "ng_dbo_StokAnalizListesi",
+    "columns": [
+      "ID",
+      "Kod",
+      "Ad",
+      "Metot",
+      "Matriks",
+      "Akreditasyon",
+      "Birim",
+      "Durumu",
+      "Method",
+      "AdEn",
+      "MethodEn",
+      "Sure",
+      "Numune",
+      "NumGereklilik",
+      "NumDipnot",
+      "NumDipnotEn",
+      "Laboratuvar",
+      "Cihaz",
+      "Fiyat",
+      "Dip",
+      "ParaBirimi",
+      "RaporFormati",
+      "YetkiliID",
+      "Limit",
+      "LOQ",
+      "LimitEn",
+      "BirimEn",
+      "LOQEn",
+      "BolumID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "StokDKDListe",
+    "target": "ng_dbo_StokDKDListe",
+    "columns": [
+      "ID",
+      "Tur",
+      "Kaynak",
+      "Kod",
+      "Ad",
+      "Tarih",
+      "Path",
+      "Link",
+      "Birim",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "StokRecete",
+    "target": "ng_dbo_StokRecete",
+    "columns": [
+      "ID",
+      "AnalizID",
+      "StokID",
+      "Miktar"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "TeklifX1",
+    "target": "ng_dbo_TeklifX1",
+    "columns": [
+      "ID",
+      "TeklifNo",
+      "TeklifTuru",
+      "PlasiyerID",
+      "Tarih",
+      "FirmaID",
+      "Durum",
+      "Aciklama",
+      "ProjeID",
+      "Iskonto",
+      "ParaBirimi",
+      "TeklifDurum",
+      "OnayTarih",
+      "MusteriID",
+      "Toplam",
+      "Notlar",
+      "KID",
+      "RevNo",
+      "KdvOran",
+      "TeklifKonusu",
+      "TeklifVeren",
+      "GenelIskonto",
+      "OlusturanAd"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "TeklifX2",
+    "target": "ng_dbo_TeklifX2",
+    "columns": [
+      "ID",
+      "TeklifNo",
+      "PaketID",
+      "AnalizID",
+      "BirimFiyat",
+      "FiyatBirim",
+      "Aciklama",
+      "Adet",
+      "Toplam",
+      "NumMiktar",
+      "TeklifID",
+      "HizmetID",
+      "HizmetAdi",
+      "Fiyat",
+      "ParaBirimi",
+      "Iskonto",
+      "Notlar",
+      "Metot",
+      "Akreditasyon"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "Termin",
+    "target": "ng_dbo_Termin",
+    "columns": [
+      "ID",
+      "RaporID",
+      "Termin"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "Yetkili",
+    "target": "ng_dbo_Yetkili",
+    "columns": [
+      "ID",
+      "Yetkili",
+      "Mail",
+      "Telefon",
+      "Firma_ID",
+      "Gorevi"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "mrEtken",
+    "target": "ng_dbo_mrEtken",
+    "columns": [
+      "ID",
+      "Name",
+      "CasNo",
+      "Fonksiyon",
+      "Tur",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "mrMix",
+    "target": "ng_dbo_mrMix",
+    "columns": [
+      "ID",
+      "MixID",
+      "EtkenID",
+      "Yuzde",
+      "Durum",
+      "Gelis"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "mrRecete",
+    "target": "ng_dbo_mrRecete",
+    "columns": [
+      "ID",
+      "UrunID",
+      "EtkenID",
+      "Alt",
+      "Ust",
+      "Tam",
+      "Durum"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "mrUrun",
+    "target": "ng_dbo_mrUrun",
+    "columns": [
+      "ID",
+      "Name",
+      "Miktar",
+      "Birim",
+      "Durum",
+      "Kategori"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "rCosing",
+    "target": "ng_dbo_rCosing",
+    "columns": [
+      "ID",
+      "Link",
+      "INCIName",
+      "Cas",
+      "EC",
+      "Functions",
+      "Regulation",
+      "SCCS",
+      "SCCSLink",
+      "Tur",
+      "Kategori"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "rCosingHata",
+    "target": "ng_dbo_rCosingHata",
+    "columns": [
+      "ID",
+      "Detay",
+      "Hata",
+      "Tarih"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "rHammadde",
+    "target": "ng_dbo_rHammadde",
+    "columns": [
+      "ID",
+      "Mix",
+      "GenelAd",
+      "Fizikokimya",
+      "Toksikoloji",
+      "Kaynak",
+      "Durum",
+      "Noael2",
+      "EkBilgi",
+      "cID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "rUGDDetay",
+    "target": "ng_dbo_rUGDDetay",
+    "columns": [
+      "ID",
+      "UrunID",
+      "Gorunum",
+      "Renk",
+      "Koku",
+      "pH",
+      "Kaynama",
+      "Erime",
+      "Yogunluk",
+      "Viskozite",
+      "Suda",
+      "Diger",
+      "Durum",
+      "KokuEn",
+      "GorunumEn",
+      "RenkEn",
+      "SudaEn",
+      "DigerEn",
+      "NKRID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "rUGDDetay2",
+    "target": "ng_dbo_rUGDDetay2",
+    "columns": [
+      "ID",
+      "UrunID",
+      "Mikro",
+      "MResim",
+      "Challenge",
+      "CResim",
+      "Stabilite",
+      "SResim",
+      "StabiliteNot",
+      "Kullanim",
+      "Ozellikler",
+      "Uyarilar",
+      "Kutu",
+      "Durum",
+      "KullanimEn",
+      "UyarilarEn",
+      "StabiliteNotEn",
+      "MikroNotEn",
+      "ChallengeNotEn",
+      "MikroNot",
+      "ChallengeNot",
+      "OzelliklerEn",
+      "Kutu2",
+      "NKRID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "rUGDFormül",
+    "target": "ng_dbo_rUGDFormül",
+    "columns": [
+      "ID",
+      "UrunID",
+      "HammaddeID",
+      "INCIName",
+      "Miktar",
+      "DaP",
+      "Noael",
+      "NKRID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "rUGDListe",
+    "target": "ng_dbo_rUGDListe",
+    "columns": [
+      "ID",
+      "RaporNo",
+      "Tarih",
+      "FirmaID",
+      "Versiyon",
+      "Urun",
+      "UrunEn",
+      "Tip1",
+      "Tip2",
+      "Uygulama",
+      "Hedef",
+      "A",
+      "Durum",
+      "RaporDurum",
+      "BirimID",
+      "Parfum",
+      "Alerjen",
+      "EURP",
+      "UKRP",
+      "Barkod",
+      "Miktar",
+      "NKRID"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "rUGDRaporMetinleri",
+    "target": "ng_dbo_rUGDRaporMetinleri",
+    "columns": [
+      "ID",
+      "UrunID",
+      "Alan",
+      "Dil",
+      "Metin",
+      "UpdatedAt"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "rUGDTip",
+    "target": "ng_dbo_rUGDTip",
+    "columns": [
+      "ID",
+      "Kategori",
+      "UrunTipi",
+      "YuzeyAlani",
+      "UygulamaBolgesi",
+      "Siklik",
+      "GunlukMiktar",
+      "ADegeri",
+      "KategoriEn",
+      "UrunTipiEn",
+      "UygulamaBolgesiEn",
+      "SiklikEn"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "rUGDYonetmelik",
+    "target": "ng_dbo_rUGDYonetmelik",
+    "columns": [
+      "ID",
+      "Num",
+      "INCI",
+      "UrunTipi",
+      "Maks",
+      "Diger",
+      "Etiket",
+      "CAS",
+      "EC",
+      "CommonName",
+      "EkBilgi",
+      "Kategori"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "rWorkList",
+    "target": "ng_dbo_rWorkList",
+    "columns": [
+      "ID",
+      "Kategori",
+      "EvrakNo",
+      "RaporNo",
+      "Tarih",
+      "Termin",
+      "FirmaID",
+      "Urun",
+      "Hizmet",
+      "Notlar",
+      "FaturaID",
+      "IsDurum",
+      "Durum",
+      "FatNo",
+      "Odeme",
+      "Proje",
+      "PlasiyerID",
+      "Notlar2"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "rkHammadde",
+    "target": "ng_dbo_rkHammadde",
+    "columns": [
+      "ID",
+      "Mix",
+      "GenelAd",
+      "Fizikokimya",
+      "Toksikoloji",
+      "Durum",
+      "Noael2",
+      "EkBilgi",
+      "cID",
+      "Kaynak"
+    ]
+  },
+  {
+    "schema": "dbo",
+    "name": "sysdiagrams",
+    "target": "ng_dbo_sysdiagrams",
+    "columns": [
+      "name",
+      "principal_id",
+      "diagram_id",
+      "version",
+      "definition"
+    ]
+  },
+  {
+    "schema": "public",
+    "name": "NumuneFotoBlob",
+    "target": "ng_public_NumuneFotoBlob",
+    "columns": [
+      "RaporID",
+      "FotoData",
+      "MimeType",
+      "UpdatedAt"
+    ]
+  },
+  {
+    "schema": "public",
+    "name": "nkr_formul",
+    "target": "ng_public_nkr_formul",
+    "columns": [
+      "ID",
+      "NKRID",
+      "HammaddeID",
+      "INCIName",
+      "Miktar",
+      "DaP",
+      "Noael"
+    ]
+  },
+  {
+    "schema": "public",
+    "name": "nkr_rapordurumoverride",
+    "target": "ng_public_nkr_rapordurumoverride",
+    "columns": [
+      "nkrid",
+      "RaporFormati",
+      "Durum",
+      "UpdatedAt"
+    ]
+  },
+  {
+    "schema": "public",
+    "name": "nkr_ugdrapormetinleri",
+    "target": "ng_public_nkr_ugdrapormetinleri",
+    "columns": [
+      "ID",
+      "NKRID",
+      "Alan",
+      "Dil",
+      "Metin",
+      "UpdatedAt"
+    ]
+  },
+  {
+    "schema": "public",
+    "name": "portal_finans_firma",
+    "target": "ng_public_portal_finans_firma",
+    "columns": [
+      "id",
+      "ad",
+      "durum",
+      "created_at"
+    ]
+  },
+  {
+    "schema": "public",
+    "name": "portal_finans_kayit",
+    "target": "ng_public_portal_finans_kayit",
+    "columns": [
+      "id",
+      "firma_id",
+      "firma_ad",
+      "tur",
+      "baslik",
+      "tutar",
+      "para_birimi",
+      "vade_tarihi",
+      "taksit_no",
+      "taksit_toplam",
+      "tekrar",
+      "otomatik_odeme",
+      "bildirim_tarihi",
+      "bildirim_saati",
+      "durum",
+      "odeme_tarihi",
+      "notlar",
+      "created_at",
+      "updated_at",
+      "odenen_tutar"
+    ]
+  },
+  {
+    "schema": "public",
+    "name": "portal_finans_odeme",
+    "target": "ng_public_portal_finans_odeme",
+    "columns": [
+      "id",
+      "kayit_id",
+      "tutar",
+      "odeme_tarihi",
+      "notlar",
+      "created_at"
+    ]
+  },
+  {
+    "schema": "public",
+    "name": "portalayarlar",
+    "target": "ng_public_portalayarlar",
+    "columns": [
+      "Anahtar",
+      "Deger"
+    ]
+  },
+  {
+    "schema": "public",
+    "name": "rootkozteklif",
+    "target": "ng_public_rootkozteklif",
+    "columns": [
+      "ID",
+      "TeklifNo",
+      "RevNo",
+      "Tarih",
+      "MusteriAdi",
+      "MusteriEmail",
+      "MusteriTelefon",
+      "MarkaAdi",
+      "UrunKategorisi",
+      "SKUSayisi",
+      "UretimMiktari",
+      "HedefPazar",
+      "OdemeTuru",
+      "KDVOran",
+      "GenelIskonto",
+      "ToplamTutar",
+      "Durum",
+      "Notlar",
+      "KID",
+      "OlusturmaTarihi",
+      "GuncellenmeTarihi",
+      "SilindiMi"
+    ]
+  },
+  {
+    "schema": "public",
+    "name": "rootkozteklifkalem",
+    "target": "ng_public_rootkozteklifkalem",
+    "columns": [
+      "ID",
+      "TeklifID",
+      "Bolum",
+      "HizmetAdi",
+      "Sure",
+      "Miktar",
+      "BirimFiyat",
+      "ParaBirimi",
+      "Iskonto",
+      "Dahil",
+      "Sira",
+      "Notlar"
+    ]
+  },
+  {
+    "schema": "public",
+    "name": "teklifonaylog",
+    "target": "ng_public_teklifonaylog",
+    "columns": [
+      "ID",
+      "TeklifID",
+      "TeklifNo",
+      "aksiyon",
+      "Aciklama",
+      "ipadresi",
+      "useragent",
+      "musteriad",
+      "MusteriEmail",
+      "musteriyetkili",
+      "Tarih",
+      "kullaniciid",
+      "kullaniciad"
+    ]
+  },
+  {
+    "schema": "public",
+    "name": "ugd_canliraporedits",
+    "target": "ng_public_ugd_canliraporedits",
+    "columns": [
+      "ID",
+      "source",
+      "recordid",
+      "Dil",
+      "profile",
+      "headhtml",
+      "bodyhtml",
+      "sectionsjson",
+      "CreatedAt"
+    ]
+  }
+]

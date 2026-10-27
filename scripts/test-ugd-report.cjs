@@ -134,6 +134,8 @@ const body = () => ({ json: async () => ({ Urun: "Test", FirmaID: 1, NormalKulla
   const db = load("lib/db.ts", {
     "@vercel/postgres": { createPool: () => pg }, "./socketGuard": { installSocketGuard() {} },
     "./mysqlCompat": { hasMysqlConfig: () => false, MysqlCompatPool: class {} },
+    "./neonMigrationState": { isNeonMigrated: async () => false },
+    "./neonMysql": { neonMysqlPool: {} },
   }, { process: { env: { UGD_POSTGRES_URL: "postgres://fixture" }, on() {} } });
   const compat = await db.default;
   await persistence.withUgdTransaction(compat, tx => tx.request().query("SELECT 42"));

@@ -1,4 +1,4 @@
-type RequestSource = { request(): any };
+type RequestSource = { request(): any; config?: { __mysql?: boolean } };
 
 export async function withUgdTransaction<T>(pool: any, work: (transaction: RequestSource) => Promise<T>): Promise<T> {
   const transaction = await pool.transaction();
@@ -9,6 +9,12 @@ export async function withUgdTransaction<T>(pool: any, work: (transaction: Reque
     return result;
   } catch (error) {
     try { await transaction.rollback(); } catch { /* Preserve the original failure. */ }
+    if ((error as { code?: string }).code === "P7501") {
+      const { waitForNeonCutover } = await import("./neonMigrationState");
+      await waitForNeonCutover();
+      const { neonMysqlPool } = await import("./neonMysql");
+      return withUgdTransaction(neonMysqlPool, work);
+    }
     throw error;
   }
 }
@@ -16,7 +22,7 @@ export async function withUgdTransaction<T>(pool: any, work: (transaction: Reque
 export async function saveUgdFormulaRows(pool: RequestSource, productId: number, rows: any[]) {
   if (!Number.isInteger(productId) || productId <= 0 || !Array.isArray(rows)) throw new Error("Geçersiz formül kaydı.");
   const product = await pool.request().input("id", productId)
-    .query("SELECT ID FROM rUGDListe WHERE ID = @id AND Durum = 'Aktif'");
+    .query("SELECT ID FROM rUGDListe WHERE ID = @id AND Durum = 'Aktif'" + (pool.config?.__mysql ? " FOR UPDATE" : ""));
   if (!product.recordset.length) throw new Error("Formülün ürün kaydı bulunamadı.");
   await pool.request().input("urunId", productId).query("DELETE FROM rUGDFormul WHERE UrunID = @urunId");
   for (const row of rows) {

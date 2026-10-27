@@ -105,11 +105,11 @@ export async function GET(request: NextRequest) {
     const dataResult = await req.query(`
         SELECT l.Tarih, l.RaporNo, l.Versiyon, t.Ad as 'Firma', t.ID as 'FirmaID',
         l.Barkod, l.Urun, l.Miktar, l.Tip1, l.Tip2, g.UrunTipi,
-        (l.Tip1 + ' - ' + g.UrunTipi) as 'UrunTipiFull',
-        l.A as 'ADegeri', l.RaporDurum as 'DurumLabel', l.ID 
-        FROM rUGDListe l 
+        CONCAT(l.Tip1, ' - ', g.UrunTipi) as 'UrunTipiFull',
+        l.A as 'ADegeri', l.RaporDurum as 'DurumLabel', l.ID
+        FROM rUGDListe l
         LEFT JOIN RootTedarikci t ON l.FirmaID = t.ID
-        LEFT JOIN rUGDTip g ON NULLIF(l.Tip2, '')::int = g.ID 
+        LEFT JOIN rUGDTip g ON CAST(NULLIF(l.Tip2, '') AS INT) = g.ID
         ${where}
         ORDER BY l.ID DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -136,9 +136,9 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { 
-      Tarih, RaporNo, Versiyon, FirmaID, Barkod, Urun, UrunEn, Miktar, 
-      Tip1, Tip2, Uygulama, Hedef, A, RaporDurum 
+    const {
+      Tarih, RaporNo, Versiyon, FirmaID, Barkod, Urun, UrunEn, Miktar,
+      Tip1, Tip2, Uygulama, Hedef, A, RaporDurum
     } = body;
 
     if (!String(Urun ?? "").trim() || !Number.isInteger(Number(FirmaID)) || Number(FirmaID) <= 0) {

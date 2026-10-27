@@ -7,6 +7,7 @@ const isPostgres = Boolean(process.env.UGD_POSTGRESS_URL || process.env.UGD_POST
 
 async function ensureTables() {
   const pool = await poolPromise;
+  if ((pool as unknown as { config?: { __mysql?: boolean } }).config?.__mysql) return;
 
   if (isPostgres) {
     await pool.request().query(`
