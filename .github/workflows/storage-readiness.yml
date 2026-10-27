@@ -40,8 +40,10 @@ jobs:
           lftp -c "
             set cmd:fail-exit yes;
             set ftp:ssl-allow no;
+            set ftp:passive-mode on;
+            set ftp:sync-mode off;
             set net:timeout 20;
-            set net:max-retries 1;
+            set net:max-retries 2;
             open ftp://$FTP_SERVER;
             user '$FTP_USERNAME' '$FTP_PASSWORD';
             cd '$incoming';
@@ -67,8 +69,10 @@ jobs:
             lftp -c "
               set cmd:fail-exit yes;
               set ftp:ssl-allow no;
+            set ftp:passive-mode on;
+            set ftp:sync-mode off;
               set net:timeout 20;
-              set net:max-retries 1;
+              set net:max-retries 2;
               open ftp://$FTP_SERVER;
               user '$FTP_USERNAME' '$FTP_PASSWORD';
               cd '$incoming';
