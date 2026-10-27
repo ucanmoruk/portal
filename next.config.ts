@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["127.0.0.1"],
   output: "standalone",
   serverExternalPackages: ["nodemailer", "mssql", "mysql2", "jszip", "docx", "pizzip", "docxtemplater", "mammoth", "pdf-parse", "pdfjs-dist"],
   outputFileTracingIncludes: {

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  BarChart3,
   Archive,
   ArchiveRestore,
   Bell,
@@ -23,6 +24,8 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+import { TASK_CATEGORIES, isOverdue } from "@/lib/kysTaskPlanning";
+import LabAkisi from "./LabAkisi";
 import styles from "./iletisim.module.css";
 
 type Person = { ID: number | string; Ad: string };
@@ -129,6 +132,10 @@ export default function IletisimClient({
     return () => clearTimeout(initial);
   }, [load]);
   useEffect(() => {
+    if (searchParams.get("sekme") === "lab-akisi") {
+      if (handledTaskLink.current !== "lab-akisi") { handledTaskLink.current = "lab-akisi"; setTab("Lab Akışı"); }
+      return;
+    }
     const taskId = Number(searchParams.get("gorevId"));
     const isCalendarLink = searchParams.get("sekme") === "gorev";
     if (isCalendarLink) {
@@ -324,6 +331,8 @@ export default function IletisimClient({
       icon: ListTodo,
       count: data.gorevler.length,
     },
+    { id: "Lab Akışı", label: "Lab Akışı", icon: CalendarDays, count: null },
+    { id: "İstatistikler", label: "İstatistikler", icon: BarChart3, count: data.gorevler.length },
   ];
   const days = useMemo<Array<Date | null>>(() => {
     if (calendarView === "gun") return [new Date(calendarDate.getFullYear(), calendarDate.getMonth(), calendarDate.getDate())];
@@ -371,14 +380,14 @@ export default function IletisimClient({
           >
             <x.icon size={16} />
             {x.label}
-            <span>{x.count}</span>
+            {x.count !== null && <span>{x.count}</span>}
           </button>
         ))}
-        <button
+        {tab !== "Lab Akışı" && <button
           className={styles.newButton}
           onClick={() => {
             setForm({
-              tur: tab,
+              tur: tab === "İstatistikler" ? "Görev" : tab,
               baslik: "",
               icerik: "",
               aliciIds: [],
@@ -391,10 +400,10 @@ export default function IletisimClient({
           }}
         >
           <Plus size={16} />
-          Yeni {tab.toLocaleLowerCase("tr-TR")}
-        </button>
+          Yeni {tab === "İstatistikler" ? "görev" : tab.toLocaleLowerCase("tr-TR")}
+        </button>}
       </div>
-      <div className={styles.filters}>
+      {tab !== "Lab Akışı" && <div className={styles.filters}>
         <label>
           <Search size={15} />
           <input
@@ -429,7 +438,7 @@ export default function IletisimClient({
             </button>
           </div>
         )}
-        {tab === "Görev" && (
+        {(tab === "Görev" || tab === "İstatistikler") && (
           <>
             <select
               aria-label="Görev durumu"
@@ -461,7 +470,7 @@ export default function IletisimClient({
               <option>Bana atanan</option>
               <option>Benim atadıklarım</option>
             </select>
-            <div className={styles.viewToggle}>
+            {tab === "Görev" && <div className={styles.viewToggle}>
               <button
                 className={taskView === "liste" ? styles.selected : ""}
                 onClick={() => setTaskView("liste")}
@@ -476,8 +485,8 @@ export default function IletisimClient({
                 <CalendarDays size={15} />
                 Takvim
               </button>
-            </div>
-            {taskView === "takvim" && <>
+            </div>}
+            {tab === "Görev" && taskView === "takvim" && <>
               <div className={`${styles.viewToggle} ${styles.calendarPrintActions}`} aria-label="Takvim görünümü">
                 <button className={calendarView === "ay" ? styles.selected : ""} onClick={() => setCalendarView("ay")}>Aylık</button>
                 <button className={calendarView === "hafta" ? styles.selected : ""} onClick={() => setCalendarView("hafta")}>Haftalık</button>
@@ -487,9 +496,21 @@ export default function IletisimClient({
             </>}
           </>
         )}
-      </div>
-      {loading ? (
+      </div>}
+      {tab === "Lab Akışı" ? <LabAkisi /> : loading ? (
         <div className={styles.empty}>Yükleniyor…</div>
+      ) : tab === "İstatistikler" ? (
+        <section className={styles.statistics}>
+          <div><h2>Görev istatistikleri</h2><p>Erişiminiz olan görevler · Yukarıdaki filtreler tüm sayılara uygulanır. Her alıcıya atanan kayıt ayrı bir görev olarak sayılır.</p></div>
+          <div className={styles.typeCards}>
+            {[["Atanan toplam", tasks.length], ["Tamamlanan", tasks.filter(task => task.durum === "Tamamlandı").length], ["Geciken", tasks.filter(task => isOverdue(task)).length], ["Devam eden", tasks.filter(task => task.durum === "Başladı").length], ["Başlamayan", tasks.filter(task => task.durum === "Atandı").length]].map(([label, count], index) => <article key={label} data-tone={index}><span>{label}</span><strong>{count}</strong></article>)}
+          </div>
+          <p>Geciken sayısı, tamamlanmamış ve bitiş tarihi geçmiş görevleri kapsar; başlamayan veya devam eden görevlerle örtüşebilir.</p>
+          <div className={styles.statsTableWrap}><table className={styles.statsTable}><caption>Görev türlerine göre dağılım</caption><thead><tr><th>Görev türü</th><th>Atanan</th><th>Tamamlanan</th><th>Geciken</th><th>Tamamlanma</th></tr></thead><tbody>
+            {TASK_CATEGORIES.map(category => { const rows = tasks.filter(task => (task.kategori || "Rutin") === category); const done = rows.filter(task => task.durum === "Tamamlandı").length; return <tr key={category}><th scope="row">{category}</th><td>{rows.length}</td><td>{done}</td><td>{rows.filter(task => isOverdue(task)).length}</td><td><progress max={rows.length || 1} value={done} aria-label={`${category} tamamlanma oranı`} /> {rows.length ? Math.round(done / rows.length * 100) : 0}%</td></tr>; })}
+          </tbody></table></div>
+          {!tasks.length && <p className={styles.empty}>Seçilen filtrelere uygun görev bulunamadı.</p>}
+        </section>
       ) : tab === "Duyuru" ? (
         <>
           <div className={styles.feed}>
