@@ -1,0 +1,72 @@
+name: Inspect deployed storage runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      restart:
+        description: Signal Passenger only when the deployed build marker matches main
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FTP client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+      - name: Read deployment markers and extraction log
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+          RESTART: ${{ inputs.restart }}
+        run: |
+          set -euo pipefail
+          base="${FTP_SERVER_DIR%/}"
+          if [[ "$base" == */_incoming ]]; then incoming="$base"; else incoming="$base/_incoming"; fi
+          if [[ -z "$base" ]]; then incoming="_incoming"; fi
+          mkdir -p readiness
+          lftp -c "
+            set cmd:fail-exit yes;
+            set ftp:ssl-allow no;
+            set net:timeout 20;
+            set net:max-retries 1;
+            open ftp://$FTP_SERVER;
+            user '$FTP_USERNAME' '$FTP_PASSWORD';
+            cd '$incoming';
+            cls -l deploy.tar.gz* extract-deploy* .lock;
+            set cmd:fail-exit no;
+            get extract-deploy.log -o readiness/extract-deploy.log;
+            get ../tmp/restart.txt -o readiness/restart.txt;
+            get ../.next/BUILD_ID -o readiness/build-id.txt;
+            get ../.next/server/app/api/health/storage/route.js -o readiness/storage-route.js;
+            bye;
+          "
+          echo '--- Deployed build marker ---'
+          if [[ -f readiness/restart.txt ]]; then cat readiness/restart.txt; fi
+          echo '--- Extraction log tail ---'
+          if [[ -f readiness/extract-deploy.log ]]; then tail -n 45 readiness/extract-deploy.log; fi
+          echo '--- Storage route present ---'
+          test -s readiness/storage-route.js && echo yes || echo no
+          if [[ "$RESTART" == true ]]; then
+            test -s readiness/storage-route.js
+            grep -F "build:${GITHUB_SHA}" readiness/restart.txt
+            printf '%s build:%s readiness-restart\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$GITHUB_SHA" > readiness/restart-signal.txt
+            lftp -c "
+              set cmd:fail-exit yes;
+              set ftp:ssl-allow no;
+              set net:timeout 20;
+              set net:max-retries 1;
+              open ftp://$FTP_SERVER;
+              user '$FTP_USERNAME' '$FTP_PASSWORD';
+              cd '$incoming';
+              put readiness/restart-signal.txt -o ../tmp/restart.txt;
+              bye;
+            "
+          fi
