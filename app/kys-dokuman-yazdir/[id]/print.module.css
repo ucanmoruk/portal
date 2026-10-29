@@ -8,11 +8,14 @@
 .header th,.header td,.appendix th,.appendix td { border: 1px solid #9ca3af; padding: 1.5mm; text-align: left; }
 .header th { padding: 2px 5px; white-space: nowrap; background: #f4f6f8; text-align: left; vertical-align: middle; }
 .header td { padding: 2px 5px; white-space: nowrap; text-align: left; vertical-align: middle; }
-.content { width: 100%; max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; font-size: 9.5pt; line-height: 1.48; }
+.content { width: 100%; max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; font-size: .92rem; line-height: 1.58; }
 .content > :first-child { margin-top: 0 !important; }
 .content > :last-child { margin-bottom: 0 !important; }
 .content h2,.content h3,.content h4 { margin: 4mm 0 1.5mm; font-weight: 800; break-after: avoid; }
-.content h2 { text-transform: uppercase; }
+.content h2 { margin: 16px 0 5px; font-size: 1.07rem; }
+.content h3 { margin: 12px 0 4px; font-size: 1rem; }
+.content h4 { margin: 9px 0 3px; font-size: .94rem; }
+.content table { font-size: inherit; }
 .content strong,.content b,.content strong *,.content b * { font-weight: 800 !important; }
 .content :global(.documentFormula) { margin: 4mm auto; padding: 3mm 5mm; border-left: 1mm solid #5042ee; background: #f7f6ff; font-family: "Cambria Math", Cambria, serif; text-align: center; }
 .content p,
@@ -23,7 +26,7 @@
 .content img { max-width: 100%; height: auto; }
 .content tr,.content figure { break-inside: avoid; }
 .appendix { margin-top: 0; break-before: page; background: #fff; }
-.appendix h2 { margin: 0 0 4mm; font-size: 12pt; }
+.appendix h2 { margin: 0 0 4mm; font-size: 12pt; font-weight: 800; }
 .appendix table { font-size: 8pt; }
 .appendix tr { break-inside: avoid; }
 .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; margin-top: 6mm; break-inside: avoid; background: #fff; font-size: 9.5pt; }
