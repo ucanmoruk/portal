@@ -1,3 +1,4 @@
+import { listSupplierMail, prepareSupplierMail, sendQueuedSupplierMail } from "@/lib/kysSupplierMail";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { completeKysOrder, updateKysOrderBilling, editSpektrotekRequestNumber, editKysRequest, getKysRequestDetail, updateKysRequestStatus } from "@/lib/kysStore";
@@ -7,6 +8,8 @@ import {
   getKysRequestFiles,
   restoreKysRequest,
 } from "@/lib/kysPurchaseWorkflow";
+
+export const maxDuration = 180;
 
 const PURCHASE_KEY = "laboratuvar.kys.satin-alma-gecmisi";
 
@@ -32,6 +35,7 @@ export async function GET(
       ...detail,
       belgeler: await getKysRequestFiles(Number(id)),
       satinAlmaYetkisi,
+      tedarikciMailleri:await listSupplierMail(Number(id)),
     });
   } catch (e: unknown) {
     return Response.json(
@@ -79,8 +83,14 @@ export async function PATCH(
       await restoreKysRequest(Number(id), user.userId);
       return Response.json({ ok: true });
     }
+    if(body.islem === "tedarikci-mail-gonder" || body.islem === "tedarikci-mail-tekrar") {
+      if(body.islem === "tedarikci-mail-gonder")await prepareSupplierMail(Number(id),body.tedarikciIds||[],body.ekAlicilar||[],body.yenidenGonder===true,body.gonderimAnahtari);
+      try {return Response.json({ok:true,mail:await sendQueuedSupplierMail(Number(id),true,{userId:user.userId,userName:user.userName})});}
+      catch(error) {console.error("[KYS supplier mail]", error instanceof Error?error.message:"Gönderim hatası");return Response.json({error:"Mail gönderimi tamamlanamadı. Kayıtlı gönderim durumunu kontrol edin."},{status:503});}
+    }
     await updateKysRequestStatus(Number(id), {
       durum: body.durum,
+      tedarikciIds:body.tedarikciIds,
       userId: (session.user as { userId?: string })?.userId || null,
       userName: session.user?.name || null,
     });

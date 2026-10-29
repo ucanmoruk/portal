@@ -10,7 +10,7 @@ const blank: Supplier = { ID: 0, Ad: "", Yetkili: "", Telefon: "", Email: "", Ad
 const fields = [
   { key: "Yetkili", label: "Yetkili", placeholder: "İsim soyisim", type: "text", autoComplete: "name" },
   { key: "Telefon", label: "Telefon", placeholder: "Telefon numarası", type: "tel", autoComplete: "tel" },
-  { key: "Email", label: "E-posta", placeholder: "ornek@firma.com", type: "email", autoComplete: "email" },
+  { key: "Email", label: "E-posta adresleri", placeholder: "satis@firma.com; teklif@firma.com", type: "text", autoComplete: "off" },
   { key: "VergiDairesi", label: "Vergi dairesi", placeholder: "Vergi dairesi adı", type: "text", autoComplete: "off" },
   { key: "VergiNo", label: "Vergi no", placeholder: "Vergi numarası", type: "text", autoComplete: "off" },
 ] as const;

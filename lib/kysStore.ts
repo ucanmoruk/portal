@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ensureKysRequestNumbers, nextKysRequestNumber, nextSpektrotekRequestNumber } from "@/lib/kysRequestNumbers";
 import { cosmoPool } from "@/lib/db";
@@ -1421,32 +1422,38 @@ export async function getKysRequestDetail(id: number, includePurchaseDetails = f
   };
 }
 
-export async function updateKysRequestStatus(id: number, input: { durum?: string; userId?: string | null; userName?: string | null }) {
+export async function updateKysRequestStatus(id: number, input: { durum?: string; userId?: string | null; userName?: string | null; tedarikciIds?: unknown }) {
   await ensureKysSchema();
+  const {ensureSupplierMailSchema}=await import("@/lib/kysSupplierMail");
+  await ensureSupplierMailSchema();
+  const approvalId=randomUUID();
+  const mailQueued=false;
   const durum = text(input.durum);
   if (!durum) throw new Error("Durum zorunludur.");
   const pool = await (await cosmoPool).transaction();
   await pool.begin();
   try {
   const current = (await pool.request().input("ID", id).query(hasMysqlConfig()
-    ? "SELECT Durum FROM KysTalep WHERE ID=@ID FOR UPDATE"
-    : "SELECT Durum FROM KysTalep WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
+    ? "SELECT Durum,TalepTuru FROM KysTalep WHERE ID=@ID FOR UPDATE"
+    : "SELECT Durum,TalepTuru FROM KysTalep WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
   if (!current) throw new Error("Talep bulunamadı.");
   requireRequestTransition(current.Durum, durum);
   if (durum === "Onay Bekliyor") {
     const accepted = (await pool.request().input("ID", id).query("SELECT ID FROM KysTalepKabul WHERE TalepID=@ID")).recordset;
     if (accepted.length) throw new Error("Kabul kaydı bulunan talep geri gönderilemez.");
   }
+  if(durum === "İşleme Alındı" && current.TalepTuru !== "Sipariş")throw new Error("Talep, tedarikçi mailleri gönderildiğinde otomatik olarak işleme alınır.");
   const dateFields =
     durum === "Onay Bekliyor"
-      ? ", OnaylayanID = NULL, OnaylayanAd = NULL, OnayTarihi = NULL, IslemeAlanID = NULL, IslemeAlanAd = NULL, IslemeAlmaTarihi = NULL"
+      ? ", OnaylayanID = NULL, OnaylayanAd = NULL, OnayTarihi = NULL, IslemeAlanID = NULL, IslemeAlanAd = NULL, IslemeAlmaTarihi = NULL, MailOnayID = NULL"
       : durum === "Onaylandı"
-      ? ", OnaylayanID = @UserID, OnaylayanAd = @UserName, OnayTarihi = GETDATE()"
+      ? ", OnaylayanID = @UserID, OnaylayanAd = @UserName, OnayTarihi = GETDATE(), MailOnayID = @MailOnayID"
       : durum === "İşleme Alındı"
         ? ", IslemeAlanID = @UserID, IslemeAlanAd = @UserName, IslemeAlmaTarihi = GETDATE()"
         : "";
   await pool.request()
     .input("ID", id)
+    .input("MailOnayID", durum === "Onaylandı" ? approvalId : null)
     .input("Durum", durum)
     .input("Current", current.Durum)
     .input("UserID", nullableText(input.userId))
@@ -1455,6 +1462,7 @@ export async function updateKysRequestStatus(id: number, input: { durum?: string
     .then(result => { if (!result.rowsAffected?.[0]) throw new Error("Talep durumu değişmiş. Sayfayı yenileyin."); });
   await pool.commit();
   } catch (e) { await pool.rollback(); throw e; }
+  return {mailQueued};
 }
 
 export async function acceptKysRequestItem(talepId: number, input: any, executor?: any) {

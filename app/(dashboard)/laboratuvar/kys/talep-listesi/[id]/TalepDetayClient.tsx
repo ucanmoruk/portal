@@ -8,10 +8,12 @@ import { useCallback, useEffect, useState } from "react";
 import styles from "@/app/styles/table.module.css";
 import kys from "../../kys.module.css";
 import { REQUEST_TRANSITIONS } from "@/lib/kysRequestRules";
+import SupplierApprovalDialog, { type SupplierMailSelection } from "../SupplierApprovalDialog";
 import TalepEditModal from "../TalepEditModal";
 
 type Birim = { id: number; ad: string };
-type Detail = { talep: any; kalemler: any[]; kabuller: any[]; belgeler?: any[]; satinAlmaYetkisi?: boolean };
+type SupplierMail = { ID:string;TedarikciAd:string;Alicilar:string;Durum:string;Hata:string|null;CreatedAt:string;SentAt:string|null;AktifOnay:number;ZamanAsimi?:number;Asama?:string;BaslamaTarihi?:string|null };
+type Detail = { tedarikciMailleri?:SupplierMail[]; talep: any; kalemler: any[]; kabuller: any[]; belgeler?: any[]; satinAlmaYetkisi?: boolean };
 const today = () => new Date().toISOString().slice(0, 10);
 
 function dateFmt(value?: string | null) {
@@ -21,6 +23,8 @@ function dateFmt(value?: string | null) {
 }
 
 export default function TalepDetayClient({ id }: { id: number }) {
+  const [approvalOpen,setApprovalOpen]=useState(false);
+  const [mailNotice,setMailNotice]=useState("");
   const [completingAll, setCompletingAll] = useState(false);
   const [shipment, setShipment] = useState({ kabulTarihi: today(), hedefBirimId: "", genelDegerlendirme: "" });
   const [editing, setEditing] = useState(false);
@@ -52,18 +56,17 @@ export default function TalepDetayClient({ id }: { id: number }) {
     genelDegerlendirme: "",
   });
 
-  const fetchDetail = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const fetchDetail = useCallback(async (silent=false) => {
+    if(!silent){setLoading(true);setError("");}
     try {
       const res = await fetch(`/api/kys/talepler/${id}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Talep detayı alınamadı.");
       setDetail(json);
     } catch (e: any) {
-      setError(e.message);
+      if(!silent)setError(e.message);
     } finally {
-      setLoading(false);
+      if(!silent)setLoading(false);
     }
   }, [id]);
 
@@ -72,18 +75,43 @@ export default function TalepDetayClient({ id }: { id: number }) {
     fetch("/api/kys/birimler").then(r => r.json()).then(j => setBirimler(j.data || [])).catch(() => {});
   }, []);
 
-  async function setStatus(durum: string) {
-    if(saving)return;setSaving(true);
+  useEffect(()=>{
+    if(!detail?.tedarikciMailleri?.some(mail=>mail.Durum==="Gönderiliyor"&&!Number(mail.ZamanAsimi)))return;
+    const timer=setInterval(()=>void fetchDetail(true),10000);
+    return()=>clearInterval(timer);
+  },[detail?.tedarikciMailleri,fetchDetail]);
+
+  async function setStatus(durum: string, tedarikciIds?:number[]):Promise<boolean> {
+    if(saving)return false;setSaving(true);
     setError("");
     try { const res = await fetch(`/api/kys/talepler/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ durum }),
+      body: JSON.stringify({ durum,tedarikciIds }),
     });
     const json = await res.json();
-    if (!res.ok) setError(json.error || "Durum güncellenemedi.");
-    fetchDetail();
-    }catch(e:any){setError(e.message||"Durum güncellenemedi.");}finally{setSaving(false);}
+    if (!res.ok) throw new Error(json.error || "Durum güncellenemedi.");
+    setMailNotice(json.mailWarning || (json.mail ? `${json.mail.gonderildi} tedarikçiye mail gönderildi${json.mail.hata||json.mail.belirsiz ? "; gönderilemeyen kayıtlar için aşağıdaki durumu kontrol edin." : "."}` : ""));
+    await fetchDetail();return true;
+    }catch(e:any){setError(e.message||"Durum güncellenemedi.");return false;}finally{setSaving(false);}
+  }
+
+  async function sendSupplierMail(selection:SupplierMailSelection):Promise<boolean>{
+    if(saving)return false;setSaving(true);setError("");
+    try{
+      const response=await fetch(`/api/kys/talepler/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({islem:"tedarikci-mail-gonder",...selection})});
+      const json=await response.json();if(!response.ok)throw new Error(json.error||"Mail gönderilemedi.");
+      setMailNotice(`${json.mail.gonderildi} tedarikçiye mail gönderildi${json.mail.hata||json.mail.belirsiz?"; gönderim durumunu kontrol edin.":". Talep işleme alındı."}`);await fetchDetail();return true;
+    }catch(e){setError(e instanceof Error?e.message:"Mail gönderilemedi.");return false;}finally{setSaving(false);}
+  }
+
+  async function retrySupplierMail(){
+    if(saving)return;setSaving(true);setError("");
+    try{
+      const response=await fetch(`/api/kys/talepler/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({islem:"tedarikci-mail-tekrar"})});
+      const json=await response.json();if(!response.ok)throw new Error(json.error||"Gönderim tamamlanamadı.");
+      setMailNotice(`${json.mail.gonderildi} mail gönderildi. Gönderim durumları güncellendi.`);await fetchDetail();
+    }catch(e){setError(e instanceof Error?e.message:"Gönderim tamamlanamadı.");}finally{setSaving(false);}
   }
 
   function openAccept(item: any) {
@@ -187,6 +215,8 @@ export default function TalepDetayClient({ id }: { id: number }) {
   if (loading && !detail) return <div className={styles.tableCard}><div className={styles.empty}>Yükleniyor...</div></div>;
   if (error && !detail) return <div className={styles.errorBanner}>{error}</div>;
   if (!detail) return null;
+  const activeMails=detail.tedarikciMailleri?.filter(mail=>Number(mail.AktifOnay))||[];
+  const sendingInProgress=activeMails.some(mail=>mail.Durum==="Gönderiliyor"&&!Number(mail.ZamanAsimi));
 
   return (
     <>
@@ -203,13 +233,15 @@ export default function TalepDetayClient({ id }: { id: number }) {
           {["Spektrotek", "Root"].includes(detail.talep.seri) && <button type="button" disabled={saving} className={styles.cancelBtn} onClick={() => {setRequestNumber(detail.talep.talepNo);setNumberError("");setEditingNumber(true);}}>Talep no düzenle</button>}
           {detail.talep.durum === "Onay Bekliyor" && !detail.talep.onayTarihi && <button type="button" disabled={saving || loading || editing} className={styles.addBtn} onClick={() => setEditing(true)}><Pencil size={15} aria-hidden="true" /> Talebi düzenle</button>}
           <Link className={styles.cancelBtn} href={`/kys-talep-yazdir/${id}`} target="_blank">Yazdır</Link>
-          {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("Onaylandı")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#e7f7ed",color:"#16713b",borderColor:"#a0d6b4"}} onClick={() => setStatus("Onaylandı")}>Onayla</button>}
-          {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("İşleme Alındı")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#e8f0ff",color:"#235ac0",borderColor:"#a7c1ee"}} onClick={() => setStatus("İşleme Alındı")}>İşleme al</button>}
+          {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("Onaylandı")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#e7f7ed",color:"#16713b",borderColor:"#a0d6b4"}} onClick={() => void setStatus("Onaylandı")}>Onayla</button>}
+          {!isOrder && ["Onaylandı","İşleme Alındı","Kısmi Kabul","Tamamlandı"].includes(detail.talep.durum) && <button type="button" disabled={saving} className={styles.addBtn} onClick={()=>setApprovalOpen(true)}>Mail gönder</button>}
+          {isOrder && REQUEST_TRANSITIONS[detail.talep.durum]?.includes("İşleme Alındı")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#e8f0ff",color:"#235ac0",borderColor:"#a7c1ee"}} onClick={() => setStatus("İşleme Alındı")}>İşleme al</button>}
           {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("İptal")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#fff0ee",color:"#b42318",borderColor:"#efb2ab"}} onClick={() => setStatus("İptal")}>İptal</button>}
           {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("Onay Bekliyor")&&<button type="button" disabled={saving} className={styles.cancelBtn} onClick={() => setStatus("Onay Bekliyor")}>Geri Gönder</button>}
         </div>
       </div>
 
+      {mailNotice&&<p role="status" className={kys.muted}>{mailNotice}</p>}
       <div className={styles.tableCard} style={{ padding: 16 }}>
         <div className={kys.detailGrid}>
           <div className={kys.detailItem}><div className={kys.detailLabel}>{["Spektrotek", "Root"].includes(detail.talep.seri) ? "Firma adı" : "Talep türü"}</div><div className={kys.detailValue}>{["Spektrotek", "Root"].includes(detail.talep.seri) ? detail.talep.firmaAdi : detail.talep.talepTuru}</div></div>
@@ -260,6 +292,13 @@ export default function TalepDetayClient({ id }: { id: number }) {
           </table>
         </div>
       </div>
+
+      {Boolean(detail.tedarikciMailleri?.length)&&<section className={kys.mailAudit} aria-label="Tedarikçi mail gönderimleri">
+        <h2>Tedarikçi mail gönderimleri</h2>
+        <p className={kys.mailEnvelope}>Gönderen: purchasing@uniquealphabet.com · CC: oguzhan@uniquealphabet.com, selin@uniquealphabet.com</p>
+        <div className={styles.tableWrapper}><table className={styles.table}><thead><tr><th>Tedarikçi / Alıcılar</th><th>Durum</th><th>Gönderim tarihi</th><th>Açıklama</th></tr></thead><tbody>{detail.tedarikciMailleri!.map(mail=><tr key={mail.ID}><td><strong>{mail.TedarikciAd}</strong><small className={kys.mailRecipients}>{JSON.parse(mail.Alicilar).join("; ")}</small></td><td>{mail.Durum==="Gönderiliyor"&&Number(mail.ZamanAsimi)?"Sonuç alınamadı":mail.Durum}{!Number(mail.AktifOnay)&&<small className={kys.mailRecipients}>Önceki gönderim</small>}</td><td>{mail.SentAt?new Date(mail.SentAt).toLocaleString("tr-TR"):"-"}</td><td>{mail.Hata||(mail.Durum==="Gönderiliyor"?(Number(mail.ZamanAsimi)?"10 dakika içinde sonuç alınamadı. Mail ulaşmış olabilir; yeniden göndermeden önce alıcıyı kontrol edin.":`${mail.Asama||"Gönderim hazırlanıyor"}. Durum otomatik güncellenir.`):"-")}</td></tr>)}</tbody></table></div>
+        {detail.tedarikciMailleri!.some(mail=>Number(mail.AktifOnay)&&["Hata","Bekliyor"].includes(mail.Durum))&&<button type="button" disabled={saving} className={styles.cancelBtn} onClick={()=>void retrySupplierMail()}>Gönderilemeyen mailleri tekrar dene</button>}
+      </section>}
 
       {editing && <TalepEditModal id={id} onClose={() => setEditing(false)} onSaved={fetchDetail} initial={{
         seri: detail.talep.seri, firmaAdi: detail.talep.firmaAdi, talepTuru: detail.talep.talepTuru, notlar: detail.talep.notlar || "", teknikSartname: detail.talep.teknikSartname || "",
@@ -313,6 +352,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
           </div>
         </div>
       )}
+      {approvalOpen && <SupplierApprovalDialog requestNo={detail.talep.talepNo} onClose={()=>setApprovalOpen(false)} onSend={sendSupplierMail} hasPrevious={Boolean(detail.tedarikciMailleri?.length)} sendingInProgress={sendingInProgress}/>}
     </>
   );
 }

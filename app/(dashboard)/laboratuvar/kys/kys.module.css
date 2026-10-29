@@ -698,3 +698,31 @@ table.purchaseHistoryTable .iconButton {
 .productPhoto input { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-primary); background: var(--color-surface); }
 .productPhoto input:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .productPhoto input:disabled { opacity: 0.6; }
+
+.supplierChoices { display:grid; gap:8px; max-height:360px; overflow:auto; margin:12px 0; }
+.supplierChoices label { display:flex; align-items:flex-start; gap:10px; padding:10px; border:1px solid var(--color-border-light); border-radius:var(--radius-sm); cursor:pointer; }
+.supplierChoices input { margin-top:4px; flex-shrink:0; }
+.supplierChoices span { min-width:0; }
+.supplierChoices strong { display:block; font-size:.875rem; }
+.supplierChoices small,.mailRecipients { display:block; font-size:.75rem; color:var(--color-text-secondary); overflow-wrap:anywhere; }
+.mailAudit { display:grid; gap:10px; padding:16px; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); margin:16px 0; }
+.mailAudit h2 { margin:0; font-size:.9375rem; font-weight:700; }
+.mailAudit>button { justify-self:start; }
+.approvalModal { min-width:0; }
+.approvalModal p { margin:0 0 12px; font-size:.8125rem; line-height:1.6; overflow-wrap:anywhere; }
+.approvalModal>div:last-child { flex-wrap:wrap; }
+.approvalModal h2 { overflow-wrap:anywhere; }
+.approvalModal button:disabled { opacity:.5; cursor:not-allowed; }
+.approvalModal input:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; }
+
+.mailAudit p.mailEnvelope,.approvalModal p.mailEnvelope { font-size:.72rem; line-height:1.5; color:var(--color-text-tertiary); margin:0 0 10px; }
+.supplierDropdown { margin:10px 0; padding:10px; border:1px solid var(--color-border); border-radius:var(--radius-sm); }
+.supplierDropdown .supplierChoices { max-height:220px; margin:8px 0; }
+.supplierSelected { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+.supplierSelected>span { display:inline-flex; align-items:center; gap:6px; max-width:100%; padding:4px 8px; border-radius:var(--radius-sm); background:var(--color-accent-light); font-size:.75rem; overflow-wrap:anywhere; }
+.supplierSelected button { border:0; background:transparent; color:var(--color-text-secondary); font-size:1rem; cursor:pointer; }
+.manualRecipient { display:grid; gap:6px; margin:14px 0; font-size:.8125rem; font-weight:600; }
+.manualRecipient textarea { width:100%; min-width:0; resize:vertical; padding:9px; border:1px solid var(--color-border); border-radius:var(--radius-sm); font:inherit; font-weight:400; }
+.manualRecipient small { font-size:.72rem; color:var(--color-text-tertiary); font-weight:400; }
+.resendConfirmation { display:flex; align-items:flex-start; gap:8px; margin-top:12px; font-size:.75rem; line-height:1.5; }
+.resendConfirmation input { margin-top:3px; flex-shrink:0; }

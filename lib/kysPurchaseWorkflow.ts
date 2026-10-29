@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { supplierEmails } from "@/lib/kysSupplierMailPolicy";
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { ensureKysSchema } from "@/lib/kysStore";
@@ -11,8 +12,10 @@ export async function ensureKysPurchaseSchema() {
       if (hasMysqlConfig()) {
         await p.request().query(`CREATE TABLE IF NOT EXISTS KysTedarikci (
         ID INT AUTO_INCREMENT PRIMARY KEY, Ad VARCHAR(220) NOT NULL, Yetkili VARCHAR(160) NULL,
-        Telefon VARCHAR(80) NULL, Email VARCHAR(220) NULL, Adres TEXT NULL, VergiDairesi VARCHAR(160) NULL,
+        Telefon VARCHAR(80) NULL, Email TEXT NULL, Adres TEXT NULL, VergiDairesi VARCHAR(160) NULL,
         VergiNo VARCHAR(80) NULL, Durum VARCHAR(20) NOT NULL DEFAULT 'Aktif', CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+        const emailColumn = await p.request().query("SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='KysTedarikci' AND COLUMN_NAME='Email'");
+        if (String(emailColumn.recordset[0]?.DATA_TYPE).toLowerCase() === "varchar") await p.request().query("ALTER TABLE KysTedarikci MODIFY COLUMN Email TEXT NULL");
         await p
           .request()
           .query(
@@ -38,8 +41,9 @@ export async function ensureKysPurchaseSchema() {
         await p.request()
           .query(`IF OBJECT_ID('KysTedarikci','U') IS NULL CREATE TABLE KysTedarikci (
         ID INT IDENTITY PRIMARY KEY, Ad NVARCHAR(220) NOT NULL, Yetkili NVARCHAR(160) NULL,
-        Telefon NVARCHAR(80) NULL, Email NVARCHAR(220) NULL, Adres NVARCHAR(MAX) NULL,
+        Telefon NVARCHAR(80) NULL, Email NVARCHAR(MAX) NULL, Adres NVARCHAR(MAX) NULL,
         VergiDairesi NVARCHAR(160) NULL, VergiNo NVARCHAR(80) NULL, Durum NVARCHAR(20) NOT NULL DEFAULT 'Aktif', CreatedAt DATETIME DEFAULT GETDATE())`);
+        await p.request().query("IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='KysTedarikci' AND COLUMN_NAME='Email' AND CHARACTER_MAXIMUM_LENGTH<>-1) ALTER TABLE KysTedarikci ALTER COLUMN Email NVARCHAR(MAX) NULL");
         await p
           .request()
           .query(
@@ -105,13 +109,9 @@ export async function saveKysSupplier(input: any, id?: number) {
   ];
   if (!clean(input.Ad) || clean(input.Ad).length > 220)
     throw new Error("Firma adı zorunludur (en fazla 220 karakter).");
-  if (
-    clean(input.Email) &&
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean(input.Email))
-  )
-    throw new Error("E-posta adresi geçersiz.");
+  const emails = supplierEmails(input.Email);
   const req = p.request();
-  fields.forEach((k) => req.input(k, clean(input[k]) || null));
+  fields.forEach((k) => req.input(k, (k === "Email" ? emails.join("; ") : clean(input[k])) || null));
   if (id) {
     req
       .input("ID", id)
