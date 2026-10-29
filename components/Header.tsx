@@ -10,11 +10,11 @@ import { useSidebar } from "./SidebarProvider";
 export default function Header() {
   const { data: session } = useSession();
   const { toggle } = useSidebar();
-  const [notifications,setNotifications]=useState<{count:number;items:Array<{id:number;etiket:string;baslik:string;olusturanAd:string}>}>({count:0,items:[]});
+  const [notifications,setNotifications]=useState<{count:number;items:Array<{id:number;etiket:string;gorevId?:number;konusmaId?:number;baslik:string;olusturanAd:string}>}>({count:0,items:[]});
   const [notificationsOpen,setNotificationsOpen]=useState(false);
   const loadNotifications=useCallback(async()=>{try{const response=await fetch("/api/kys/iletisim/bildirimler");if(response.ok)setNotifications(await response.json());}catch{/* Bildirim hatası üst menüyü engellemez. */}},[]);
   const markNotification=useCallback(async(id?:number)=>{await fetch("/api/kys/iletisim",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(id?{islem:"okundu",id}:{islem:"tumunu-okundu"})});await loadNotifications();},[loadNotifications]);
-  const notificationHref=(item:{id:number;etiket:string})=>item.etiket==="Görev"?`/laboratuvar/kys/iletisim?sekme=gorev&gorevId=${item.id}`:"/laboratuvar/kys/iletisim";
+  const notificationHref=(item:{id:number;etiket:string;gorevId?:number;konusmaId?:number})=>(item.etiket==="Görev"||item.gorevId)?`/laboratuvar/kys/iletisim?sekme=gorev&gorevId=${item.gorevId||item.id}`:item.konusmaId?`/laboratuvar/kys/iletisim?sekme=mesaj&konusmaId=${item.konusmaId}`:"/laboratuvar/kys/iletisim";
   useEffect(()=>{if(!session?.user)return;const initial=setTimeout(()=>void loadNotifications(),0);const timer=setInterval(()=>void loadNotifications(),30000);return()=>{clearTimeout(initial);clearInterval(timer);};},[session?.user,loadNotifications]);
 
   return (
@@ -29,7 +29,7 @@ export default function Header() {
           <div className={styles.userArea}>
             <Link className={styles.calendarButton} href="/laboratuvar/kys/iletisim?sekme=gorev&gorunum=takvim" aria-label="Takvimi aç" title="Takvim"><CalendarDays size={18}/></Link>
             <div className={styles.notificationWrap}>
-              <button className={styles.notificationButton} aria-label={`${notifications.count} okunmamış bildirim`} onClick={()=>setNotificationsOpen(value=>!value)}>
+              <button className={styles.notificationButton} aria-label={`${notifications.count} bildirim`} onClick={()=>setNotificationsOpen(value=>!value)}>
                 <Bell size={17}/>{notifications.count>0&&<span>{notifications.count>99?"99+":notifications.count}</span>}
               </button>
               {notificationsOpen&&<div className={styles.notificationPanel}><header><strong>Bildirimler</strong>{notifications.count>0&&<button onClick={()=>void markNotification()}>Tümünü okundu yap</button>}</header>{notifications.items.length===0?<p>Yeni bildiriminiz yok.</p>:notifications.items.map(item=><div className={styles.notificationItem} key={`${item.etiket}-${item.id}`}><Link href={notificationHref(item)} onClick={()=>{setNotificationsOpen(false);void markNotification(item.id);}}><small>{item.etiket}</small><strong>{item.baslik}</strong><span>{item.olusturanAd}</span></Link><button onClick={()=>void markNotification(item.id)} title="Okundu işaretle">✓</button></div>)}<Link className={styles.notificationAll} href="/laboratuvar/kys/iletisim" onClick={()=>setNotificationsOpen(false)}>İç iletişimi görüntüle</Link></div>}

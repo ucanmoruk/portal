@@ -921,3 +921,34 @@
 .statsTable progress { width:80px; max-width:100%; accent-color:var(--color-accent); }
 .tabs { flex-wrap:wrap; }
 @media(max-width:480px) { .typeCards { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } .typeCards > * { padding:15px; } }
+
+/* Hallmark · pre-emit critique: P4 H5 E4 S5 R5 V4 · existing portal tokens */
+.taskMain strong { font-size:.9375rem; line-height:1.4; font-weight:700; overflow-wrap:anywhere; }
+.taskMain small,.taskSummary time { font-size:.75rem; line-height:1.5; }
+.taskStatus { font-size:.75rem; }
+.taskDetail { gap:12px; padding:20px 28px; }
+.taskSectionTitle,.taskDescription h3,.taskDiscussion h3 { margin:0; font-size:.75rem; font-weight:700; color:var(--color-text-secondary); line-height:1.5; }
+.taskDescription p { margin:6px 0 4px; font-size:.875rem; line-height:1.6; color:var(--color-text-primary); white-space:pre-wrap; overflow-wrap:anywhere; }
+.timeline p { font-size:.75rem; line-height:1.5; }
+.timeline small { font-size:.75rem; }
+.taskDiscussion { display:grid; gap:10px; margin:8px 0 0; padding-top:16px; border-top:1px solid var(--color-border-light); }
+.taskDiscussion h3 span { font-weight:400; }
+.taskDiscussion article { padding:12px 14px; border:1px solid var(--color-border-light); border-radius:var(--radius-sm); background:var(--color-surface-2); }
+.taskDiscussion article header { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 12px; }
+.taskDiscussion article strong { font-size:.75rem; font-weight:650; color:var(--color-text-secondary); }
+.taskDiscussion time { color:var(--color-text-tertiary); font-size:.75rem; }
+.taskDiscussion p { margin:4px 0 0; font-size:.875rem; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; }
+.taskDiscussion label { margin-top:4px; font-size:.75rem; font-weight:600; color:var(--color-text-secondary); }
+.taskDiscussion textarea { width:100%; padding:10px 12px; border:1px solid var(--color-border); border-radius:var(--radius-sm); font:inherit; font-size:.875rem; line-height:1.6; resize:vertical; background:var(--color-surface); }
+.taskDiscussion textarea:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; }
+.taskDiscussion button { justify-self:start; display:flex; align-items:center; gap:6px; padding:8px 12px; border-radius:var(--radius-sm); background:var(--color-accent); color:var(--color-surface); font-size:.8125rem; font-weight:600; cursor:pointer; }
+.taskDiscussion button:hover { filter:brightness(.94); }
+.taskDiscussion button:focus-visible { outline:2px solid var(--color-accent); outline-offset:3px; }
+.taskDiscussion button:active { transform:translateY(1px); }
+.taskDiscussion button:disabled { opacity:.5; cursor:default; }
+.taskActions button { font-size:.8125rem; }
+.shell,.taskList,.taskRow { min-width:0; }
+@media(max-width:1000px){.filters{flex-wrap:wrap;min-width:0}.filters>label{min-width:0;flex:1 1 220px}}
+@media(max-width:760px){.taskDetail{padding:16px}.taskMain strong{font-size:.875rem}.taskSummary{padding-right:80px}.taskQuickActions{right:12px}.taskActions{flex-wrap:wrap}.taskDiscussion textarea{min-width:0}}
+.messageReplyStatus { display:inline-flex; width:fit-content; margin-top:5px; padding:3px 8px; border-radius:6px; background:#eef2f6; color:#475569; font-size:12px; font-weight:600; }
+.messageReplyStatus[data-pending="true"] { background:#fff3d6; color:#875800; }

@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { pendingMessageNotifications } from "@/lib/kysMessageReply";
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 
@@ -50,6 +51,8 @@ async function createSchema() {
       SELECT DISTINCT COALESCE(KonusmaID,ID),OlusturanID,OlusturanAd FROM KysIletisim WHERE Tur='Mesaj' AND OlusturanID<>''`);
     await pool.request().query(`INSERT IGNORE INTO KysIletisimKatilimci (KonusmaID,KullaniciID,KullaniciAd)
       SELECT DISTINCT COALESCE(KonusmaID,ID),AliciID,AliciAd FROM KysIletisim WHERE Tur='Mesaj' AND AliciID IS NOT NULL AND AliciID<>''`);
+    await pool.request().query("ALTER TABLE KysIletisim ADD COLUMN IF NOT EXISTS BildirimAnahtari VARCHAR(220) NULL");
+    await pool.request().query("CREATE UNIQUE INDEX IF NOT EXISTS UX_KysIletisim_Bildirim ON KysIletisim (BildirimAnahtari)");
   } else {
     await pool.request().query(`IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='KysIletisim') CREATE TABLE KysIletisim (
       ID INT IDENTITY(1,1) PRIMARY KEY, Tur NVARCHAR(20) NOT NULL, Baslik NVARCHAR(220) NOT NULL, Icerik NVARCHAR(MAX) NULL,
@@ -78,6 +81,10 @@ async function createSchema() {
       SELECT DISTINCT COALESCE(i.KonusmaID,i.ID),i.AliciID,i.AliciAd FROM KysIletisim i
       WHERE i.Tur='Mesaj' AND i.AliciID IS NOT NULL AND i.AliciID<>'' AND NOT EXISTS (SELECT 1 FROM KysIletisimKatilimci k WHERE k.KonusmaID=COALESCE(i.KonusmaID,i.ID) AND k.KullaniciID=i.AliciID)`);
   }
+  if (!hasMysqlConfig()) {
+    await pool.request().query("IF COL_LENGTH('KysIletisim', 'BildirimAnahtari') IS NULL ALTER TABLE KysIletisim ADD BildirimAnahtari NVARCHAR(220) NULL");
+    await pool.request().query("IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='UX_KysIletisim_Bildirim') CREATE UNIQUE INDEX UX_KysIletisim_Bildirim ON KysIletisim (BildirimAnahtari) WHERE BildirimAnahtari IS NOT NULL");
+  }
 }
 
 function mapItem(row: Row) {
@@ -92,7 +99,8 @@ export async function listKysIletisim(user: User) {
   await ensureKysIletisimSchema(); const pool=await cosmoPool;
   const res=await pool.request().input("UserID",user.userId).query(`SELECT i.*,CASE WHEN o.ID IS NULL THEN 0 ELSE 1 END AS Okundu
     FROM KysIletisim i LEFT JOIN KysIletisimOkuma o ON o.IcerikID=i.ID AND o.KullaniciID=@UserID
-    WHERE i.Tur='Duyuru' OR i.OlusturanID=@UserID OR i.AliciID=@UserID
+    WHERE i.Tur='Duyuru' OR (i.Tur NOT IN ('Görev Yorumu','Termin Hatırlatma') AND (i.OlusturanID=@UserID OR i.AliciID=@UserID))
+      OR (i.Tur='Görev Yorumu' AND EXISTS (SELECT 1 FROM KysIletisim t WHERE t.ID=i.KonusmaID AND t.Tur='Görev' AND (t.OlusturanID=@UserID OR t.AliciID=@UserID)))
       OR (i.Tur='Mesaj' AND EXISTS (SELECT 1 FROM KysIletisimKatilimci k WHERE k.KonusmaID=COALESCE(i.KonusmaID,i.ID) AND k.KullaniciID=@UserID))
     ORDER BY i.CreatedAt DESC`);
   const items=res.recordset.map(mapItem);
@@ -102,6 +110,7 @@ export async function listKysIletisim(user: User) {
   const logs=await pool.request().query(`SELECT GorevID,Durum,KullaniciAd,CreatedAt FROM KysIletisimGorevLog ORDER BY CreatedAt ASC`);
   const logByTask=new Map<number,any[]>();
   for(const row of logs.recordset){const id=number(row,"GorevID");const list=logByTask.get(id)||[];list.push({durum:string(row,"Durum"),kullaniciAd:string(row,"KullaniciAd"),createdAt:date(row.CreatedAt)});logByTask.set(id,list);}
+  const comments=items.filter(item=>item.tur==="Görev Yorumu");
   const messages=items.filter((item:any)=>item.tur==="Mesaj");
   const participantRows=await pool.request().query("SELECT KonusmaID,KullaniciID,KullaniciAd FROM KysIletisimKatilimci ORDER BY ID");
   const participantsByThread=new Map<number,Array<{id:string;ad:string}>>();
@@ -109,7 +118,7 @@ export async function listKysIletisim(user: User) {
   const archived=(await pool.request().input("UserID",user.userId).query("SELECT KonusmaID FROM KysIletisimArsiv WHERE KullaniciID=@UserID")).recordset.map((row:Row)=>number(row,"KonusmaID"));
   const archivedSet=new Set(archived);
   const allThreads=Array.from(new Set(messages.map((item:any)=>item.konusmaId||item.id))).map(id=>({id,participants:participantsByThread.get(Number(id))||[],messages:messages.filter((item:any)=>(item.konusmaId||item.id)===id).sort((a:any,b:any)=>String(a.createdAt).localeCompare(String(b.createdAt)))})).sort((a,b)=>String(b.messages.at(-1)?.createdAt).localeCompare(String(a.messages.at(-1)?.createdAt)));
-  return {duyurular:items.filter((item:any)=>item.tur==="Duyuru").map((item:any)=>({...item,okuyanlar:readsByItem.get(item.id)||[]})),mesajlar:allThreads.filter(thread=>!archivedSet.has(Number(thread.id))),arsivMesajlar:allThreads.filter(thread=>archivedSet.has(Number(thread.id))),gorevler:items.filter((item:any)=>item.tur==="Görev").map((item:any)=>({...item,akış:logByTask.get(item.id)||[]}))};
+  return {duyurular:items.filter((item:any)=>item.tur==="Duyuru").map((item:any)=>({...item,okuyanlar:readsByItem.get(item.id)||[]})),mesajlar:allThreads.filter(thread=>!archivedSet.has(Number(thread.id))),arsivMesajlar:allThreads.filter(thread=>archivedSet.has(Number(thread.id))),gorevler:items.filter((item:any)=>item.tur==="Görev").map((item:any)=>({...item,akış:logByTask.get(item.id)||[],yorumlar:comments.filter(comment=>comment.konusmaId===item.id).reverse()}))};
 }
 
 export async function createKysIletisim(input:Record<string,unknown>,user:User){
@@ -166,7 +175,35 @@ export async function markKysIletisimRead(id:number,user:User){
 }
 export async function markAllKysIletisimRead(user:User){await ensureKysIletisimSchema();const pool=await cosmoPool;const visible="(i.Tur='Duyuru' AND i.OlusturanID<>@UserID) OR i.AliciID=@UserID OR (i.Tur='Mesaj' AND i.OlusturanID<>@UserID AND EXISTS (SELECT 1 FROM KysIletisimKatilimci k WHERE k.KonusmaID=COALESCE(i.KonusmaID,i.ID) AND k.KullaniciID=@UserID))";await pool.request().input("UserID",user.userId).query(hasMysqlConfig()?`INSERT IGNORE INTO KysIletisimOkuma (IcerikID,KullaniciID) SELECT i.ID,@UserID FROM KysIletisim i WHERE ${visible}`:`INSERT INTO KysIletisimOkuma (IcerikID,KullaniciID) SELECT i.ID,@UserID FROM KysIletisim i WHERE (${visible}) AND NOT EXISTS (SELECT 1 FROM KysIletisimOkuma o WHERE o.IcerikID=i.ID AND o.KullaniciID=@UserID)`);}
 
-export async function updateKysGorev(id:number,durum:string,user:User){await ensureKysIletisimSchema();if(!["Başladı","Tamamlandı"].includes(durum))throw new Error("Geçersiz görev durumu.");const pool=await cosmoPool;const row=(await pool.request().input("ID",id).query("SELECT * FROM KysIletisim WHERE ID=@ID AND Tur='Görev'")).recordset[0];if(!row)throw new Error("Görev bulunamadı.");if(string(row,"AliciID")!==user.userId&&string(row,"OlusturanID")!==user.userId)throw new Error("Bu görevi güncelleme yetkiniz yok.");await pool.request().input("ID",id).input("Durum",durum).query("UPDATE KysIletisim SET Durum=@Durum,UpdatedAt=GETDATE() WHERE ID=@ID");await pool.request().input("ID",id).input("Durum",durum).input("UserID",user.userId).input("UserName",user.userName).query("INSERT INTO KysIletisimGorevLog (GorevID,Durum,KullaniciID,KullaniciAd) VALUES (@ID,@Durum,@UserID,@UserName)");}
+export async function updateKysGorev(id:number,durum:string,user:User){
+  await ensureKysIletisimSchema();
+  if(!["Kabul Edildi","Başladı","Tamamlandı"].includes(durum))throw new Error("Geçersiz görev durumu.");
+  const pool=await cosmoPool;
+  const row=(await pool.request().input("ID",id).query("SELECT * FROM KysIletisim WHERE ID=@ID AND Tur='Görev'")).recordset[0];
+  if(!row)throw new Error("Görev bulunamadı.");
+  const current=string(row,"Durum");
+  if(string(row,"AliciID")!==user.userId && !(durum==="Tamamlandı"&&string(row,"OlusturanID")===user.userId))throw new Error("Bu işlemi yalnızca görevin atandığı kişi yapabilir.");
+  if(current===durum)return;
+  if(!((current==="Atandı"&&durum==="Kabul Edildi")||(current==="Kabul Edildi"&&durum==="Başladı")||(current==="Başladı"&&durum==="Tamamlandı")))throw new Error("Önce görevi kabul edin, ardından başlatın ve tamamlayın.");
+  const tx=await pool.transaction();await tx.begin();
+  try {
+    const result=await tx.request().input("ID",id).input("Durum",durum).input("Onceki",current).query("UPDATE KysIletisim SET Durum=@Durum,UpdatedAt=GETDATE() WHERE ID=@ID AND Durum=@Onceki");
+    if(!result.rowsAffected[0])throw new Error("Görev değişti. Sayfayı yenileyin.");
+    await tx.request().input("ID",id).input("Durum",durum).input("UserID",user.userId).input("UserName",user.userName).query("INSERT INTO KysIletisimGorevLog (GorevID,Durum,KullaniciID,KullaniciAd) VALUES (@ID,@Durum,@UserID,@UserName)");
+    await tx.commit();
+  }catch(error){await tx.rollback();throw error;}
+}
+
+export async function commentKysGorev(id:number,icerik:string,user:User){
+  await ensureKysIletisimSchema();
+  if(!text(icerik)||text(icerik).length>5000)throw new Error("Yorum 1–5000 karakter olmalıdır.");
+  const pool=await cosmoPool;
+  const row=(await pool.request().input("ID",id).query("SELECT * FROM KysIletisim WHERE ID=@ID AND Tur='Görev'")).recordset[0];
+  if(!row||![string(row,"AliciID"),string(row,"OlusturanID")].includes(user.userId))throw new Error("Bu göreve yorum ekleme yetkiniz yok.");
+  const receiver=string(row,"AliciID")===user.userId?string(row,"OlusturanID"):string(row,"AliciID");
+  await pool.request().input("ID",id).input("Baslik",string(row,"Baslik")).input("Icerik",text(icerik)).input("UserID",user.userId).input("UserName",user.userName).input("AliciID",receiver)
+    .query("INSERT INTO KysIletisim (Tur,Baslik,Icerik,OlusturanID,OlusturanAd,AliciID,KonusmaID,Durum) VALUES ('Görev Yorumu',@Baslik,@Icerik,@UserID,@UserName,@AliciID,@ID,'Aktif')");
+}
 
 export async function updateKysGorevDetails(id:number,input:Record<string,unknown>,user:User){
   await ensureKysIletisimSchema();const pool=await cosmoPool;
@@ -178,8 +215,11 @@ export async function updateKysGorevDetails(id:number,input:Record<string,unknow
   if(!baslik||!icerik||!aliciId||!baslangic||!bitis)throw new Error("Başlık, içerik, alıcı, başlama ve bitiş tarihleri zorunludur.");
   if(bitis<baslangic)throw new Error("Bitiş tarihi başlama tarihinden önce olamaz.");
   if(!['Rutin','Satış','Rutin Dışı'].includes(kategori))throw new Error("Görev kategorisi seçilmelidir.");
+  if(string(row,"AliciID")!==aliciId){
+    await pool.request().input("ID",id).query("DELETE FROM KysIletisimOkuma WHERE IcerikID=@ID");
+  }
   await pool.request().input("ID",id).input("Baslik",baslik.slice(0,220)).input("Icerik",icerik).input("AliciID",aliciId).input("AliciAd",aliciAd||aliciId).input("Termin",termin).input("Baslangic",baslangic).input("Bitis",bitis).input("Kategori",kategori)
-    .query("UPDATE KysIletisim SET Baslik=@Baslik,Icerik=@Icerik,AliciID=@AliciID,AliciAd=@AliciAd,TerminTarihi=@Termin,BaslangicTarihi=@Baslangic,BitisTarihi=@Bitis,Kategori=@Kategori,UpdatedAt=GETDATE() WHERE ID=@ID");
+    .query("UPDATE KysIletisim SET Durum=CASE WHEN AliciID<>@AliciID THEN 'Atandı' ELSE Durum END,Baslik=@Baslik,Icerik=@Icerik,AliciID=@AliciID,AliciAd=@AliciAd,TerminTarihi=@Termin,BaslangicTarihi=@Baslangic,BitisTarihi=@Bitis,Kategori=@Kategori,UpdatedAt=GETDATE() WHERE ID=@ID");
   await pool.request().input("ID",id).input("UserID",user.userId).input("UserName",user.userName).query("INSERT INTO KysIletisimGorevLog (GorevID,Durum,KullaniciID,KullaniciAd) VALUES (@ID,'Düzenlendi',@UserID,@UserName)");
 }
 
@@ -191,7 +231,38 @@ export async function deleteKysGorev(id:number,user:User){
   if(string(row,"Durum")==="Tamamlandı")throw new Error("Tamamlanan görevler silinemez.");
   await pool.request().input("ID",id).query("DELETE FROM KysIletisimOkuma WHERE IcerikID=@ID");
   await pool.request().input("ID",id).query("DELETE FROM KysIletisimGorevLog WHERE GorevID=@ID");
+  await pool.request().input("ID",id).query("DELETE FROM KysIletisimOkuma WHERE IcerikID IN (SELECT ID FROM KysIletisim WHERE KonusmaID=@ID AND Tur IN ('Görev Yorumu','Termin Hatırlatma'))");
+  await pool.request().input("ID",id).query("DELETE FROM KysIletisim WHERE KonusmaID=@ID AND Tur IN ('Görev Yorumu','Termin Hatırlatma')");
   await pool.request().input("ID",id).query("DELETE FROM KysIletisim WHERE ID=@ID AND Tur='Görev'");
 }
 
-export async function getKysBildirimler(user:User){const data=await listKysIletisim(user);const items=[...data.duyurular.filter((x:any)=>!x.okundu&&x.olusturanId!==user.userId).map((x:any)=>({...x,etiket:"Duyuru"})),...data.mesajlar.flatMap((t:any)=>t.messages).filter((x:any)=>!x.okundu&&x.olusturanId!==user.userId).map((x:any)=>({...x,etiket:"Mesaj"})),...data.gorevler.filter((x:any)=>!x.okundu&&x.aliciId===user.userId).map((x:any)=>({...x,etiket:"Görev"}))].sort((a:any,b:any)=>String(b.createdAt).localeCompare(String(a.createdAt)));return {count:items.length,items:items.slice(0,8)};}
+// Reminders are materialized by the existing notification poll. Unique keys make repeated polls safe.
+export async function getKysBildirimler(user:User){
+  await ensureKysIletisimSchema();
+  const pool=await cosmoPool;
+  const today=new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Istanbul"});
+  const tomorrow=new Date(new Date(`${today}T12:00:00+03:00`).getTime()+86400000).toLocaleDateString("sv-SE",{timeZone:"Europe/Istanbul"});
+  const tasks=(await pool.request().input("UserID",user.userId).query("SELECT * FROM KysIletisim WHERE Tur='Görev' AND AliciID=@UserID AND Durum<>'Tamamlandı'")).recordset;
+  for(const task of tasks){
+    const end=date(task.BitisTarihi||task.TerminTarihi)?.slice(0,10);
+    if(!end||end>tomorrow)continue;
+    const stage=end<today?"Gecikti":end===today?"Bugün":"Yarın";
+    const key=`termin:${number(task,"ID")}:${user.userId}:${end}:${stage}`;
+    const insert="INSERT INTO KysIletisim (Tur,Baslik,Icerik,OlusturanID,OlusturanAd,AliciID,KonusmaID,Durum,TerminTarihi,BildirimAnahtari) VALUES ('Termin Hatırlatma',@Baslik,@Icerik,@OlusturanID,@OlusturanAd,@UserID,@ID,'Aktif',@Termin,@Key)";
+    await pool.request().input("ID",number(task,"ID")).input("UserID",user.userId).input("OlusturanID",string(task,"OlusturanID")).input("OlusturanAd",string(task,"OlusturanAd")).input("Baslik",`${stage}: ${string(task,"Baslik")}`.slice(0,220)).input("Icerik",`Görevin termin tarihi: ${end}`).input("Termin",end).input("Key",key)
+      .query(hasMysqlConfig()?insert.replace("INSERT INTO","INSERT IGNORE INTO"):`IF NOT EXISTS (SELECT 1 FROM KysIletisim WHERE BildirimAnahtari=@Key) ${insert}`);
+  }
+  const data=await listKysIletisim(user);
+  const events=(await pool.request().input("UserID",user.userId).query(`SELECT i.* FROM KysIletisim i
+    INNER JOIN KysIletisim t ON t.ID=i.KonusmaID AND t.Tur='Görev'
+    LEFT JOIN KysIletisimOkuma o ON o.IcerikID=i.ID AND o.KullaniciID=@UserID
+    WHERE i.AliciID=@UserID AND o.ID IS NULL AND i.Tur IN ('Termin Hatırlatma','Görev Yorumu')
+      AND (t.AliciID=@UserID OR t.OlusturanID=@UserID)
+      AND (i.Tur='Görev Yorumu' OR (t.Durum<>'Tamamlandı' AND t.AliciID=@UserID AND COALESCE(t.BitisTarihi,t.TerminTarihi)=i.TerminTarihi))`)).recordset.map(row=>({...mapItem(row),etiket:string(row,"Tur"),gorevId:number(row,"KonusmaID")}));
+  const items=[...events.filter(event=>{
+    if(event.etiket!=="Termin Hatırlatma")return true;
+    const due=String(event.terminTarihi).slice(0,10);
+    return event.baslik.startsWith(due<today?"Gecikti:":due===today?"Bugün:":"Yarın:");
+  }),...data.duyurular.filter((x:any)=>!x.okundu&&x.olusturanId!==user.userId).map((x:any)=>({...x,etiket:"Duyuru"})),...pendingMessageNotifications(data.mesajlar,user.userId),...data.gorevler.filter((x:any)=>!x.okundu&&x.aliciId===user.userId).map((x:any)=>({...x,etiket:"Görev"}))].sort((a:any,b:any)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  return {count:items.length,items:items.slice(0,8)};
+}

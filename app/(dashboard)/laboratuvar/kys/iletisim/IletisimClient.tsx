@@ -24,6 +24,7 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+import { messageReplyStatus } from "@/lib/kysMessageReply";
 import { TASK_CATEGORIES, isOverdue } from "@/lib/kysTaskPlanning";
 import LabAkisi from "./LabAkisi";
 import styles from "./iletisim.module.css";
@@ -46,6 +47,7 @@ type Item = {
   kategori: string | null;
   createdAt: string;
   okundu: boolean;
+  yorumlar?: Array<{ id: number; icerik: string; olusturanAd: string; createdAt: string }>;
   okuyanlar?: Read[];
   akış?: Array<{ durum: string; kullaniciAd: string; createdAt: string }>;
 };
@@ -100,6 +102,8 @@ export default function IletisimClient({
   const [taskFilter, setTaskFilter] = useState("Tümü");
   const [taskCategoryFilter, setTaskCategoryFilter] = useState("Tümü");
   const [taskOwnershipFilter, setTaskOwnershipFilter] = useState("Tümü");
+  const [messageStatusFilter, setMessageStatusFilter] = useState("Tümü");
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [messageView, setMessageView] = useState<"gelen" | "arsiv">("gelen");
   const [taskView, setTaskView] = useState<"liste" | "takvim">("liste");
   const [calendarView, setCalendarView] = useState<"ay" | "hafta" | "gun">("ay");
@@ -110,8 +114,8 @@ export default function IletisimClient({
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), today.getDate());
   });
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const r = await fetch("/api/kys/iletisim");
       const j = await r.json();
@@ -132,6 +136,23 @@ export default function IletisimClient({
     return () => clearTimeout(initial);
   }, [load]);
   useEffect(() => {
+    if (tab !== "Mesaj") return;
+    const timer = setInterval(() => void load(true), 30000);
+    return () => clearInterval(timer);
+  }, [tab, load]);
+  useEffect(() => {
+    if (searchParams.get("sekme") === "mesaj") {
+      setTab("Mesaj");
+      const threadId = Number(searchParams.get("konusmaId"));
+      if (loading || !Number.isSafeInteger(threadId) || threadId <= 0 || handledTaskLink.current === `mesaj-${threadId}`) return;
+      const thread = [...data.mesajlar, ...data.arsivMesajlar].find(thread => thread.id === threadId);
+      if (!thread) return;
+      handledTaskLink.current = `mesaj-${threadId}`;
+      setMessageView(data.arsivMesajlar.some(thread => thread.id === threadId) ? "arsiv" : "gelen");
+      setMessageStatusFilter("Tümü");setSearch("");
+      setExpanded(current => new Set([...current, threadId]));
+      return;
+    }
     if (searchParams.get("sekme") === "lab-akisi") {
       if (handledTaskLink.current !== "lab-akisi") { handledTaskLink.current = "lab-akisi"; setTab("Lab Akışı"); }
       return;
@@ -154,8 +175,9 @@ export default function IletisimClient({
     setTaskFilter("Tümü");
     setSearch("");
     setPage(1);
+    setTaskView("takvim");
     setCalendarTaskId(taskId);
-  }, [data.gorevler, loading, searchParams]);
+  }, [data.gorevler, data.mesajlar, data.arsivMesajlar, loading, searchParams]);
   useEffect(() => {
     if (calendarTaskId === null) return;
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -199,14 +221,35 @@ export default function IletisimClient({
     });
     await load();
   }
+  const [taskBusy, setTaskBusy] = useState(false);
+  const [taskComments, setTaskComments] = useState<Record<number, string>>({});
   async function action(body: Record<string, unknown>) {
-    const r = await fetch("/api/kys/iletisim", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (r.ok) await load();
+    if (taskBusy) return;
+    setTaskBusy(true);setError("");
+    try {
+      const r = await fetch("/api/kys/iletisim", {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const json=await r.json();if(!r.ok)throw new Error(json.error||"İşlem tamamlanamadı.");
+      await load();
+    } catch(e){setError(e instanceof Error?e.message:"İşlem tamamlanamadı.");}
+    finally{setTaskBusy(false);}
   }
+  async function addTaskComment(id:number){
+    if(taskBusy||!taskComments[id]?.trim())return;
+    setTaskBusy(true);setError("");
+    try{
+      const response=await fetch("/api/kys/iletisim",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({islem:"gorev-yorum",id,icerik:taskComments[id]})});
+      const json=await response.json();if(!response.ok)throw new Error(json.error||"Yorum eklenemedi.");
+      setTaskComments(current=>({...current,[id]:""}));await load();
+    }catch(e){setError(e instanceof Error?e.message:"Yorum eklenemedi.");}finally{setTaskBusy(false);}
+  }
+  function taskDiscussion(task:Item){return <section className={styles.taskDiscussion} aria-label="Görev yorumları">
+    <h3>Yorumlar <span>({task.yorumlar?.length || 0})</span></h3>
+    {task.yorumlar?.length ? task.yorumlar.map(comment=><article key={comment.id}><header><strong>{comment.olusturanAd}</strong><time>{fmt(comment.createdAt)}</time></header><p>{comment.icerik}</p></article>):<p>Henüz yorum eklenmemiş.</p>}
+    <label htmlFor={`task-comment-${task.id}`}>Yorumunuz</label>
+    <textarea id={`task-comment-${task.id}`} maxLength={5000} rows={3} value={taskComments[task.id]||""} onChange={event=>setTaskComments(current=>({...current,[task.id]:event.target.value}))} placeholder="Görevle ilgili açıklama veya yorum yazın" />
+    <button type="button" disabled={taskBusy||!taskComments[task.id]?.trim()} onClick={()=>void addTaskComment(task.id)}><Send size={15}/>Yorum ekle</button>
+  </section>;}
+
   function openTaskEdit(task: Item) {
     setEditingTask(task);
     setEditTaskForm({ baslik: task.baslik, icerik: task.icerik, aliciId: task.aliciId, baslangicTarihi: String(task.baslangicTarihi || task.terminTarihi || "").slice(0, 10), bitisTarihi: String(task.bitisTarihi || task.terminTarihi || "").slice(0, 10), kategori: task.kategori || "Rutin" });
@@ -230,17 +273,16 @@ export default function IletisimClient({
   }
   async function answer(id: number) {
     const value = reply[id]?.trim();
-    if (!value) return;
-    const r = await fetch("/api/kys/iletisim", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ islem: "yanit", konusmaId: id, icerik: value }),
-    });
-    if (r.ok) {
-      setReply((x) => ({ ...x, [id]: "" }));
-      await load();
-    }
+    if (!value || sendingMessage) return;
+    setSendingMessage(true);setError("");
+    try {
+      const r = await fetch("/api/kys/iletisim", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({islem:"yanit",konusmaId:id,icerik:value})});
+      const json=await r.json();if(!r.ok)throw new Error(json.error||"Yanıt gönderilemedi.");
+      setReply(current=>({...current,[id]:""}));await load(true);
+    }catch(e){setError(e instanceof Error?e.message:"Yanıt gönderilemedi.");}
+    finally{setSendingMessage(false);}
   }
+
   function toggle(id: number) {
     setExpanded((current) => {
       const next = new Set(current);
@@ -429,14 +471,17 @@ export default function IletisimClient({
           </select>
         )}
         {tab === "Mesaj" && (
+          <>
+          <select aria-label="Mesaj yanıt durumu" value={messageStatusFilter} onChange={event=>setMessageStatusFilter(event.target.value)}><option>Tümü</option><option>Yanıtınız bekleniyor</option><option>Yanıt bekleniyor</option></select>
           <div className={styles.viewToggle} aria-label="Mesaj görünümü">
             <button className={messageView === "gelen" ? styles.selected : ""} onClick={() => setMessageView("gelen")}>
-              <MessageSquare size={15} /> Mesajlar ({data.mesajlar.length})
+              <MessageSquare size={15} /> Mesajlar ({data.mesajlar.length}) · {data.mesajlar.filter(thread => messageReplyStatus(thread.messages, currentUserId) === "Yanıtınız bekleniyor").length} yanıtınızı bekliyor
             </button>
             <button className={messageView === "arsiv" ? styles.selected : ""} onClick={() => setMessageView("arsiv")}>
               <Archive size={15} /> Arşiv ({data.arsivMesajlar.length})
             </button>
           </div>
+          </>
         )}
         {(tab === "Görev" || tab === "İstatistikler") && (
           <>
@@ -449,6 +494,7 @@ export default function IletisimClient({
               <option>Atandı</option>
               <option>Termini Geçmiş</option>
               <option>Başladı</option>
+              <option>Kabul Edildi</option>
               <option>Tamamlandı</option>
             </select>
             <select
@@ -592,6 +638,7 @@ export default function IletisimClient({
       ) : tab === "Mesaj" ? (
         <div className={styles.feed}>
           {(messageView === "arsiv" ? data.arsivMesajlar : data.mesajlar)
+            .filter(thread => messageStatusFilter === "Tümü" || messageReplyStatus(thread.messages, currentUserId) === messageStatusFilter)
             .filter((thread) => {
               const last = thread.messages.at(-1)!;
               return (
@@ -635,6 +682,7 @@ export default function IletisimClient({
                         )}
                       </small>
                       <strong>{last.baslik}</strong>
+                      <span className={styles.messageReplyStatus} data-pending={last.olusturanId !== currentUserId}>{messageReplyStatus(thread.messages, currentUserId)}</span>
                       <time>{fmt(last.createdAt)}</time>
                     </span>
                     <ChevronDown
@@ -674,12 +722,14 @@ export default function IletisimClient({
                               [thread.id]: e.target.value,
                             }))
                           }
+                          aria-label="Mesaj yanıtınız"
+                          disabled={sendingMessage}
                           placeholder="Yanıt yazın…"
                           onKeyDown={(e) => {
                             if (e.key === "Enter") void answer(thread.id);
                           }}
                         />
-                        <button onClick={() => void answer(thread.id)}>
+                        <button disabled={sendingMessage || !reply[thread.id]?.trim()} aria-label="Yanıt gönder" onClick={() => void answer(thread.id)}>
                           <Send size={15} />
                         </button>
                         <button className={styles.archiveButton} onClick={() => void action({ islem: messageView === "arsiv" ? "mesaj-arsivden-cikar" : "mesaj-arsivle", konusmaId: thread.id })} title={messageView === "arsiv" ? "Konuşmayı arşivden çıkar" : "Konuşmayı arşivle"} aria-label={messageView === "arsiv" ? "Konuşmayı arşivden çıkar" : "Konuşmayı arşivle"}>{messageView === "arsiv" ? <ArchiveRestore size={15} /> : <Archive size={15} />}</button>
@@ -831,14 +881,16 @@ export default function IletisimClient({
                   </div>
                 ))}
               </div>
+              {calendarTask.tur === "Görev" && taskDiscussion(calendarTask)}
               <div className={styles.taskActions}>
                 {calendarTask.tur === "Görev" && calendarTask.olusturanId === currentUserId && calendarTask.durum !== "Tamamlandı" && (
                   <><button className={styles.editTask} onClick={() => openTaskEdit(calendarTask)}><Pencil size={15} />Düzenle</button><button className={styles.deleteTask} onClick={() => void deleteTask(calendarTask)}><Trash2 size={15} />Sil</button></>
                 )}
-                {calendarTask.tur === "Görev" && calendarTask.durum === "Atandı" &&
+                {calendarTask.tur === "Görev" && calendarTask.durum === "Atandı" && calendarTask.aliciId === currentUserId && <button disabled={taskBusy} className={styles.start} onClick={()=>void action({islem:"gorev",id:calendarTask.id,durum:"Kabul Edildi"})}><Check size={15}/>Görevi kabul et</button>}
+                {calendarTask.tur === "Görev" && calendarTask.durum === "Kabul Edildi" &&
                   calendarTask.aliciId === currentUserId && (
                     <button
-                      className={styles.start}
+                      className={styles.start} disabled={taskBusy}
                       onClick={() =>
                         void action({
                           islem: "gorev",
@@ -855,7 +907,7 @@ export default function IletisimClient({
                   (calendarTask.aliciId === currentUserId ||
                     calendarTask.olusturanId === currentUserId) && (
                     <button
-                      className={styles.finish}
+                      className={styles.finish} disabled={taskBusy}
                       onClick={() =>
                         void action({
                           islem: "gorev",
@@ -928,7 +980,8 @@ export default function IletisimClient({
                 )}
                 {open && (
                   <div className={styles.taskDetail}>
-                    <p>{item.icerik}</p>
+                    <section className={styles.taskDescription}><h3>Görev açıklaması</h3><p>{item.icerik}</p></section>
+                    <h3 className={styles.taskSectionTitle}>İşlem geçmişi</h3>
                     <div className={styles.timeline}>
                       {item.akış?.map((log, i) => (
                         <div key={`${log.createdAt}-${i}`}>
@@ -942,11 +995,13 @@ export default function IletisimClient({
                         </div>
                       ))}
                     </div>
+                    {taskDiscussion(item)}
                     <div className={styles.taskActions}>
-                      {item.durum === "Atandı" &&
+                      {item.durum === "Atandı" && item.aliciId === currentUserId && <button disabled={taskBusy} className={styles.start} onClick={()=>void action({islem:"gorev",id:item.id,durum:"Kabul Edildi"})}><Check size={15}/>Görevi kabul et</button>}
+                      {item.durum === "Kabul Edildi" &&
                         item.aliciId === currentUserId && (
                           <button
-                            className={styles.start}
+                            className={styles.start} disabled={taskBusy}
                             onClick={() =>
                               void action({
                                 islem: "gorev",
@@ -963,7 +1018,7 @@ export default function IletisimClient({
                         (item.aliciId === currentUserId ||
                           item.olusturanId === currentUserId) && (
                           <button
-                            className={styles.finish}
+                            className={styles.finish} disabled={taskBusy}
                             onClick={() =>
                               void action({
                                 islem: "gorev",

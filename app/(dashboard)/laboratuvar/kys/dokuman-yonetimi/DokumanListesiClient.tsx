@@ -58,6 +58,10 @@ export default function DokumanListesiClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState("");
+  const exportRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [tur, setTur] = useState("");
@@ -149,6 +153,28 @@ export default function DokumanListesiClient() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [modalOpen, silinecek, saving, previewId]);
+
+  useEffect(() => {
+    if (!exportOpen) return;
+    const close = (event: PointerEvent) => { if (!exportRef.current?.contains(event.target as Node)) setExportOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setExportOpen(false); };
+    document.addEventListener("pointerdown", close);document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("pointerdown", close);document.removeEventListener("keydown", escape); };
+  }, [exportOpen]);
+  async function exportDocuments(format: "master" | "excel") {
+    if (exporting) return;
+    setExporting(true);setExportOpen(false);setError("");setExportSuccess("");
+    try {
+      const params = new URLSearchParams({format, search:search.trim(),tur,durum,sort});
+      const response = await fetch(`/api/kys/dokumanlar/export?${params}`);
+      if (!response.ok) { const json = await response.json();throw new Error(json.error || "Dışa aktarma başarısız."); }
+      const blob = await response.blob();const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");link.href=url;link.download=format==="excel"?"KYS-Dokumanlar.xlsx":"L102-01-Dokuman-Master-Listesi.pdf";
+      document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      setExportSuccess(format==="excel"?"Excel dosyası indirildi.":"Master Listesi indirildi.");
+    } catch(e) { setError(errorMessage(e,"Dışa aktarma tamamlanamadı.")); }
+    finally { setExporting(false); }
+  }
 
   async function openPreview(id: number) {
     const row = rows.find(item => item.id === id);
@@ -321,6 +347,14 @@ export default function DokumanListesiClient() {
             )}
           </div>
           <div className={tableStyles.toolbarRight}>
+            <div className={styles.exportWrap} ref={exportRef}>
+              <button type="button" className={styles.ghostButton} disabled={exporting || loading} aria-expanded={exportOpen} aria-controls="document-export-options" onClick={()=>setExportOpen(open=>!open)}><Download size={15}/>{exporting?"Hazırlanıyor…":"Dışarı Aktar"}</button>
+              {exportOpen && <div id="document-export-options" className={styles.exportOptions}>
+                <strong>Dışarı Aktar</strong><small>Seçili filtrelere uyan tüm kayıtlar</small>
+                <button type="button" onClick={()=>void exportDocuments("master")}>Master Listesi <small>PDF · L102-01 formatı</small></button>
+                <button type="button" onClick={()=>void exportDocuments("excel")}>Excel <small>Filtrelenmiş doküman listesi</small></button>
+              </div>}
+            </div>
             <button type="button" className={relationOpen ? styles.relationButtonActive : styles.ghostButton} onClick={() => {
               const next = !relationOpen;
               setRelationOpen(next);
@@ -408,7 +442,8 @@ export default function DokumanListesiClient() {
         </div>
 
         <div className={tableStyles.tableCard}>
-          {error && <div className={tableStyles.errorBar}>{error}</div>}
+          {exportSuccess && <p className={styles.exportSuccess} role="status">{exportSuccess}</p>}
+          {error && <div className={tableStyles.errorBar} role="alert">{error}</div>}
           <div className={tableStyles.tableWrapper}>
             <table className={`${tableStyles.table} ${styles.documentTable}`}>
               <thead>

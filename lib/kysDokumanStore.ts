@@ -363,6 +363,7 @@ export async function listKysDokumanlar(params: {
   sort?: string;
   page?: number;
   limit?: number;
+  all?: boolean;
 }) {
   await ensureKysDokumanSchema();
   const pool = await cosmoPool;
@@ -406,7 +407,7 @@ export async function listKysDokumanlar(params: {
       LEFT JOIN KysDokumanDosya kd ON kd.DokumanID = KysDokuman.ID
       ${where}
       ORDER BY ${order}
-      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      ${params.all ? "" : "OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY"}
     `);
 
   const statsRes = await pool.request().query(`
