@@ -44,6 +44,7 @@ jobs:
           cp -r node_modules/@sparticuz/chromium/bin/. deploy/node_modules/@sparticuz/chromium/bin/
           mkdir -p deploy/.next/static
           cp -r .next/static/. deploy/.next/static/
+          node -e 'require("fs").writeFileSync("deploy/.next/static/deployment.json", JSON.stringify({commit:process.env.GITHUB_SHA}))'
           mkdir -p deploy/public
           cp -r public/. deploy/public/
           mkdir -p deploy/tmp
@@ -99,3 +100,43 @@ jobs:
             bye;
           "
           echo "Tarball yüklendi → sunucudaki cron 1 dk içinde extract eder."
+
+      - name: Verify live deployment and diagnose extraction
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 10); do
+            if curl --fail --silent --show-error --max-time 15 "https://lab.uniqueanalyse.com/_next/static/deployment.json?commit=$GITHUB_SHA" -o live-deployment.json && node -e 'const fs=require("fs"); const value=JSON.parse(fs.readFileSync("live-deployment.json","utf8")); process.exit(value.commit===process.env.GITHUB_SHA?0:1)'; then
+              echo "Live application serves commit $GITHUB_SHA"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::FTP upload completed, but the live application is not serving the expected commit. Checking server extraction logs."
+          FTP_BASE_DIR="${FTP_SERVER_DIR%/}"
+          if [[ "$FTP_BASE_DIR" == */_incoming ]]; then
+            FTP_INCOMING_DIR="$FTP_BASE_DIR"
+            FTP_APP_DIR="${FTP_BASE_DIR%/_incoming}"
+          else
+            FTP_APP_DIR="${FTP_BASE_DIR:-.}"
+            FTP_INCOMING_DIR="$FTP_APP_DIR/_incoming"
+          fi
+          lftp -c "
+            set net:timeout 20;
+            set net:max-retries 1;
+            set ftp:ssl-allow no;
+            open ftp://$FTP_SERVER;
+            user '$FTP_USERNAME' '$FTP_PASSWORD';
+            set cmd:fail-exit no;
+            cls -l '$FTP_INCOMING_DIR';
+            get '$FTP_INCOMING_DIR/extract-deploy.log' -o extraction.log;
+            get '$FTP_APP_DIR/tmp/restart.txt' -o restart-marker.txt;
+            bye;
+          " || true
+          if [[ -f extraction.log ]]; then tail -n 35 extraction.log; fi
+          if [[ -f restart-marker.txt ]]; then cat restart-marker.txt; fi
+          exit 1
