@@ -12,7 +12,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
 
     steps:
       - name: Checkout
@@ -99,7 +99,7 @@ jobs:
             mv deploy.tar.gz.uploading deploy.tar.gz;
             bye;
           "
-          echo "Tarball yüklendi → sunucudaki cron 1 dk içinde extract eder."
+          echo "Tarball yüklendi → sunucudaki cron extract edecek (10-15 dk sürebilir)."
 
       - name: Verify live deployment and diagnose extraction
         env:
@@ -109,12 +109,13 @@ jobs:
           FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 10); do
+          # Sunucudaki cron extract + restart pratikte 10-15 dk sürebiliyor; 20 dk bekle.
+          for attempt in $(seq 1 40); do
             if curl --fail --silent --show-error --max-time 15 "https://lab.uniqueanalyse.com/_next/static/deployment.json?commit=$GITHUB_SHA" -o live-deployment.json && node -e 'const fs=require("fs"); const value=JSON.parse(fs.readFileSync("live-deployment.json","utf8")); process.exit(value.commit===process.env.GITHUB_SHA?0:1)'; then
               echo "Live application serves commit $GITHUB_SHA"
               exit 0
             fi
-            sleep 15
+            sleep 30
           done
           echo "::error::FTP upload completed, but the live application is not serving the expected commit. Checking server extraction logs."
           FTP_BASE_DIR="${FTP_SERVER_DIR%/}"
