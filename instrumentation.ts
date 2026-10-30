@@ -11,5 +11,7 @@ export async function register() {
     startNotificationWorker();
     const { startPaymentReportWorker } = await import("./lib/paymentReportWorker");
     startPaymentReportWorker();
+    const { startKysTelegramWorker } = await import("./lib/kysTelegramWorker");
+    startKysTelegramWorker();
   }
 }
