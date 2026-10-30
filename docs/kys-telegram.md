@@ -1,6 +1,6 @@
 # KYS Telegram bildirimleri
 
-Admin > Ayarlar sayfasında yöneticilere **Telegram Bildirimleri** ayarları görünür.
+Admin > Ayarlar > Telegram Bildirimleri sayfasında yöneticilere **Telegram Bildirimleri** ayarları görünür.
 Kişiler için beş abonelik ayrı seçilir:
 
 - Günlük kişisel işler: her gün 09.00; yalnız kişiye atanmış, tamamlanmamış,
@@ -23,9 +23,13 @@ geriye dönük gönderilmez. Mesajlarda portal bağlantısı bulunur.
 2. Sunucunun ortam değişkenlerine `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`,
    `KYS_TELEGRAM_PORTAL_URL=https://lab.uniqueanalyse.com` ve en az 32 karakterlik
    rastgele `KYS_TELEGRAM_CRON_SECRET` ekleyin. Tokeni sohbete veya Git'e yazmayın.
-3. Her alıcı Telegram'da botu açıp `/start` mesajı göndersin. Webhook kullanmayan
-   botta sunucudan `node scripts/telegram-chat-ids.mjs` komutuyla kişisel Chat ID'leri
-   okuyun. Komut mesaj göndermez, webhook değiştirmez; mevcut webhook varsa durur.
+3. Her alıcı Telegram'da botu açıp `/start` mesajı göndersin. Admin > Ayarlar >
+   Telegram Bildirimleri sayfasında bota mesaj yazan kişiler otomatik listelenir.
+   Telegram listesini yenile düğmesiyle tekrar okuyabilirsiniz. Portal kullanıcısını
+   seçip listedeki kişiye tıklayın; Chat ID forma aktarılır. Liste mesaj göndermez,
+   offset ilerletmez ve mevcut webhook varsa değiştirmeden durur. Yalnız bekleyen
+   güncellemelerdeki son 100 kayıt okunur; boşsa yeni mesaj gönderin. Terminal
+   alternatifi: `node scripts/telegram-chat-ids.mjs`.
 4. Yönetici ayarlarından portal kullanıcısını seçin, kişinin Chat ID'sini girip
    aboneliklerini kaydedin. Özel sohbet Telegram `getChat` ile doğrulanır.
    Aynı Chat ID iki kullanıcıya bağlanamaz; grup/kanal adresleri kabul edilmez.

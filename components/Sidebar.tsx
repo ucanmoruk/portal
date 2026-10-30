@@ -413,6 +413,13 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
                     <span className={styles.navSubDot} />
                     Ayarlar
                   </Link>
+                  <Link href="/admin/ayarlar/telegram"
+                    className={`${styles.navSubLink} ${pathname.startsWith("/admin/ayarlar/telegram") ? styles.navSubLinkActive : ""}`}
+                    style={{ paddingLeft: 36 }}
+                  >
+                    <span className={styles.navSubDot} />
+                    Telegram Bildirimleri
+                  </Link>
                   <Link href="/admin/ayarlar/otomasyonlar"
                     className={`${styles.navSubLink} ${pathname.startsWith("/admin/ayarlar/otomasyonlar") ? styles.navSubLinkActive : ""}`}
                     style={{ paddingLeft: 36 }}

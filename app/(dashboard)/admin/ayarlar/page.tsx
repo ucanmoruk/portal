@@ -3,7 +3,6 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { getAllSettings } from "@/lib/settings";
 import AyarlarForm from "./AyarlarForm";
-import TelegramSettings from "./TelegramSettings";
 import Link from "next/link";
 
 export const metadata = { title: "Ayarlar" };
@@ -30,7 +29,10 @@ export default async function AyarlarPage() {
         <strong>Otomasyonlar →</strong>
         <span style={{ display: "block", marginTop: 8, color: "var(--color-text-secondary)", fontSize: 13 }}>Günlük vade raporlarını, kurulum durumunu ve onaylı ödeme hatırlatmalarını takip edin.</span>
       </Link>
-      <TelegramSettings />
+      <Link href="/admin/ayarlar/telegram" style={{ display: "block", maxWidth: 720, padding: 20, marginBottom: 28, border: "1px solid var(--color-border)", borderRadius: 10, textDecoration: "none", color: "var(--color-text-primary)" }}>
+        <strong>Telegram Bildirimleri →</strong>
+        <span style={{ display: "block", marginTop: 8, color: "var(--color-text-secondary)", fontSize: 13 }}>Alıcıları, günlük ve haftalık özetleri, geciken iş hatırlatmalarını yönetin.</span>
+      </Link>
       <AyarlarForm initial={settings} />
     </div>
   );
