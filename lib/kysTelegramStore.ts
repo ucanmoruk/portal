@@ -9,7 +9,8 @@ import { listLabFlow } from "@/lib/labAkisStore";
 import { ensureKysIletisimSchema } from "@/lib/kysIletisimStore";
 import { loadDotenvOnce } from "@/lib/loadDotenv";
 import { telegramCall, TelegramApiError, verifyTelegramChat } from "@/lib/kysTelegramApi";
-import { digestLines, istanbulClock, telegramParts, TELEGRAM_KINDS, type DigestTask, type TelegramKind, type TelegramRecipient } from "@/lib/kysTelegramRules";
+import { telegramInteractionEnabled } from "@/lib/kysTelegramConnection";
+import { digestLines, istanbulClock, telegramParts, telegramTaskParts, TELEGRAM_KINDS, TELEGRAM_TITLES, type TelegramPart, type DigestTask, type TelegramKind, type TelegramRecipient } from "@/lib/kysTelegramRules";
 
 let schema:Promise<void>|null=null;
 type Row=Record<string,unknown>;
@@ -42,7 +43,7 @@ export function ensureTelegramSchema(){
   return schema;
 }
 
-async function eligibility(userId:string){
+export async function telegramEligibility(userId:string){
   const users=await getUserPool();
   const row=(await users.request().input("ID",Number(userId)).query("SELECT ID,Ad,Soyad,Durum,LaboratuvarBirimID FROM RootKullanici WHERE ID=@ID AND Durum='Aktif'")).recordset[0];
   if(!row)return null;
@@ -56,7 +57,7 @@ async function eligibility(userId:string){
   return {name,scope,revision:hash(JSON.stringify([row.LaboratuvarBirimID,permissions.sort(),admin]))};
 }
 
-async function recipients(){
+export async function telegramRecipients(){
   await ensureTelegramSchema();
   return (await (await cosmoPool).request().query("SELECT * FROM KysTelegramRecipient ORDER BY UserID")).recordset.map((row:Row):TelegramRecipient=>({userId:String(row.UserID),name:"",chatId:String(row.ChatID),chatLabel:String(row.ChatLabel),enabled:Boolean(Number(row.Enabled)),daily:Boolean(Number(row.DailyTasks)),weekly:Boolean(Number(row.WeeklyTasks)),analyses:Boolean(Number(row.Analyses)),quality:Boolean(Number(row.Quality)),overdue:Boolean(Number(row.OverdueTasks))}));
 }
@@ -69,12 +70,12 @@ export async function telegramSettings(){
     CASE WHEN State='sending' AND ${stale} THEN 'uncertain' ELSE State END AS State,
     CASE WHEN State='sending' AND ${stale} THEN N'10 dakika içinde sonuç alınamadı; Telegram sohbetini kontrol edin.' ELSE LastError END AS LastError
     FROM KysTelegramDigest ORDER BY UpdatedAt DESC`)).recordset;
-  return {users,recipients:await recipients(),deliveries:deliveryRows,enabled:process.env.KYS_TELEGRAM_ENABLED==="true",botConfigured:Boolean(process.env.TELEGRAM_BOT_TOKEN),botUsername:process.env.TELEGRAM_BOT_USERNAME||"",cronConfigured:(process.env.KYS_TELEGRAM_CRON_SECRET?.length||0)>=32,schedule:"Günlük 09.00 · Haftalık pazartesi 09.00 · Europe/Istanbul"};
+  return {users,recipients:await telegramRecipients(),deliveries:deliveryRows,enabled:process.env.KYS_TELEGRAM_ENABLED==="true",botConfigured:Boolean(process.env.TELEGRAM_BOT_TOKEN),botUsername:process.env.TELEGRAM_BOT_USERNAME||"",interactionEnabled:await telegramInteractionEnabled(),cronConfigured:(process.env.KYS_TELEGRAM_CRON_SECRET?.length||0)>=32,schedule:"Günlük 09.00 · Haftalık pazartesi 09.00 · Europe/Istanbul"};
 }
 export async function saveTelegramRecipient(input:Record<string,unknown>,actor:string){
   await ensureTelegramSchema();
   const userId=String(input.userId||"");
-  if(!/^[1-9]\d*$/.test(userId)||!await eligibility(userId))throw new Error("Aktif ve KYS erişimi bulunan bir kullanıcı seçin.");
+  if(!/^[1-9]\d*$/.test(userId)||!await telegramEligibility(userId))throw new Error("Aktif ve KYS erişimi bulunan bir kullanıcı seçin.");
   const chatId=String(input.chatId||"").trim();const chatLabel=await verifyTelegramChat(chatId);
   const pool=await cosmoPool;const tx=await pool.transaction();await tx.begin();
   try{
@@ -86,26 +87,27 @@ export async function saveTelegramRecipient(input:Record<string,unknown>,actor:s
 }
 export async function removeTelegramRecipient(userId:string){await ensureTelegramSchema();await (await cosmoPool).request().input("ID",userId).query("DELETE FROM KysTelegramRecipient WHERE UserID=@ID");}
 
-async function deliver(recipient:TelegramRecipient,kind:TelegramKind,period:string,revision:string,parts:string[]){
+async function deliver(recipient:TelegramRecipient,kind:TelegramKind,period:string,revision:string,parts:Array<string|TelegramPart>,requestId?:string){
   const pool=await cosmoPool;
-  const key=hash(JSON.stringify([recipient.userId,recipient.chatId,kind,period,revision]));
+  const key=hash(JSON.stringify([recipient.userId,recipient.chatId,kind,period,revision,...(requestId?[requestId]:[])]));
   const insert="INSERT INTO KysTelegramDigest (DigestKey,UserID,ChatID,Kind,Period,PayloadJson) VALUES (@Key,@User,@Chat,@Kind,@Period,@Payload)";
   try{
-    await pool.request().input("Key",key).input("User",recipient.userId).input("Chat",recipient.chatId).input("Kind",kind).input("Period",period).input("Payload",JSON.stringify(parts)).query(hasMysqlConfig()?insert.replace("INSERT INTO","INSERT IGNORE INTO"):`IF NOT EXISTS (SELECT 1 FROM KysTelegramDigest WHERE DigestKey=@Key) ${insert}`);
+    await pool.request().input("Key",key).input("User",recipient.userId).input("Chat",recipient.chatId).input("Kind",requestId?`test_${kind}`:kind).input("Period",period).input("Payload",JSON.stringify(parts)).query(hasMysqlConfig()?insert.replace("INSERT INTO","INSERT IGNORE INTO"):`IF NOT EXISTS (SELECT 1 FROM KysTelegramDigest WHERE DigestKey=@Key) ${insert}`);
   }catch(error){if(![2601,2627].includes(Number((error as {number?:number}).number)))throw error;}
   const claimed=await pool.request().input("Key",key).query("UPDATE KysTelegramDigest SET State='sending',LastError=NULL,UpdatedAt=GETDATE() WHERE DigestKey=@Key AND State IN ('pending','retry') AND (RetryAt IS NULL OR RetryAt<=GETDATE())");
   if(!claimed.rowsAffected[0])return "skipped";
   try{
   const row=(await pool.request().input("Key",key).query("SELECT PayloadJson,NextPart FROM KysTelegramDigest WHERE DigestKey=@Key")).recordset[0];
-  const texts=JSON.parse(row.PayloadJson) as string[];
+  const texts=JSON.parse(row.PayloadJson) as Array<string|TelegramPart>;
   for(let index=Number(row.NextPart);index<texts.length;index++){
-    const current=(await recipients()).find(item=>item.userId===recipient.userId);
-    const access=await eligibility(recipient.userId);
+    const current=(await telegramRecipients()).find(item=>item.userId===recipient.userId);
+    const access=await telegramEligibility(recipient.userId);
     if(!current?.enabled||current.chatId!==recipient.chatId||!current[kind]||access?.revision!==revision){
       await pool.request().input("Key",key).query("UPDATE KysTelegramDigest SET State='cancelled',UpdatedAt=GETDATE() WHERE DigestKey=@Key");return "cancelled";
     }
     try{
-      const message=await telegramCall<{message_id:number}>("sendMessage",{chat_id:recipient.chatId,text:texts[index],link_preview_options:{is_disabled:true}});
+      const part=texts[index];
+      const message=await telegramCall<{message_id:number}>("sendMessage",{chat_id:recipient.chatId,...(typeof part==="string"?{text:part}:part),link_preview_options:{is_disabled:true}});
       await pool.request().input("Key",key).input("Next",index+1).input("Message",String(message.message_id)).query("UPDATE KysTelegramDigest SET NextPart=@Next,MessageID=@Message,UpdatedAt=GETDATE() WHERE DigestKey=@Key");
     }catch(error){
       const api=error instanceof TelegramApiError?error:null;
@@ -122,23 +124,25 @@ async function deliver(recipient:TelegramRecipient,kind:TelegramKind,period:stri
   }
 }
 
-export async function runTelegramDigests(now=new Date()){
+export async function runTelegramDigests(now=new Date(),test?:{userIds:string[];kinds:TelegramKind[];requestId:string}){
   loadDotenvOnce();
-  if(process.env.KYS_TELEGRAM_ENABLED!=="true"||!process.env.TELEGRAM_BOT_TOKEN)return {enabled:false,results:[]};
-  const clock=istanbulClock(now);if(clock.hour<9)return {enabled:true,results:[]};
+  if((!test&&process.env.KYS_TELEGRAM_ENABLED!=="true")||!process.env.TELEGRAM_BOT_TOKEN)return {enabled:false,results:[]};
+  const clock=istanbulClock(now);if(!test&&clock.hour<9)return {enabled:true,results:[]};
   await ensureKysIletisimSchema();
   const pool=await cosmoPool;
   const base=process.env.KYS_TELEGRAM_PORTAL_URL||"https://lab.uniqueanalyse.com";
   const url=new URL("/laboratuvar/kys/iletisim",base);if(url.protocol!=="https:")throw new Error("Telegram portal adresi HTTPS olmalıdır.");
+  const interactive=await telegramInteractionEnabled();
   const results:Array<{userId:string;kind:TelegramKind|"recipient";state:string}>=[];
-  for(const recipient of (await recipients()).filter(item=>item.enabled)){
+  for(const recipient of (await telegramRecipients()).filter(item=>item.enabled&&(!test||test.userIds.includes(item.userId)))){
     try{
-    const access=await eligibility(recipient.userId);if(!access)continue;
+    const access=await telegramEligibility(recipient.userId);if(!access)continue;
     const existing=(await pool.request().input("ID",recipient.userId).input("Today",clock.today).input("Week",clock.monday).query("SELECT DigestKey,State FROM KysTelegramDigest WHERE UserID=@ID AND Period IN (@Today,@Week)")).recordset;
     const reports=new Map(existing.map(row=>[String(row.DigestKey),String(row.State)]));
     const periodOf=(kind:TelegramKind)=>kind==="weekly"?clock.monday:clock.today;
-    const keyOf=(kind:TelegramKind)=>hash(JSON.stringify([recipient.userId,recipient.chatId,kind,periodOf(kind),access.revision]));
-    const kinds=TELEGRAM_KINDS.filter(kind=>recipient[kind]&&(!reports.has(keyOf(kind))||["pending","retry"].includes(reports.get(keyOf(kind))!)));
+    const keyOf=(kind:TelegramKind)=>hash(JSON.stringify([recipient.userId,recipient.chatId,kind,periodOf(kind),access.revision,...(test?[test.requestId]:[])]));
+    const kinds=TELEGRAM_KINDS.filter(kind=>(!test||test.kinds.includes(kind))&&recipient[kind]&&(!reports.has(keyOf(kind))||["pending","retry"].includes(reports.get(keyOf(kind))!)));
+    if(test)for(const kind of TELEGRAM_KINDS.filter(kind=>test.kinds.includes(kind)&&recipient[kind]&&!kinds.includes(kind)))results.push({userId:recipient.userId,kind,state:reports.get(keyOf(kind))||"skipped"});
     if(!kinds.length)continue;
     const fresh=kinds.filter(kind=>!reports.has(keyOf(kind)));
     const rows=fresh.some(kind=>kind==="daily"||kind==="weekly"||kind==="overdue")?(await pool.request().input("ID",recipient.userId).query("SELECT ID,Baslik,Durum,BaslangicTarihi,BitisTarihi,TerminTarihi FROM KysIletisim WHERE Tur='Görev' AND AliciID=@ID AND Durum<>'Tamamlandı'")).recordset:[];
@@ -148,8 +152,13 @@ export async function runTelegramDigests(now=new Date()){
     const quality=flow.kalite.map(item=>({id:item.id,title:item.baslik,description:item.aciklama,date:item.tarih,done:item.tamamlandi}));
     for(const kind of kinds){
       const lines=fresh.includes(kind)?digestLines(kind,access.name,clock,tasks,analyses,quality):[];
-      const parts=telegramParts(lines,url.toString()+(["analyses","quality"].includes(kind)?"?sekme=lab-akisi":"?sekme=gorev"));
-      const state=await deliver(recipient,kind,kind==="weekly"?clock.monday:clock.today,access.revision,parts);
+      const link=url.toString()+(["analyses","quality"].includes(kind)?"?sekme=lab-akisi":"?sekme=gorev");
+      let parts:Array<string|TelegramPart>=interactive&&fresh.includes(kind)&&["daily","weekly","overdue"].includes(kind)?telegramTaskParts(kind,access.name,clock,tasks,link):telegramParts(lines,link);
+      if(test&&fresh.includes(kind)){
+        if(!parts.length)parts=[`UNIQUE · Deneme · ${TELEGRAM_TITLES[kind]}\n${access.name} · ${clock.today}\nSeçilen bildirim türünde bekleyen kayıt yok.\n${link}`];
+        else parts=parts.map(part=>typeof part==="string"?`DENEME\n${part}`:{...part,text:`DENEME · Düğmeler gerçek portal görevlerini tamamlar.\n${part.text}`});
+      }
+      const state=await deliver(recipient,kind,kind==="weekly"?clock.monday:clock.today,access.revision,parts,test?.requestId);
       results.push({userId:recipient.userId,kind,state});
     }
     }catch{results.push({userId:recipient.userId,kind:"recipient",state:"error"});}

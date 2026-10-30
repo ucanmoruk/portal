@@ -9,7 +9,7 @@ const mappings=[{UserID:'11',ChatID:'101',ChatLabel:'Alice',Enabled:1,DailyTasks
 const users=[{ID:11,Ad:'Alice',Soyad:'Test',Durum:'Aktif',LaboratuvarBirimID:10},{ID:12,Ad:'Bob',Soyad:'Test',Durum:'Aktif',LaboratuvarBirimID:20}];
 const permissions=new Map([['11',['laboratuvar.kys.iletisim']],['12',['laboratuvar.kys.iletisim']]]);
 const tasks=[{ID:1,AliciID:'11',Baslik:'Alice today',Durum:'Atandı',BaslangicTarihi:'2026-11-02',BitisTarihi:'2026-11-02'},{ID:2,AliciID:'11',Baslik:'Alice Wednesday',Durum:'Başladı',BaslangicTarihi:'2026-11-04',BitisTarihi:'2026-11-04'},{ID:3,AliciID:'11',Baslik:'Next week',Durum:'Atandı',BaslangicTarihi:'2026-11-10',BitisTarihi:'2026-11-10'},{ID:4,AliciID:'11',Baslik:'Completed',Durum:'Tamamlandı',BaslangicTarihi:'2026-11-02',BitisTarihi:'2026-11-02'},{ID:5,AliciID:'12',Baslik:'Bob private task',Durum:'Atandı',BaslangicTarihi:'2026-11-02',BitisTarihi:'2026-11-02'}];
-const reports=new Map();const sent=[];let mode='ok',calls=0;
+const reports=new Map();const sent=[];let mode='ok',calls=0,interactive=false;
 const res=(recordset=[],affected=0)=>({recordset,rowsAffected:[affected]});
 function request(){const args={};return {input(key,value){args[key]=value;return this;},async query(raw){
   const sql=raw.replace(/\s+/g,' ').trim();
@@ -29,6 +29,7 @@ function request(){const args={};return {input(key,value){args[key]=value;return
 }};}
 const pool={request};
 const store=load('lib/kysTelegramStore.ts',{
+  '@/lib/kysTelegramConnection':{telegramInteractionEnabled:async()=>interactive},
   '@/lib/db':{cosmoPool:Promise.resolve(pool)},'@/lib/mysqlCompat':{hasMysqlConfig:()=>true},'@/lib/userStore':{getUserPool:async()=>pool},'@/lib/permissionStore':{getPermissionPool:async()=>pool},
   '@/lib/labResultAccess':{getLabScope:async session=>({departmentId:session.user.userId==='11'?10:20,admin:false})},
   '@/lib/labAkisStore':{listLabFlow:async scope=>({analizler:[{id:1,ad:`Dept ${scope.departmentId} today`,raporNo:'261001',numune:'Sample',termin:'2026-11-02',tamamlandi:false},{id:2,ad:'Future analysis',raporNo:'261002',numune:'Sample',termin:'2026-11-03',tamamlandi:false},{id:3,ad:'Completed analysis',raporNo:'261003',numune:'Sample',termin:'2026-11-02',tamamlandi:true}],kalite:[{id:1,baslik:'Today quality',aciklama:'Calibration',tarih:'2026-11-02',tamamlandi:false},{id:2,baslik:'Future quality',aciklama:'',tarih:'2026-11-03',tamamlandi:false}]})},
@@ -71,6 +72,15 @@ async function run(){
   await store.runTelegramDigests(new Date('2026-11-04T06:00:00Z'));
   assert.equal(sent.filter(item=>item.text.includes('Geciken işleriniz')).length,2);
   tasks.pop();tasks[0].Durum='Atandı';mappings[0].OverdueTasks=0;
+  reset();process.env.KYS_TELEGRAM_ENABLED='false';
+  const manual={userIds:['11'],kinds:['daily'],requestId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'};
+  await store.runTelegramDigests(new Date('2026-11-02T05:00:00Z'),manual);assert.equal(sent.length,1);assert(sent[0].text.includes('DENEME'));assert(sent.every(item=>item.chat_id==='101'));
+  const again=await store.runTelegramDigests(monday,manual);assert.equal(sent.length,1);assert.equal(again.results[0].state,'sent');
+  process.env.KYS_TELEGRAM_ENABLED='true';await store.runTelegramDigests(monday);assert.equal(sent.length,7);
+  reset();interactive=true;
+  await store.runTelegramDigests(new Date('2026-11-02T05:00:00Z'),{userIds:['11'],kinds:['daily'],requestId:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'});
+  assert(sent[0].reply_markup.inline_keyboard[0][0].callback_data==='kys:done:1');
+  interactive=false;
   reset();mode='network';await store.runTelegramDigests(monday);const firstCalls=calls;assert([...reports.values()].some(row=>row.State==='uncertain'));await store.runTelegramDigests(monday);assert.equal(calls,firstCalls);
   reset();mode='429';await store.runTelegramDigests(monday);const retry=[...reports.values()].find(row=>row.State==='retry');assert(retry);const frozen=retry.PayloadJson;
   retry.RetryAt=new Date(0);tasks[0].Baslik='Changed after snapshot';await store.runTelegramDigests(monday);assert.equal(retry.State,'sent');assert.equal(retry.PayloadJson,frozen);tasks[0].Baslik='Alice today';
@@ -93,6 +103,8 @@ async function run(){
   const proxy=load('proxy.ts',{'next-auth/jwt':{getToken:async()=>null},'next/server':{NextResponse:{next:()=>new Response(null,{status:204}),json:(body,options)=>Response.json(body,options)}}}).default;
   assert.equal((await proxy({nextUrl:{pathname:'/api/cron/kys-telegram',search:''}})).status,204);
   assert.equal((await proxy({nextUrl:{pathname:'/api/cron/kys-telegram-other',search:''}})).status,401);
+  assert.equal((await proxy({nextUrl:{pathname:'/api/telegram/kys',search:''}})).status,204);
+  assert.equal((await proxy({nextUrl:{pathname:'/api/telegram/kys-other',search:''}})).status,401);
   console.log('PASS: Istanbul daily/weekly boundaries, personal ownership, lab scope, due/completed filters, recipient subscriptions, length limits, parallel cron deduplication, weekly once, frozen retry, uncertain protection, revoked permissions and cron auth. No real Telegram or DB used.');
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});

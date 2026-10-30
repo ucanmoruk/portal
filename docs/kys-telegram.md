@@ -63,3 +63,67 @@ Sunucuda token eksikse veya gönderimler kapalıysa gerçek bildirim gönderilme
 Token istemciye, kayıt tablosuna veya hata mesajına yazılmaz.
 
 Bot API: https://core.telegram.org/bots/api#sendmessage
+
+
+## Telegram’dan görev tamamlama
+
+Admin > Ayarlar > Telegram Bildirimleri sayfasında **Telegram görev düğmelerini
+etkinleştir** düğmesine bir kez basın. İşlem yalnız yöneticiye açıktır. Botun
+webhook adresi HTTPS portalındaki /api/telegram/kys olur; doğrulama anahtarı bot
+token’ından sunucuda türetilir ve tarayıcıya verilmez. Başka bir webhook varsa
+üzerine yazılmaz. Token değişirse bağlantıyı aynı düğmeyle yenileyin.
+
+Bağlantı etkinleştikten sonra gönderilen günlük, haftalık ve geciken kişisel görev
+mesajlarında görev başına ✅ düğmesi bulunur. Düğme yalnız mevcut görev alıcısının
+kendi özel sohbetinde çalışır; aktif kullanıcı ve güncel KYS erişimi yeniden
+kontrol edilir. Görev doğrudan Tamamlandı olur; görev geçmişine Telegram kaynağıyla
+tek kayıt yazılır. Tekrar basmak ikinci geçmiş kaydı oluşturmaz. Başka kullanıcıya
+atanmış veya silinmiş görev tamamlanmaz. Önceden gönderilmiş mesajlara geriye
+dönük düğme eklenmez. Analiz ve kalite özetleri bilgilendirme mesajı olarak kalır.
+
+Webhook açıkken getUpdates kullanılmaz. Yeni özel sohbetlerin yalnız Chat ID,
+ad ve kullanıcı adı bilgileri KysTelegramChat tablosuna kaydedilir; mesaj içeriği
+saklanmaz. Böylece eşleştirme listesi çalışmaya devam eder. Webhook açılmadan
+önce bekleyen sohbet bilgileri de bu listeye alınır.
+
+## Anında deneme gönderimi
+
+Kayıtlı ve açık en fazla 10 alıcıyı, ardından bildirim türlerini seçip
+**Seçilenlere deneme gönder** düğmesine basın. Yalnız alıcının kayıtlı tercihlerinde
+açık olan seçili türler gönderilir. İşlem 09.00’u beklemez ve otomatik gönderim
+kapalıyken de kullanılabilir; bot token’ı gereklidir. Kayıt yoksa bağlantıyı
+denemek için kayıt bulunmadığını bildiren mesaj gider. Deneme mesajlarındaki görev
+düğmeleri gerçek görevleri tamamlar.
+
+Deneme gönderim kimliği otomatik özetlerden ayrıdır; sabah özetini engellemez.
+Aynı kimlikle durum kontrolü tekrar mesaj üretmez. Gönderim belirsizse sonuç
+tekrar sorgulanabilir; yeni deneme hazırlamadan önce sohbeti kontrol edin.
+
+
+## Telegram’dan hızlı görev atama
+
+Aynı webhook bağlantısı açıkken bota aşağıdaki biçimde mesaj yazılabilir:
+
+- Selin bugün teklifleri kontrol et
+- Oğuzhan Eker yarın kargo durumunu sor
+- Selin bir hafta sonra stokları kontrol et
+- Selin 05.11.2026 raporu hazırla
+
+İsteğe bağlı /gorev öneki kullanılabilir. /yardim ve /help örnekleri gösterir.
+Göndericinin özel sohbeti aktif portal kullanıcısıyla eşleştirilmiş ve KYS erişimi
+olmalıdır. Alıcılar aktif ve KYS erişimi olan portal kullanıcıları arasından
+ad/ad-soyad ile bulunur; alıcının Telegram kullanması zorunlu değildir. Türkçe
+harfsiz adlar da eşleşir; birden fazla eşleşmede kişi seçimi gösterilir.
+
+Tarihler Europe/Istanbul takvimine göre çözülür: bugün, yarın, bir hafta sonra,
+1 hafta sonra; tam tarihler GG.AA.YYYY, GG/AA/YYYY veya YYYY-AA-GG olabilir.
+Geçersiz ve geçmiş tarihler reddedilir. Görevin başlangıcı ve termini seçilen
+gündür; kategori Rutin, ilk durumu Atandı olur. Görev metni en fazla 2000 karakter;
+başlık ilk 220 karakter, açıklama metnin tamamıdır.
+
+Bot kişi, tarih ve metni önizlemede gösterir. Görevi ata onayı alınmadan görev
+oluşturulmaz. Taslaklar 30 dakika geçerlidir; İptal düğmesi taslağı kapatır.
+Onay anında iki kişinin güncel erişimi tekrar kontrol edilir; taslak yalnız
+oluşturan sohbet ve portal hesabı tarafından kullanılabilir. Satır kilidi altında
+görev, atama geçmişi ve taslağın sonucu tek işlemde kaydedilir. Telegram’ın
+tekrar iletmesi veya aynı onaya tekrar basılması ikinci görev oluşturmaz.

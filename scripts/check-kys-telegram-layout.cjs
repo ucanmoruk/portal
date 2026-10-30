@@ -16,7 +16,7 @@ async function run(){
   try{for(const width of [320,375,414,768]){
     const page=await browser.newPage({viewport:{width,height:1100}});await page.setContent(html);
     const metrics=await page.locator('.panel').evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth}));assert(metrics.width<=width&&metrics.scroll<=metrics.width+1,JSON.stringify(metrics));
-    assert.equal(await page.locator('input[type=checkbox]').count(),6);
+    assert.equal(await page.locator('input[type=checkbox]').count(),12);
     await page.screenshot({path:`tmp/kys-telegram-check/settings-${width}.png`,fullPage:true});await page.close();console.log('PASS Telegram settings width',width);
   }}finally{await browser.close();}
 }

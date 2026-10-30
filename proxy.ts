@@ -22,6 +22,7 @@ function isPublicPath(pathname: string) {
     // This cron route authenticates its own Bearer secret, without a login cookie.
     pathname === "/api/cron/payment-report" ||
     pathname === "/api/cron/kys-telegram" ||
+    pathname === "/api/telegram/kys" ||
     PUBLIC_PATH_PREFIXES.some((path) => pathname.startsWith(path)) ||
     /^\/api\/teklifler\/[^/]+\/onay(?:\/|$)/.test(pathname)
   );

@@ -13,18 +13,18 @@ export function istanbulClock(now=new Date()){
   return {today,hour:Number(value("hour")),monday,sunday:shiftDay(monday,6)};
 }
 export function shiftDay(day:string,offset:number){const date=new Date(`${day}T12:00:00Z`);date.setUTCDate(date.getUTCDate()+offset);return date.toISOString().slice(0,10);}
+export const TELEGRAM_TITLES={daily:"Günlük işleriniz",weekly:"Haftalık işleriniz",analyses:"Bugün çıkacak analizler",quality:"Kalite işleri",overdue:"Geciken işleriniz · Hatırlatma"};
 const display=(day:string)=>day?day.slice(0,10).split("-").reverse().join("."):"Tarih belirtilmemiş";
 const clean=(text:string)=>text.replace(/[\r\n\t]+/g," ").trim();
 export function digestLines(kind:TelegramKind,person:string,clock:ReturnType<typeof istanbulClock>,tasks:DigestTask[],analyses:DigestAnalysis[],quality:DigestQuality[]){
   const period=kind==="weekly"?`${display(clock.monday)} – ${display(clock.sunday)}`:display(clock.today);
-  const titles={daily:"Günlük işleriniz",weekly:"Haftalık işleriniz",analyses:"Bugün çıkacak analizler",quality:"Kalite işleri",overdue:"Geciken işleriniz · Hatırlatma"};
+
   let items:string[]=[];
-  if(kind==="daily"||kind==="weekly"||kind==="overdue")items=tasks.filter(task=>task.status!=="Tamamlandı"&&(kind!=="overdue"||Boolean(task.end&&task.end<clock.today))&&(!task.start||task.start<=(kind==="weekly"?clock.sunday:clock.today)))
-    .sort((a,b)=>a.end.localeCompare(b.end)||a.id-b.id).map(task=>`• ${clean(task.title)}\n  ${task.end&&task.end<clock.today?"Gecikmiş · ":""}${task.status} · Termin: ${display(task.end)}`);
+  if(kind==="daily"||kind==="weekly"||kind==="overdue")items=telegramDigestTasks(kind,clock,tasks).map(task=>`• ${clean(task.title)}\n  ${task.end&&task.end<clock.today?"Gecikmiş · ":""}${task.status} · Termin: ${display(task.end)}`);
   if(kind==="analyses")items=analyses.filter(item=>!item.done&&item.end===clock.today).map(item=>`• ${clean(item.name)} · Rapor ${clean(item.report)}\n  ${clean(item.sample)}`);
   if(kind==="quality")items=quality.filter(item=>!item.done&&item.date===clock.today).map(item=>`• ${clean(item.title)}${item.description?`\n  ${clean(item.description)}`:""}`);
   if(!items.length)return [];
-  return [`UNIQUE · ${titles[kind]}\n${clean(person)} · ${period}\n${items.length} kayıt\n`,...items];
+  return [`UNIQUE · ${TELEGRAM_TITLES[kind]}\n${clean(person)} · ${period}\n${items.length} kayıt\n`,...items];
 }
 export function telegramParts(lines:string[],url:string){
   if(!lines.length)return [];
@@ -39,4 +39,18 @@ export function telegramParts(lines:string[],url:string){
   }
   if(current.trim())parts.push(current.trimEnd());
   return parts.map((text,index)=>`${parts.length>1?`(${index+1}/${parts.length})\n`:""}${text}${footer}`);
+}
+
+export type TelegramPart={text:string;reply_markup?:{inline_keyboard:Array<Array<{text:string;callback_data:string}>>}};
+export function telegramDigestTasks(kind:TelegramKind,clock:ReturnType<typeof istanbulClock>,tasks:DigestTask[]){
+  return tasks.filter(task=>task.status!=="Tamamlandı"&&(kind!=="overdue"||Boolean(task.end&&task.end<clock.today))&&(!task.start||task.start<=(kind==="weekly"?clock.sunday:clock.today))).sort((a,b)=>a.end.localeCompare(b.end)||a.id-b.id);
+}
+export function telegramTaskParts(kind:TelegramKind,person:string,clock:ReturnType<typeof istanbulClock>,tasks:DigestTask[],url:string):TelegramPart[]{
+  const selected=telegramDigestTasks(kind,clock,tasks),parts:TelegramPart[]=[];
+  for(let offset=0;offset<selected.length;offset+=10){
+    const group=selected.slice(offset,offset+10);
+    const texts=telegramParts(digestLines(kind,person,clock,group,[],[]),url);
+    texts.forEach((text,index)=>parts.push({text,...(index===texts.length-1?{reply_markup:{inline_keyboard:group.map(task=>[{text:`✅ #${task.id} · ${clean(task.title).slice(0,45)}`,callback_data:`kys:done:${task.id}`}])}}:{})}));
+  }
+  return parts;
 }

@@ -2,7 +2,7 @@ type Chat={id:number;type:string;first_name?:string;last_name?:string;username?:
 export class TelegramApiError extends Error{
   constructor(message:string,readonly definitive:boolean,readonly retryAfter=0){super(message);}
 }
-export async function telegramCall<T>(method:"getChat"|"sendMessage"|"getWebhookInfo"|"getUpdates",body:Record<string,unknown>):Promise<T>{
+export async function telegramCall<T>(method:"getChat"|"sendMessage"|"getWebhookInfo"|"getUpdates"|"setWebhook"|"answerCallbackQuery"|"editMessageReplyMarkup"|"editMessageText",body:Record<string,unknown>):Promise<T>{
   const token=process.env.TELEGRAM_BOT_TOKEN||"";
   if(!/^\d+:[a-zA-Z0-9_-]+$/.test(token))throw new TelegramApiError("Telegram bot tokeni sunucuda tanımlı değil.",true);
   let response:Response;
