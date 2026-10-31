@@ -122,6 +122,7 @@ const navGroups: NavGroup[] = [
       { label: "Müşteri Takip", href: "/musteriler/notlar", menuKey: "musteriler.notlar" },
       { label: "CRM Agent", href: "/iletisim/crm-agent", menuKey: "musteriler.notlar" },
       { label: "Müşteri Talep", href: "/iletisim/musteri-talep", menuKey: "iletisim.musteri-talep" },
+      { label: "Spektrotek Talep", href: "/iletisim/spektrotek-talep", menuKey: "iletisim.spektrotek-talep" },
     ],
   },
   {

@@ -1,0 +1,11 @@
+-- Spektrotek mail leads; MySQL/MariaDB. Application also initializes this schema.
+CREATE TABLE IF NOT EXISTS SpektrotekTalep (
+      Id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,KaynakId VARCHAR(64) NOT NULL UNIQUE,Tarih DATETIME(3) NOT NULL,
+      MusteriAdi VARCHAR(300) NOT NULL,KisiAdi VARCHAR(200) NULL,Email VARCHAR(320) NOT NULL,Talep VARCHAR(300) NOT NULL,
+      Ozet VARCHAR(1000) NULL,Konu VARCHAR(500) NULL,Hesap VARCHAR(100) NOT NULL,Skor TINYINT UNSIGNED NULL,
+      Durum VARCHAR(40) NOT NULL DEFAULT 'Bekliyor',DurumTarihi DATETIME(3) NULL,DurumKullanici VARCHAR(100) NULL,
+      OlusturmaTarihi DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),GuncellemeTarihi DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      Surum INT NOT NULL DEFAULT 1,KEY IX_SpektrotekTalep_Tarih (Tarih,Id),
+      CONSTRAINT CK_SpektrotekTalep_Durum CHECK (Durum IN ('Bekliyor','Teklif Gönderildi'))
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci;
+ALTER TABLE SpektrotekTalep ADD COLUMN IF NOT EXISTS Surum INT NOT NULL DEFAULT 1;
