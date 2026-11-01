@@ -144,7 +144,7 @@ export async function GET(
     const signed = preview ? merged : await signPdfBuffer(merged);
 
     // Dış kod öncelikli — yoksa iç rapor no fallback. "/" karakterleri "-" yapılır.
-    const baseKod = (data.onay?.disRaporKodu || data.header.RaporNo || String(nkrIdNum)).replace(/\//g, "-");
+    const baseKod = String(data.onay?.disRaporKodu || data.header.RaporNo || nkrIdNum).replace(/\//g, "-");
     const englishName = sanitizeFileNamePart(data.header.Numune_Adi_En || data.header.Numune_Adi || baseKod);
     const fileName = isEnglishReport(format)
       ? `Eng_${englishName || nkrIdNum}-imzali.pdf`
