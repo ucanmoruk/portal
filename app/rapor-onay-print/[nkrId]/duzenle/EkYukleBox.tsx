@@ -10,10 +10,12 @@ export default function EkYukleBox({
   nkrId,
   format,
   locked,
+  onChanged,
 }: {
   nkrId: number;
   format: string;
   locked: boolean;
+  onChanged?: () => void;
 }) {
   const [ek, setEk] = useState<Ek>(null);
   const [busy, setBusy] = useState(false);
@@ -42,6 +44,7 @@ export default function EkYukleBox({
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || "Yüklenemedi");
       setEk(j.ek ?? null);
+      onChanged?.();
     } catch (e: any) {
       setError(e.message || "Yüklenemedi");
     } finally {
@@ -56,6 +59,7 @@ export default function EkYukleBox({
       const r = await fetch(base, { method: "DELETE" });
       if (!r.ok) throw new Error("Kaldırılamadı");
       setEk(null);
+      onChanged?.();
     } catch (e: any) {
       setError(e.message || "Kaldırılamadı");
     } finally {
@@ -78,7 +82,7 @@ export default function EkYukleBox({
     <div style={box}>
       <div style={{ fontWeight: 700, fontSize: 14 }}>📎 Ek-1 PDF</div>
       <div style={{ fontSize: 12, color: "#6e6e73", flex: 1, minWidth: 200 }}>
-        Bu &quot;Diğer&quot; raporun ilk sayfasının arkasına eklenecek PDF. Yayın/imza anında birleştirilir.
+        PDF, raporun sonuna rapor numarası ve sayfa bilgileriyle eklenir.
       </div>
 
       {ek?.ekUrl ? (
@@ -96,7 +100,7 @@ export default function EkYukleBox({
         </>
       ) : (
         <button type="button" onClick={() => inputRef.current?.click()} disabled={busy || locked} style={btn("#0071e3", "#fff")}>
-          {busy ? "Yükleniyor…" : "Ek-1 PDF Yükle"}
+          {busy ? "Yükleniyor…" : "Ek Oluştur"}
         </button>
       )}
 

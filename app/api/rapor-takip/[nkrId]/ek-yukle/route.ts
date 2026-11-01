@@ -1,3 +1,4 @@
+import { PDFDocument } from "pdf-lib";
 import { checkNumuneWorkspace } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -44,6 +45,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { nkrIdNum, format, ok } = parse(request, nkrId);
   if (!ok) return Response.json({ error: "Geçersiz istek" }, { status: 400 });
 
+  const pool = await cosmoPool;
+  const workspaceError = await checkNumuneWorkspace(pool, request, nkrIdNum);
+  if (workspaceError) return workspaceError;
+  const approval = await pool.request().input("nkrId", nkrIdNum).input("format", format)
+    .query("SELECT Durum FROM NKR_RaporOnay WHERE NkrID = @nkrId AND RaporFormati = @format");
+  if (approval.recordset.some((row: { Durum: string }) => ["Onaylandı", "Ödeme bekliyor", "Yayınlandı", "Arşiv"].includes(row.Durum))) {
+    return Response.json({ error: "Rapor kilitli. Ek değişikliği için raporu revize edin." }, { status: 409 });
+  }
+
   if (!isRaporFtpConfigured()) {
     return Response.json({ error: "FTP yapılandırılmadı (RAPOR_FTP_* eksik)." }, { status: 503 });
   }
@@ -53,17 +63,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const file = form.get("file");
   if (!(file instanceof File)) return Response.json({ error: "Dosya yok." }, { status: 400 });
 
+  if (file.size > 20 * 1024 * 1024) return Response.json({ error: "PDF en fazla 20 MB olabilir." }, { status: 400 });
   const buf = Buffer.from(await file.arrayBuffer());
   if (buf.length < 5 || buf.subarray(0, 5).toString("latin1") !== "%PDF-") {
     return Response.json({ error: "Ek-1 yalnızca PDF olabilir." }, { status: 400 });
   }
 
   try {
+    const pdf = await PDFDocument.load(buf);
+    if (!pdf.getPageCount()) throw new Error("Boş PDF");
+  } catch {
+    return Response.json({ error: "PDF okunamadı. Şifresiz ve geçerli bir PDF seçin." }, { status: 400 });
+  }
+  try {
     const token = genToken();
     const up = await uploadRaporPdfToFtp({ pdfBuffer: buf, token });
-    const pool = await cosmoPool;
-    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
-    if (workspaceError) return workspaceError;
     await setRaporEk(pool, nkrIdNum, format, up.publicUrl, token, userId);
     return Response.json({ ok: true, ek: { ekUrl: up.publicUrl, ekToken: token } });
   } catch (e: any) {
@@ -80,8 +94,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const { nkrIdNum, format, ok } = parse(request, nkrId);
   if (!ok) return Response.json({ error: "Geçersiz istek" }, { status: 400 });
   const pool = await cosmoPool;
-    const workspaceError = await checkNumuneWorkspace(pool, request, Number(nkrId));
-    if (workspaceError) return workspaceError;
+  const workspaceError = await checkNumuneWorkspace(pool, request, nkrIdNum);
+  if (workspaceError) return workspaceError;
+  const approval = await pool.request().input("nkrId", nkrIdNum).input("format", format)
+    .query("SELECT Durum FROM NKR_RaporOnay WHERE NkrID = @nkrId AND RaporFormati = @format");
+  if (approval.recordset.some((row: { Durum: string }) => ["Onaylandı", "Ödeme bekliyor", "Yayınlandı", "Arşiv"].includes(row.Durum))) {
+    return Response.json({ error: "Rapor kilitli. Ek değişikliği için raporu revize edin." }, { status: 409 });
+  }
   await deleteRaporEk(pool, nkrIdNum, format);
   return Response.json({ ok: true });
 }

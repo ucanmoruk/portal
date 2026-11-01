@@ -92,7 +92,8 @@ export async function GET(
     return Response.json({ error: "Geçersiz rapor / format." }, { status: 400 });
   }
 
-  if (!pdfImzaYapilandirildi()) {
+  const preview = request.nextUrl.searchParams.get("preview") === "1";
+  if (!preview && !pdfImzaYapilandirildi()) {
     return Response.json(
       {
         error:
@@ -111,7 +112,7 @@ export async function GET(
     // Onaylı / Yayınlanmış / Arşivlenmiş raporlar imzalı PDF olarak indirilebilir.
     // "Arşiv" = önceden onaylanmış, sonradan arşive alınmış rapor → indirilebilir olmalı.
     const durum = data.onay?.durum;
-    if (!data.onay || (durum !== "Onaylandı" && durum !== "Ödeme bekliyor" && durum !== "Yayınlandı" && durum !== "Arşiv")) {
+    if (!preview && (!data.onay || (durum !== "Onaylandı" && durum !== "Ödeme bekliyor" && durum !== "Yayınlandı" && durum !== "Arşiv"))) {
       return Response.json(
         { error: "Bu rapor henüz onaylanmamış. Önce raporu onaylayın." },
         { status: 409 },
@@ -140,7 +141,7 @@ export async function GET(
     const merged = await maybeMergeEk(pool, pdf, nkrIdNum, format);
 
     // PAdES dijital imza göm (self-signed köprü sertifika) — Ek-1 dahil tüm belgeye.
-    const signed = await signPdfBuffer(merged);
+    const signed = preview ? merged : await signPdfBuffer(merged);
 
     // Dış kod öncelikli — yoksa iç rapor no fallback. "/" karakterleri "-" yapılır.
     const baseKod = (data.onay?.disRaporKodu || data.header.RaporNo || String(nkrIdNum)).replace(/\//g, "-");
@@ -152,7 +153,7 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": contentDispositionFileName(fileName),
+        "Content-Disposition": preview ? "inline" : contentDispositionFileName(fileName),
         "Cache-Control": "no-store",
       },
     });

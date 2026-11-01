@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import EkYukleBox from "./duzenle/EkYukleBox";
 import QRCode from "qrcode";
 
 // İşlem (Onayla/Geri Gönder) sonrası sekmeyi kapat. Bu sayfa window.open ile
@@ -57,6 +58,9 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampl
   const [onay] = useState<OnayInfo | null>(initialOnay);
   const [canApprove, setCanApprove] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<"onayla" | "geri" | "yayinla" | "imzali" | null>(null);
+  const [showEk, setShowEk] = useState(false);
+  const [ekVersion, setEkVersion] = useState(0);
+  const [showMerged, setShowMerged] = useState(false);
   const [error, setError] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [showGeriModal, setShowGeriModal] = useState(false);
@@ -156,7 +160,7 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampl
   const handleDownloadPdf = () => {
     // Bu sayfayı print dialog'una aç (toolbar print'te @media print ile gizli)
     document.title = printFileBase;
-    window.print();
+    window.open(`/api/rapor-takip/${nkrId}/imzali-pdf?format=${encodeURIComponent(format)}&preview=1`, "_blank", "noopener,noreferrer");
   };
 
   const handleDuzenle = () => {
@@ -242,6 +246,9 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampl
           </label>
         )}
 
+        {canApprove && !onaylandi && <button type="button" onClick={() => setShowEk(!showEk)} disabled={busy !== null}
+          style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: "#0071e3", color: "white", cursor: "pointer" }}>Ek Oluştur</button>}
+        <button type="button" onClick={() => setShowMerged(!showMerged)} style={{ padding: "8px 18px", borderRadius: 8, cursor: "pointer" }}>Ekli Raporu Görüntüle</button>
         {/* Eylem butonları */}
         {!onaylandi && canApprove && (
           <>
@@ -359,6 +366,12 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampl
         </button>
       </div>
 
+      {showEk && <div className="onay-toolbar"><EkYukleBox nkrId={nkrId} format={format} locked={onaylandi || !canApprove}
+        onChanged={() => { setEkVersion(v => v + 1); setShowMerged(true); }} /></div>}
+      {showMerged && <div className="onay-toolbar" style={{ padding: 16 }}>
+        <iframe key={ekVersion} title="Ek dahil rapor PDF önizlemesi" src={`/api/rapor-takip/${nkrId}/imzali-pdf?format=${encodeURIComponent(format)}&preview=1`}
+          style={{ width: "100%", height: "80vh", border: "1px solid #ddd" }} />
+      </div>}
       {error && (
         <div className="onay-toolbar" style={{
           background: "#ff453a", color: "#fff", padding: "8px 24px", fontSize: 12,
