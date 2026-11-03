@@ -44,3 +44,19 @@ export function validateChallengeData(value: unknown): ChallengeData {
   }
   return { version: 1, sourceFile: data.sourceFile, sourceSheet: data.sourceSheet, assessment: data.assessment, rows: data.rows.map(row => ({ organism: row.organism, inoculation: row.inoculation, counts: [...row.counts], reductions: [...row.reductions] })) };
 }
+
+// Eski latin1 sütunlarında Türkçe ğ karakteri ? olarak kaydedilmiş olabilir.
+// Yalnızca bilinen kayıt bozulmasını düzelt; diğer geçersiz değerleri reddet.
+export function deserializeChallengeData(json: string): ChallengeData {
+  const data = JSON.parse(json);
+  if (data && typeof data === "object" && data.assessment === "Uygun De?il") {
+    data.assessment = "Uygun Değil";
+  }
+  return validateChallengeData(data);
+}
+
+// Unicode kaçışları, mevcut latin1 sütunlarında da JSON metnini kayıpsız tutar.
+export function serializeChallengeData(value: ChallengeData): string {
+  return JSON.stringify(validateChallengeData(value)).replace(/[\u007f-\uffff]/g,
+    character => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
-import { validateChallengeData, type ChallengeData } from "@/lib/challengeImport";
+import { validateChallengeData, deserializeChallengeData, serializeChallengeData, type ChallengeData } from "@/lib/challengeImport";
 
 let ready: Promise<void> | null = null;
 export function ensureChallengeTable(pool: any): Promise<void> {
@@ -15,7 +15,7 @@ export async function loadChallengeData(pool: any, nkrId: number): Promise<Chall
   const exists = await pool.request().query("SELECT 1 AS x FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='NKR_ChallengeVeri'");
   if (!exists.recordset.length) return null;
   const result = await pool.request().input("ID", nkrId).query("SELECT VeriJson FROM NKR_ChallengeVeri WHERE NkrID=@ID");
-  return result.recordset[0] ? validateChallengeData(JSON.parse(String(result.recordset[0].VeriJson))) : null;
+  return result.recordset[0] ? deserializeChallengeData(String(result.recordset[0].VeriJson)) : null;
 }
 
 export async function saveChallengeData(base: any, nkrId: number, value: unknown, userId: string, submit: boolean) {
@@ -32,7 +32,7 @@ export async function saveChallengeData(base: any, nkrId: number, value: unknown
     const approved = (await tx.request().input("ID", nkrId).query("SELECT ID FROM NKR_RaporOnay WHERE NkrID=@ID AND UPPER(RaporFormati) IN ('CHALLENGE','CHALLENGEEN') AND Durum IN (N'Onaylandı',N'Ödeme bekliyor',N'Yayınlandı',N'Arşiv')")).recordset;
     if (approved.length) throw new Error("Onaylı raporun sonuçları değiştirilemez. Önce raporu geri alın.");
     const existing = (await tx.request().input("ID", nkrId).query("SELECT NkrID FROM NKR_ChallengeVeri WHERE NkrID=@ID")).recordset[0];
-    await tx.request().input("ID", nkrId).input("Json", JSON.stringify(data)).input("User", userId).query(existing
+    await tx.request().input("ID", nkrId).input("Json", serializeChallengeData(data)).input("User", userId).query(existing
       ? "UPDATE NKR_ChallengeVeri SET VeriJson=@Json,UpdatedBy=@User,UpdatedAt=GETDATE() WHERE NkrID=@ID"
       : "INSERT INTO NKR_ChallengeVeri (NkrID,VeriJson,UpdatedBy) VALUES (@ID,@Json,@User)");
     const assessmentEn = data.assessment === "Uygun" ? "Pass" : data.assessment === "Uygun Değil" ? "Fail" : "N/A";

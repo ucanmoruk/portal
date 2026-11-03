@@ -21,6 +21,15 @@ assert.throws(()=>api.importChallengeSheet({},"t.xlsx","S"),/formatında değil/
 assert(api.isChallengeFormat("ChallengeEn"));assert(!api.isChallengeFormat("Genel"));assert(!api.isChallengeFormat("ChallengeFake"));
 for(const assessment of api.CHALLENGE_ASSESSMENTS)api.validateChallengeData({...data,assessment});
 assert.throws(()=>api.validateChallengeData({...data,assessment:"Pass"}));assert.throws(()=>api.validateChallengeData({...data,assessment:"Uygun",rows:data.rows.slice(1)}));
+// Persisted latin1 damage must render as FAIL without changing new-input validation.
+const failed={...data,assessment:"Uygun Değil"};
+const stored=api.serializeChallengeData(failed);
+assert(!/[^\x00-\x7f]/.test(stored));
+assert.equal(JSON.parse(stored).assessment,"Uygun Değil");
+assert.equal(api.deserializeChallengeData(JSON.stringify({...data,assessment:"Uygun De?il"})).assessment,"Uygun Değil");
+assert.equal(api.deserializeChallengeData(stored).assessment,"Uygun Değil");
+assert.throws(()=>api.deserializeChallengeData(JSON.stringify({...data,assessment:"unknown"})));
+assert.throws(()=>api.validateChallengeData({...data,assessment:"Uygun De?il"}));
 if(process.argv[2]){
  const workbook=XLSX.readFile(process.argv[2],{cellText:true,cellFormula:true});
  for(const name of workbook.SheetNames){const imported=api.importChallengeSheet(workbook.Sheets[name],"reference.xlsx",name);assert.equal(imported.rows.length,5);assert.equal(imported.rows[4].counts[1],"-");assert.equal(imported.rows[4].reductions[0],"-");console.log(name+": "+imported.rows[0].inoculation+"; log7="+imported.rows[0].reductions[0]);}
