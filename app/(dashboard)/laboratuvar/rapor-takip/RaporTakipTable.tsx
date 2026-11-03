@@ -272,7 +272,7 @@ export default function RaporTakipTable({
   const directApprovalMode = phase === "lab" && Boolean(fixedRaporTuru) && isUgdrFormat(fixedRaporTuru || "");
   const selectionColumnWidth = directApprovalMode || !phase ? "32px" : "0";
   const expandColumnWidth = directApprovalMode ? "0" : "24px";
-  const listGridColumns = `${selectionColumnWidth} ${expandColumnWidth} 80px 108px 108px 1fr ${phase === "lab" ? "0" : "108px"} 170px 100px ${phase === "approval" ? "0" : phase === "returned" ? "180px" : phase === "lab" ? "140px" : "110px"} ${(phase === "returned" || phase === "lab") ? "0 0 0" : "36px 36px 36px"}`;
+  const listGridColumns = `${selectionColumnWidth} ${expandColumnWidth} 80px 108px 108px 1fr ${phase === "lab" ? "0" : "108px"} 170px 100px ${phase === "approval" ? "110px" : phase === "returned" ? "180px" : phase === "lab" ? "140px" : "110px"} ${(phase === "returned" || phase === "lab") ? "0 0 0" : "36px 36px 36px"}`;
 
   // Gönder modal
   const [gonderRow,    setGonderRow]    = useState<RaporRow | null>(null);
@@ -1239,16 +1239,16 @@ export default function RaporTakipTable({
                 </div>
 
                 {/* Onaya Gönder / Geri Al / Tekrar Onaya Gönder
-                    - phase=approval → buton yok (PDF Önizleme yeterli)
+                    - phase=approval → onay bekleyen Challenge raporu için Geri Al
                     - phase=returned → "Tekrar Onaya Gönder" (geniş, mavi)
                     - Bekliyor → buton yok
                     - Analiz Devam Ediyor (N<M) → gizli
                     - Analiz Devam Ediyor N/N → "Onaya Gönder"
                     - Onay Bekleniyor → "Geri Al"
                     - Onaylandı/Yayınlandı → disabled bilgi */}
-                <div style={{ display: phase === "approval" ? "none" : "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
+                <div style={{ display: phase === "approval" && !(isChallengeFormat(row.RaporFormati) && row.RaporDurumu === "Onay Bekleniyor") ? "none" : "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
                   {(() => {
-                    if (phase === "approval") return null;
+                    if (phase === "approval" && !(isChallengeFormat(row.RaporFormati) && row.RaporDurumu === "Onay Bekleniyor")) return null;
 
                     // Geri Gelenler tabı → tek bir geniş "Tekrar Onaya Gönder" butonu
                     if (phase === "returned") {

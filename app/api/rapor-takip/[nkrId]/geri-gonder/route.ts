@@ -1,3 +1,5 @@
+import { baseReportFormat, englishReportFormat } from "@/lib/raporFormatLanguage";
+import { isChallengeFormat } from "@/lib/challengeImport";
 import { checkNumuneWorkspace } from "@/lib/numuneWorkspace";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -34,73 +36,89 @@ export async function POST(
     if (workspaceError) return workspaceError;
 
     // İlgili tablolar opsiyonel — yoksa atla
-    const tables = ["NKR_RaporOnay", "NKR_LabKabul", "NKR_RaporDurumOverride", "NKR_Log"];
+    const tables = ["NKR_RaporOnay", "NKR_LabKabul", "NKR_RaporDurumOverride", "NKR_Log", "NKR_RaporDuzenleme"];
     const tblRes = await pool.request().query(
       `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
        WHERE TABLE_SCHEMA IN ('dbo', 'cosmoroot') AND TABLE_NAME IN (${tables.map(t => `'${t}'`).join(",")})`
     );
     const present = new Set<string>(tblRes.recordset.map((r: any) => String(r.TABLE_NAME).toLowerCase()));
 
-    // Onay (varsa) → SİLME, placeholder'a sıfırla. Böylece dış takip kodu
-    // (DisRaporKodu), karekod token'ı ve revize açıklaması (Notlar) korunur →
-    // stabil kod ve revizyon notu geri-gönder döngüsünde kaybolmaz. Durum=NULL
-    // olduğu için listede override 'Geri Gönderildi' baskın gelir (eskisiyle
-    // aynı davranış), tekrar Onayla'da aynı kod+token yeniden kullanılır.
-    if (present.has("nkr_raporonay")) {
-      await pool.request()
-        .input("nkrId", nkrIdNum).input("format", format)
-        .query(`
-          UPDATE NKR_RaporOnay
-          SET Durum = NULL, YayinUrl = NULL, YayinTarihi = NULL
-          WHERE NkrID = @nkrId
-            AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
-        `);
-    }
-
-    // NKR_LabKabul DOKUNULMAZ — kabul edilmiş kalsın, sadece durum "Geri Gönderildi" olsun.
-    // Bu sayede "Geri Gelenler" tabında görünür, lab orada düzeltip tekrar Onaya Gönderebilir.
-
-    // Override → "Geri Gönderildi" set et (DELETE + INSERT) + notlar
-    if (present.has("nkr_rapordurumoverride")) {
-      // Notlar kolonu var mı? (eski override tablosunda olmayabilir)
-      const colRes = await pool.request().query(
-        `SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_SCHEMA IN ('dbo','cosmoroot')
-           AND TABLE_NAME='NKR_RaporDurumOverride' AND COLUMN_NAME='Notlar'`
-      );
-      const hasNotlar = colRes.recordset.length > 0;
-
-      await pool.request()
-        .input("nkrId", nkrIdNum).input("format", format)
-        .query(`
-          DELETE FROM NKR_RaporDurumOverride
-          WHERE NkrID = @nkrId
-            AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
-        `);
-      if (hasNotlar) {
+    // Challenge sonuçları iki dilde ortaktır; iki onayı da geri al.
+    const baseFormat = baseReportFormat(format);
+    const formats = isChallengeFormat(format)
+      ? [...new Set([baseFormat, englishReportFormat(baseFormat)].filter((value): value is string => Boolean(value)))]
+      : [format];
+    for (const targetFormat of formats) {
+      // Onay (varsa) → SİLME, placeholder'a sıfırla. Böylece dış takip kodu
+      // (DisRaporKodu), karekod token'ı ve revize açıklaması (Notlar) korunur →
+      // stabil kod ve revizyon notu geri-gönder döngüsünde kaybolmaz. Durum=NULL
+      // olduğu için listede override 'Geri Gönderildi' baskın gelir (eskisiyle
+      // aynı davranış), tekrar Onayla'da aynı kod+token yeniden kullanılır.
+      if (present.has("nkr_raporonay")) {
         await pool.request()
-          .input("nkrId", nkrIdNum)
-          .input("format", format)
-          .input("notlar", notlar)
+          .input("nkrId", nkrIdNum).input("format", targetFormat)
           .query(`
-            INSERT INTO NKR_RaporDurumOverride (NkrID, RaporFormati, Durum, UpdatedAt, Notlar)
-            VALUES (@nkrId, @format, N'Geri Gönderildi', GETDATE(), @notlar)
+            UPDATE NKR_RaporOnay
+            SET Durum = NULL, YayinUrl = NULL, YayinTarihi = NULL,
+                OnayTarihi = NULL, OnaylayanID = NULL, OnaylayanAd = NULL,
+                ImzaHash = NULL, ImzaTarihi = NULL, ImzaSurum = NULL
+            WHERE NkrID = @nkrId
+              AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
           `);
-      } else {
+      }
+
+      // NKR_LabKabul DOKUNULMAZ — kabul edilmiş kalsın, sadece durum "Geri Gönderildi" olsun.
+      // Bu sayede "Geri Gelenler" tabında görünür, lab orada düzeltip tekrar Onaya Gönderebilir.
+
+      // Override → "Geri Gönderildi" set et (DELETE + INSERT) + notlar
+      if (present.has("nkr_rapordurumoverride")) {
+        // Notlar kolonu var mı? (eski override tablosunda olmayabilir)
+        const colRes = await pool.request().query(
+          `SELECT 1 AS x FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA IN ('dbo','cosmoroot')
+             AND TABLE_NAME='NKR_RaporDurumOverride' AND COLUMN_NAME='Notlar'`
+        );
+        const hasNotlar = colRes.recordset.length > 0;
+
         await pool.request()
-          .input("nkrId", nkrIdNum)
-          .input("format", format)
+          .input("nkrId", nkrIdNum).input("format", targetFormat)
           .query(`
-            INSERT INTO NKR_RaporDurumOverride (NkrID, RaporFormati, Durum, UpdatedAt)
-            VALUES (@nkrId, @format, N'Geri Gönderildi', GETDATE())
+            DELETE FROM NKR_RaporDurumOverride
+            WHERE NkrID = @nkrId
+              AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))
           `);
+        if (hasNotlar) {
+          await pool.request()
+            .input("nkrId", nkrIdNum)
+            .input("format", targetFormat)
+            .input("notlar", notlar)
+            .query(`
+              INSERT INTO NKR_RaporDurumOverride (NkrID, RaporFormati, Durum, UpdatedAt, Notlar)
+              VALUES (@nkrId, @format, N'Geri Gönderildi', GETDATE(), @notlar)
+            `);
+        } else {
+          await pool.request()
+            .input("nkrId", nkrIdNum)
+            .input("format", targetFormat)
+            .query(`
+              INSERT INTO NKR_RaporDurumOverride (NkrID, RaporFormati, Durum, UpdatedAt)
+              VALUES (@nkrId, @format, N'Geri Gönderildi', GETDATE())
+            `);
+        }
+      }
+
+      if (present.has("nkr_raporduzenleme")) {
+        await pool.request().input("nkrId", nkrIdNum).input("format", targetFormat)
+          .query(`UPDATE NKR_RaporDuzenleme SET Kilitli = 0
+            WHERE NkrID = @nkrId
+              AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'))`);
       }
     }
 
     if (present.has("nkr_log")) {
       const aciklama = notlar
-        ? `${format} formatı geri gönderildi: ${notlar}`
-        : `${format} formatı laboratuvara geri gönderildi (Kabul Bekleyenler'e döner).`;
+        ? `${formats.join(", ")} formatları geri gönderildi: ${notlar}`
+        : `${formats.join(", ")} formatları laboratuvara geri gönderildi (Geri Gelenler).`;
       await pool.request()
         .input("NKRID", nkrIdNum)
         .input("KullaniciID", userId)
