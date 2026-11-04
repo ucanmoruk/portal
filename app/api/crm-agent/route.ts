@@ -1,16 +1,17 @@
+import { CRM_SYSTEM_PROMPT } from "@/lib/crmPrompt";
+import { getCrmCatalog } from "@/lib/crmCatalog";
+import { getCrmKnowledge } from "@/lib/crmKnowledgeStore";
+import { crmKnowledgePrompt } from "@/lib/crmKnowledgeRules";
+import { createCrmDraft } from "@/lib/crmDraftStore";
+import { hydrateCrmOffer } from "@/lib/crmOffer";
+import { crmAiConfig, requestCrmAnalysis } from "@/lib/crmAi";
 import { getPortalUser } from "@/lib/portalYetki";
 import { cosmoPool } from "@/lib/db";
 import { ensureFirmaGenelNotSchema } from "@/lib/firmaGenelNotStore";
 import { ensureMusteriNotSchema } from "@/lib/musteriNotStore";
 
-const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const fail = (message: string, status: number) => Response.json({ error: message }, { status });
 type ChatMessage = { role: "user" | "assistant"; content: string };
-
-function outputText(data: unknown) {
-  const value = data as { output_text?: string; output?: Array<{ content?: Array<{ text?: string }> }> };
-  return value.output_text || value.output?.flatMap(item => item.content || []).map(item => item.text || "").join("\n").trim() || "";
-}
 
 export async function POST(request: Request) {
   const user = await getPortalUser();
@@ -20,10 +21,10 @@ export async function POST(request: Request) {
     const body = await request.json();
     const question = String(body.question || "").trim();
     const firmaId = body.firmaId ? Number(body.firmaId) : null;
-    if (question.length < 3 || question.length > 1200) return fail("Soru 3-1200 karakter arasında olmalıdır.", 400);
+    if (question.length < 3 || question.length > 12000) return fail("Soru 3-12000 karakter arasında olmalıdır.", 400);
     if (firmaId != null && (!Number.isInteger(firmaId) || firmaId <= 0)) return fail("Geçersiz firma.", 400);
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return fail("CRM Agent için OPENAI_API_KEY tanımlı değil.", 503);
+    let config;
+    try { config = crmAiConfig(); } catch (error) { return fail(error instanceof Error ? error.message : "AI yapılandırması eksik.", 503); }
 
     await Promise.all([ensureFirmaGenelNotSchema(), ensureMusteriNotSchema()]);
     const pool = await cosmoPool;
@@ -39,14 +40,15 @@ export async function POST(request: Request) {
       bind().query(`SELECT TOP 60 f.Firma_Adi AS Firma,t.TeklifNo,t.Tarih,t.Toplam,t.TeklifDurum FROM TeklifBaslik t INNER JOIN Firma f ON f.ID=t.MusteriID WHERE t.Durum='Aktif' ${where} ORDER BY t.ID DESC`),
       bind().query(`SELECT TOP 60 f.Firma_Adi AS Firma,p.ProformaNo,p.Tarih,p.GenelToplam,p.Durum FROM ProformaBaslik p INNER JOIN Firma f ON f.ID=p.FirmaID WHERE COALESCE(p.SilindiMi,0)=0 ${where} ORDER BY p.ID DESC`),
     ]);
-    const context = { scope: firm ? { mode: "selected-company", firm } : { mode: "all-companies" }, today: new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Istanbul" }), firmaNotlari: generalNotes.recordset, takipNotlari: followUps.recordset, faturalar: invoices.recordset, teklifler: offers.recordset, proformalar: proformas.recordset };
+    const { services, packages } = await getCrmCatalog();
+    const context = { hizmetler: services, paketler: packages, scope: firm ? { mode: "selected-company", firm } : { mode: "all-companies" }, today: new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Istanbul" }), firmaNotlari: generalNotes.recordset, takipNotlari: followUps.recordset, faturalar: invoices.recordset, teklifler: offers.recordset, proformalar: proformas.recordset };
     const history = (Array.isArray(body.messages) ? body.messages : []).slice(-8).filter((item: ChatMessage) => ["user", "assistant"].includes(item?.role) && typeof item?.content === "string").map((item: ChatMessage) => ({ role: item.role, content: item.content.slice(0, 1500) }));
-    const response = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: MODEL, input: [
-      { role: "system", content: "Sen Unique Analyse CRM Agent'sın. Yalnızca sana verilen JSON bağlamına dayanarak Türkçe cevap ver. Seçili firma modu varsa sadece o firmayı değerlendir; başka firma hakkında bilgi verme. Genel modda firmaları karşılaştırabilir ve tarih aralığı sorularını bugünün tarihine göre hesaplayabilirsin. Veri yoksa açıkça belirt. Tutar, tarih, fatura ve teklif numaralarını uydurma. Yanıtları kısa, eyleme dönük ve gerektiğinde madde işaretli yaz." },
+    const knowledge = await getCrmKnowledge();
+    const analysis = await requestCrmAnalysis(config, CRM_SYSTEM_PROMPT + crmKnowledgePrompt(knowledge.content), [
       ...history, { role: "user", content: JSON.stringify({ question, context }) },
-    ] }) });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) return fail((data as { error?: { message?: string } }).error?.message || "AI yanıtı alınamadı.", 502);
-    return Response.json({ answer: outputText(data), scope: firm ? firm.Firma_Adi : "Tüm firmalar" });
+    ]);
+    const offer = analysis.offer ? hydrateCrmOffer(analysis.offer, services, packages) : null;
+    const draftId = offer ? await createCrmDraft(user.userId, offer) : null;
+    return Response.json({ answer: analysis.answer, offer, draftId, scope: firm ? firm.Firma_Adi : "Tüm firmalar" });
   } catch (error) { return fail(error instanceof Error ? error.message : "CRM Agent çalışamadı.", 500); }
 }

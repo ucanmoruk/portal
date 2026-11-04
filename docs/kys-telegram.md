@@ -127,3 +127,34 @@ Onay anında iki kişinin güncel erişimi tekrar kontrol edilir; taslak yalnız
 oluşturan sohbet ve portal hesabı tarafından kullanılabilir. Satır kilidi altında
 görev, atama geçmişi ve taslağın sonucu tek işlemde kaydedilir. Telegram’ın
 tekrar iletmesi veya aynı onaya tekrar basılması ikinci görev oluşturmaz.
+
+
+## Bağımsız cron ayar dosyası
+
+Cron, cPanel Node.js App ortam değişkenlerini otomatik devralmaz. Uygulama köküne `.env.telegram-cron` dosyası yüklenebilir (public/ altına değil). İçindeki `KYS_TELEGRAM_CRON_SECRET`, cPanel uygulama ortamındaki aynı adlı değişkenle eşleşmelidir; `KYS_TELEGRAM_PORTAL_URL` HTTPS portal adresidir.
+
+Çalıştırıcı önce `.env.telegram-cron`, sonra `.env.local`, `.env.production`, `.env` dosyalarından yalnız bu iki anahtarı okur; mevcut süreç değişkenlerini değiştirmez. Ek npm bağımlılığı gerekmez. `node scripts/run-kys-telegram.mjs --check` ayarları doğrular, dış istek veya mesaj göndermez. Dağıtım paketi çalıştırıcıyı `scripts/run-kys-telegram.mjs` yolunda içerir.
+
+Önerilen zamanlama `*/5 * * * *` şeklindedir. Bu her beş dakikada bir kontrol demektir; aynı gün/tür/alıcı için yeniden mesaj üretilmez. Daha seyrek kontrol kullanılabilir, fakat gecikme ve geçici hatadan toparlanma süresi artar.
+
+
+### cPanel klasörü ve hata günlüğü
+
+Bu kurulumda uygulama klasörü `/home/uniqueanalyse/lab.uniqueanalyse.com` şeklindedir; `lab.uniqeuanalyse.com` değildir. Çalıştırıcı dosyasının `scripts/run-kys-telegram.mjs` yolunda mevcut olduğunu doğrulayın.
+
+```sh
+(cd /home/uniqueanalyse/lab.uniqueanalyse.com && node scripts/run-kys-telegram.mjs) >> /home/uniqueanalyse/telegram-cron.log 2>&1
+```
+
+Parantez grubuna uygulanan yönlendirme `cd` hatalarını da ana dizindeki loga kaydeder. `node` cron PATH'inde yoksa cPanel Node.js App aktivasyonundaki gerçek Node yolu kullanılmalıdır. `.env` değişikliklerinden sonra uygulamayı cPanel'den yeniden başlatın; çalışan sunucu eski değişkenleri tutabilir.
+
+
+### Cron ortamında `node: command not found`
+
+`run-kys-telegram.sh` cPanel Node kurulumunu bulup bağımlılıksız `.mjs` çalıştırıcısını başlatır. Her iki dosya uygulamanın `scripts/` klasöründe olmalıdır. Başlatıcı önce `KYS_TELEGRAM_NODE_BINARY`/PATH, sonra uygulamanın `nodevenv` klasörü ve CloudLinux standart Node yollarını kontrol eder. Yerleşik fetch desteği olmayan eski sürümler kullanılmaz.
+
+```sh
+/bin/bash /home/uniqueanalyse/lab.uniqueanalyse.com/scripts/run-kys-telegram.sh >> /home/uniqueanalyse/telegram-cron.log 2>&1
+```
+
+Zamanlama `*/5 * * * *` kalabilir. Aynı komutta `.sh` dosyasından sonra `--check` eklemek yalnız ayarları doğrular, mesaj göndermez. Başlatıcı Node'u bulamazsa loga açıklayıcı hata yazar; cPanel'deki uygulama Node yolu açıkça belirtilebilir.

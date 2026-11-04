@@ -719,6 +719,10 @@ table.purchaseHistoryTable .iconButton {
 .supplierDropdown { margin:10px 0; padding:10px; border:1px solid var(--color-border); border-radius:var(--radius-sm); }
 .supplierDropdown .supplierChoices { max-height:220px; margin:8px 0; }
 .supplierSelected { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+.recipientPreview { margin-top:14px; padding:10px 12px; border:1px solid var(--color-border); border-radius:var(--radius-sm); background:var(--color-surface-2); font-size:.75rem; line-height:1.5; overflow-wrap:anywhere; }
+.recipientPreview ul { list-style:none; margin:6px 0 0; padding:0; }
+.recipientPreview li + li { margin-top:6px; }
+.recipientPreview p { margin:6px 0 0; }
 .supplierSelected>span { display:inline-flex; align-items:center; gap:6px; max-width:100%; padding:4px 8px; border-radius:var(--radius-sm); background:var(--color-accent-light); font-size:.75rem; overflow-wrap:anywhere; }
 .supplierSelected button { border:0; background:transparent; color:var(--color-text-secondary); font-size:1rem; cursor:pointer; }
 .manualRecipient { display:grid; gap:6px; margin:14px 0; font-size:.8125rem; font-weight:600; }

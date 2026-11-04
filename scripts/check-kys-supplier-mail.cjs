@@ -25,7 +25,7 @@ function request(){const args={};return {input(key,value){args[key]=value;return
   if(sql.startsWith('SELECT ID,Ad,Email FROM KysTedarikci'))return result(suppliers.filter(s=>s.ID===args.ID));
   if(sql.startsWith('INSERT INTO KysTalepTedarikciMail')){
     assert(!jobs.some(job=>job.OnayID===args.OnayID&&job.TedarikciID===args.TedarikciID));
-    jobs.push({ID:args.ID,OnayID:args.OnayID,TalepID:args.TalepID,TedarikciID:args.TedarikciID,TedarikciAd:args.Ad,Alicilar:args.Alicilar,FormJson:args.Form,Durum:'Bekliyor'});return result([],1);
+    jobs.push({ID:args.ID,OnayID:args.OnayID,TalepID:args.TalepID,TedarikciID:args.TedarikciID,TedarikciAd:args.Ad,Alicilar:args.Alicilar,CcAlicilar:args.CcAlicilar,FormJson:args.Form,Durum:'Bekliyor'});return result([],1);
   }
   if(sql.startsWith("UPDATE KysTalep SET Durum='İşleme Alındı'")){
     const active=jobs.filter(job=>job.OnayID===root.MailOnayID);if(root.Durum==='Onaylandı'&&active.length&&active.every(job=>job.Durum==='Gönderildi')){root.Durum='İşleme Alındı';return result([],1);}return result();
@@ -78,24 +78,39 @@ async function run(){
   assert.equal((await approve()).mailQueued,false);assert.equal(root.Durum,'Onaylandı');assert.equal(jobs.length,0);assert.equal(sent.length,0);
   await assert.rejects(mail.prepareSupplierMail(1,[]));assert.equal(root.Durum,'Onaylandı');assert.equal(jobs.length,0);
   await assert.rejects(mail.prepareSupplierMail(1,[1,3]));assert.equal(jobs.length,0);
-  await mail.prepareSupplierMail(1,[1,1,2]);assert.equal(jobs.length,2);assert.equal(sent.length,0);
-  await mail.prepareSupplierMail(1,[1,2],[],false,jobs[0].OnayID);assert.equal(jobs.length,2);
+  await assert.rejects(mail.prepareSupplierMail(1,[1,2]));assert.equal(jobs.length,0);
+  await assert.rejects(mail.prepareSupplierMail(1,[3]));assert.equal(jobs.length,0);
+  await mail.prepareSupplierMail(1,[1,1]);assert.equal(jobs.length,1);assert.equal(sent.length,0);
+  await mail.prepareSupplierMail(1,[1],[],false,jobs[0].OnayID);assert.equal(jobs.length,1);
   assert.equal(JSON.parse(jobs[0].FormJson).onaylayanAd,'Onaylayan Örnek');
   const snapshot=jobs[0].FormJson;suppliers[0].Email='changed@example.com';
   await Promise.all([mail.sendQueuedSupplierMail(1),mail.sendQueuedSupplierMail(1)]);
-  assert.equal(sent.length,2);assert(jobs.every(job=>job.Durum==='Gönderildi'));assert.equal(root.Durum,'İşleme Alındı');
+  assert.equal(sent.length,1);assert(jobs.every(job=>job.Durum==='Gönderildi'));assert.equal(root.Durum,'İşleme Alındı');
   const firstSupplierMail=sent.find(mail=>mail.to.includes('satis@one.example'));
   assert.deepEqual(firstSupplierMail.to,['satis@one.example','teklif@one.example']);
-  assert.deepEqual(firstSupplierMail.cc,['oguzhan@uniquealphabet.com','selin@uniquealphabet.com']);
+  assert.deepEqual(firstSupplierMail.cc,[]); // No hidden/default CC recipients.
   assert.equal(firstSupplierMail.from.address,'purchasing@uniquealphabet.com');
   assert(firstSupplierMail.html.includes('Tahoma'));assert(firstSupplierMail.html.includes('Oğuzhan EKER'));
   assert(firstSupplierMail.text.startsWith('Sayın Yetkili,'));assert(firstSupplierMail.attachments.some(a=>a.cid==='purchasing-signature'));
   assert(!firstSupplierMail.to.includes('info@two.example'));assert.equal(firstSupplierMail.attachments[0].contentType,'application/pdf');
-  await mail.sendQueuedSupplierMail(1,true);assert.equal(sent.length,2);
-  await assert.rejects(approve([1]));assert.equal(jobs.length,2);assert.equal(jobs[0].FormJson,snapshot);
+  await mail.sendQueuedSupplierMail(1,true);assert.equal(sent.length,1);
+  await assert.rejects(approve([1]));assert.equal(jobs.length,1);assert.equal(jobs[0].FormJson,snapshot);
   await assert.rejects(mail.prepareSupplierMail(1,[2]));
-  await mail.prepareSupplierMail(1,[2],[],true);await mail.sendQueuedSupplierMail(1);assert.equal(sent.length,3);assert.equal(jobs.length,3);
-  await reset();await approve();await mail.prepareSupplierMail(1,[],['new@manual.example']);assert.equal(jobs[0].TedarikciID,-1);await mail.sendQueuedSupplierMail(1);assert.deepEqual(sent[0].to,['new@manual.example']);
+  await mail.prepareSupplierMail(1,[2],[],true);await mail.sendQueuedSupplierMail(1);assert.equal(sent.length,2);assert.equal(jobs.length,2);
+  await reset();await approve();
+  await assert.rejects(mail.prepareSupplierMail(1,[2],[],false,undefined,['bad-address']));assert.equal(jobs.length,0);
+  await mail.prepareSupplierMail(1,[2],[],false,undefined,policy.PURCHASING_CC);
+  assert.deepEqual(JSON.parse(jobs[0].CcAlicilar),policy.PURCHASING_CC);
+  await mail.sendQueuedSupplierMail(1);assert.deepEqual(sent[0].cc,policy.PURCHASING_CC);assert.deepEqual(sent[0].to,['info@two.example']);
+  await reset();await approve();
+  const priorEmail=suppliers[1].Email;suppliers[1].Email=policy.PURCHASING_CC[0];
+  await mail.prepareSupplierMail(1,[2],[],false,undefined,policy.PURCHASING_CC);await mail.sendQueuedSupplierMail(1);
+  assert.deepEqual(sent[0].to,[policy.PURCHASING_CC[0]]);assert.deepEqual(sent[0].cc,[policy.PURCHASING_CC[1]]);
+  suppliers[1].Email=priorEmail;
+  await reset();await approve();await assert.rejects(mail.prepareSupplierMail(1,[],['new@manual.example']));assert.equal(jobs.length,0);
+  await mail.prepareSupplierMail(1,[2],['new@manual.example','info@two.example','NEW@manual.example']);
+  assert.equal(jobs.length,1);assert.equal(jobs[0].TedarikciID,2);
+  await mail.sendQueuedSupplierMail(1);assert.equal(sent.length,1);assert.deepEqual(sent[0].to,['info@two.example']);assert.deepEqual(sent[0].cc,['new@manual.example']);
   await reset();await approve();await mail.prepareSupplierMail(1,[2]);jobs[0].Durum='Gönderiliyor';
   await assert.rejects(mail.prepareSupplierMail(1,[2],[],true));
   jobs[0].ZamanAsimi=1;await mail.prepareSupplierMail(1,[2],[],true);assert.equal(jobs.length,2);await mail.sendQueuedSupplierMail(1);assert.equal(sent.length,1);
@@ -122,6 +137,6 @@ async function run(){
   session={user:{userId:'fixture',name:'Fixture'}};portalUser={...portalUser,firmalar:['Root']};assert.equal((await invoke()).status,403);assert.equal(dispatches,0);
   portalUser={...portalUser,firmalar:['Unique']};assert.equal((await invoke()).status,200);assert.equal(approvals,1);assert.equal(dispatches,0);
   const sendResponse=await route.PATCH(new Request('http://localhost/api/kys/talepler/1',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({islem:'tedarikci-mail-gonder',tedarikciIds:[2]})}),{params:Promise.resolve({id:'1'})});assert.equal(sendResponse.status,200);assert.equal(dispatches,1);
-  console.log('PASS: multi-address validation, approval without sending, explicit send preparation rollback, supplier isolation, fixed From/CC, Tahoma signature and shared PDF attachment, frozen snapshot, concurrent dispatch deduplication, retry only safe failures, partial/uncertain SMTP protection, stale approval exclusion, explicit resend history, manual recipients, stale/recent sending guards. No real DB or email used.');
+  console.log('PASS: multi-address validation, approval without sending, explicit send preparation rollback, supplier isolation, fixed From/explicit opt-in CC, Tahoma signature and shared PDF attachment, frozen snapshot, concurrent dispatch deduplication, retry only safe failures, partial/uncertain SMTP protection, stale approval exclusion, explicit resend history, manual recipients only in CC, exactly one message, stale/recent sending guards. No real DB or email used.');
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});

@@ -1,3 +1,5 @@
+import { packageDisplayRows } from "@/lib/teklifPackage";
+import { ensureTeklifPackageSchema } from "@/lib/teklifPackageSchema";
 export const runtime = "nodejs";
 
 import { getServerSession } from "next-auth";
@@ -10,6 +12,9 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 interface TeklifMailSatir {
+  PaketGrup?: string | null;
+  PaketAdi?: string | null;
+  Notlar?: string | null;
   HizmetAdi: string;
   Adet: number | string | null;
   Metot: string;
@@ -46,7 +51,8 @@ export async function POST(
   }
 
   try {
-    const pool = await cosmoPool;
+    await ensureTeklifPackageSchema();
+  const pool = await cosmoPool;
 
     // Ayarları DB'den oku (env fallback)
     const cfg = await getAllSettings();
@@ -96,7 +102,7 @@ export async function POST(
     const sRes = await pool.request()
       .input("TeklifID", Number(id))
       .query(`
-        SELECT HizmetAdi,
+        SELECT HizmetAdi, PaketGrup, PaketAdi, Notlar,
                ISNULL(Adet, 1)          AS Adet,
                ISNULL(Metot, '')        AS Metot,
                ISNULL(Akreditasyon, '') AS Akreditasyon,
@@ -136,7 +142,7 @@ export async function POST(
     const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "");
 
     // Hizmet satır HTML'i
-    const satirHtml = satirlar.map((s, i) => {
+    const satirHtml = packageDisplayRows(satirlar).map((s, i) => {
       const adet = Number.parseInt(String(s.Adet ?? ""), 10) || 1;
       const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
       const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
@@ -147,7 +153,9 @@ export async function POST(
       if (String(s.Akreditasyon || "").trim().toLowerCase() === "var") parts.push("*");
       parts.push(escHtml(s.HizmetAdi || ""));
       if (s.Metot) parts.push(`/ ${escHtml(s.Metot)}`);
-      const hizmetLabel = parts.join(" ");
+      const hizmetLabel = s.UygulananParametreler
+        ? `<strong>${parts.join(" ")}</strong><div style="font-size:11px;margin-top:5px;line-height:1.5;"><strong>Uygulanan parametreler:</strong>${s.UygulananParametreler.map(item => `<div>• ${escHtml(item)}</div>`).join("")}</div>`
+        : parts.join(" ");
 
       return `
         <tr>
@@ -247,6 +255,7 @@ export async function GET(
 }
 
 async function buildPreviewHtml(id: string, mesaj: string) {
+  await ensureTeklifPackageSchema();
   const pool = await cosmoPool;
   const cfg = await getAllSettings();
   const sirketAdi = cfg.SIRKET_ADI || process.env.SIRKET_ADI || "ÜGD";
@@ -277,7 +286,7 @@ async function buildPreviewHtml(id: string, mesaj: string) {
   const sRes = await pool.request()
     .input("TeklifID", Number(id))
     .query(`
-      SELECT HizmetAdi,
+      SELECT HizmetAdi, PaketGrup, PaketAdi, Notlar,
              ISNULL(Adet, 1)          AS Adet,
              ISNULL(Metot, '')        AS Metot,
              ISNULL(Akreditasyon, '') AS Akreditasyon,
@@ -309,7 +318,7 @@ async function buildPreviewHtml(id: string, mesaj: string) {
   });
   const pb = Object.entries(pbCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "TRY";
 
-  const satirHtml = satirlar.map((s, i) => {
+  const satirHtml = packageDisplayRows(satirlar).map((s, i) => {
     const adet = Number.parseInt(String(s.Adet ?? ""), 10) || 1;
     const fiyat = Number.parseFloat(String(s.Fiyat ?? "")) || 0;
     const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
@@ -318,7 +327,9 @@ async function buildPreviewHtml(id: string, mesaj: string) {
     if (String(s.Akreditasyon || "").trim().toLowerCase() === "var") parts.push("*");
     parts.push(escHtml(s.HizmetAdi || ""));
     if (s.Metot) parts.push(`/ ${escHtml(s.Metot)}`);
-    const hizmetLabel = parts.join(" ");
+    const hizmetLabel = s.UygulananParametreler
+        ? `<strong>${parts.join(" ")}</strong><div style="font-size:11px;margin-top:5px;line-height:1.5;"><strong>Uygulanan parametreler:</strong>${s.UygulananParametreler.map(item => `<div>• ${escHtml(item)}</div>`).join("")}</div>`
+        : parts.join(" ");
 
     return `
       <tr>

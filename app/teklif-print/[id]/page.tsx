@@ -1,3 +1,4 @@
+import { ensureTeklifPackageSchema } from "@/lib/teklifPackageSchema";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -24,6 +25,7 @@ export default async function TeklifPrintPage({
   const autoPrint = sp.print === "1";
   const pdfMode = sp.pdfMode === "1";
 
+  await ensureTeklifPackageSchema();
   const pool = await cosmoPool;
 
   const headerRes = await pool.request()
@@ -64,7 +66,7 @@ export default async function TeklifPrintPage({
         ISNULL(k.Metot, '') AS Metot,
         -- Snapshot bos veya null ise StokAnalizListesi'nden live degeri al
         ISNULL(NULLIF(LTRIM(RTRIM(ISNULL(k.Akreditasyon, ''))), ''), ISNULL(s.Akreditasyon, '')) AS Akreditasyon,
-        k.Notlar
+        k.Notlar, k.PaketGrup, k.PaketAdi
       FROM TeklifKalem k
       LEFT JOIN StokAnalizListesi s ON s.ID = k.HizmetID
       WHERE k.TeklifID = @TeklifID

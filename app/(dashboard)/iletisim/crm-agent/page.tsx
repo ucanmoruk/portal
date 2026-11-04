@@ -8,5 +8,5 @@ export default async function Page() {
   const user = await getPortalUser();
   if (!user) redirect("/login");
   if (!user.isAdmin && !user.can("musteriler.musteri-listesi") && !user.can("musteriler.notlar")) redirect("/");
-  return <div className={styles.page} style={{ maxWidth: 1200 }}><div className={styles.pageHeader}><div><h1 className={styles.pageTitle}>CRM Agent</h1><p className={styles.pageSubtitle}>Müşteri notları, teklifler, proformalar ve faturalar üzerinden firma özelinde veya genel CRM soruları sorun.</p></div></div><CrmAgentClient /></div>;
+  return <div className={styles.page} style={{ maxWidth: 1200 }}><div className={styles.pageHeader}><div><h1 className={styles.pageTitle}>CRM Agent</h1><p className={styles.pageSubtitle}>Müşteri taleplerini analiz edin, hizmet listesindeki fiyatlarla teklif ve e-posta yanıtı hazırlayın.</p></div></div><CrmAgentClient canManageKnowledge={user.isAdmin} /></div>;
 }

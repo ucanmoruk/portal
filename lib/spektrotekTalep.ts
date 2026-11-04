@@ -25,15 +25,26 @@ export function ensureSpektrotekTalepSchema(){
       Durum VARCHAR(40) NOT NULL DEFAULT 'Bekliyor',DurumTarihi DATETIME(3) NULL,DurumKullanici VARCHAR(100) NULL,
       OlusturmaTarihi DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),GuncellemeTarihi DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       Surum INT NOT NULL DEFAULT 1,KEY IX_SpektrotekTalep_Tarih (Tarih,Id),
-      CONSTRAINT CK_SpektrotekTalep_Durum CHECK (Durum IN ('Bekliyor','Teklif Gönderildi'))
+      CONSTRAINT CK_SpektrotekTalep_Durum CHECK (Durum IN ('Bekliyor','Teklif Gönderildi','Onaylandı','Uygun Değil','Ret'))
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci`:`IF OBJECT_ID('SpektrotekTalep','U') IS NULL BEGIN CREATE TABLE SpektrotekTalep (
       Id INT IDENTITY(1,1) PRIMARY KEY,KaynakId NVARCHAR(64) NOT NULL UNIQUE,Tarih DATETIME2(3) NOT NULL,
       MusteriAdi NVARCHAR(300) NOT NULL,KisiAdi NVARCHAR(200) NULL,Email NVARCHAR(320) NOT NULL,Talep NVARCHAR(300) NOT NULL,
       Ozet NVARCHAR(1000) NULL,Konu NVARCHAR(500) NULL,Hesap NVARCHAR(100) NOT NULL,Skor TINYINT NULL,
       Durum NVARCHAR(40) NOT NULL DEFAULT N'Bekliyor',DurumTarihi DATETIME2(3) NULL,DurumKullanici NVARCHAR(100) NULL,
       OlusturmaTarihi DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),GuncellemeTarihi DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),Surum INT NOT NULL DEFAULT 1,
-      CONSTRAINT CK_SpektrotekTalep_Durum CHECK (Durum IN (N'Bekliyor',N'Teklif Gönderildi')));
+      CONSTRAINT CK_SpektrotekTalep_Durum CHECK (Durum IN (N'Bekliyor',N'Teklif Gönderildi',N'Onaylandı',N'Uygun Değil',N'Ret')));
       CREATE INDEX IX_SpektrotekTalep_Tarih ON SpektrotekTalep (Tarih DESC,Id DESC); END`);
+    const pool = await cosmoPool;
+    if (hasMysqlConfig()) {
+      const constraints = await pool.request().query("SELECT CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND CONSTRAINT_NAME='CK_SpektrotekTalep_Durum'");
+      if (constraints.recordset.length && !String(constraints.recordset[0].CHECK_CLAUSE).includes("Onaylandı")) {
+        await pool.request().query("ALTER TABLE SpektrotekTalep DROP CONSTRAINT CK_SpektrotekTalep_Durum, ADD CONSTRAINT CK_SpektrotekTalep_Durum CHECK (Durum IN ('Bekliyor','Teklif Gönderildi','Onaylandı','Uygun Değil','Ret'))");
+      }
+    } else {
+      await pool.request().query(`IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name='CK_SpektrotekTalep_Durum' AND definition NOT LIKE N'%Onaylandı%') BEGIN
+        ALTER TABLE SpektrotekTalep DROP CONSTRAINT CK_SpektrotekTalep_Durum;
+        ALTER TABLE SpektrotekTalep ADD CONSTRAINT CK_SpektrotekTalep_Durum CHECK (Durum IN (N'Bekliyor',N'Teklif Gönderildi',N'Onaylandı',N'Uygun Değil',N'Ret')); END`);
+    }
     await (await cosmoPool).request().query(hasMysqlConfig()?"ALTER TABLE SpektrotekTalep ADD COLUMN IF NOT EXISTS Surum INT NOT NULL DEFAULT 1":"IF COL_LENGTH('SpektrotekTalep','Surum') IS NULL ALTER TABLE SpektrotekTalep ADD Surum INT NOT NULL DEFAULT 1");
   })().catch(error=>{ready=null;throw error;});return ready;
 }

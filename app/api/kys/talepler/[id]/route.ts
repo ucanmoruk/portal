@@ -84,7 +84,7 @@ export async function PATCH(
       return Response.json({ ok: true });
     }
     if(body.islem === "tedarikci-mail-gonder" || body.islem === "tedarikci-mail-tekrar") {
-      if(body.islem === "tedarikci-mail-gonder")await prepareSupplierMail(Number(id),body.tedarikciIds||[],body.ekAlicilar||[],body.yenidenGonder===true,body.gonderimAnahtari);
+      if(body.islem === "tedarikci-mail-gonder")await prepareSupplierMail(Number(id),body.tedarikciIds||[],body.ekAlicilar||[],body.yenidenGonder===true,body.gonderimAnahtari,body.ccAlicilar||[]);
       try {return Response.json({ok:true,mail:await sendQueuedSupplierMail(Number(id),true,{userId:user.userId,userName:user.userName})});}
       catch(error) {console.error("[KYS supplier mail]", error instanceof Error?error.message:"Gönderim hatası");return Response.json({error:"Mail gönderimi tamamlanamadı. Kayıtlı gönderim durumunu kontrol edin."},{status:503});}
     }

@@ -12,7 +12,7 @@ import SupplierApprovalDialog, { type SupplierMailSelection } from "../SupplierA
 import TalepEditModal from "../TalepEditModal";
 
 type Birim = { id: number; ad: string };
-type SupplierMail = { ID:string;TedarikciAd:string;Alicilar:string;Durum:string;Hata:string|null;CreatedAt:string;SentAt:string|null;AktifOnay:number;ZamanAsimi?:number;Asama?:string;BaslamaTarihi?:string|null };
+type SupplierMail = { ID:string;TedarikciAd:string;Alicilar:string;CcAlicilar?:string|null;Durum:string;Hata:string|null;CreatedAt:string;SentAt:string|null;AktifOnay:number;ZamanAsimi?:number;Asama?:string;BaslamaTarihi?:string|null };
 type Detail = { tedarikciMailleri?:SupplierMail[]; talep: any; kalemler: any[]; kabuller: any[]; belgeler?: any[]; satinAlmaYetkisi?: boolean };
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -295,8 +295,8 @@ export default function TalepDetayClient({ id }: { id: number }) {
 
       {Boolean(detail.tedarikciMailleri?.length)&&<section className={kys.mailAudit} aria-label="Tedarikçi mail gönderimleri">
         <h2>Tedarikçi mail gönderimleri</h2>
-        <p className={kys.mailEnvelope}>Gönderen: purchasing@uniquealphabet.com · CC: oguzhan@uniquealphabet.com, selin@uniquealphabet.com</p>
-        <div className={styles.tableWrapper}><table className={styles.table}><thead><tr><th>Tedarikçi / Alıcılar</th><th>Durum</th><th>Gönderim tarihi</th><th>Açıklama</th></tr></thead><tbody>{detail.tedarikciMailleri!.map(mail=><tr key={mail.ID}><td><strong>{mail.TedarikciAd}</strong><small className={kys.mailRecipients}>{JSON.parse(mail.Alicilar).join("; ")}</small></td><td>{mail.Durum==="Gönderiliyor"&&Number(mail.ZamanAsimi)?"Sonuç alınamadı":mail.Durum}{!Number(mail.AktifOnay)&&<small className={kys.mailRecipients}>Önceki gönderim</small>}</td><td>{mail.SentAt?new Date(mail.SentAt).toLocaleString("tr-TR"):"-"}</td><td>{mail.Hata||(mail.Durum==="Gönderiliyor"?(Number(mail.ZamanAsimi)?"10 dakika içinde sonuç alınamadı. Mail ulaşmış olabilir; yeniden göndermeden önce alıcıyı kontrol edin.":`${mail.Asama||"Gönderim hazırlanıyor"}. Durum otomatik güncellenir.`):"-")}</td></tr>)}</tbody></table></div>
+        <p className={kys.mailEnvelope}>Gönderen: purchasing@uniquealphabet.com · To ve CC alıcıları her gönderim kaydında ayrı gösterilir.</p>
+        <div className={styles.tableWrapper}><table className={styles.table}><thead><tr><th>Tedarikçi / Alıcılar</th><th>Durum</th><th>Gönderim tarihi</th><th>Açıklama</th></tr></thead><tbody>{detail.tedarikciMailleri!.map(mail=><tr key={mail.ID}><td><strong>{mail.TedarikciAd}</strong><small className={kys.mailRecipients}>{"To: " + JSON.parse(mail.Alicilar).join("; ")}</small><small className={kys.mailRecipients}>{mail.CcAlicilar != null ? "CC: " + (JSON.parse(mail.CcAlicilar).join("; ") || "Yok") : mail.Durum === "Gönderildi" ? "CC: oguzhan@uniquealphabet.com; selin@uniquealphabet.com (eski sabit kopya)" : "CC: Yok"}</small></td><td>{mail.Durum==="Gönderiliyor"&&Number(mail.ZamanAsimi)?"Sonuç alınamadı":mail.Durum}{!Number(mail.AktifOnay)&&<small className={kys.mailRecipients}>Önceki gönderim</small>}</td><td>{mail.SentAt?new Date(mail.SentAt).toLocaleString("tr-TR"):"-"}</td><td>{mail.Hata||(mail.Durum==="Gönderiliyor"?(Number(mail.ZamanAsimi)?"10 dakika içinde sonuç alınamadı. Mail ulaşmış olabilir; yeniden göndermeden önce alıcıyı kontrol edin.":`${mail.Asama||"Gönderim hazırlanıyor"}. Durum otomatik güncellenir.`):"-")}</td></tr>)}</tbody></table></div>
         {detail.tedarikciMailleri!.some(mail=>Number(mail.AktifOnay)&&["Hata","Bekliyor"].includes(mail.Durum))&&<button type="button" disabled={saving} className={styles.cancelBtn} onClick={()=>void retrySupplierMail()}>Gönderilemeyen mailleri tekrar dene</button>}
       </section>}
 

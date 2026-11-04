@@ -251,3 +251,12 @@ yaptığı gibi) — zorunlu değil.
 - **Tek kaynak**: `TeklifBaslik` / `TeklifKalem`. Müşteri portalı bunları okur, onay/red'i
   `TeklifDurum` + `TeklifOnayLog`'a yazar.
 - **Kod bağlanmaz**; format **kopyalanır**. Raporlar için de aynı desen uygulanacak.
+
+
+## Paket başlığı ve uygulanan parametreler (2026-11-03)
+
+`TeklifKalem.PaketGrup` (64 karakter, nullable) ve `PaketAdi` (300 karakter, nullable) paket başlığı görünümünü saklar. Her analiz kendi hizmet kimliği, fiyatı, adedi, indirimi ve metoduyla ayrı kalem olarak kalır. Alanlar boşsa eski ayrı satır görünümü kullanılır. Aynı paket tekrar eklendiğinde farklı grup kimliği verilir.
+
+Müşteri çıktısında aynı grup ve para birimindeki kalemleri tek başlık altında göstermek için `lib/teklifPackage.ts` içindeki `packageDisplayRows` kullanılmalıdır. Sonuçtaki `UygulananParametreler` başlığın altında listelenir. Paket tutarı analizlerin indirim sonrası toplamıdır; genel indirim ve KDV ayrıca uygulanır. Farklı para birimleri birleştirilmez. Adetler farklıysa başlık adedi 1 olur ve gerçek adetler parametre açıklamalarında korunur.
+
+Taşınabilir `TeklifPrintDocument.tsx` kopyalanırken bu yardımcı dosya da kopyalanmalı ve veri sorgusu `PaketGrup`, `PaketAdi` kolonlarını içermelidir. Bu depodaki yazdırma/PDF, e-posta ve Word çıktıları aynı gruplama kuralını kullanır.

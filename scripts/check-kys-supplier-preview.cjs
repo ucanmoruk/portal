@@ -20,13 +20,15 @@ async function run(){
   const css=globals+fs.readFileSync('app/styles/table.module.css','utf8')+fs.readFileSync('app/(dashboard)/laboratuvar/kys/kys.module.css','utf8');
   const renderPreview=(props={})=>{index=0;return `<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>${renderToStaticMarkup(React.createElement(Dialog,{requestNo:'2026-1001',onClose(){},onSend(){throw new Error('No sends in preview');},...props}))}</body></html>`;};
   const html=renderPreview();
+  assert(html.includes("Yok — yalnızca seçtiğiniz alıcılara gönderilir."));
+  assert(html.includes("Asıl alıcılar (To)"));
   const {chromium}=require('C:/Users/dazzl/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
   const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,timeout:20000});
   try{for(const width of [320,375,414,768]){
     const page=await browser.newPage({viewport:{width,height:900}});await page.setContent(html);
     const metrics=await page.locator('.approvalModal').evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth,left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right}));
     assert(metrics.scroll<=metrics.width+1&&metrics.left>=0&&metrics.right<=width,JSON.stringify(metrics));
-    assert.equal(await page.locator('input[type=checkbox]:disabled').count(),1);
+    assert.equal(await page.locator('input[type=radio]:disabled').count(),1);
     await page.locator('.approvalModal').screenshot({path:`tmp/kys-supplier-check/approval-${width}.png`});await page.close();
     console.log('PASS approval layout',width);
   }
@@ -42,6 +44,7 @@ async function run(){
     assert((await mailPage.locator('body>div').evaluate(el=>getComputedStyle(el).fontFamily)).includes('Tahoma'));
     await mailPage.screenshot({path:'tmp/kys-supplier-check/mail.png',fullPage:true});await mailPage.close();
   }finally{await browser.close();}
+  if(process.argv.includes('--layout-only')){console.log('PASS: supplier modal layout, To preview and opt-in CC; no mail or DB access.');return;}
   const {renderHtmlToPdf}=compile('lib/chromiumPdf.ts',{'@/lib/loadDotenv':{loadDotenvOnce(){}}});
   const snapshot={talepNo:'2026-1001',seri:'Unique',firmaAdi:'UNIQUE',olusturanAd:'Örnek Talep Eden',onaylayanAd:'Örnek Onaylayan',olusturmaTarihi:'2026-10-29',teknikSartname:'Ölçüm aralığı ve kalibrasyon sertifikası talebi.',notlar:'Teklif ve teslimat süresini bildiriniz.',kalemler:Array.from({length:35},(_,i)=>({kod:`MAT-${i+1}`,stokKod:'',malzemeAdi:'Ölçüm malzemesi – Türkçe karakter kontrolü',ozellik:'Ölçüm hassasiyeti ve teknik özellikler',marka:'Örnek',kullaniciNotu:'',miktar:2.5,birim:'Adet'}))};
   const logo=`data:image/png;base64,${fs.readFileSync('public/unique-logo.png').toString('base64')}`;

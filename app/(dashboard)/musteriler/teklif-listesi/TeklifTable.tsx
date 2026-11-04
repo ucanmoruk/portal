@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { Fragment, useEffect, useRef, useState, useCallback } from "react";
 import styles from "@/app/styles/table.module.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -34,9 +34,13 @@ interface Satir {
   metot: string;
   akreditasyon: string;
   notlar: string;
+  paketGrup?: string | null;
+  paketAdi?: string | null;
 }
 
 interface TeklifApiSatir {
+  PaketGrup?: string | null;
+  PaketAdi?: string | null;
   HizmetID: number | null;
   HizmetAdi: string | null;
   Adet: number | string | null;
@@ -214,6 +218,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   const [hizmetLoading, setHizmetLoading] = useState(false);
   const [paketler,      setPaketler]      = useState<PaketOpt[]>([]);
   const [paketLoading,  setPaketLoading]  = useState(false);
+  const [paketDisplayMode, setPaketDisplayMode] = useState<"ayri" | "baslik">("ayri");
   const [paketExpanded, setPaketExpanded] = useState<number | null>(null);
   const hizmetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -351,7 +356,10 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   // para birimini kullan — kullanıcı paraBirimi seçicisini sonradan değiştirirse
   // de tüm satırlar otomatik güncellenir (changeTeklifParaBirimi).
   function addHizmet(h: HizmetOpt)   { setSatirlar(p => [...p, { ...makeSatir(h), paraBirimi: teklifParaBirimi }]); }
-  function addPaket(pk: PaketOpt)    { setSatirlar(p => [...p, ...pk.items.map(it => ({ ...makeSatir(it), paraBirimi: teklifParaBirimi }))]); }
+  function addPaket(pk: PaketOpt) {
+    const group = paketDisplayMode === "baslik" ? crypto.randomUUID() : null;
+    setSatirlar(p => [...p, ...pk.items.map(it => ({ ...makeSatir(it), paraBirimi: teklifParaBirimi, paketGrup: group, paketAdi: group ? pk.ListeAdi : null }))]);
+  }
   function removeSatir(key: string)  { setSatirlar(p => p.filter(s => s._key !== key)); }
   function updateSatir(key: string, field: keyof Omit<Satir, "_key">, val: string) {
     setSatirlar(p => p.map(s => s._key === key ? { ...s, [field]: val } : s));
@@ -365,7 +373,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
   // ── open modal ─────────────────────────────────────────────────────────────
   function resetModal() {
     setMusteri(null); setMusteriQ(""); setMusteriOpts([]);
-    setSatirlar([]); setTeklifNotlar("");
+    setSatirlar([]); setTeklifNotlar(""); setPaketDisplayMode("ayri");
     setKisaAciklama("Fiyat teklifimiz");
     setKdvOran("20"); setGenelIskonto("0");
     setTeklifParaBirimi("TRY");
@@ -416,7 +424,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
           fiyat: s.Fiyat != null ? String(s.Fiyat) : "",
           paraBirimi: pbMajority, iskonto: s.Iskonto != null ? String(s.Iskonto) : "0",
           metot: s.Metot || "", akreditasyon: s.Akreditasyon || "",
-          notlar: s.Notlar || "",
+          notlar: s.Notlar || "", paketGrup: s.PaketGrup || null, paketAdi: s.PaketAdi || null,
         })));
       }
     } catch {} finally { setSatirLoading(false); }
@@ -447,7 +455,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
         fiyat: s.Fiyat != null ? String(s.Fiyat) : "",
         paraBirimi: s.ParaBirimi || "TRY", iskonto: s.Iskonto != null ? String(s.Iskonto) : "0",
         metot: s.Metot || "", akreditasyon: s.Akreditasyon || "",
-        notlar: s.Notlar || "",
+        notlar: s.Notlar || "", paketGrup: s.PaketGrup || null, paketAdi: s.PaketAdi || null,
       })));
     }).catch(() => {}).finally(() => setSatirLoading(false));
   }
@@ -487,7 +495,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
           fiyat: s.Fiyat != null ? String(s.Fiyat) : "",
           paraBirimi: pbMajority, iskonto: s.Iskonto != null ? String(s.Iskonto) : "0",
           metot: s.Metot || "", akreditasyon: s.Akreditasyon || "",
-          notlar: s.Notlar || "",
+          notlar: s.Notlar || "", paketGrup: s.PaketGrup || null, paketAdi: s.PaketAdi || null,
         })));
       }
     }).catch(() => {}).finally(() => setSatirLoading(false));
@@ -515,6 +523,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
     setSaveErr("");
     if (!musteri)               { setSaveErr("Müşteri seçimi zorunludur."); return; }
     if (satirlar.length === 0)  { setSaveErr("En az bir hizmet eklemelisiniz."); return; }
+    if (satirlar.some(s => s.paketGrup && !s.paketAdi?.trim())) { setSaveErr("Paket başlığı boş bırakılamaz."); return; }
 
     if (modalMode === "edit") {
       // İlk Kaydet tıklamasında revize diyaloğunu aç
@@ -539,7 +548,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
         hizmetId: s.hizmetId, hizmetAdi: s.hizmetAdi,
         adet: s.adet, fiyat: s.fiyat, paraBirimi: s.paraBirimi,
         iskonto: s.iskonto, metot: s.metot, akreditasyon: s.akreditasyon,
-        notlar: s.notlar,
+        notlar: s.notlar, paketGrup: s.paketGrup, paketAdi: s.paketAdi,
       })),
       notlar:       teklifNotlar,
       teklifKonusu: "Fiyat teklifimiz",
@@ -1052,6 +1061,12 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
 
                 {addMode === "paket" && (
                   <div style={panelStyle}>
+                    <label style={{ display: "block", marginBottom: 12 }}>Paketi teklifte gösterme biçimi
+                      <select value={paketDisplayMode} onChange={e => setPaketDisplayMode(e.target.value as "ayri" | "baslik")} style={{ marginLeft: 8 }}>
+                        <option value="ayri">Analizleri ayrı satırlar olarak ekle</option>
+                        <option value="baslik">Paket başlığı ve uygulanan parametreler</option>
+                      </select>
+                    </label>
                     {paketLoading
                       ? <p style={smallText}>Yükleniyor...</p>
                       : paketler.length === 0
@@ -1067,7 +1082,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                                     {p.Aciklama && <span style={{ color: "var(--color-text-secondary)", fontSize: 12, marginLeft: 8 }}>— {p.Aciklama}</span>}
                                   </div>
                                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                    <button style={smallAddBtnStyle} onMouseDown={e => { e.stopPropagation(); addPaket(p); }}>Tümünü Ekle</button>
+                                    <button style={smallAddBtnStyle} type="button" disabled={!p.items.length} onClick={e => { e.stopPropagation(); addPaket(p); }}>Tümünü Ekle</button>
                                     <span style={{ color: "var(--color-text-tertiary)", fontSize: 12 }}>{paketExpanded === p.ID ? "▲" : "▼"}</span>
                                   </div>
                                 </div>
@@ -1111,8 +1126,15 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {satirlar.map(s => (
-                          <tr key={s._key} style={{ borderBottom: "1px solid var(--color-border)" }}>
+                        {satirlar.map((s, index) => (
+                          <Fragment key={s._key}>
+                          {s.paketGrup && (index === 0 || satirlar[index - 1].paketGrup !== s.paketGrup) && <tr style={{ background: "var(--color-surface-2)" }}><td colSpan={8} style={{ ...tdStyle, padding: 12 }}>
+                            <input maxLength={300} aria-label="Paket başlığı" style={{ ...cellInputStyle, fontWeight: 700, maxWidth: 480 }} value={s.paketAdi || ""} onChange={e => setSatirlar(rows => rows.map(row => row.paketGrup === s.paketGrup ? { ...row, paketAdi: e.target.value } : row))} />
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}><strong style={{ fontSize: 12 }}>Uygulanan parametreler</strong>
+                              <button type="button" style={{ fontSize: 11 }} onClick={() => setSatirlar(rows => rows.map(row => row.paketGrup === s.paketGrup ? { ...row, paketGrup: null, paketAdi: null } : row))}>Ayrı satırlara dönüştür</button>
+                            </div>
+                          </td></tr>}
+                          <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
                             <td style={tdStyle}>
                               <input
                                 style={{ ...cellInputStyle, minWidth: 220, fontWeight: 500 }}
@@ -1159,6 +1181,7 @@ export default function TeklifTable({ userName = "" }: { userName?: string }) {
                                 style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-danger)", fontSize: 16, padding: "0 4px" }}>×</button>
                             </td>
                           </tr>
+                          </Fragment>
                         ))}
                       </tbody>
                     </table>

@@ -9,7 +9,7 @@ import { ensureKysPurchaseSchema } from "@/lib/kysPurchaseWorkflow";
 import { getAllSettings } from "@/lib/settings";
 import { renderHtmlToPdf } from "@/lib/chromiumPdf";
 import { kysRequestCompany } from "@/lib/kysRequestCompany";
-import { PURCHASING_CC, PURCHASING_FROM, purchaseFormHtml, supplierMailContent, supplierEmails, type PurchaseMailSnapshot } from "@/lib/kysSupplierMailPolicy";
+import { selectedSupplierCc, PURCHASING_FROM, purchaseFormHtml, supplierMailContent, supplierEmails, type PurchaseMailSnapshot } from "@/lib/kysSupplierMailPolicy";
 
 type Executor = Pick<ConnectionPool,"request">;
 let ready: Promise<void> | null = null;
@@ -26,6 +26,7 @@ export async function ensureSupplierMailSchema() {
         CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, SentAt DATETIME NULL,
         UNIQUE KEY UX_TalepMail_Onay (OnayID,TedarikciID), KEY IX_TalepMail_Talep (TalepID)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci`);
+      await pool.request().query("ALTER TABLE KysTalepTedarikciMail ADD COLUMN IF NOT EXISTS CcAlicilar TEXT NULL");
       await pool.request().query("ALTER TABLE KysTalepTedarikciMail ADD COLUMN IF NOT EXISTS BaslamaTarihi DATETIME NULL, ADD COLUMN IF NOT EXISTS Asama VARCHAR(40) NULL");
     } else {
       await pool.request().query("IF COL_LENGTH('KysTalep','MailOnayID') IS NULL ALTER TABLE KysTalep ADD MailOnayID NVARCHAR(36) NULL");
@@ -35,6 +36,7 @@ export async function ensureSupplierMailSchema() {
         Durum NVARCHAR(24) NOT NULL DEFAULT 'Bekliyor', Hata NVARCHAR(MAX) NULL, MesajID NVARCHAR(255) NULL,
         CreatedAt DATETIME NOT NULL DEFAULT GETDATE(), SentAt DATETIME NULL,
         CONSTRAINT UX_TalepMail_Onay UNIQUE (OnayID,TedarikciID))`);
+      await pool.request().query("IF COL_LENGTH('KysTalepTedarikciMail','CcAlicilar') IS NULL ALTER TABLE KysTalepTedarikciMail ADD CcAlicilar NVARCHAR(MAX) NULL");
       await pool.request().query("IF COL_LENGTH('KysTalepTedarikciMail','BaslamaTarihi') IS NULL ALTER TABLE KysTalepTedarikciMail ADD BaslamaTarihi DATETIME NULL; IF COL_LENGTH('KysTalepTedarikciMail','Asama') IS NULL ALTER TABLE KysTalepTedarikciMail ADD Asama NVARCHAR(40) NULL;");
     }
   })().catch(error=>{ready=null;throw error;});
@@ -42,30 +44,22 @@ export async function ensureSupplierMailSchema() {
 }
 
 // Called inside the send preparation transaction: addresses and form contents are frozen together.
-export async function queueSupplierMail(tx:Executor, requestId:number, approvalId:string, ids:unknown, snapshot:PurchaseMailSnapshot, extra:unknown=[]){
+export async function queueSupplierMail(tx:Executor, requestId:number, approvalId:string, ids:unknown, snapshot:PurchaseMailSnapshot, extra:unknown=[], ccInput:unknown=[]){
   if(!Array.isArray(ids)||!Array.isArray(extra))throw new Error("Alıcı seçimi geçersiz.");
   const supplierIds=[...new Set(ids.map(Number))];
-  if(supplierIds.some(id=>!Number.isSafeInteger(id)||id<=0))throw new Error("Tedarikçi seçimi geçersiz.");
-  const recipients:Array<{id:number;name:string;addresses:string[]}>=[];
-  for(const supplierId of supplierIds){
-    const supplier=(await tx.request().input("ID",supplierId).query("SELECT ID,Ad,Email FROM KysTedarikci WHERE ID=@ID AND Durum='Aktif'")).recordset[0];
-    if(!supplier)throw new Error("Seçili tedarikçi bulunamadı veya pasif.");
-    const addresses=supplierEmails(supplier.Email);
-    if(!addresses.length)throw new Error(`${supplier.Ad}: en az bir e-posta adresi kaydedilmelidir.`);
-    recipients.push({id:supplierId,name:supplier.Ad,addresses});
-  }
-  const known=new Set(recipients.flatMap(recipient=>recipient.addresses));
-  const manual=supplierEmails(extra.join(";")).filter(address=>!known.has(address));
-  manual.forEach((address,index)=>recipients.push({id:-index-1,name:"Manuel alıcı",addresses:[address]}));
-  if(!recipients.length||recipients.length>50)throw new Error("1–50 tedarikçi veya e-posta adresi seçin.");
-  for(const recipient of recipients){
-    await tx.request().input("ID",randomUUID()).input("OnayID",approvalId).input("TalepID",requestId).input("TedarikciID",recipient.id).input("Ad",recipient.name).input("Alicilar",JSON.stringify(recipient.addresses)).input("Form",JSON.stringify(snapshot))
-      .query("INSERT INTO KysTalepTedarikciMail (ID,OnayID,TalepID,TedarikciID,TedarikciAd,Alicilar,FormJson) VALUES (@ID,@OnayID,@TalepID,@TedarikciID,@Ad,@Alicilar,@Form)");
-  }
+  if(supplierIds.length!==1||supplierIds.some(id=>!Number.isSafeInteger(id)||id<=0))throw new Error("Tek bir e-posta için bir tedarikçi seçin. Ek adresleri CC alanına yazın.");
+  const supplierId=supplierIds[0];
+  const supplier=(await tx.request().input("ID",supplierId).query("SELECT ID,Ad,Email FROM KysTedarikci WHERE ID=@ID AND Durum='Aktif'")).recordset[0];
+  if(!supplier)throw new Error("Seçili tedarikçi bulunamadı veya pasif.");
+  const addresses=supplierEmails(supplier.Email);
+  if(!addresses.length)throw new Error(`${supplier.Ad}: en az bir e-posta adresi kaydedilmelidir.`);
+  const cc=selectedSupplierCc([...selectedSupplierCc(ccInput),...selectedSupplierCc(extra)]).filter(address=>!addresses.includes(address));
+  await tx.request().input("ID",randomUUID()).input("OnayID",approvalId).input("TalepID",requestId).input("TedarikciID",supplierId).input("Ad",supplier.Ad).input("Alicilar",JSON.stringify(addresses)).input("CcAlicilar",JSON.stringify(cc)).input("Form",JSON.stringify(snapshot))
+    .query("INSERT INTO KysTalepTedarikciMail (ID,OnayID,TalepID,TedarikciID,TedarikciAd,Alicilar,CcAlicilar,FormJson) VALUES (@ID,@OnayID,@TalepID,@TedarikciID,@Ad,@Alicilar,@CcAlicilar,@Form)");
 }
 
 const staleSql=(alias="m")=>hasMysqlConfig()?`TIMESTAMPDIFF(SECOND,COALESCE(${alias}.BaslamaTarihi,${alias}.CreatedAt),CURRENT_TIMESTAMP)>600`:`DATEDIFF(second,COALESCE(${alias}.BaslamaTarihi,${alias}.CreatedAt),GETDATE())>600`;
-export async function prepareSupplierMail(requestId:number,ids:unknown,extra:unknown=[],resend=false,sendKey?:string){
+export async function prepareSupplierMail(requestId:number,ids:unknown,extra:unknown=[],resend=false,sendKey?:string,ccInput:unknown=[]){
   await ensureSupplierMailSchema();
   const pool=await cosmoPool;
   const tx=await pool.transaction();await tx.begin();
@@ -81,7 +75,7 @@ export async function prepareSupplierMail(requestId:number,ids:unknown,extra:unk
     const {getKysRequestDetail}=await import("@/lib/kysStore");
     const detail=await getKysRequestDetail(requestId,false,tx);
     if(!detail)throw new Error("Talep bulunamadı.");
-    await queueSupplierMail(tx,requestId,approvalId,ids,{...detail.talep,kalemler:detail.kalemler},extra);
+    await queueSupplierMail(tx,requestId,approvalId,ids,{...detail.talep,kalemler:detail.kalemler},extra,ccInput);
     await tx.request().input("ID",requestId).input("MailOnayID",approvalId).query("UPDATE KysTalep SET MailOnayID=@MailOnayID WHERE ID=@ID");
     await tx.commit();
   }catch(error){await tx.rollback();throw error;}
@@ -133,7 +127,7 @@ export async function sendQueuedSupplierMail(requestId:number,retry=false,actor:
         attempted=true;
         const content=supplierMailContent();
         const info=await transporter.sendMail({
-          from:{name:"UNIQUE Satın Alma",address:PURCHASING_FROM},replyTo:PURCHASING_FROM,to,cc:PURCHASING_CC,
+          from:{name:"UNIQUE Satın Alma",address:PURCHASING_FROM},replyTo:PURCHASING_FROM,to,cc:selectedSupplierCc(job.CcAlicilar?JSON.parse(job.CcAlicilar):[]).filter(address=>!to.includes(address)),
           messageId:`<kys-request-${job.ID}@uniquealphabet.com>`,subject:`Talep Formu – ${snapshot.talepNo}`,
           ...content,
           attachments:[{filename:`Talep-${snapshot.talepNo.replace(/[^a-zA-Z0-9_-]/g,"-")}.pdf`,content:pdf,contentType:"application/pdf"},{filename:"unique-logo.png",path:path.join(process.cwd(),"public","unique-logo.png"),cid:"purchasing-signature"}],
@@ -162,7 +156,7 @@ export async function sendQueuedSupplierMail(requestId:number,retry=false,actor:
 export async function listSupplierMail(requestId:number) {
   await ensureSupplierMailSchema();
   const pool=await cosmoPool;
-  return (await pool.request().input("ID",requestId).query(`SELECT m.ID,m.TedarikciAd,m.Alicilar,m.Durum,m.Hata,m.CreatedAt,m.SentAt,m.BaslamaTarihi,m.Asama,
+  return (await pool.request().input("ID",requestId).query(`SELECT m.ID,m.TedarikciAd,m.Alicilar,m.CcAlicilar,m.Durum,m.Hata,m.CreatedAt,m.SentAt,m.BaslamaTarihi,m.Asama,
     CASE WHEN ${staleSql()} THEN 1 ELSE 0 END AS ZamanAsimi,
     CASE WHEN t.MailOnayID=m.OnayID THEN 1 ELSE 0 END AS AktifOnay
     FROM KysTalepTedarikciMail m INNER JOIN KysTalep t ON t.ID=m.TalepID WHERE m.TalepID=@ID ORDER BY m.CreatedAt DESC,m.ID`)).recordset;

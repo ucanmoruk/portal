@@ -1,3 +1,4 @@
+import { ensureTeklifPackageSchema, packageInput } from "@/lib/teklifPackageSchema";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -30,6 +31,7 @@ export async function GET(
   }
 
   try {
+    await ensureTeklifPackageSchema();
     const pool = await cosmoPool;
 
     const headerRes = await pool.request()
@@ -69,7 +71,7 @@ export async function GET(
                ISNULL(Adet,1)   AS Adet,
                ISNULL(Metot,'') AS Metot,
                ISNULL(Akreditasyon,'') AS Akreditasyon,
-               Fiyat, ParaBirimi, Iskonto, Notlar
+               Fiyat, ParaBirimi, Iskonto, Notlar, PaketGrup, PaketAdi
         FROM TeklifKalem
         WHERE TeklifID = @TeklifID
         ORDER BY ID
@@ -159,6 +161,8 @@ export async function PUT(
       return sum + adet * (parseFloat(s.fiyat) || 0) * (1 - (parseFloat(s.iskonto) || 0) / 100);
     }, 0);
 
+    for (const row of satirlar) packageInput(row);
+    await ensureTeklifPackageSchema();
     const pool     = await cosmoPool;
     const teklifId = Number(id);
 
@@ -198,6 +202,7 @@ export async function PUT(
       .query(`DELETE FROM TeklifKalem WHERE TeklifID = @TeklifID`);
 
     for (const s of satirlar) {
+      const paket = packageInput(s);
       await pool.request()
         .input("TeklifID",   teklifId)
         .input("HizmetID",    s.hizmetId      || null)
@@ -209,9 +214,10 @@ export async function PUT(
         .input("ParaBirimi",  s.paraBirimi    || "TRY")
         .input("Iskonto",     parseFloat(s.iskonto) || 0)
         .input("Notlar",      s.notlar        || null)
+        .input("PaketGrup", paket.group).input("PaketAdi", paket.title)
         .query(`
-          INSERT INTO TeklifKalem (TeklifID, HizmetID, HizmetAdi, Adet, Metot, Akreditasyon, Fiyat, ParaBirimi, Iskonto, Notlar)
-          VALUES (@TeklifID, @HizmetID, @HizmetAdi, @Adet, @Metot, @Akreditasyon, @Fiyat, @ParaBirimi, @Iskonto, @Notlar)
+          INSERT INTO TeklifKalem (TeklifID, HizmetID, HizmetAdi, Adet, Metot, Akreditasyon, Fiyat, ParaBirimi, Iskonto, Notlar, PaketGrup, PaketAdi)
+          VALUES (@TeklifID, @HizmetID, @HizmetAdi, @Adet, @Metot, @Akreditasyon, @Fiyat, @ParaBirimi, @Iskonto, @Notlar, @PaketGrup, @PaketAdi)
         `);
     }
 

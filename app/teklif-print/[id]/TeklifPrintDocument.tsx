@@ -1,3 +1,4 @@
+import { packageDisplayRows } from "@/lib/teklifPackage";
 import { JetBrains_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import { ttInterphases } from "@/app/fonts/reportFonts";
@@ -44,6 +45,8 @@ export interface TeklifHeader {
 }
 
 export interface TeklifSatir {
+  PaketGrup?: string | null;
+  PaketAdi?: string | null;
   HizmetAdi: string;
   Adet: number | string | null;
   Fiyat: number | string | null;
@@ -409,7 +412,7 @@ export default function TeklifPrintDocument({
               </tr>
             </thead>
             <tbody>
-              {satirlar.map((s, i) => {
+              {packageDisplayRows(satirlar).map((s, i) => {
                 const adet = Number.parseInt(String(s.Adet ?? ""), 10) || 1;
                 const fiyat = numOrNull(s.Fiyat);
                 const iskonto = Number.parseFloat(String(s.Iskonto ?? "")) || 0;
@@ -419,7 +422,7 @@ export default function TeklifPrintDocument({
                 return (
                   <tr key={i}>
                     <td className="center no">{i + 1}.</td>
-                    <td><div>{adi}</div>{s.Notlar?.trim() && <div className="service-note">{s.Notlar.trim()}</div>}</td>
+                    <td><div style={s.UygulananParametreler ? { fontWeight: 700 } : undefined}>{adi}</div>{s.UygulananParametreler && <div className="service-note" style={{ fontStyle: "normal" }}><strong>Uygulanan parametreler:</strong>{s.UygulananParametreler.map((parameter, index) => <div key={index}>• {parameter}</div>)}</div>}{s.Notlar?.trim() && <div className="service-note">{s.Notlar.trim()}</div>}</td>
                     <td className="center">{adet}</td>
                     <td className="right">
                       {fiyat != null

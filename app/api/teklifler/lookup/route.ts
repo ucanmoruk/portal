@@ -83,6 +83,8 @@ export async function GET(request: NextRequest) {
           ISNULL(s.Ad, '')  AS HizmetAdi,
           ISNULL(s.Kod, '') AS Kod,
           s.Fiyat,
+          ISNULL(s.Method, ISNULL(s.Metot,'')) AS Metot,
+          ISNULL(s.Akreditasyon,'') AS Akreditasyon,
           ISNULL(s.ParaBirimi, 'TRY') AS ParaBirimi
         FROM NumuneX4 x4
         JOIN StokAnalizListesi s ON s.ID = x4.AltAnalizID

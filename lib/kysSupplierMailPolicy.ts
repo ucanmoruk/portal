@@ -1,6 +1,11 @@
 import { requestFormDocument } from "./kysRequestForm";
 export const PURCHASING_FROM = "purchasing@uniquealphabet.com";
 export const PURCHASING_CC = ["oguzhan@uniquealphabet.com", "selin@uniquealphabet.com"];
+// These are suggestions only; never automatically add them to a message.
+export function selectedSupplierCc(value: unknown = []) {
+  if (!Array.isArray(value) || value.length > 50 || value.some(item => typeof item !== "string")) throw new Error("CC alıcı seçimi geçersiz.");
+  return supplierEmails(value.join(";"));
+}
 
 export function supplierEmails(value: unknown) {
   const addresses = String(value ?? "").split(/[;,\s]+/).map(address=>address.trim().toLowerCase()).filter(Boolean);

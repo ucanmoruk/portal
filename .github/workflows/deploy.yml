@@ -48,6 +48,9 @@ jobs:
           mkdir -p deploy/public
           cp -r public/. deploy/public/
           mkdir -p deploy/tmp
+          mkdir -p deploy/scripts
+          cp scripts/run-kys-telegram.mjs deploy/scripts/run-kys-telegram.mjs
+          cp scripts/run-kys-telegram.sh deploy/scripts/run-kys-telegram.sh
           date -u +"%Y-%m-%dT%H:%M:%SZ build:${GITHUB_SHA}" > deploy/tmp/restart.txt
 
       - name: Create tarball

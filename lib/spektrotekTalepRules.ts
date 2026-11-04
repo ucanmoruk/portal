@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const SPEKTROTEK_TALEP_DURUMLAR=["Bekliyor","Teklif Gönderildi"] as const;
+export const SPEKTROTEK_TALEP_DURUMLAR=["Bekliyor","Teklif Gönderildi","Onaylandı","Uygun Değil","Ret"] as const;
 export type SpektrotekTalepDurum=typeof SPEKTROTEK_TALEP_DURUMLAR[number];
 const fields={
   tarih:z.string().datetime({offset:true}),

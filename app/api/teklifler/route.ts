@@ -1,3 +1,4 @@
+import { ensureTeklifPackageSchema, packageInput } from "@/lib/teklifPackageSchema";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
@@ -24,7 +25,8 @@ async function ensureTables() {
       throw error;
     });
   }
-  return teklifTablesReady;
+  await teklifTablesReady;
+  await ensureTeklifPackageSchema();
 }
 
 async function ensureTablesUncached() {
@@ -102,6 +104,7 @@ async function genUniqueDisKod(pool: any): Promise<string> {
 
 async function insertSatirlar(pool: any, teklifId: number, satirlar: any[]) {
   for (const s of satirlar) {
+    const paket = packageInput(s);
     await pool.request()
       .input("TeklifID",    teklifId)
       .input("HizmetID",    s.hizmetId      || null)
@@ -113,9 +116,10 @@ async function insertSatirlar(pool: any, teklifId: number, satirlar: any[]) {
       .input("ParaBirimi",  s.paraBirimi    || "TRY")
       .input("Iskonto",     parseFloat(s.iskonto) || 0)
       .input("Notlar",      s.notlar        || null)
+      .input("PaketGrup", paket.group).input("PaketAdi", paket.title)
       .query(`
-        INSERT INTO TeklifKalem (TeklifID, HizmetID, HizmetAdi, Adet, Metot, Akreditasyon, Fiyat, ParaBirimi, Iskonto, Notlar)
-        VALUES (@TeklifID, @HizmetID, @HizmetAdi, @Adet, @Metot, @Akreditasyon, @Fiyat, @ParaBirimi, @Iskonto, @Notlar)
+        INSERT INTO TeklifKalem (TeklifID, HizmetID, HizmetAdi, Adet, Metot, Akreditasyon, Fiyat, ParaBirimi, Iskonto, Notlar, PaketGrup, PaketAdi)
+        VALUES (@TeklifID, @HizmetID, @HizmetAdi, @Adet, @Metot, @Akreditasyon, @Fiyat, @ParaBirimi, @Iskonto, @Notlar, @PaketGrup, @PaketAdi)
       `);
   }
 }
@@ -253,6 +257,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "En az bir hizmet eklemelisiniz." }, { status: 400 });
     }
 
+    for (const row of satirlar) packageInput(row);
     const toplam = calcToplam(satirlar);
     const pool   = await cosmoPool;
 

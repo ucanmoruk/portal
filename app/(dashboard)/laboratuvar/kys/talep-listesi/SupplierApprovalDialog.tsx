@@ -6,7 +6,7 @@ import styles from "@/app/styles/table.module.css";
 import kys from "../kys.module.css";
 
 type Supplier={ID:number;Ad:string;Email:string};
-export type SupplierMailSelection={tedarikciIds:number[];ekAlicilar:string[];yenidenGonder:boolean;gonderimAnahtari:string};
+export type SupplierMailSelection={tedarikciIds:number[];ekAlicilar:string[];yenidenGonder:boolean;gonderimAnahtari:string;ccAlicilar:string[]};
 export default function SupplierApprovalDialog({requestNo,onClose,onSend,hasPrevious=false,sendingInProgress=false}:{requestNo:string;onClose:()=>void;onSend:(selection:SupplierMailSelection)=>Promise<boolean>;hasPrevious?:boolean;sendingInProgress?:boolean}){
   const [suppliers,setSuppliers]=useState<Supplier[]>([]);
   const [selected,setSelected]=useState<number[]>([]);
@@ -18,6 +18,7 @@ export default function SupplierApprovalDialog({requestNo,onClose,onSend,hasPrev
   const [manual,setManual]=useState("");
   const [resend,setResend]=useState(false);
   const [sendKey]=useState(()=>globalThis.crypto.randomUUID());
+  const [copyInternal,setCopyInternal]=useState(false);
   useEffect(()=>{
     const controller=new AbortController();
     fetch("/api/kys/talepler/tedarikciler",{signal:controller.signal}).then(async response=>{
@@ -31,9 +32,9 @@ export default function SupplierApprovalDialog({requestNo,onClose,onSend,hasPrev
     setError("");
     try{
       const extra=supplierEmails(manual);
-      if(!selected.length&&!extra.length){setError("En az bir tedarikçi veya e-posta adresi girin.");return;}
+      if(selected.length!==1){setError("Ana alıcı olarak bir tedarikçi seçin. Ek adresler CC olarak gönderilir.");return;}
       setBusy(true);
-      if(await onSend({tedarikciIds:selected,ekAlicilar:extra,yenidenGonder:resend,gonderimAnahtari:sendKey}))onClose();else setError("Gönderim tamamlanamadı. Talep detayındaki hata mesajını kontrol edin.");}
+      if(await onSend({tedarikciIds:selected,ekAlicilar:extra,yenidenGonder:resend,gonderimAnahtari:sendKey,ccAlicilar:copyInternal?[...PURCHASING_CC]:[]}))onClose();else setError("Gönderim tamamlanamadı. Talep detayındaki hata mesajını kontrol edin.");}
     catch(error){setError(error instanceof Error?error.message:"Gönderim tamamlanamadı.");}
     finally{setBusy(false);}
   }
@@ -47,27 +48,29 @@ export default function SupplierApprovalDialog({requestNo,onClose,onSend,hasPrev
         else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
       }
     }}>
-    <header className={styles.modalHeader}><h2 id="supplier-approval-title">Talep formunu tedarikçilere gönder</h2></header>
+    <header className={styles.modalHeader}><h2 id="supplier-approval-title">Talep formunu tedarikçiye gönder</h2></header>
     <div className={styles.modalBody}>
-    <p><strong>{requestNo}</strong> için seçilen her tedarikçiye ayrı bir e-posta gönderilir. Onaylanan talep formu PDF olarak eklenir.</p>
-    <p className={kys.mailEnvelope}>Gönderen: {PURCHASING_FROM}<br/>CC: {PURCHASING_CC.join(", ")}</p>
+    <p><strong>{requestNo}</strong> için tek bir e-posta gönderilir. Tedarikçi ana alıcıdır; ek adresler CC’ye eklenir. Onaylanan talep formu PDF olarak eklenir.</p>
+    <p className={kys.mailEnvelope}>Gönderen: {PURCHASING_FROM}<br/>CC: {[manual.trim(),copyInternal?PURCHASING_CC.join(", "):""].filter(Boolean).join("; ")||"Yok — yalnızca seçtiğiniz alıcılara gönderilir."}</p>
     {error&&<p role="alert" className={styles.errorBar}>{error}</p>}
     {sendingInProgress&&<p role="status">Bir mail gönderimi hâlâ sürüyor. Sonuçlanınca yeniden gönderebilirsiniz.</p>}
-    <button autoFocus type="button" className={styles.cancelBtn} disabled={busy||loading} aria-expanded={listOpen} aria-controls="supplier-mail-options" onClick={()=>setListOpen(open=>!open)}>{loading?"Tedarikçiler yükleniyor…":selected.length?`${selected.length} tedarikçi seçildi` :"Tedarikçi seç…"}</button>
+    <button autoFocus type="button" className={styles.cancelBtn} disabled={busy||loading} aria-expanded={listOpen} aria-controls="supplier-mail-options" onClick={()=>setListOpen(open=>!open)}>{loading?"Tedarikçiler yükleniyor…":selected.length?"Tedarikçi seçildi" :"Tedarikçi seç…"}</button>
     {selected.length>0&&<div className={kys.supplierSelected}>{selected.map(id=><span key={id}>{suppliers.find(s=>s.ID===id)?.Ad}<button type="button" disabled={busy} aria-label={`${suppliers.find(s=>s.ID===id)?.Ad} seçimini kaldır`} onClick={()=>setSelected(ids=>ids.filter(value=>value!==id))}>×</button></span>)}</div>}
     {listOpen&&<div id="supplier-mail-options" className={kys.supplierDropdown}>
     <input disabled={busy} className={styles.searchInput} aria-label="Tedarikçi ara" placeholder="Firma veya e-posta ara" value={search} onChange={event=>setSearch(event.target.value)}/>
     <div className={kys.supplierChoices}>
       {loading?<p>Yükleniyor…</p>:rows.length?rows.map(supplier=>{
         let addresses:string[]=[];try{addresses=supplierEmails(supplier.Email);}catch{/* Invalid addresses cannot be selected. */}
-        return <label key={supplier.ID}><input type="checkbox" disabled={busy||!addresses.length||(!selected.includes(supplier.ID)&&selected.length>=50)} checked={selected.includes(supplier.ID)} onChange={event=>setSelected(ids=>event.target.checked?[...ids,supplier.ID]:ids.filter(id=>id!==supplier.ID))}/><span><strong>{supplier.Ad}</strong><small>{addresses.length?addresses.join("; "):"Geçerli e-posta adresi kaydedilmemiş."}</small></span></label>;
+        return <label key={supplier.ID}><input type="radio" name="supplier-primary-recipient" disabled={busy||!addresses.length} checked={selected.includes(supplier.ID)} onChange={()=>setSelected([supplier.ID])}/><span><strong>{supplier.Ad}</strong><small>{addresses.length?addresses.join("; "):"Geçerli e-posta adresi kaydedilmemiş."}</small></span></label>;
       }):<p>Tedarikçi bulunamadı.</p>}
     </div>
     <button type="button" className={styles.cancelBtn} onClick={()=>setListOpen(false)}>Seçimi tamamla</button>
     </div>}
-    <label className={kys.manualRecipient}>Listede olmayan alıcılar<textarea rows={2} disabled={busy} value={manual} onChange={event=>setManual(event.target.value)} placeholder="teklif@firma.com; satis@digerfirma.com"/><small>Adresleri virgül veya noktalı virgülle ayırın. Tedarikçi listesine kaydedilmez; her adrese ayrı mail gönderilir.</small></label>
+    <label className={kys.manualRecipient}>Ek alıcılar (CC)<textarea rows={2} disabled={busy} value={manual} onChange={event=>setManual(event.target.value)} placeholder="teklif@firma.com; satis@digerfirma.com"/><small>Adresleri virgül veya noktalı virgülle ayırın. Tedarikçi listesine kaydedilmez; aynı e-postanın kopyası gönderilir.</small></label>
+    <label className={kys.resendConfirmation}><input type="checkbox" disabled={busy} checked={copyInternal} onChange={event=>setCopyInternal(event.target.checked)}/><span>İç ekibe kopya gönder (CC): {PURCHASING_CC.join(", ")}</span></label>
+    <div className={kys.recipientPreview}><strong>Asıl alıcılar (To)</strong>{selected.length ? <ul>{selected.map(id => <li key={id}>{suppliers.find(s=>s.ID===id)?.Ad} — {suppliers.find(s=>s.ID===id)?.Email}</li>)}</ul> : null}{manual.trim() && <p>CC: {manual}</p>}{!selected.length&&!manual.trim()&&<p>Henüz alıcı seçilmedi.</p>}</div>
     {hasPrevious&&<label className={kys.resendConfirmation}><input type="checkbox" disabled={busy} checked={resend} onChange={event=>setResend(event.target.checked)}/><span>Önceki gönderimleri kontrol ettim. Seçtiğim alıcılara yeniden mail gönderilsin. Sonucu belirsiz bir mail ulaşmış olabilir.</span></label>}
     </div>
-    <div className={styles.modalFooter}><button type="button" className={styles.cancelBtn} disabled={busy} onClick={onClose}>Vazgeç</button><button type="button" className={styles.addBtn} disabled={busy||loading||sendingInProgress||(!selected.length&&!manual.trim())||(hasPrevious&&!resend)} onClick={()=>void approve()}>{busy?"Gönderiliyor…":hasPrevious?"Yeniden mail gönder":"Mail gönder"}</button></div>
+    <div className={styles.modalFooter}><button type="button" className={styles.cancelBtn} disabled={busy} onClick={onClose}>Vazgeç</button><button type="button" className={styles.addBtn} disabled={busy||loading||sendingInProgress||selected.length!==1||(hasPrevious&&!resend)} onClick={()=>void approve()}>{busy?"Gönderiliyor…":hasPrevious?"Yeniden mail gönder":"Mail gönder"}</button></div>
   </section></div>;
 }

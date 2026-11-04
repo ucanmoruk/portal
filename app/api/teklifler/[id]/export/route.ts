@@ -1,3 +1,5 @@
+import { packageDisplayRows } from "@/lib/teklifPackage";
+import { ensureTeklifPackageSchema } from "@/lib/teklifPackageSchema";
 export const runtime = "nodejs";
 
 import { getServerSession } from "next-auth";
@@ -70,7 +72,7 @@ function fillHizmetRows(xml: string, satirlar: any[]): string {
   }
   if (!templateRow) return xml;
 
-  const filledRows = satirlar.map((s: any, idx: number) => {
+  const filledRows = packageDisplayRows(satirlar).map((s, idx: number) => {
     const adet    = parseInt(s.Adet)      || 1;
     const fiyat   = parseFloat(s.Fiyat)   || 0;
     const iskonto = parseFloat(s.Iskonto) || 0;
@@ -86,11 +88,12 @@ function fillHizmetRows(xml: string, satirlar: any[]): string {
     if (String(s.Akreditasyon || "").trim().toLowerCase() === "var") parts.push("*");
     parts.push(s.HizmetAdi || "");
     if (s.Metot) parts.push(`/ ${s.Metot}`);
+    if (s.UygulananParametreler) parts.push("\nUygulanan parametreler:\n" + s.UygulananParametreler.map((item: string) => `• ${item}`).join("\n"));
     const hizmetLabel = parts.join(" ");
 
     return templateRow!
       .split("{no}")           .join(String(idx + 1))
-      .split("{hizmet_adi}")   .join(escXml(hizmetLabel))
+      .split("{hizmet_adi}")   .join(escXml(hizmetLabel).replace(/\n/g, '</w:t><w:br/><w:t xml:space="preserve">'))
       .split("{adet}")         .join(String(adet))
       .split("{birim_fiyat}")  .join(escXml(fiyatStr))
       .split("{toplam_fiyat}") .join(escXml(`${fmt(net)} ${pb}`));
@@ -129,6 +132,7 @@ export async function GET(
   }
 
   try {
+    await ensureTeklifPackageSchema();
     const pool = await cosmoPool;
 
     const hRes = await pool.request()
@@ -160,7 +164,7 @@ export async function GET(
     const sRes = await pool.request()
       .input("TeklifID", Number(id))
       .query(`
-        SELECT HizmetAdi,
+        SELECT HizmetAdi, PaketGrup, PaketAdi,
                ISNULL(Adet,1)          AS Adet,
                ISNULL(Metot,'')        AS Metot,
                ISNULL(Akreditasyon,'') AS Akreditasyon,
