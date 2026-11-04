@@ -714,6 +714,8 @@ export default function RaporTakipTable({
   };
 
   const toggleCompletion = async (row: RaporRow) => {
+    // Challenge geri alma işlemi yalnız rapor önizlemesinin üst barındadır.
+    if (isChallengeFormat(row.RaporFormati) && row.RaporDurumu === "Onay Bekleniyor") return;
     // Onay Bekleniyor durumdayken "Geri Al" → /geri-gonder (Geri Gönderildi state)
     // Bekliyor/Analiz Devam Ediyor iken "Onaya Gönder" → /tamamla (Onay Bekleniyor)
     try {
@@ -1239,16 +1241,16 @@ export default function RaporTakipTable({
                 </div>
 
                 {/* Onaya Gönder / Geri Al / Tekrar Onaya Gönder
-                    - phase=approval → onay bekleyen Challenge raporu için Geri Al
+                    - phase=approval → tablo üzerinde durum aksiyonu yok
                     - phase=returned → "Tekrar Onaya Gönder" (geniş, mavi)
                     - Bekliyor → buton yok
                     - Analiz Devam Ediyor (N<M) → gizli
                     - Analiz Devam Ediyor N/N → "Onaya Gönder"
                     - Onay Bekleniyor → "Geri Al"
                     - Onaylandı/Yayınlandı → disabled bilgi */}
-                <div style={{ display: phase === "approval" && !(isChallengeFormat(row.RaporFormati) && row.RaporDurumu === "Onay Bekleniyor") ? "none" : "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
+                <div style={{ display: phase === "approval" || (isChallengeFormat(row.RaporFormati) && row.RaporDurumu === "Onay Bekleniyor") ? "none" : "flex", justifyContent: "center" }} onClick={e => e.stopPropagation()}>
                   {(() => {
-                    if (phase === "approval" && !(isChallengeFormat(row.RaporFormati) && row.RaporDurumu === "Onay Bekleniyor")) return null;
+                    if (phase === "approval" || (isChallengeFormat(row.RaporFormati) && row.RaporDurumu === "Onay Bekleniyor")) return null;
 
                     // Geri Gelenler tabı → tek bir geniş "Tekrar Onaya Gönder" butonu
                     if (phase === "returned") {

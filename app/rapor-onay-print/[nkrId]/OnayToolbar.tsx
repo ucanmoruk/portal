@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import EkYukleBox from "./duzenle/EkYukleBox";
 import QRCode from "qrcode";
+import { isChallengeFormat } from "@/lib/challengeImport";
 
 // İşlem (Onayla/Geri Gönder) sonrası sekmeyi kapat. Bu sayfa window.open ile
 // açıldığından window.close() çalışır; tarayıcı engellerse (örn. doğrudan URL
@@ -57,6 +58,7 @@ function sanitizeFileNamePart(value: unknown) {
 export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampleName, sampleNameEn }: Props) {
   const [onay] = useState<OnayInfo | null>(initialOnay);
   const [canApprove, setCanApprove] = useState<boolean | null>(null);
+  const [canRecall, setCanRecall] = useState(false);
   const [busy, setBusy] = useState<"onayla" | "geri" | "yayinla" | "imzali" | null>(null);
   const [showEk, setShowEk] = useState(false);
   const [ekVersion, setEkVersion] = useState(0);
@@ -88,8 +90,9 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampl
       .then((j: { isAdmin?: boolean; keys?: string[] }) => {
         const ok = j.isAdmin || (j.keys || []).includes("laboratuvar.rapor-onayla");
         setCanApprove(Boolean(ok));
+        setCanRecall(Boolean(ok || (j.keys || []).includes("laboratuvar.numune-takip-lab") || (j.keys || []).includes("laboratuvar.rapor-takip")));
       })
-      .catch(() => setCanApprove(false));
+      .catch(() => { setCanApprove(false); setCanRecall(false); });
   }, []);
 
   // QR kod
@@ -201,6 +204,8 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampl
 
   const handleClose = () => window.close();
 
+  const isChallenge = isChallengeFormat(format);
+  const canRecallChallenge = isChallenge && canRecall && !["Onaylandı", "Yayınlandı", "Ödeme bekliyor", "Arşiv"].includes(onay?.durum || "");
   const yayinlandi = onay?.durum === "Yayınlandı";
   const onaylandi = onay?.durum === "Onaylandı" || yayinlandi;
 
@@ -278,6 +283,7 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampl
             >
               {busy === "onayla" ? "Onaylanıyor…" : "✓ Onayla"}
             </button>
+            {!isChallenge && (
             <button
               type="button"
               onClick={() => setShowGeriModal(true)}
@@ -291,12 +297,19 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampl
             >
               ↩ Geri Gönder
             </button>
+            )}
           </>
         )}
 
+        {canRecallChallenge && <button type="button" onClick={() => setShowGeriModal(true)} disabled={busy !== null}
+          title="Challenge raporunu düzeltme için geri al; Türkçe ve İngilizce onaylar birlikte geri alınır."
+          style={{ padding: "8px 18px", borderRadius: 8, background: "transparent", color: "#ff453a", border: "1px solid #ff453a55", fontSize: 13, fontWeight: 600, cursor: busy ? "wait" : "pointer" }}>
+          ↩ Geri Al
+        </button>}
+
         {!onaylandi && canApprove === false && (
           <span style={{ color: "#ffbe66", fontSize: 12 }}>
-            Onaylama yetkiniz yok — sadece görüntüleme
+            {canRecallChallenge ? "Onaylama yetkiniz yok; raporu geri alabilirsiniz." : "Onaylama yetkiniz yok — sadece görüntüleme"}
           </span>
         )}
 
@@ -394,7 +407,7 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampl
             background: "#fff", borderRadius: 14, padding: 24,
             maxWidth: 480, width: "100%",
           }}>
-            <h3 style={{ margin: 0, marginBottom: 8, fontSize: 16 }}>Raporu Geri Gönder</h3>
+            <h3 style={{ margin: 0, marginBottom: 8, fontSize: 16 }}>{isChallenge ? "Challenge Raporunu Geri Al" : "Raporu Geri Gönder"}</h3>
             <p style={{ fontSize: 13, color: "#6e6e73", marginBottom: 14 }}>
               Rapor &quot;Geri Gelenler&quot; sekmesine düşer. Notunuz lab&apos;a iletilir.
             </p>
@@ -430,7 +443,7 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampl
                   fontSize: 13, fontWeight: 700, cursor: busy ? "wait" : "pointer",
                 }}
               >
-                {busy === "geri" ? "Gönderiliyor…" : "Geri Gönder"}
+                {busy === "geri" ? (isChallenge ? "Geri alınıyor…" : "Gönderiliyor…") : (isChallenge ? "Geri Al" : "Geri Gönder")}
               </button>
             </div>
           </div>
