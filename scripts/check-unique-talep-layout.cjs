@@ -10,15 +10,15 @@ const offer = { recipient: fixture.name, email: fixture.email, subject: fixture.
 const cssModule = { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) };
 function render(file, detail, sent = false) {
   let index = 0;
-  const row = { ...fixture, ...(sent ? { sentAt: new Date().toISOString(), mailState: 'Gönderildi', status: 'Teklif İletildi', quoteId: 77 } : {}) };
-  const values = detail ? [row, offer, [], [], false, '', '', fixture.name, [], '', '', '', ''] : [[{ ...row, summary: row.text }], false, '', '', '', '', '', 'potential', 1];
-  const hooks = { ...React, useEffect() {}, useState(initial) { const i = index++; return [i < values.length ? values[i] : initial, () => {}]; } };
+  const row = { ...fixture, ...(sent ? { sentAt: new Date().toISOString(), mailState: 'Gönderildi', status: 'Teklif Gönderildi', quoteId: 77 } : {}) };
+  const values = detail ? [row, offer, [], [], false, '', '', fixture.name, [], '', '', '', ''] : [[{ ...row, summary: row.text }], false, '', '', '', '', 'potential', 1, null];
+  const hooks = { ...React, useEffect() {}, useRef(initial) { return { current: initial }; }, useState(initial) { const i = index++; return [i < values.length ? values[i] : initial, () => {}]; } };
   const mocks = { react: hooks, 'next/link': { __esModule: true, default: ({ children, ...props }) => React.createElement('a', props, children) }, '@/lib/uniqueTalepRules': rules, '@/lib/crmOffer': crm };
   const source = ts.transpileModule(fs.readFileSync(root + file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
   const mod = { exports: {} };
   new Function('require', 'module', 'exports', source)(name => name in mocks ? mocks[name] : name.endsWith('.css') ? cssModule : require(name), mod, mod.exports);
   const css = ['app/globals.css', 'app/styles/table.module.css', 'app/(dashboard)/iletisim/spektrotek-talep/requests.module.css', root + 'unique-talep.module.css'].map(file => fs.readFileSync(file, 'utf8').replace(/^@(?:import|source).*$/gm, '')).join('\n');
-  return `<html lang="tr"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;padding:16px">${renderToStaticMarkup(React.createElement(mod.exports.default, { id: '1' }))}</body></html>`;
+  return `<html lang="tr"><head><base href="https://preview.example/"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body style="margin:0;padding:16px">${renderToStaticMarkup(React.createElement(mod.exports.default, { id: '1' }))}</body></html>`;
 }
 (async () => {
   fs.mkdirSync('output/unique-talep', { recursive: true });
@@ -27,15 +27,26 @@ function render(file, detail, sent = false) {
     for (const width of [375, 768, 1440]) {
       for (const detail of [false, true]) {
         const page = await browser.newPage({ viewport: { width, height: 900 } });
+        await page.route('**/unique-logo.png', route => route.fulfill({ contentType: 'image/png', body: fs.readFileSync('public/unique-logo.png') }));
         await page.setContent(render(detail ? 'UniqueRequestDetail.tsx' : 'UniqueRequestsClient.tsx', detail));
         assert(await page.locator('h1').isVisible());
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
         assert(!overflow, `horizontal page overflow: ${width}, detail=${detail}`);
-        if (detail) { assert.equal(await page.getByRole('button', { name: 'Yanıt ve PDF teklifi gönder' }).count(), 1); assert(await page.getByLabel('Mail açıklaması').isVisible()); }
-        else assert.equal(await page.getByRole('link', { name: 'İncele' }).count(), 1);
+        if (detail) { assert.equal(await page.getByRole('button', { name: 'Yanıt ve PDF teklifi gönder' }).count(), 1); assert(await page.getByLabel('Mail açıklaması').isVisible()); assert((await page.locator('[aria-label="Oğuzhan Eker e-posta imzası"]>div').evaluate(el => getComputedStyle(el).fontFamily)).includes('Tahoma')); }
+        else {
+          assert.equal(await page.getByRole('link', { name: 'İncele' }).count(), 1);
+          assert.equal(await page.getByRole('columnheader', { name: 'Sınıf', exact: true }).count(), 0);
+          assert.equal(await page.getByRole('button', { name: /talebini listeden sil/ }).count(), 1);
+          assert.equal(await page.locator('tbody select').count(), 1);
+        }
         await page.screenshot({ path: `output/unique-talep/${detail ? 'detail' : 'list'}-${width}.png`, fullPage: true }); await page.close();
       }
     }
+    const signaturePage = await browser.newPage({ viewport: { width: 580, height: 250 } });
+    const signature = require('../lib/uniqueMailSignature.ts').uniqueMailSignatureHtml(`data:image/png;base64,${fs.readFileSync('public/unique-logo.png').toString('base64')}`);
+    await signaturePage.setContent(`<html><body style="margin:10px;background:white">${signature}</body></html>`);
+    assert(await signaturePage.locator('img').evaluate(el => el.complete && el.naturalWidth > 0));
+    await signaturePage.screenshot({ path: 'output/unique-talep/signature.png' }); await signaturePage.close();
     const page = await browser.newPage(); await page.setContent(render('UniqueRequestDetail.tsx', true, true));
     assert(await page.getByRole('button', { name: 'Yanıt ve PDF teklifi gönder' }).isDisabled());
     assert(await page.locator('select').nth(1).isEnabled());

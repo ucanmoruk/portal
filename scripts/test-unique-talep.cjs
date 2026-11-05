@@ -13,9 +13,9 @@ const offer = { recipient: 'Test Firma', email: 'customer@example.com', subject:
 let row, authorized = true, sent = [], quotes = 0, updates = 0, badPdf = false, smtpError = false;
 const pool = { request() { return { input() { return this; }, async query(sql) { if (sql.includes('Firma_Adi')) return { recordset: [{ Firma_Adi: 'Test Firma' }] }; updates++; return { recordset: [], rowsAffected: [1] }; } }; } };
 const route = compile('app/api/unique-talep/[id]/route.ts', {
-  '@/lib/portalYetki': { async getPortalUser() { return authorized ? { can: () => true } : null; } },
+  '@/lib/portalYetki': { async getPortalUser() { return authorized ? { can: () => true, userId: "test-user" } : null; } },
   '@/lib/uniqueTalepStore': {
-    async getUniqueRequest() { return structuredClone(row); },
+    async getUniqueRequest() { if (row.deletedAt) throw new Error("Talep bulunamadı."); return structuredClone(row); },
     async saveUniqueRequest(next) { if (next.version !== row.version) throw new Error('version conflict'); row = { ...structuredClone(next), version: next.version + 1 }; return structuredClone(row); },
   },
   '@/lib/uniqueTalepRules': rules, '@/lib/crmOffer': require('../lib/crmOffer.ts'),
@@ -56,18 +56,43 @@ async function post(action, extra = {}) {
   assert.equal(rules.classifyUniqueMail('Merhaba', 'İyi günler', 'a@example.com').potential, false);
   row = fixture(); authorized = false; assert.equal((await post('send')).status, 401); authorized = true;
   assert.equal((await post('send', { version: 999 })).status, 409); assert.equal(sent.length, 0);
-  assert.equal((await post('edit', { status: 'Teklif İletildi' })).status, 400);
+  assert.equal((await post('edit', { status: 'Teklif Gönderildi' })).status, 200); assert.equal(row.status, 'Teklif Gönderildi'); assert.equal(row.sentAt, null);
   assert.equal((await post('analyze')).status, 200); assert.equal(row.offer.items[0].price, 150);
   assert.equal((await post('draft')).status, 200); assert.equal(quotes, 0); assert.equal(sent.length, 0);
   row.companyId = null; assert.equal((await post('send')).status, 400); row.companyId = 5;
   assert.equal((await post('send', { offer: { ...offer, items: [{ ...offer.items[0], quantity: -1 }] } })).status, 400);
   badPdf = true; assert.equal((await post('send')).status, 400); assert.equal(sent.length, 0); assert.equal(row.mailState, 'Taslak'); assert.equal(row.quoteId, 77);
   badPdf = false; assert.equal((await post('send')).status, 200); assert.equal(quotes, 1); assert.equal(sent.length, 1);
-  assert.equal(row.status, 'Teklif İletildi'); assert.equal(row.mailState, 'Gönderildi'); assert.ok(row.sentAt); assert.equal(updates, 1);
-  assert.equal(sent[0].attachments[0].contentType, 'application/pdf'); assert.equal(sent[0].to, offer.email); assert.ok(sent[0].text.includes('Oğuzhan Eker')); assert.ok(!sent[0].html.includes('<script>')); assert.equal(sent[0].inReplyTo, '<test@example.com>');
+  assert.equal(row.status, 'Teklif Gönderildi'); assert.equal(row.mailState, 'Gönderildi'); assert.ok(row.sentAt); assert.equal(updates, 1);
+  assert.equal(sent[0].attachments[0].contentType, 'application/pdf'); assert.equal(sent[0].to, offer.email); assert.ok(sent[0].text.includes('Oğuzhan EKER')); assert.ok(!sent[0].html.includes('<script>')); assert.equal(sent[0].inReplyTo, '<test@example.com>'); assert(sent[0].html.includes('font-family:Tahoma')); assert(sent[0].html.includes('cid:unique-mail-signature')); assert.equal(sent[0].attachments[1].cid, 'unique-mail-signature');
   assert.equal((await post('send')).status, 400); assert.equal(sent.length, 1);
   assert.equal((await post('edit', { status: 'Onaylandı' })).status, 200);
   row = fixture(); smtpError = true; assert.equal((await post('send')).status, 400); assert.equal(row.mailState, 'Belirsiz'); assert.equal(row.status, 'Bekliyor');
   smtpError = false; assert.equal((await post('send')).status, 400); assert.equal(sent.length, 1);
-  console.log('PASS: classification, auth, version conflict, company, catalog price, quote reuse, PDF failure, signed PDF email, sent status and duplicate/uncertain send protection. No external calls.');
+  const context = { params: Promise.resolve({ id: '1' }) };
+  const deletion = version => new Request('https://portal.example/api/unique-talep/1', { method: 'DELETE', body: JSON.stringify({ version }) });
+  assert.equal((await route.DELETE(deletion(row.version), context)).status, 400);
+  row = fixture(); authorized = false; assert.equal((await route.DELETE(deletion(row.version), context)).status, 401); authorized = true;
+  assert.equal((await route.DELETE(deletion(999), context)).status, 409);
+  assert.equal((await route.DELETE(deletion(row.version), context)).status, 200); assert.ok(row.deletedAt); assert.equal(row.deletedBy, 'test-user'); assert.equal(row.source, 'test');
+  assert.equal((await route.GET(new Request('https://portal.example/api/unique-talep/1'), context)).status, 404);
+  assert.equal(rules.normalizeUniqueStatus('Teklif İletildi'), 'Teklif Gönderildi');
+  const unsorted = [{ id: 20, date: '2026-11-01T00:00:00Z' }, { id: 1, date: '2026-11-05T00:00:00Z' }, { id: 2, date: '2026-11-05T00:00:00Z' }];
+  assert.deepEqual(unsorted.sort(rules.newestUniqueFirst).map(r => r.id), [2, 1, 20]);
+  const payloadRows = [
+    { ID: 100, Version: 1, Payload: JSON.stringify({ ...fixture(), date: '2026-11-01T00:00:00Z' }) },
+    { ID: 2, Version: 1, Payload: JSON.stringify({ ...fixture(), date: '2026-11-05T00:00:00Z', status: 'Teklif İletildi' }) },
+    { ID: 101, Version: 2, Payload: JSON.stringify({ ...fixture(), deletedAt: new Date().toISOString() }) },
+  ];
+  const storePool = { request() { const params = {}; return { input(k, v) { params[k] = v; return this; }, async query(sql) {
+    if (sql.startsWith('SELECT ID FROM')) return { recordset: [{ ID: 101 }], rowsAffected: [] };
+    if (sql.startsWith('SELECT')) return { recordset: params.ID ? payloadRows.filter(r => r.ID === params.ID) : payloadRows, rowsAffected: [] };
+    assert(!sql.startsWith('DELETE'), 'Mailbox source keys must be retained'); return { recordset: [], rowsAffected: [1] };
+  } }; } };
+  const realStore = compile('lib/uniqueTalepStore.ts', { './db': { cosmoPool: Promise.resolve(storePool) }, './mysqlCompat': { hasMysqlConfig: () => true }, './uniqueTalepRules': rules });
+  const listed = await realStore.listUniqueRequests();
+  assert.deepEqual(listed.map(r => r.id), [2, 100]); assert.equal(listed[0].status, 'Teklif Gönderildi');
+  await assert.rejects(() => realStore.getUniqueRequest(101));
+  assert.equal(await realStore.insertUniqueRequest({ ...fixture(), source: 'deleted-source' }), false);
+  console.log('PASS: soft deletion/filtering/deduplication, newest-first sorting, manual statuses, Tahoma/CID signature, classification, auth, version conflict, company, catalog price, quote reuse, PDF failure, signed PDF email, sent status and duplicate/uncertain send protection. No external calls.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

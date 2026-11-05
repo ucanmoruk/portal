@@ -1,6 +1,7 @@
 import { cosmoPool } from "./db";
 import { hasMysqlConfig } from "./mysqlCompat";
 import type { UniqueRequest } from "./uniqueTalepRules";
+import { normalizeUniqueStatus, newestUniqueFirst } from "./uniqueTalepRules";
 
 let ready: Promise<unknown> | null = null;
 export async function uniquePool() {
@@ -16,16 +17,19 @@ export async function uniquePool() {
   await ready; return pool;
 }
 function map(row: Record<string, unknown>): UniqueRequest {
-  return { ...JSON.parse(String(row.Payload)), id: Number(row.ID), version: Number(row.Version) };
+  const payload = JSON.parse(String(row.Payload));
+  return { ...payload, status: normalizeUniqueStatus(payload.status), id: Number(row.ID), version: Number(row.Version) };
 }
 export async function getUniqueRequest(id: number) {
   const result = await (await uniquePool()).request().input("ID", id).query("SELECT ID,Payload,Version FROM UniqueTalep WHERE ID=@ID");
   if (!result.recordset[0]) throw new Error("Talep bulunamadı.");
-  return map(result.recordset[0]);
+  const item = map(result.recordset[0]);
+  if (item.deletedAt) throw new Error("Talep bulunamadı.");
+  return item;
 }
 export async function listUniqueRequests() {
   const result = await (await uniquePool()).request().query("SELECT ID,Payload,Version FROM UniqueTalep ORDER BY ID DESC");
-  return result.recordset.map(map);
+  return result.recordset.map(map).filter(item => !item.deletedAt).sort(newestUniqueFirst);
 }
 export async function insertUniqueRequest(value: Omit<UniqueRequest, "id" | "version">) {
   const pool = await uniquePool();

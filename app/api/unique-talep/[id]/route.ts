@@ -3,7 +3,9 @@ import { z } from "zod";
 import nodemailer from "nodemailer";
 import { getPortalUser } from "@/lib/portalYetki";
 import { getUniqueRequest, saveUniqueRequest } from "@/lib/uniqueTalepStore";
-import { uniqueEdit, UNIQUE_SIGNATURE } from "@/lib/uniqueTalepRules";
+import { uniqueEdit } from "@/lib/uniqueTalepRules";
+import { UNIQUE_SIGNATURE_TEXT, uniqueReplyHtml } from "@/lib/uniqueMailSignature";
+import path from "node:path";
 import { CrmOfferEdit, hydrateCrmOffer } from "@/lib/crmOffer";
 import { getCrmCatalog } from "@/lib/crmCatalog";
 import { getCrmKnowledge } from "@/lib/crmKnowledgeStore";
@@ -15,7 +17,6 @@ import { getAllSettings } from "@/lib/settings";
 import { POST as createQuote } from "@/app/api/teklifler/route";
 import { PUT as updateQuote } from "@/app/api/teklifler/[id]/route";
 import { GET as quotePdf } from "@/app/api/teklif-print/[id]/pdf/route";
-import { mailEscape } from "@/lib/kysSupplierMailPolicy";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -49,8 +50,6 @@ export async function POST(request: Request, context: Context) {
         if (!firm) throw new Error("Firma bulunamadı.");
         companyName = String(firm.Firma_Adi);
       } else if (edit.companyId === null) companyName = "";
-      // Only the send operation may set the sent status.
-      if (edit.status === "Teklif İletildi" && !item.sentAt) throw new Error("Bu durum başarılı teklif gönderiminden sonra otomatik atanır.");
       return Response.json({ item: await saveUniqueRequest({ ...item, ...edit, companyName }) });
     }
     if (body.action === "analyze") {
@@ -102,14 +101,15 @@ export async function POST(request: Request, context: Context) {
       auth: { user: setting("MAIL_USER"), pass: setting("MAIL_PASS") }, connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 60000 });
     item = await saveUniqueRequest({ ...item, mailState: "Gönderiliyor" });
     smtpStarted = true;
-    const text = `${offer.replyBody!.trim()}\n\n${UNIQUE_SIGNATURE}`;
+    const text = `${offer.replyBody!.trim()}\n\n${UNIQUE_SIGNATURE_TEXT}`;
     const result = await transporter.sendMail({ from: { name: "Oğuzhan Eker | Unique Analyse", address: "info@uniqueanalyse.com" },
       to: offer.email, subject: offer.replySubject!, text,
-      html: `<div style="font:14px Arial,sans-serif;line-height:1.6;white-space:pre-wrap">${mailEscape(text)}</div>`,
+      html: uniqueReplyHtml(offer.replyBody!),
       ...(item.messageId ? { inReplyTo: item.messageId, references: [item.messageId] } : {}),
-      attachments: [{ filename: `Unique_Analyse_Teklif_${item.quoteId}.pdf`, content: pdf, contentType: "application/pdf" }] });
+      attachments: [{ filename: `Unique_Analyse_Teklif_${item.quoteId}.pdf`, content: pdf, contentType: "application/pdf" },
+        { filename: "unique-logo.png", path: path.join(process.cwd(), "public", "unique-logo.png"), cid: "unique-mail-signature", contentDisposition: "inline" }] });
     if (!result.accepted?.length || result.rejected?.length) throw new Error("SMTP alıcı adresini kabul etmedi. Gönderimi kontrol edin.");
-    item = await saveUniqueRequest({ ...item, status: "Teklif İletildi", mailState: "Gönderildi", sentAt: new Date().toISOString(), sentMessageId: result.messageId, error: "" });
+    item = await saveUniqueRequest({ ...item, status: "Teklif Gönderildi", mailState: "Gönderildi", sentAt: new Date().toISOString(), sentMessageId: result.messageId, error: "" });
     reserved = false;
     await (await cosmoPool).request().input("ID", item.quoteId).query("UPDATE TeklifBaslik SET TeklifDurum=N'Onay Bekleniyor' WHERE ID=@ID AND TeklifDurum='Taslak'");
     return Response.json({ item });
@@ -117,4 +117,19 @@ export async function POST(request: Request, context: Context) {
     if (reserved && item) await saveUniqueRequest({ ...item, mailState: smtpStarted ? "Belirsiz" : "Taslak", error: smtpStarted ? "SMTP sonucu belirsiz; yeniden göndermeden önce posta kutusunu kontrol edin." : "Hazırlık tamamlanamadı; teklif kaydını kontrol edip tekrar deneyebilirsiniz." }).catch(() => {});
     return Response.json({ error: error instanceof z.ZodError ? "Girilen bilgileri kontrol edin." : error instanceof Error ? error.message : "İşlem tamamlanamadı." }, { status: 400 });
   }
+}
+
+export async function DELETE(request: Request, context: Context) {
+  const user = await getPortalUser();
+  if (!user?.can("iletisim.unique-talep")) return Response.json({ error: "Yetkisiz erişim" }, { status: user ? 403 : 401 });
+  try {
+    const id = z.coerce.number().int().positive().parse((await context.params).id);
+    const { version } = z.object({ version: z.number().int().positive() }).parse(await request.json());
+    const item = await getUniqueRequest(id);
+    if (version !== item.version) return Response.json({ error: "Kayıt güncellendi. Sayfayı yenileyin." }, { status: 409 });
+    if (["Hazırlanıyor", "Gönderiliyor", "Belirsiz"].includes(item.mailState)) throw new Error("Gönderim devam ederken veya sonucu belirsizken talep silinemez.");
+    // Keep the source key so subsequent IMAP scans cannot recreate a removed lead.
+    await saveUniqueRequest({ ...item, deletedAt: new Date().toISOString(), deletedBy: user.userId });
+    return Response.json({ success: true });
+  } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Talep silinemedi." }, { status: 400 }); }
 }
