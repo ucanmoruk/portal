@@ -3,7 +3,7 @@ require('./register-local-ts.cjs');
 const fs = require('node:fs'), ts = require('typescript'), assert = require('node:assert/strict');
 const live = require('../lib/ugdLiveReport.ts');
 function load(file, mocks = {}) {
-  const input = fs.readFileSync(file, 'utf8');
+  const input = fs.readFileSync(file, 'utf8').replaceAll('import.meta.url', JSON.stringify(require('node:url').pathToFileURL(require('node:path').resolve(file)).href));
   const source = ts.transpileModule(input, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   const mod = { exports: {} };
   new Function('require', 'module', 'exports', source)(name => name in mocks ? mocks[name] : require(name), mod, mod.exports);
@@ -44,7 +44,7 @@ const request = body => new Request('https://portal.example/api/urunler/canli-ra
   assert.deepEqual(legacy.item.sections, sections);
   let lookedUp = [], wordHtml = '';
   const render = load('app/api/urunler/rapor-sablon/route.ts', {
-    ...auth, '@/lib/db': { __esModule: true, default: Promise.resolve(db), cosmoPool: Promise.resolve(db) },
+    ...auth, '@/lib/chromiumPdf': load('lib/chromiumPdf.ts', { '@/lib/loadDotenv': { loadDotenvOnce() {} } }), '@/lib/db': { __esModule: true, default: Promise.resolve(db), cosmoPool: Promise.resolve(db) },
     '@/lib/ugdLiveReportStore': { async loadLiveReport(k) { lookedUp.push(k); return selected ? { bodyHtml: packed.bodyHtml, headHtml: '<style>body{font-family:Arial}</style>' } : null; } },
     '@/lib/ugdRegulationLookup': { async enrichUgdFormulaRows() { throw new Error('Saved reports must not regenerate formula tables'); } },
     'html-to-docx': async html => { wordHtml = html; return Buffer.from('docx-fixture'); },

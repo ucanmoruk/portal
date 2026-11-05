@@ -5,7 +5,7 @@ const ts = require("typescript");
 
 function load(file, imports = {}, globals = {}) {
   const mod = { exports: {} };
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, "utf8"), {
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, "utf8").replaceAll("import.meta.url", JSON.stringify(require("node:url").pathToFileURL(require("node:path").resolve(file)).href)), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
   }).outputText, {
     module: mod, exports: mod.exports, console, Buffer, Response, URL, WebSocket, setTimeout, clearTimeout, process, ...globals,

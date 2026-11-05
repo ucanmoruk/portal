@@ -218,10 +218,10 @@ function waitForDevtoolsUrl(proc: ChildProcessWithoutNullStreams): Promise<strin
     const timer = setTimeout(
       () =>
         reject(
-          new Error(
+          Object.assign(new Error(
             `Chrome DevTools bağlantısı zaman aşımına uğradı (${timeoutMs} ms).` +
               (stderr ? ` Chrome çıktısı: ${tail(stderr)}` : ""),
-          ),
+          ), { code: "CHROME_STARTUP_TIMEOUT" }),
         ),
       timeoutMs,
     );
@@ -283,6 +283,7 @@ function isChromeSpawnPressureError(error: unknown): boolean {
   const msg = String(anyError?.message || error || "").toLowerCase();
   return (
     anyError?.code === "EAGAIN" ||
+    anyError?.code === "CHROME_STARTUP_TIMEOUT" ||
     anyError?.code === "EMFILE" ||
     anyError?.code === "ENFILE" ||
     msg.includes(" eagain") ||
@@ -306,6 +307,9 @@ async function withChromeSpawnRetry<T>(fn: () => Promise<T>): Promise<T> {
   }
 
   if (isChromeSpawnPressureError(lastError)) {
+    if ((lastError as NodeJS.ErrnoException)?.code === "CHROME_STARTUP_TIMEOUT") {
+      throw new Error("PDF motoru sunucuda zamanında başlatılamadı. Biraz sonra tekrar deneyin.");
+    }
     throw new Error(
       "Sunucuda PDF için Chromium başlatılamadı: process limiti geçici olarak dolu (EAGAIN). " +
         "Biraz sonra tekrar deneyin; aynı anda çoklu rapor gönderimi varsa istekler sıraya alınmalıdır.",
@@ -325,12 +329,12 @@ function normalizeUrlForCompare(value: string): string {
 }
 
 async function closeChromeProcess(chrome: ChildProcessWithoutNullStreams | undefined): Promise<void> {
-  if (!chrome || chrome.exitCode !== null || chrome.killed) return;
+  if (!chrome || chrome.exitCode !== null || chrome.signalCode !== null) return;
 
   chrome.kill("SIGTERM");
   await Promise.race([new Promise<void>((resolve) => chrome!.once("exit", () => resolve())), delay(900)]);
 
-  if (chrome.exitCode === null && !chrome.killed) {
+  if (chrome.exitCode === null && chrome.signalCode === null) {
     chrome.kill("SIGKILL");
     await Promise.race([new Promise<void>((resolve) => chrome!.once("exit", () => resolve())), delay(500)]);
   }

@@ -17,3 +17,9 @@ Doğrulama: `node scripts/test-ugd-live-editor.cjs`, `node scripts/test-ugd-live
 Laboratuvar formülü en fazla 100 satırlık INSERT gruplarıyla tek transaction içinde değiştirilir; numune kilidi eşzamanlı kaydı sıraya alır. Formül değişimi ve rapor durum güncellemesi birlikte commit edilir; hata halinde eski formül korunur. İstemci eşleştirme/kayıt aşamalarını gösterir, çift başlatmayı engeller ve ağ bekleyişini eşleştirmede 90, kayıtta 45 saniyeyle sınırlar. Zaman aşımı sonucu belirsiz kayıtta kullanıcıya kayıt durumunu kontrol etmesi söylenir; metin otomatik temizlenmez.
 
 Ek testler: `node scripts/test-ugd-formula-match.cjs` ve `node scripts/test-ugd-formula-ui.cjs`.
+
+## PDF motoru
+
+ÜGD çıktısı `lib/chromiumPdf.ts` ortak motorunu kullanır; bağımsız, 10 saniyelik eski Chrome başlatıcısı kaldırılmıştır. Aynı işlemde PDF işleri sıraya alınır, Chrome başlangıcı varsayılan 45 saniye beklenir ve geçici başlangıç zaman aşımı/kaynak limiti hatalarında temizlenip yeniden denenir. SIGTERM gönderilmiş olması işlemin kapandığı kabul edilmez; hâlâ çalışan Chrome gerekirse SIGKILL ile sonlandırılır. Başlık, altbilgi ve sayfa kenarları korunur; baskıdan önce fotoğraf ve yazı tiplerinin yüklenmesi beklenir. ÜGD API süre bütçesi 180 saniyedir.
+
+Başlatma/sıralama/temizlik testi: `node scripts/test-chromium-startup.cjs`. Gerçek PDF testi: `node scripts/test-ugd-live-report.cjs --pdf`.
