@@ -9,3 +9,11 @@ Editör önce kaydedilmiş raporu yükler. Kaydedilen belgedeki firma metni, tab
 PDF/Word üretiminde öncelik: istekteki düzenlenmiş HTML → kayıt/lisan/profil için son kaydedilmiş HTML → yeni şablon. Bu kural TR, EN ve CPSR için aynıdır. Rapor takipten çıktı ve imzalı ÜGD PDF de formun kayıt ID'siyle aynı kaydı kullanır. Kaydedilmiş belge basılırken firma ve formül tabloları yeniden üretilmez.
 
 Doğrulama: `node scripts/test-ugd-live-editor.cjs`, `node scripts/test-ugd-live-report.cjs --pdf`, `node scripts/test-ugd-report.cjs`. Gerçek PDF testi yalnızca sentetik belge kullanır; veritabanı ve oturum bağımlılıkları taklittir. Mevcut müşteri raporları test amacıyla değiştirilmez.
+
+## Formül analizi
+
+`ANALİZİ BAŞLAT` katalog eşleştirmesini satır başına seri sorgularla değil üç toplu okumayla yapar. İstek en fazla 250 bileşen içerir. INCI/CAS eşleşmesi, yönetmelik numarası önceliği, NOAEL ve miktar normalizasyonu korunur. Eşleşmeyen bileşenler listeden düşürülmez.
+
+Laboratuvar formülü en fazla 100 satırlık INSERT gruplarıyla tek transaction içinde değiştirilir; numune kilidi eşzamanlı kaydı sıraya alır. Formül değişimi ve rapor durum güncellemesi birlikte commit edilir; hata halinde eski formül korunur. İstemci eşleştirme/kayıt aşamalarını gösterir, çift başlatmayı engeller ve ağ bekleyişini eşleştirmede 90, kayıtta 45 saniyeyle sınırlar. Zaman aşımı sonucu belirsiz kayıtta kullanıcıya kayıt durumunu kontrol etmesi söylenir; metin otomatik temizlenmez.
+
+Ek testler: `node scripts/test-ugd-formula-match.cjs` ve `node scripts/test-ugd-formula-ui.cjs`.

@@ -2,6 +2,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 import { ensureLabUgdrFormulTable } from "@/lib/labUgdrStorage";
+import { LabFormulaInput, saveLabFormula } from "@/lib/labUgdrFormulaSave";
+import { z } from "zod";
 import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 
 async function resolveNkrId(pool: any, rawId: string) {
@@ -49,7 +51,7 @@ export async function GET(
     const rows = await enrichUgdFormulaRows(result.recordset);
     return Response.json(rows);
   } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    return Response.json({ error: e instanceof z.ZodError ? "Formül satırlarını ve miktarlarını kontrol edin (en fazla 250 satır)." : e.message }, { status: e instanceof z.ZodError ? 400 : 500 });
   }
 }
 
@@ -63,8 +65,7 @@ export async function POST(
   const { id } = await params;
 
   try {
-    const { rows } = await request.json();
-    if (!Array.isArray(rows)) return Response.json({ error: "Gecersiz veri" }, { status: 400 });
+    const { rows } = LabFormulaInput.parse(await request.json());
 
     const pool = await cosmoPool;
     const nkrId = await resolveNkrId(pool, id);
@@ -72,50 +73,11 @@ export async function POST(
 
     await ensureLabUgdrFormulTable(pool);
 
-    await pool.request()
-      .input("nkrId", nkrId)
-      .query("DELETE FROM NKR_Formul WHERE NKRID = @nkrId");
-
-    for (const row of rows) {
-      await pool.request()
-        .input("nkrId", nkrId)
-        .input("hammaddeId", row.cosingId ?? null)
-        .input("inciName", row.INCIName ?? row.inputName ?? "")
-        .input("miktar", String(row.inputAmount ?? row.miktar ?? "0"))
-        .input("dap", row.dap ?? 100)
-        .input("noael", row.noael ? String(row.noael) : null)
-        .query(`
-          INSERT INTO NKR_Formul (NKRID, HammaddeID, INCIName, Miktar, DaP, Noael)
-          VALUES (@nkrId, @hammaddeId, @inciName, @miktar, @dap, @noael)
-        `);
-    }
-
-    await pool.request().query(`
-      CREATE TABLE NKR_RaporDurumOverride (
-        NkrID INT NOT NULL,
-        RaporFormati NVARCHAR(100) NOT NULL,
-        Durum NVARCHAR(50) NOT NULL,
-        UpdatedAt DATETIME NOT NULL,
-        PRIMARY KEY (NkrID, RaporFormati)
-      )
-    `).catch(() => undefined);
-
-    await pool.request()
-      .input("nkrId", nkrId)
-      .input("format", "ÜGDR")
-      .input("durum", "Devam Ediyor")
-      .query(`
-        DELETE FROM NKR_RaporDurumOverride
-        WHERE NkrID = @nkrId
-          AND UPPER(REPLACE(RaporFormati, N'Ü', N'U')) = UPPER(REPLACE(@format, N'Ü', N'U'));
-
-        INSERT INTO NKR_RaporDurumOverride (NkrID, RaporFormati, Durum, UpdatedAt)
-        VALUES (@nkrId, @format, @durum, GETDATE());
-      `);
+    await saveLabFormula(pool, nkrId, rows);
 
     return Response.json({ message: "Formul kaydedildi", count: rows.length });
   } catch (e: any) {
-    return Response.json({ error: e.message }, { status: 500 });
+    return Response.json({ error: e instanceof z.ZodError ? "Formül satırlarını ve miktarlarını kontrol edin (en fazla 250 satır)." : e.message }, { status: e instanceof z.ZodError ? 400 : 500 });
   }
 }
 

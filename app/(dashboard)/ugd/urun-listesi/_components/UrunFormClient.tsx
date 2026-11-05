@@ -477,6 +477,8 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 
   const [lookups, setLookups] = useState<{ firmalar: any[]; tipler: any[]; nextRaporNo?: number }>({ firmalar: [], tipler: [] });
   const [form, setForm] = useState(emptyForm());
+  const [formulPhase, setFormulPhase] = useState("");
+  const formulBusy = useRef(false);
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -772,14 +774,15 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 
   // ── Formül analizi ────────────────────────────────────────────────────────
   const processFormulItems = async (items: { name: string; amount: string }[]) => {
-    if (!items.length) return;
-    setFormulLoading(true); setFormulError("");
+    if (!items.length || formulBusy.current) return;
+    formulBusy.current = true;
+    setFormulLoading(true); setFormulError(""); setFormulPhase("Bileşenler eşleştiriliyor…");
     try {
       const res = await fetch("/api/formul-kontrol/match", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items }), signal: AbortSignal.timeout(90000),
       });
-      if (!res.ok) throw new Error("Kontrol işlemi başarısız");
+      if (!res.ok) { const error = await res.json().catch(() => ({})); throw new Error(error.error || "Kontrol işlemi başarısız"); }
       const data = await res.json();
       // noael: sunucudan gelen değeri string'e çevir, yoksa ""
       const mapped = data.map((r: any) => withCalcDefaults({
@@ -791,10 +794,15 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 
       // Eğer kayıtlı ürün varsa formülü DB'ye kaydet
       if (savedId) {
+        setFormulPhase("Eşleştirme tamamlandı. Formül kaydediliyor…");
         await saveFormulToDB(savedId, mapped);
       }
-    } catch (e: any) { setFormulError(e.message); }
-    finally { setFormulLoading(false); }
+      setFormulPhase(savedId ? "Eşleştirme tamamlandı ve formül kaydedildi." : "Eşleştirme tamamlandı.");
+    } catch (e: any) {
+      setFormulPhase("");
+      setFormulError(e.name === "TimeoutError" || e.name === "AbortError" ? "İşlem zaman aşımına uğradı. Formül metniniz korundu; yeniden denemeden önce kayıt durumunu kontrol edin." : e.message);
+    }
+    finally { formulBusy.current = false; setFormulLoading(false); }
   };
 
   // ── Formülü DB'ye kaydet ─────────────────────────────────────────────────
@@ -804,13 +812,16 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(isLabSource ? { rows } : { urunId: Number(urunId), rows }),
+        signal: AbortSignal.timeout(45000),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setFormulError(`Formül kaydedilemedi: ${err.error || `HTTP ${res.status}`}`);
+        throw new Error(err.error || `HTTP ${res.status}`);
       }
     } catch (e: any) {
-      setFormulError(`Formül kaydedilemedi: ${e.message}`);
+      const message = e.name === "TimeoutError" || e.name === "AbortError" ? "Formül kaydı zaman aşımına uğradı. Sayfayı yeniden yüklemeden önce formül metnini kopyalayın ve kayıt durumunu kontrol edin." : `Formül kaydedilemedi: ${e.message}`;
+      setFormulError(message);
+      throw new Error(message);
     }
   };
 
@@ -1509,12 +1520,13 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
             <textarea className={styles.searchInput} style={{ width: '100%', minHeight: 140, padding: 16, fontFamily: 'monospace' }} placeholder="Kopyalayıp buraya yapıştırın (Excel stili)..." value={formulInput} onChange={e => setFormulInput(e.target.value)} disabled={formulLoading} />
             <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
               <button type="button" className={styles.saveBtn} onClick={handleFormulPaste} disabled={formulLoading}>
-                {formulLoading ? "Analiz Ediliyor..." : "ANALİZİ BAŞLAT"}
+                {formulLoading ? (formulPhase.includes("kaydediliyor") ? "Kaydediliyor…" : "Eşleştiriliyor…") : "ANALİZİ BAŞLAT"}
               </button>
               <button type="button" className={styles.cancelBtn} onClick={() => { setFormulInput(""); setFormulResults([]); setFormulError(""); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
                 Temizle
               </button>
             </div>
+            {formulPhase && <p role="status" style={{ marginTop: 12 }}>{formulPhase}</p>}
             {formulError && <div className={styles.formError} style={{ marginTop: 12 }}>{formulError}</div>}
           </div>
 
