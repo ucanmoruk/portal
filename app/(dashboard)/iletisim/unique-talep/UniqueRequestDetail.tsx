@@ -58,7 +58,8 @@ export default function UniqueRequestDetail({ id }: { id: string }) {
   function addCatalog(serviceId?: number, packageId?: number) {
     if (!offer) return;
     const extra = hydrateCrmOffer({ recipient: offer.recipient, email: offer.email, subject: offer.subject, replySubject: "", replyBody: "", warnings: [], items: serviceId ? [{ serviceId, quantity: 1, products: [] }] : [], packages: packageId ? [{ packageId, quantity: 1, products: [] }] : [] }, services, packages);
-    setOffer({ ...offer, items: [...offer.items, ...extra.items.map(line => ({ ...line, packageGroup: line.packageGroup ? `${line.packageGroup}-${Date.now()}` : null }))], warnings: [...offer.warnings, ...extra.warnings] });
+    const groupSuffix = Date.now();
+    setOffer({ ...offer, items: [...offer.items, ...extra.items.map(line => ({ ...line, packageGroup: line.packageGroup ? `${line.packageGroup}-${groupSuffix}` : null }))], warnings: [...offer.warnings, ...extra.warnings] });
   }
   if (!item || !offer) return <div className={table.page}><h1 className={table.pageTitle}>Unique Talep</h1>{error ? <p role="alert">{error}</p> : <p>Talep yükleniyor…</p>}<Link href="/iletisim/unique-talep">Talep listesine dön</Link></div>;
   const locked = busy || !!item.sentAt || ["Hazırlanıyor", "Gönderiliyor", "Belirsiz"].includes(item.mailState);
