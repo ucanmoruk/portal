@@ -35,6 +35,21 @@ async function post(action, extra = {}) {
   return route.POST(new Request('https://portal.example/api/unique-talep/1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, version: row.version, offer, ...extra }) }), { params: Promise.resolve({ id: '1' }) });
 }
 (async () => {
+  const { NextRequest } = require('next/server');
+  const proxy = compile('proxy.ts', { 'next-auth/jwt': { async getToken() { return null; } } }).default;
+  const cronProxy = await proxy(new NextRequest('https://portal.example/api/cron/unique-talep'));
+  assert.equal(cronProxy.headers.get('x-middleware-next'), '1');
+  assert.equal((await proxy(new NextRequest('https://portal.example/api/unique-talep'))).status, 401);
+  let cronCalls = 0;
+  const cron = compile('app/api/cron/unique-talep/route.ts', { '@/lib/loadDotenv': { loadDotenvOnce() {} }, '@/lib/uniqueTalepMailbox': { async syncUniqueMailbox() { cronCalls++; return { added: 0 }; } } });
+  assert.equal((await cron.GET(new Request('https://portal.example/api/cron/unique-talep'))).status, 401);
+  assert.equal(cronCalls, 0);
+  const oldSecret = process.env.KYS_TELEGRAM_CRON_SECRET;
+  try {
+    process.env.KYS_TELEGRAM_CRON_SECRET = 'fixture-key-for-cron-authorization-test';
+    assert.equal((await cron.GET(new Request('https://portal.example/api/cron/unique-talep', { headers: { authorization: 'Bearer ' + process.env.KYS_TELEGRAM_CRON_SECRET } }))).status, 200);
+    assert.equal(cronCalls, 1);
+  } finally { if (oldSecret === undefined) delete process.env.KYS_TELEGRAM_CRON_SECRET; else process.env.KYS_TELEGRAM_CRON_SECRET = oldSecret; }
   assert.equal(rules.classifyUniqueMail('Analiz fiyat teklifi', 'pH testi rica ederiz', 'a@example.com').potential, true);
   assert.equal(rules.classifyUniqueMail('Laboratory quotation', 'Please quote cosmetic testing', 'a@example.com').category, 'Fiyat Teklifi');
   assert.equal(rules.classifyUniqueMail('Analiz kampanyası', 'unsubscribe price test', 'noreply@example.com').potential, false);
