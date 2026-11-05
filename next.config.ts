@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   output: "standalone",
-  serverExternalPackages: ["nodemailer", "mssql", "mysql2", "jszip", "docx", "pizzip", "docxtemplater", "mammoth", "pdf-parse", "pdfjs-dist"],
+  serverExternalPackages: ["nodemailer", "imapflow", "mailparser", "mssql", "mysql2", "jszip", "docx", "pizzip", "docxtemplater", "mammoth", "pdf-parse", "pdfjs-dist"],
   outputFileTracingIncludes: {
     "/api/kys/pdf-worker": ["./node_modules/pdfjs-dist/build/pdf.mjs", "./node_modules/pdfjs-dist/build/pdf.worker.min.mjs"],
     "/api/kys/dokumanlar/[id]/pdf": ["./scripts/convert-word-to-pdf.ps1"],

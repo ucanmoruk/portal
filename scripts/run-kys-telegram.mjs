@@ -20,7 +20,13 @@ if (process.argv.includes("--check")) {
   console.log("Telegram cron yapılandırması hazır. Gönderim yapılmadı.");
   process.exit(0);
 }
-const response=await fetch(new URL("/api/cron/kys-telegram",base),{headers:{Authorization:`Bearer ${secret}`},signal:AbortSignal.timeout(180000)});
-if(!response.ok)throw new Error(`Telegram zamanlayıcı HTTP ${response.status} hatası verdi.`);
-const data=await response.json();
-console.log(JSON.stringify(data));
+// Both jobs are independent: a mailbox outage must not suppress Telegram digests.
+const jobs=await Promise.allSettled([
+  ["Telegram", "/api/cron/kys-telegram", 180000],
+  ["Unique Talep", "/api/cron/unique-talep", 300000],
+].map(async ([label, endpoint, timeout])=>{
+  const response=await fetch(new URL(endpoint,base),{headers:{Authorization:`Bearer ${secret}`},signal:AbortSignal.timeout(timeout)});
+  if(!response.ok)throw new Error(`${label} zamanlayıcı HTTP ${response.status} hatası verdi.`);
+  console.log(JSON.stringify({job:label,result:await response.json()}));
+}));
+for(const job of jobs)if(job.status==="rejected"){console.error(job.reason.message);process.exitCode=1;}

@@ -11,6 +11,7 @@ export interface MenuItem {
 
 export const MENU_TREE: MenuItem[] = [
   { key: "iletisim.spektrotek-talep", label: "Spektrotek Talep", href: "/iletisim/spektrotek-talep" },
+  { key: "iletisim.unique-talep", label: "Unique Talep", href: "/iletisim/unique-talep" },
   { key: "iletisim.musteri-talep", label: "Müşteri Talep", href: "/iletisim/musteri-talep" },
   {
     key: "dashboard",
