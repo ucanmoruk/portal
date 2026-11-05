@@ -1,6 +1,6 @@
 "use client";
 
-import { refreshUgdReportHtml } from "@/lib/ugdReportRefresh";
+import { restoreLiveReportSections, liveReportDocument } from "@/lib/ugdLiveReport";
 import { calcSED, fmtSED, parseUgdNumber } from "@/lib/ugdCalculations";
 
 
@@ -257,24 +257,6 @@ function mergeFirmalar(primary: any[] = [], extras: any[] = []) {
   return merged;
 }
 
-function normalizeFirmaText(value: unknown) {
-  return String(value ?? "").replace(/\s+/g, " ").trim().toLocaleLowerCase("tr-TR");
-}
-
-function hasStalePhysicalChemDash(html: unknown) {
-  const normalized = normalizeFirmaText(html);
-  return ["görünüm", "renk", "koku"].some((label) =>
-    normalized.includes(label) && /<td[^>]*>\s*(?:—|-)\s*<\/td>/i.test(String(html ?? "")),
-  );
-}
-
-function normalizeSavedCpsrHtml(value: unknown) {
-  return String(value || "")
-    .replace(/<p\b[^>]*class=["'][^"']*\bbasis\b[^"']*["'][^>]*>\s*Prepared in accordance with the Turkish Medicines and Medical Devices Agency Guideline on Safety Assessment of Cosmetic Products Version 3\.0\.\s*<\/p>/gi, "")
-    .replace(/\bWater Solubility\b/g, "Solubility in water")
-    .replace(/\bOther Solubility\b/g, "Solubility in other solvents and oils");
-}
-
 type LabStatus = 'Tamamlandı' | 'Devam Ediyor';
 
 function labSentence(kind: 'mikro' | 'challenge' | 'stabilite', status: LabStatus, shelfLife: string, pao: string) {
@@ -479,6 +461,10 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
   const [savedOk, setSavedOk] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
   const [editorSaveStatus, setEditorSaveStatus] = useState("");
+  const [editorSaving, setEditorSaving] = useState(false);
+  const editorSaveBusy = useRef(false);
+  const editorLoadSequence = useRef(0);
+  const lastSavedReport = useRef<{ key: string; head: string; body: string } | null>(null);
   const [loadingEdit, setLoadingEdit] = useState(isEdit);
   const [reportLang, setReportLang] = useState<ReportVariant>('tr');
 
@@ -950,6 +936,10 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 
   // ── Son kayıt ─────────────────────────────────────────────────────────────
   const handleFinalSave = async () => {
+    if (activeTab === 'canli-rapor') {
+      await handleSaveEditedReport();
+      return;
+    }
     if (!form.Urun || !form.FirmaID) {
       setGlobalError("Ürün adı ve firma seçimi zorunludur.");
       setActiveTab('genel');
@@ -976,18 +966,6 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
   };
 
   // ── Rapor İndir ───────────────────────────────────────────────────────────
-  const loadSavedEditedHtml = async (language: ReportVariant, profile: 'ugd' | 'lab') => {
-    const recordId = Number(savedId || editId || 0);
-    if (!recordId) return "";
-    const saved = await fetch(`/api/urunler/canli-rapor?source=${isLabSource ? "lab" : "ugd"}&recordId=${recordId}&language=${language}&profile=${profile}`)
-      .then(response => response.ok ? response.json() : null)
-      .catch(() => null);
-    const bodyHtml = String(saved?.item?.bodyHtml || "").trim();
-    if (!bodyHtml) return "";
-    const headHtml = String(saved?.item?.headHtml || "");
-    return `<!doctype html><html><head><meta charset="utf-8" />${headHtml}</head><body><div class="WordSection1">${bodyHtml}</div></body></html>`;
-  };
-
   const handleReportDownload = async (format: "preview" | "word" | "pdf") => {
     setPrintLoading(true);
     const previewWindow = format === "preview" ? window.open("", "_blank") : null;
@@ -1000,16 +978,14 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       const endpointFormat = format === "preview" ? "pdf" : format === "word" ? "docx" : "pdf";
       const language = reportLang;
       const profile = isLabSource ? "lab" : "ugd";
-      const currentEditorBody = language === "cpsr" && activeTab === "canli-rapor" ? getEditedReportHtml().trim() : "";
-      const editedHtml = language === "cpsr"
-        ? currentEditorBody
-          ? `<!doctype html><html><head><meta charset="utf-8" />${editorHead}</head><body><div class="WordSection1">${currentEditorBody}</div></body></html>`
-          : await loadSavedEditedHtml(language, profile)
+      const currentEditorBody = activeTab === "canli-rapor" ? getEditedReportHtml().trim() : "";
+      const editedHtml = currentEditorBody
+        ? liveReportDocument(editorHead, currentEditorBody)
         : "";
       const res = await fetch(`/api/urunler/rapor-sablon?format=${endpointFormat}&language=${language}&profile=${profile}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ form, formulResults, firmaAd, language, profile, editedHtml }),
+        body: JSON.stringify({ form, formulResults, firmaAd, language, profile, editedHtml, recordId: Number(savedId || editId || 0) }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -1063,7 +1039,10 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 
   const saveEditedReport = async (bodyHtml: string) => {
     const recordId = Number(savedId || editId || 0);
-    if (!recordId || !bodyHtml.trim()) return null;
+    if (!recordId || !bodyHtml.trim()) throw new Error("Kaydedilecek rapor kaydı bulunamadı.");
+    const key = `${isLabSource ? "lab" : "ugd"}:${recordId}:${reportLang}`;
+    const previous = lastSavedReport.current;
+    if (previous?.key === key && previous.head === editorHead && previous.body === bodyHtml) return { ok: true };
     const profile = isLabSource ? "lab" : "ugd";
     const res = await fetch("/api/urunler/canli-rapor", {
       method: "POST",
@@ -1074,7 +1053,6 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
         language: reportLang,
         profile,
         headHtml: editorHead,
-        bodyHtml,
         sections: editorSections.map((s, index) => ({
           ...s,
           html: editorRefs.current[editorSectionUiKey(s, index)]?.innerHTML ?? s.html,
@@ -1082,62 +1060,49 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       }),
     });
     if (!res.ok) {
-      console.warn("Canlı rapor kaydı atlandı:", await res.text().catch(() => `HTTP ${res.status}`));
-      return null;
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error || `Canlı rapor kaydedilemedi (HTTP ${res.status}).`);
     }
-    return res.json().catch(() => ({ ok: true }));
+    const result = await res.json();
+    if (!result.ok) throw new Error("Canlı rapor kaydı doğrulanamadı.");
+    lastSavedReport.current = { key, head: editorHead, body: bodyHtml };
+    return result;
   };
 
   const loadEditableReport = async (preferSaved = true) => {
+    const sequence = ++editorLoadSequence.current;
     setEditorLoading(true);
+    setGlobalError("");
     try {
       const recordId = Number(savedId || editId || 0);
       const profile = isLabSource ? "lab" : "ugd";
       const firmaAd = selectedFirmaAd();
       const language = reportLang;
+      if (preferSaved && recordId) {
+        const response = await fetch(`/api/urunler/canli-rapor?source=${profile}&recordId=${recordId}&language=${language}&profile=${profile}&compact=1`, { cache: "no-store" });
+        const saved = await response.json();
+        if (!response.ok) throw new Error(saved.error || "Kaydedilen rapor okunamadı.");
+        if (sequence !== editorLoadSequence.current) return;
+        if (saved.item?.bodyHtml) {
+          const body = String(saved.item.bodyHtml), head = String(saved.item.headHtml || "");
+          setEditorHead(head);
+          setEditorSections(restoreLiveReportSections(body, saved.item.sections));
+          lastSavedReport.current = { key: `${profile}:${recordId}:${language}`, head, body };
+          setEditorSaveStatus(saved.item.createdAt ? `Son kayıt yüklendi: ${new Date(saved.item.createdAt).toLocaleString("tr-TR")}` : "Son kayıt yüklendi.");
+          return;
+        }
+      }
       const res = await fetch(`/api/urunler/rapor-sablon?format=html&language=${language}&profile=${profile}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ form, formulResults, firmaAd, language, profile }),
       });
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Rapor HTML alınamadı (HTTP ${res.status})`);
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || `Rapor HTML alınamadı (HTTP ${res.status})`);
       }
       const html = await res.text();
-
-      if (preferSaved && recordId) {
-        const saved = await fetch(`/api/urunler/canli-rapor?source=${isLabSource ? "lab" : "ugd"}&recordId=${recordId}&language=${reportLang}&profile=${profile}`)
-          .then(r => r.ok ? r.json() : null)
-          .catch(() => null);
-        if (saved?.item?.bodyHtml) {
-          const savedBodyHtml = reportLang === "cpsr"
-            ? normalizeSavedCpsrHtml(saved.item.bodyHtml)
-            : saved.item.bodyHtml;
-          const savedSections = Array.isArray(saved.item.sections)
-            ? saved.item.sections.map((section: any) => ({
-                ...section,
-                html: String(section?.html || "").trim()
-                  ? refreshUgdReportHtml(reportLang === "cpsr" ? normalizeSavedCpsrHtml(section.html) : section.html, html, reportLang === "cpsr")
-                  : "",
-              }))
-            : [];
-          const hasSplitContent = savedSections.length === 6 && savedSections.filter((section: any) => String(section?.html || "").trim()).length > 1;
-          const currentFirmaAd = selectedFirmaAd();
-          const savedHasCurrentFirma = !isLabSource
-            || (currentFirmaAd
-              ? normalizeFirmaText(savedBodyHtml).includes(normalizeFirmaText(currentFirmaAd))
-              : false);
-          const savedHasFreshPhysicalChem = !isLabSource || !hasStalePhysicalChemDash(savedBodyHtml);
-          if (hasSplitContent && savedHasCurrentFirma && savedHasFreshPhysicalChem) {
-            setEditorHead(saved.item.headHtml || "");
-            setEditorSections(savedSections);
-            setEditorSaveStatus(saved.item.createdAt ? `Son kayıt yüklendi: ${new Date(saved.item.createdAt).toLocaleString("tr-TR")}` : "Son kayıt yüklendi.");
-            return;
-          }
-        }
-      }
-
+      if (sequence !== editorLoadSequence.current) return;
+      lastSavedReport.current = null;
       const doc = new DOMParser().parseFromString(html, "text/html");
       setEditorHead(doc.head?.innerHTML || "");
       const splitSections = [
@@ -1197,9 +1162,9 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
           : section.html,
       })));
     } catch (err: any) {
-      setGlobalError(err.message || "Canlı rapor yüklenemedi");
+      if (sequence === editorLoadSequence.current) setGlobalError(err.message || "Canlı rapor yüklenemedi");
     } finally {
-      setEditorLoading(false);
+      if (sequence === editorLoadSequence.current) setEditorLoading(false);
     }
   };
 
@@ -1290,11 +1255,13 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
   };
 
   const printEditedAsPdf = async () => {
+    if (editorSaveBusy.current) return;
     const bodyHtml = getEditedReportHtml();
     if (!bodyHtml.trim()) {
       setGlobalError("Yazdırılacak rapor içeriği henüz yüklenmedi. Lütfen Şablonu Yenile butonuna basın.");
       return;
     }
+    editorSaveBusy.current = true;
     setPrintLoading(true);
     setGlobalError("");
     const previewWindow = window.open("", "_blank");
@@ -1303,11 +1270,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       previewWindow.document.close();
     }
     try {
-      try {
-        await saveEditedReport(bodyHtml);
-      } catch (saveErr) {
-        console.warn("Canlı rapor kaydı yapılamadı, PDF yine de oluşturuluyor:", saveErr);
-      }
+      await saveEditedReport(bodyHtml);
       const firmaAd = selectedFirmaAd();
       const language = reportLang;
       const profile = isLabSource ? "lab" : "ugd";
@@ -1315,7 +1278,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       const res = await fetch(`/api/urunler/rapor-sablon?format=pdf&language=${language}&profile=${profile}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ form, formulResults, firmaAd, language, profile, editedHtml }),
+        body: JSON.stringify({ form, formulResults, firmaAd, language, profile, editedHtml, recordId: Number(savedId || editId || 0) }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1337,6 +1300,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       }
       setGlobalError(err.message || "Canlı rapor yazdırılamadı.");
     } finally {
+      editorSaveBusy.current = false;
       setPrintLoading(false);
     }
   };
@@ -1347,12 +1311,18 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
       setEditorSaveStatus("Kaydedilecek içerik bulunamadı.");
       return;
     }
+    if (editorSaveBusy.current) return;
+    editorSaveBusy.current = true;
+    setEditorSaving(true);
     setEditorSaveStatus("Kaydediliyor...");
     try {
       await saveEditedReport(bodyHtml);
       setEditorSaveStatus(`Kaydedildi: ${new Date().toLocaleString("tr-TR")}`);
-    } catch {
-      setEditorSaveStatus("Kaydedilemedi.");
+    } catch (error) {
+      setEditorSaveStatus(error instanceof Error ? error.message : "Kaydedilemedi.");
+    } finally {
+      editorSaveBusy.current = false;
+      setEditorSaving(false);
     }
   };
 
@@ -1886,13 +1856,13 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 	                <button type="button" className={styles.cancelBtn} onMouseDown={e => e.preventDefault()} onClick={deleteSelectedTableRow}>Satır Sil</button>
 	              </div>
 	              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-	                <button type="button" className={styles.cancelBtn} onClick={() => void loadEditableReport(false)} disabled={editorLoading} style={{ opacity: editorLoading ? 0.6 : 1 }}>
+	                <button type="button" className={styles.cancelBtn} onClick={() => void loadEditableReport(false)} disabled={editorLoading || editorSaving || printLoading} style={{ opacity: editorLoading ? 0.6 : 1 }}>
 	                  {editorLoading ? 'Yükleniyor...' : 'Şablonu Yenile'}
 	                </button>
-                <button type="button" className={styles.cancelBtn} onClick={handleSaveEditedReport}>
-                  Kaydet
+                <button type="button" className={styles.cancelBtn} onClick={handleSaveEditedReport} disabled={editorSaving || printLoading || editorLoading}>
+                  {editorSaving ? "Kaydediliyor…" : "Kaydet"}
                 </button>
-	                <button type="button" className={styles.saveBtn} onClick={printEditedAsPdf} disabled={printLoading} style={{ opacity: printLoading ? 0.65 : 1 }}>
+	                <button type="button" className={styles.saveBtn} onClick={printEditedAsPdf} disabled={printLoading || editorSaving || editorLoading} style={{ opacity: printLoading ? 0.65 : 1 }}>
 	                  {printLoading ? "Hazırlanıyor..." : "Yazdır"}
 	                </button>
 	              </div>
@@ -1926,7 +1896,7 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
 	                      className="liveReportEditorBody WordSection1"
 	                      data-live-editor-key={uiKey}
 	                      data-live-editor-index={idx}
-	                      contentEditable
+	                      contentEditable={!editorLoading && !editorSaving && !printLoading}
                       suppressContentEditableWarning
                       style={{ minHeight: 320, padding: 12, overflowX: 'hidden', overflowY: 'auto', lineHeight: 1.55, maxWidth: '100%' }}
                       dangerouslySetInnerHTML={{ __html: section.html || '<p></p>' }}
@@ -1993,10 +1963,10 @@ export default function UrunFormClient({ editId, source = 'ugd', returnHref = "/
               type="button"
               className={styles.saveBtn}
               onClick={handleFinalSave}
-              disabled={saving}
+              disabled={saving || editorSaving || printLoading || editorLoading}
               style={{ minWidth: 200, opacity: saving ? 0.6 : 1 }}
             >
-              {saving ? "Kaydediliyor..." : tabIndex === 2 ? "KAYDET VE ÖNİZLE" : isEdit ? "GÜNCELLE" : "ÜRÜNÜ KAYDET"}
+              {saving || editorSaving ? "Kaydediliyor..." : activeTab === "canli-rapor" ? "RAPORU KAYDET" : tabIndex === 2 ? "KAYDET VE ÖNİZLE" : isEdit ? "GÜNCELLE" : "ÜRÜNÜ KAYDET"}
             </button>
           )}
         </div>

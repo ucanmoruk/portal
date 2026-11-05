@@ -12,7 +12,8 @@ import HTMLtoDOCX from "html-to-docx";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import poolPromise, { cosmoPool } from "@/lib/db";
-import { refreshUgdReportHtml } from "@/lib/ugdReportRefresh";
+import { liveReportDocument } from "@/lib/ugdLiveReport";
+import { loadLiveReport } from "@/lib/ugdLiveReportStore";
 import { enrichUgdFormulaRows } from "@/lib/ugdRegulationLookup";
 import { renderUgdReportHtml } from "@/lib/ugdReportHtml";
 import { renderUgdReportHtmlEn } from "@/lib/ugdReportHtmlEn";
@@ -482,7 +483,7 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return Response.json({ error: "Yetkisiz" }, { status: 401 });
 
-  let form: Record<string, unknown>, formulResults: any[], firmaAd: string, bodyLanguage: ReportLanguage, bodyProfile: ReportProfile, editedHtml: string;
+  let form: Record<string, unknown>, formulResults: any[], firmaAd: string, bodyLanguage: ReportLanguage, bodyProfile: ReportProfile, editedHtml: string, recordId: number;
   try {
     const b = await request.json();
     form = b.form || {};
@@ -491,6 +492,7 @@ export async function POST(request: Request) {
     bodyLanguage = pickLanguage(b.language);
     bodyProfile = pickProfile(b.profile);
     editedHtml = sv(b.editedHtml);
+    recordId = Number(b.recordId || form.ID || 0);
   } catch {
     return Response.json({ error: "Geçersiz istek gövdesi" }, { status: 400 });
   }
@@ -500,6 +502,19 @@ export async function POST(request: Request) {
     const format = searchParams.get("format") || "doc";
     const language = pickLanguage(searchParams.get("language") || bodyLanguage);
     const profile = pickProfile(searchParams.get("profile") || bodyProfile);
+    const saved = !editedHtml && format !== "html" && Number.isSafeInteger(recordId) && recordId > 0
+      ? await loadLiveReport({ source: profile, recordId, language, profile }) : null;
+    const snapshotHtml = editedHtml || (saved?.bodyHtml ? liveReportDocument(saved.headHtml, saved.bodyHtml) : "");
+    // A saved or explicitly edited report is the final document. Regenerating tables
+    // here discards changes to concentrations, supplier details and removed rows.
+    if (snapshotHtml) {
+      const suffix = language === "cpsr" ? "_CPSR" : language === "en" ? "_EN" : "";
+      const name = `${safeReportName(form.RaporNo)}${suffix}`;
+      if (format === "html") return new Response(snapshotHtml, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+      if (format === "pdf") return new Response(await renderPdf(snapshotHtml, form, language, profile) as unknown as BodyInit, { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="UGD_Rapor_${name}.pdf"` } });
+      const docx = await renderDocx(snapshotHtml, form, language, profile);
+      return new Response(docx as unknown as BodyInit, { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "Content-Disposition": `attachment; filename="UGD_Rapor_${name}.docx"` } });
+    }
     const firmaDetails = await getFirmaDetails(form.FirmaID, profile);
     const reportFirmaAd = firmaDetails.firmaAd || sv(firmaAd);
     const enrichedFormulResults = await enrichUgdFormulaRows(formulResults);
@@ -508,7 +523,7 @@ export async function POST(request: Request) {
       : language === "en"
         ? renderUgdReportHtmlEn({ form, formulResults: enrichedFormulResults, ...firmaDetails, firmaAd: reportFirmaAd, language, profile })
         : renderUgdReportHtml({ form, formulResults: enrichedFormulResults, ...firmaDetails, firmaAd: reportFirmaAd, language, profile }));
-    const html = refreshUgdReportHtml(editedHtml, generatedHtml, language === "cpsr");
+    const html = generatedHtml;
     const languageSuffix = language === "cpsr" ? "_CPSR" : language === "en" ? "_EN" : "";
     const safeName = `${safeReportName(form.RaporNo)}${languageSuffix}`;
 
