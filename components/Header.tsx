@@ -3,7 +3,7 @@
 import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import { Bell, CalendarDays } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "./Header.module.css";
 import { useSidebar } from "./SidebarProvider";
 
@@ -12,10 +12,12 @@ export default function Header() {
   const { toggle } = useSidebar();
   const [notifications,setNotifications]=useState<{count:number;items:Array<{id:number;etiket:string;gorevId?:number;konusmaId?:number;baslik:string;olusturanAd:string}>}>({count:0,items:[]});
   const [notificationsOpen,setNotificationsOpen]=useState(false);
-  const loadNotifications=useCallback(async()=>{try{const response=await fetch("/api/kys/iletisim/bildirimler");if(response.ok)setNotifications(await response.json());}catch{/* Bildirim hatası üst menüyü engellemez. */}},[]);
+  const notificationsPending = useRef(false);
+  const loadNotifications=useCallback(async()=>{if(notificationsPending.current)return;notificationsPending.current=true;try{const response=await fetch("/api/kys/iletisim/bildirimler");if(response.ok)setNotifications(await response.json());}catch{/* Bildirim hatası üst menüyü engellemez. */}finally{notificationsPending.current=false;}},[]);
   const markNotification=useCallback(async(id?:number)=>{await fetch("/api/kys/iletisim",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(id?{islem:"okundu",id}:{islem:"tumunu-okundu"})});await loadNotifications();},[loadNotifications]);
   const notificationHref=(item:{id:number;etiket:string;gorevId?:number;konusmaId?:number})=>(item.etiket==="Görev"||item.gorevId)?`/laboratuvar/kys/iletisim?sekme=gorev&gorevId=${item.gorevId||item.id}`:item.konusmaId?`/laboratuvar/kys/iletisim?sekme=mesaj&konusmaId=${item.konusmaId}`:"/laboratuvar/kys/iletisim";
-  useEffect(()=>{if(!session?.user)return;const initial=setTimeout(()=>void loadNotifications(),0);const timer=setInterval(()=>void loadNotifications(),30000);return()=>{clearTimeout(initial);clearInterval(timer);};},[session?.user,loadNotifications]);
+  const signedIn = Boolean(session?.user);
+  useEffect(()=>{if(!signedIn)return;const initial=setTimeout(()=>void loadNotifications(),0);const timer=setInterval(()=>{if(document.visibilityState === "visible")void loadNotifications();},30000);return()=>{clearTimeout(initial);clearInterval(timer);};},[signedIn,loadNotifications]);
 
   return (
     <header className={styles.header} data-dashboard-header>

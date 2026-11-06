@@ -95,7 +95,7 @@ function mapItem(row: Row) {
     createdAt:date(row.CreatedAt), updatedAt:date(row.UpdatedAt), okundu:Boolean(number(row,"Okundu")) };
 }
 
-export async function listKysIletisim(user: User) {
+export async function listKysIletisim(user: User, includeDetails = true) {
   await ensureKysIletisimSchema(); const pool=await cosmoPool;
   const res=await pool.request().input("UserID",user.userId).query(`SELECT i.*,CASE WHEN o.ID IS NULL THEN 0 ELSE 1 END AS Okundu
     FROM KysIletisim i LEFT JOIN KysIletisimOkuma o ON o.IcerikID=i.ID AND o.KullaniciID=@UserID
@@ -104,10 +104,10 @@ export async function listKysIletisim(user: User) {
       OR (i.Tur='Mesaj' AND EXISTS (SELECT 1 FROM KysIletisimKatilimci k WHERE k.KonusmaID=COALESCE(i.KonusmaID,i.ID) AND k.KullaniciID=@UserID))
     ORDER BY i.CreatedAt DESC`);
   const items=res.recordset.map(mapItem);
-  const readRows=await pool.request().query(`SELECT IcerikID,KullaniciID,OkunduAt FROM KysIletisimOkuma ORDER BY OkunduAt ASC`);
+  const readRows=includeDetails ? await pool.request().query(`SELECT IcerikID,KullaniciID,OkunduAt FROM KysIletisimOkuma ORDER BY OkunduAt ASC`) : { recordset: [] };
   const readsByItem=new Map<number,Array<{kullaniciId:string;okunduAt:string|null}>>();
   for(const row of readRows.recordset){const id=number(row,"IcerikID");const list=readsByItem.get(id)||[];list.push({kullaniciId:string(row,"KullaniciID"),okunduAt:date(row.OkunduAt)});readsByItem.set(id,list);}
-  const logs=await pool.request().query(`SELECT GorevID,Durum,KullaniciAd,CreatedAt FROM KysIletisimGorevLog ORDER BY CreatedAt ASC`);
+  const logs=includeDetails ? await pool.request().query(`SELECT GorevID,Durum,KullaniciAd,CreatedAt FROM KysIletisimGorevLog ORDER BY CreatedAt ASC`) : { recordset: [] };
   const logByTask=new Map<number,any[]>();
   for(const row of logs.recordset){const id=number(row,"GorevID");const list=logByTask.get(id)||[];list.push({durum:string(row,"Durum"),kullaniciAd:string(row,"KullaniciAd"),createdAt:date(row.CreatedAt)});logByTask.set(id,list);}
   const comments=items.filter(item=>item.tur==="Görev Yorumu");
@@ -243,22 +243,33 @@ export async function getKysBildirimler(user:User){
   const today=new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Istanbul"});
   const tomorrow=new Date(new Date(`${today}T12:00:00+03:00`).getTime()+86400000).toLocaleDateString("sv-SE",{timeZone:"Europe/Istanbul"});
   const tasks=(await pool.request().input("UserID",user.userId).query("SELECT * FROM KysIletisim WHERE Tur='Görev' AND AliciID=@UserID AND Durum<>'Tamamlandı'")).recordset;
+  // Older installations may lack the unique reminder index. Read existing keys
+  // once so polling does not create another reminder for every overdue task.
+  const existingKeys = new Set((await pool.request().input("UserID",user.userId).query(
+    "SELECT DISTINCT BildirimAnahtari FROM KysIletisim WHERE AliciID=@UserID AND Tur='Termin Hatırlatma' AND BildirimAnahtari IS NOT NULL"
+  )).recordset.map(row=>string(row,"BildirimAnahtari")));
   for(const task of tasks){
     const end=date(task.BitisTarihi||task.TerminTarihi)?.slice(0,10);
     if(!end||end>tomorrow)continue;
     const stage=end<today?"Gecikti":end===today?"Bugün":"Yarın";
     const key=`termin:${number(task,"ID")}:${user.userId}:${end}:${stage}`;
+    if(existingKeys.has(key))continue;
     const insert="INSERT INTO KysIletisim (Tur,Baslik,Icerik,OlusturanID,OlusturanAd,AliciID,KonusmaID,Durum,TerminTarihi,BildirimAnahtari) VALUES ('Termin Hatırlatma',@Baslik,@Icerik,@OlusturanID,@OlusturanAd,@UserID,@ID,'Aktif',@Termin,@Key)";
     await pool.request().input("ID",number(task,"ID")).input("UserID",user.userId).input("OlusturanID",string(task,"OlusturanID")).input("OlusturanAd",string(task,"OlusturanAd")).input("Baslik",`${stage}: ${string(task,"Baslik")}`.slice(0,220)).input("Icerik",`Görevin termin tarihi: ${end}`).input("Termin",end).input("Key",key)
       .query(hasMysqlConfig()?insert.replace("INSERT INTO","INSERT IGNORE INTO"):`IF NOT EXISTS (SELECT 1 FROM KysIletisim WHERE BildirimAnahtari=@Key) ${insert}`);
   }
-  const data=await listKysIletisim(user);
+  const data=await listKysIletisim(user, false);
   const events=(await pool.request().input("UserID",user.userId).query(`SELECT i.* FROM KysIletisim i
     INNER JOIN KysIletisim t ON t.ID=i.KonusmaID AND t.Tur='Görev'
     LEFT JOIN KysIletisimOkuma o ON o.IcerikID=i.ID AND o.KullaniciID=@UserID
     WHERE i.AliciID=@UserID AND o.ID IS NULL AND i.Tur IN ('Termin Hatırlatma','Görev Yorumu')
       AND (t.AliciID=@UserID OR t.OlusturanID=@UserID)
-      AND (i.Tur='Görev Yorumu' OR (t.Durum<>'Tamamlandı' AND t.AliciID=@UserID AND COALESCE(t.BitisTarihi,t.TerminTarihi)=i.TerminTarihi))`)).recordset.map(row=>({...mapItem(row),etiket:string(row,"Tur"),gorevId:number(row,"KonusmaID")}));
+      AND (i.Tur='Görev Yorumu' OR (t.Durum<>'Tamamlandı' AND t.AliciID=@UserID AND COALESCE(t.BitisTarihi,t.TerminTarihi)=i.TerminTarihi))
+      AND (i.Tur='Görev Yorumu' OR i.ID IN (
+        SELECT MAX(reminder.ID) FROM KysIletisim reminder
+        WHERE reminder.AliciID=@UserID AND reminder.Tur='Termin Hatırlatma'
+        GROUP BY reminder.BildirimAnahtari, reminder.KonusmaID, reminder.TerminTarihi
+      ))`)).recordset.map(row=>({...mapItem(row),etiket:string(row,"Tur"),gorevId:number(row,"KonusmaID")}));
   const items=[...events.filter(event=>{
     if(event.etiket!=="Termin Hatırlatma")return true;
     const due=String(event.terminTarihi).slice(0,10);

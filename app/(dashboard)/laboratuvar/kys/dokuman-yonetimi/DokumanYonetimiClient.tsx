@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { Download } from "lucide-react";
+import { externalDocumentLink } from "@/lib/kysDocumentLink";
 import { hasKysPdfPreview } from "@/lib/kysFilePreview";
 import UploadedPdfPreview from "./[id]/onizleme/UploadedPdfPreview";
-import { convertTextCase, type TextCaseMode } from "@/lib/kysTextCase";
+import { convertTextCase, formatProcedureHeadingText, type TextCaseMode } from "@/lib/kysTextCase";
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -54,7 +55,7 @@ import {
 } from "./dokumanTypes";
 
 type Kullanici = { ID: number | string; Ad: string };
-type DisKaynakliDokuman = { id: number; dokumanKodu: string; dokumanAdi: string; yayincisi: string; pdfPath: string };
+type DisKaynakliDokuman = { id: number; dokumanKodu: string; dokumanAdi: string; yayincisi: string; pdfPath: string; yayinLinki: string };
 type Aksiyon =
   | "onaya-gonder"
   | "yayin-onayi"
@@ -224,6 +225,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     hazirlayanId: "", hazirlayanAd: "", onaylayanId: "", onaylayanAd: "",
   });
   const [yayinDokumanlari, setYayinDokumanlari] = useState<DokumanDetay[]>([]);
+  const [linkSearchError, setLinkSearchError] = useState("");
   const [disKaynakliDokumanlar, setDisKaynakliDokumanlar] = useState<DisKaynakliDokuman[]>([]);
   const [linkSearchBusy, setLinkSearchBusy] = useState(false);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
@@ -231,6 +233,9 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   const [revizyonOnizleme, setRevizyonOnizleme] = useState<{ etiket: string; icerik: string; aciklama: string } | null>(null);
   const [manualRevizyonOpen, setManualRevizyonOpen] = useState(false);
   const [manualRevizyonBusy, setManualRevizyonBusy] = useState(false);
+  const [deleteRevision, setDeleteRevision] = useState<DokumanRevizyon | null>(null);
+  const [deleteRevisionBusy, setDeleteRevisionBusy] = useState(false);
+  const [deleteRevisionError, setDeleteRevisionError] = useState("");
   const [manualRevizyonHata, setManualRevizyonHata] = useState("");
   const [manualRevizyonId, setManualRevizyonId] = useState<number | null>(null);
   const [manualRevizyon, setManualRevizyon] = useState({ revizyon: "", yayinTarihi: "", revizyonuYapan: "", maddeler: [{ maddeNo: "", aciklama: "" }] });
@@ -253,11 +258,12 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
   const tableMenuRef = useRef<HTMLDivElement | null>(null);
 
   const canEdit = Boolean(doc?.duzenlenebilir && yetki.duzenle);
+  const fileBasedDocument = Boolean(doc?.hasDosya || doc?.tur === "Form" || doc?.tur === "Liste");
 
   // ── Veri ───────────────────────────────────────────────────────────────────
 
-  const fetchDoc = useCallback(async () => {
-    setLoading(true);
+  const fetchDoc = useCallback(async (background = false) => {
+    if (!background) setLoading(true);
     setError("");
     try {
       const res = await fetch(`/api/kys/dokumanlar/${documentId}`);
@@ -267,9 +273,9 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       setYetki(json.yetki || BOS_YETKI);
     } catch (e: unknown) {
       setError(errorMessage(e, "Doküman alınamadı."));
-      setDoc(null);
+      if (!background) setDoc(null);
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, [documentId]);
 
@@ -290,8 +296,9 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     }
     setDirty(false);
     setEditing(false);
+    if (doc.hasDosya || doc.tur === "Form" || doc.tur === "Liste") setActiveTab(tab => tab === "icerik" ? "kunye" : tab);
     if (!initialTabSetRef.current) {
-      if (doc.hasDosya) setActiveTab("kunye");
+      if (doc.hasDosya || doc.tur === "Form" || doc.tur === "Liste") setActiveTab("kunye");
       initialTabSetRef.current = true;
     }
     setKunye({
@@ -331,6 +338,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
 
   useEffect(() => {
     const query = linkSearch.trim();
+    setLinkSearchError("");
     if (!linkModalOpen || query.length < 2) {
       setYayinDokumanlari([]);
       setDisKaynakliDokumanlar([]);
@@ -349,6 +357,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
         setDisKaynakliDokumanlar(result.external || []);
       } catch (cause) {
         if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+          setLinkSearchError(errorMessage(cause, "Doküman araması yapılamadı."));
           setYayinDokumanlari([]);
           setDisKaynakliDokumanlar([]);
         }
@@ -611,6 +620,17 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     return `${lastH3}.${max + 1}`;
   }
 
+  function applyProcedureHeadingCase(heading: HTMLElement, level: 2 | 3 | 4) {
+    if (doc?.tur !== "Prosedür" && doc?.tur !== "Talimat") return;
+    const walker = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT);
+    const state = { wordStart: true };
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      const text = node as Text;
+      text.data = formatProcedureHeadingText(text.data, level, state);
+    }
+  }
+
   function insertHeading(level: 2 | 3 | 4) {
     if (!ensureEditing()) return;
     const editor = editorRef.current;
@@ -636,6 +656,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
         });
         const currentText = heading.textContent?.trim() || "";
         if (!/^\d+(?:\.\d+)*\.?\s/.test(currentText)) heading.insertBefore(document.createTextNode(`${number} `), heading.firstChild);
+        applyProcedureHeadingCase(heading, level);
         headingSeqRef.current += 1;
         heading.id = slugifyHeading(heading.textContent || currentText, headingSeqRef.current);
         savedRangeRef.current = null;
@@ -651,6 +672,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     const heading = document.createElement(`h${level}`);
     heading.id = slugifyHeading(`${number} ${label}`, headingSeqRef.current);
     heading.textContent = `${number} ${label}`;
+    applyProcedureHeadingCase(heading, level);
     const paragraph = document.createElement("p");
     paragraph.innerHTML = "<br>";
     const insertionBlock = insertionBlockInsideEditor();
@@ -863,10 +885,12 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
     if (!ensureEditing()) return;
     const editor = editorRef.current;
     const target = disKaynakliDokumanlar.find(item => String(item.id) === targetId);
-    if (!editor || !target?.pdfPath) return;
+    if (!editor || !target) return;
+    const url = externalDocumentLink(target);
+    if (!url) { setLinkSearchError("Bu dokümanın PDF dosyası veya geçerli yayın bağlantısı yok."); return; }
     const range = currentSelectionInsideEditor() || savedRangeRef.current;
     const anchor = document.createElement("a");
-    anchor.href = target.pdfPath;
+    anchor.href = url;
     anchor.target = "_blank";
     anchor.rel = "noopener noreferrer";
     if (range && editor.contains(range.commonAncestorContainer)) {
@@ -992,7 +1016,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       const res = await fetch(`/api/kys/dokumanlar/${doc.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ icerik, ...extra }),
+        body: JSON.stringify({ ...(doc.tur === "Form" || doc.tur === "Liste" || doc.hasDosya ? {} : { icerik }), ...extra }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Doküman kaydedilemedi.");
@@ -1088,7 +1112,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       setAksiyonModal(null);
       loadedKeyRef.current = "";
       await fetchDoc();
-      setActiveTab(aksiyonModal === "revizyon-baslat" || aksiyonModal === "reddet" ? (doc.hasDosya ? "kunye" : "icerik") : "akis");
+      setActiveTab(aksiyonModal === "revizyon-baslat" || aksiyonModal === "reddet" ? (fileBasedDocument ? "kunye" : "icerik") : "akis");
     } catch (e: unknown) {
       setAksiyonHata(errorMessage(e, "İşlem tamamlanamadı."));
     } finally {
@@ -1113,6 +1137,22 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       return;
     }
     window.open(`/kys-dokuman-yazdir/${doc?.id}?print=1`, "_blank", "noopener,noreferrer");
+  }
+
+  async function removeRevision() {
+    if (!deleteRevision || deleteRevisionBusy || !yetki.revizyonSil) return;
+    setDeleteRevisionBusy(true);
+    setDeleteRevisionError("");
+    try {
+      const res = await fetch(`/api/kys/dokumanlar/${documentId}/revizyonlar/${deleteRevision.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Revizyon silinemedi.");
+      const deletedId = deleteRevision.id;
+      setDoc(current => current ? { ...current, revizyonlar: current.revizyonlar.filter(revision => revision.id !== deletedId) } : current);
+      setDeleteRevision(null);
+      void fetchDoc(true);
+    } catch (error) { setDeleteRevisionError(errorMessage(error, "Revizyon silinemedi.")); }
+    finally { setDeleteRevisionBusy(false); }
   }
 
   async function saveManualRevizyon() {
@@ -1242,11 +1282,11 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 {saving ? "Kaydediliyor..." : dirty ? "Kaydet" : "Kaydedildi"}
               </button>
             )}
-            {doc.hasDosya && !hasKysPdfPreview(doc) ? <a href={`/api/kys/dokumanlar/${doc.id}/dosya?download=1`} className={styles.ghostButton}><Download size={15} /> İndir</a> : <button type="button" className={styles.ghostButton} onClick={() => doc.hasDosya ? openPreviewInNewTab() : setPreviewOpen(true)}>
+            {(!fileBasedDocument || doc.hasDosya) && (doc.hasDosya && !hasKysPdfPreview(doc) ? <a href={`/api/kys/dokumanlar/${doc.id}/dosya?download=1`} className={styles.ghostButton}><Download size={15} /> İndir</a> : <button type="button" className={styles.ghostButton} onClick={() => doc.hasDosya ? openPreviewInNewTab() : setPreviewOpen(true)}>
               <Eye size={15} />
               Önizle
-            </button>}
-            {!doc.hasDosya && <button type="button" className={styles.ghostButton} onClick={printDocument}>
+            </button>)}
+            {!fileBasedDocument && <button type="button" className={styles.ghostButton} onClick={printDocument}>
               <Printer size={15} />
               Yazdır / PDF
             </button>}
@@ -1277,7 +1317,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
 
         <div className={styles.tabs} role="tablist" aria-label="Doküman sekmeleri">
           {([
-            ...(!doc.hasDosya ? [["icerik", "İçerik"]] : []),
+            ...(!fileBasedDocument ? [["icerik", "İçerik"]] : []),
             ["kunye", "Künye"],
             ["akis", "Onay Akışı"],
             ["revizyon", `Revizyonlar (${doc.revizyonlar.length})`],
@@ -1296,7 +1336,7 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
           ))}
         </div>
 
-        {activeTab === "icerik" && (
+        {activeTab === "icerik" && !fileBasedDocument && (
           <div className={styles.contentLayout}>
             <div className={styles.sectionNavSticky}>
               <aside className={styles.sectionNav} aria-label="Doküman içindekiler">
@@ -1473,15 +1513,15 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
 
         {activeTab === "kunye" && (
           <div className={styles.kunyePanel}>
-            {doc.hasDosya && (
+            {fileBasedDocument && (
               <div className={tableStyles.formGroup}>
                 <label htmlFor="replacement-document">Doküman dosyası</label>
-                {hasKysPdfPreview(doc) ? <button type="button" className={styles.ghostButton} onClick={() => setPdfPreviewOpen(true)}><Eye size={15} /> {doc.dosyaAdi}</button> : <a href={`/api/kys/dokumanlar/${doc.id}/dosya?download=1`}><Download size={15} /> İndir · {doc.dosyaAdi}</a>}
+                {!doc.hasDosya ? <span className={styles.flowHint}>Henüz dosya yüklenmedi. Dokümanı PDF, Word veya Excel dosyası olarak yükleyin.</span> : hasKysPdfPreview(doc) ? <button type="button" className={styles.ghostButton} onClick={() => setPdfPreviewOpen(true)}><Eye size={15} /> {doc.dosyaAdi}</button> : <a href={`/api/kys/dokumanlar/${doc.id}/dosya?download=1`}><Download size={15} /> İndir · {doc.dosyaAdi}</a>}
                 {canEdit ? <>
                   <input id="replacement-document" key={doc.updatedAt} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" disabled={fileSaving || saving} onChange={event => setReplacementFile(event.target.files?.[0] || null)} />
-                  <span className={styles.flowHint}>PDF, Word veya Excel · En fazla 20 MB. Yeni dosya mevcut dosyanın yerini alır.</span>
+                  <span className={styles.flowHint}>PDF, Word veya Excel · En fazla 20 MB.{doc.hasDosya ? " Yeni dosya mevcut dosyanın yerini alır." : ""}</span>
                   <button type="button" className={styles.publishButton} disabled={!replacementFile || fileSaving || saving} onClick={() => void replaceDocumentFile()}>
-                    <FileUp size={16} /> {fileSaving ? "Yükleniyor…" : "Dosyayı değiştir"}
+                    <FileUp size={16} /> {fileSaving ? "Yükleniyor…" : doc.hasDosya ? "Dosyayı değiştir" : "Dosya yükle"}
                   </button>
                 </> : <span className={styles.flowHint}>Dosyayı değiştirmek için düzenleme yetkisi ve düzenlenebilir bir doküman gerekir. Yayındaki doküman için revizyon başlatın.</span>}
               </div>
@@ -1645,12 +1685,29 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 <span>{rev.olusturanAd || "-"}</span>
                 <div className={styles.revisionRowActions}>
                   {rev.hasIcerik && <button type="button" className={styles.revisionIconButton} title="Sürümü gör" aria-label={`Revizyon ${rev.revizyonEtiket} sürümünü gör`} onClick={() => void openRevizyon(rev.id, rev.revizyonEtiket)}><Eye size={15} /></button>}
+                  {yetki.goruntule && yetki.revizyonSil && <button type="button" className={styles.revisionIconButton} title="Revizyonu sil" aria-label={`Revizyon ${rev.revizyonEtiket} sil`} onClick={() => { setDeleteRevisionError(""); setDeleteRevision(rev); }}><Trash2 size={15} /></button>}
                   {yetki.duzenle && <button type="button" className={styles.revisionIconButton} title="Düzenle" aria-label={`Revizyon ${rev.revizyonEtiket} düzenle`} onClick={() => openManualRevizyon(rev)}><PenLine size={15} /></button>}
                 </div>
               </div>)}
             </div>}
           </div>
         )}
+
+        {deleteRevision && <div className={styles.previewBackdrop} role="dialog" aria-modal="true" aria-labelledby="delete-revision-title" aria-describedby="delete-revision-description" onKeyDown={event => { if (event.key === "Escape" && !deleteRevisionBusy) setDeleteRevision(null); }}>
+          <div className={styles.deleteRevisionModal}>
+            <div className={styles.deleteRevisionBody}>
+              <div className={styles.deleteRevisionIcon}><Trash2 size={22} /></div>
+              <h2 id="delete-revision-title">Revizyon {deleteRevision.revizyonEtiket} silinsin mi?</h2>
+              <p id="delete-revision-description">Bu revizyon kaydı geçmişten kalıcı olarak kaldırılacak. Bu işlem geri alınamaz.</p>
+              <div className={styles.deleteRevisionNote}>Dokümanın güncel içeriği ve revizyon numarası korunur.</div>
+              {deleteRevisionError && <div role="alert" className={styles.manualRevisionError}>{deleteRevisionError}</div>}
+            </div>
+            <div className={styles.deleteRevisionActions}>
+              <button type="button" autoFocus className={styles.ghostButton} disabled={deleteRevisionBusy} onClick={() => setDeleteRevision(null)}>Vazgeç</button>
+              <button type="button" className={styles.deleteRevisionButton} disabled={deleteRevisionBusy} onClick={() => void removeRevision()}><Trash2 size={15} />{deleteRevisionBusy ? "Siliniyor…" : "Revizyonu sil"}</button>
+            </div>
+          </div>
+        </div>}
 
         {manualRevizyonOpen && <div className={styles.previewBackdrop} role="dialog" aria-modal="true" aria-labelledby="manual-revision-title" onClick={() => !manualRevizyonBusy && setManualRevizyonOpen(false)}>
           <div className={styles.manualRevisionModal} onClick={event => event.stopPropagation()}>
@@ -1766,10 +1823,11 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                 <span>Doküman no veya adı</span>
                 <input autoFocus value={linkSearch} onChange={event => setLinkSearch(event.target.value)} placeholder="Örn. PR-01 veya Numune Kabul" />
               </label>
+              {linkSearchError && <div className={styles.manualRevisionError} role="alert">{linkSearchError}</div>}
               <div className={styles.documentLinkResults}>
                 {linkSearch.trim().length < 2 && <span className={styles.sideEmpty}>Sonuçları görmek için en az 2 karakter yazın.</span>}
                 {linkSearchBusy && <span className={styles.sideEmpty}>Dokümanlar aranıyor…</span>}
-                {!linkSearchBusy && linkSearch.trim().length >= 2 && yayinDokumanlari.filter(item => item.id !== doc.id).length === 0 && disKaynakliDokumanlar.length === 0 && (
+                {!linkSearchBusy && !linkSearchError && linkSearch.trim().length >= 2 && yayinDokumanlari.filter(item => item.id !== doc.id).length === 0 && disKaynakliDokumanlar.length === 0 && (
                   <span className={styles.sideEmpty}>Aramanıza uygun iç veya dış kaynaklı doküman bulunamadı.</span>
                 )}
                 {yayinDokumanlari
@@ -1780,11 +1838,11 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
                       <strong>{item.kod}</strong><span>{item.baslik}</span><small>İç doküman · {item.tur}</small>
                     </button>
                   ))}
-                {disKaynakliDokumanlar
+                {[...disKaynakliDokumanlar]
                   .sort((a, b) => a.dokumanKodu.localeCompare(b.dokumanKodu, "tr", { numeric: true }))
                   .map(item => (
-                    <button key={`external-${item.id}`} type="button" onClick={() => createExternalDocumentLink(String(item.id))}>
-                      <strong>{item.dokumanKodu}</strong><span>{item.dokumanAdi}</span><small>Dış kaynaklı PDF{item.yayincisi ? ` · ${item.yayincisi}` : ""}</small>
+                    <button key={`external-${item.id}`} type="button" disabled={!externalDocumentLink(item)} onClick={() => createExternalDocumentLink(String(item.id))}>
+                      <strong>{item.dokumanKodu}</strong><span>{item.dokumanAdi}</span><small>{!externalDocumentLink(item) ? "PDF veya geçerli yayın bağlantısı eklenmemiş" : item.pdfPath ? "Dış kaynaklı PDF" : "Dış kaynaklı · Yayın bağlantısı"}{item.yayincisi ? ` · ${item.yayincisi}` : ""}</small>
                     </button>
                   ))}
               </div>
@@ -1889,8 +1947,8 @@ export default function DokumanYonetimiClient({ documentId }: { documentId: numb
       </div>
       <div className={styles.printAppendix} aria-hidden="true">
         <h2>Revizyon Geçmişi</h2>
-        <table><thead><tr><th>Rev.</th><th>Madde No</th><th>Açıklama</th><th>Yayın Tarihi</th></tr></thead>
-          <tbody>{doc.revizyonlar.map(rev => <tr key={rev.id}><td>{rev.revizyonEtiket}</td><td>{rev.maddeNo || "-"}</td><td>{rev.aciklama || "-"}</td><td>{formatDate(rev.yayinTarihi)}</td></tr>)}</tbody>
+        <table><thead><tr><th>Rev.</th><th>Madde No</th><th>Açıklama</th><th>Revizyonu Yapan</th><th>Yayın Tarihi</th></tr></thead>
+          <tbody>{doc.revizyonlar.map(rev => <tr key={rev.id}><td>{rev.revizyonEtiket}</td><td>{rev.maddeNo || "-"}</td><td>{rev.aciklama || "-"}</td><td>{rev.olusturanAd || "-"}</td><td>{formatDate(rev.yayinTarihi)}</td></tr>)}</tbody>
         </table>
         <div className={styles.signatureGrid}>
           <div><span>Hazırlayan</span><strong>{doc.hazirlayanAd || "-"}</strong><i>Islak İmza</i></div>

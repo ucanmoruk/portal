@@ -22,6 +22,7 @@ export async function GET(request: Request) {
 
     const result = await listKysDokumanlar({
       search: url.searchParams.get("search") || "",
+      searchMode: url.searchParams.get("searchMode") || "code",
       tur: url.searchParams.get("tur") || "",
       durum: url.searchParams.get("durum") || "",
       sort: url.searchParams.get("sort") || "",

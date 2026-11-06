@@ -30,6 +30,7 @@ export type DokumanYetki = {
   kontrol: boolean;
   onayla: boolean;
   sil: boolean;
+  revizyonSil: boolean;
   isAdmin: boolean;
 };
 
@@ -40,6 +41,7 @@ export const BOS_YETKI: DokumanYetki = {
   kontrol: false,
   onayla: false,
   sil: false,
+  revizyonSil: false,
   isAdmin: false,
 };
 

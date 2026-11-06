@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   if (query.length < 2) return Response.json({ internal: [], external: [] });
   try {
     const [internal, external] = await Promise.all([
-      listKysDokumanlar({ search: query, sort: "kod-asc", page: 1, limit: 30 }),
+      listKysDokumanlar({ search: query, searchMode: "title-code", sort: "kod-asc", page: 1, limit: 30 }),
       listDisKaynakliDokumanlar({ search: query, sort: "kod-asc", page: 1, limit: 30 }),
     ]);
     return Response.json({ internal: internal.data, external: external.data });

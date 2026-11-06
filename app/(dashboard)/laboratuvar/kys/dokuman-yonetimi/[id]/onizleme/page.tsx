@@ -79,8 +79,8 @@ export default async function DokumanOnizlemePage({ params, searchParams }: { pa
       </div>
       <section className={styles.printAppendix}>
         <h2>Revizyon Geçmişi</h2>
-        <table><thead><tr><th>Rev.</th><th>Madde No</th><th>Açıklama</th><th>Yayın Tarihi</th></tr></thead>
-          <tbody>{doc.revizyonlar.map(rev => <tr key={rev.id}><td>{rev.revizyonEtiket}</td><td>{rev.maddeNo || "-"}</td><td>{rev.aciklama || "-"}</td><td>{formatDate(rev.yayinTarihi)}</td></tr>)}</tbody>
+        <table><thead><tr><th>Rev.</th><th>Madde No</th><th>Açıklama</th><th>Revizyonu Yapan</th><th>Yayın Tarihi</th></tr></thead>
+          <tbody>{doc.revizyonlar.map(rev => <tr key={rev.id}><td>{rev.revizyonEtiket}</td><td>{rev.maddeNo || "-"}</td><td>{rev.aciklama || "-"}</td><td>{rev.olusturanAd || "-"}</td><td>{formatDate(rev.yayinTarihi)}</td></tr>)}</tbody>
         </table>
         <div className={styles.signatures}>
           <div><span>Hazırlayan</span><strong>{doc.hazirlayanAd || "-"}</strong><i>Islak İmza</i></div>

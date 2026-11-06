@@ -73,6 +73,7 @@ export const MENU_TREE: MenuItem[] = [
       { key: "laboratuvar.kys.dokuman-yonetimi.olustur", label: "Doküman Oluşturma", href: "#", virtual: true },
       { key: "laboratuvar.kys.dokuman-yonetimi.duzenle", label: "Doküman Düzenleme", href: "#", virtual: true },
       { key: "laboratuvar.kys.dokuman-yonetimi.kontrol", label: "Doküman Kontrol Onayı", href: "#", virtual: true },
+      { key: "laboratuvar.kys.dokuman-yonetimi.revizyon-sil", label: "Doküman Revizyonu Silme", href: "#", virtual: true },
       { key: "laboratuvar.kys.dokuman-yonetimi.onayla", label: "Doküman Yayın Onayı", href: "#", virtual: true },
       { key: "laboratuvar.kys.dis-kaynakli-dokuman", label: "Dış Kaynaklı Doküman", href: "/laboratuvar/kys/dis-kaynakli-dokuman" },
       { key: "laboratuvar.kys.dis-kaynakli-dokuman.kontrol", label: "Dış Kaynaklı Doküman Kontrol", href: "#", virtual: true },

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import DokumanActivity from "./DokumanActivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Download, Eye, FilePlus2, Network, Printer, RotateCw, Search, Trash2, Upload, X } from "lucide-react";
 import { hasKysPdfPreview } from "@/lib/kysFilePreview";
@@ -14,7 +15,6 @@ import {
   DOKUMAN_TURLERI,
   errorMessage,
   formatDate,
-  formatDateTime,
   statusTone,
   type DokumanDetay,
   type DokumanOzet,
@@ -58,15 +58,17 @@ export default function DokumanListesiClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [activityOpen, setActivityOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState("");
   const exportRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
+  const [searchMode, setSearchMode] = useState("code");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [tur, setTur] = useState("");
   const [durum, setDurum] = useState("");
-  const [sort, setSort] = useState("guncel");
+  const [sort, setSort] = useState("kod-grup");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [total, setTotal] = useState(0);
@@ -100,7 +102,7 @@ export default function DokumanListesiClient() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  useEffect(() => { setPage(1); }, [debouncedSearch, tur, durum, sort, limit]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, searchMode, tur, durum, sort, limit]);
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
@@ -108,6 +110,7 @@ export default function DokumanListesiClient() {
     try {
       const params = new URLSearchParams({
         search: debouncedSearch,
+        searchMode,
         tur,
         durum,
         sort,
@@ -128,7 +131,7 @@ export default function DokumanListesiClient() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, tur, durum, sort, page, limit]);
+  }, [debouncedSearch, searchMode, tur, durum, sort, page, limit]);
 
   useEffect(() => { void fetchRows(); }, [fetchRows]);
 
@@ -165,7 +168,7 @@ export default function DokumanListesiClient() {
     if (exporting) return;
     setExporting(true);setExportOpen(false);setError("");setExportSuccess("");
     try {
-      const params = new URLSearchParams({format, search:search.trim(),tur,durum,sort});
+      const params = new URLSearchParams({format, search:search.trim(),searchMode,tur,durum,sort});
       const response = await fetch(`/api/kys/dokumanlar/export?${params}`);
       if (!response.ok) { const json = await response.json();throw new Error(json.error || "Dışa aktarma başarısız."); }
       const blob = await response.blob();const url = URL.createObjectURL(blob);
@@ -321,11 +324,15 @@ export default function DokumanListesiClient() {
       <div className={styles.listCard}>
         <div className={tableStyles.toolbar}>
           <div className={tableStyles.toolbarLeft}>
+            <select className={kys.select} aria-label="Arama alanı" value={searchMode} onChange={event => setSearchMode(event.target.value)}>
+              <option value="code">Kodda ara</option>
+              <option value="content">Başlık ve içerikte ara</option>
+            </select>
             <div className={tableStyles.searchBox}>
               <Search size={15} className={tableStyles.searchIcon} />
               <input
                 className={tableStyles.searchInput}
-                placeholder="Kod, başlık, içerik veya sorumlu ara..."
+                placeholder={searchMode === "code" ? "Doküman kodu ara..." : "Başlık veya içerik ara..."}
                 value={search}
                 onChange={event => setSearch(event.target.value)}
               />
@@ -347,11 +354,12 @@ export default function DokumanListesiClient() {
             )}
           </div>
           <div className={tableStyles.toolbarRight}>
+            <button type="button" className={styles.ghostButton} aria-expanded={activityOpen} onClick={()=>setActivityOpen(value=>!value)}>Değişiklik Kayıtları</button>
             <div className={styles.exportWrap} ref={exportRef}>
               <button type="button" className={styles.ghostButton} disabled={exporting || loading} aria-expanded={exportOpen} aria-controls="document-export-options" onClick={()=>setExportOpen(open=>!open)}><Download size={15}/>{exporting?"Hazırlanıyor…":"Dışarı Aktar"}</button>
               {exportOpen && <div id="document-export-options" className={styles.exportOptions}>
-                <strong>Dışarı Aktar</strong><small>Seçili filtrelere uyan tüm kayıtlar</small>
-                <button type="button" onClick={()=>void exportDocuments("master")}>Master Listesi <small>PDF · L102-01 formatı</small></button>
+                <strong>Dışarı Aktar</strong><small>PDF: tüm dokümanlar · Excel: seçili filtreler</small>
+                <button type="button" onClick={()=>void exportDocuments("master")}>L102-01 Doküman Master Listesi <small>PDF · Tüm dokümanlar</small></button>
                 <button type="button" onClick={()=>void exportDocuments("excel")}>Excel <small>Filtrelenmiş doküman listesi</small></button>
               </div>}
             </div>
@@ -376,6 +384,7 @@ export default function DokumanListesiClient() {
           </div>
         </div>
 
+        {activityOpen && <DokumanActivity />}
         {relationOpen && (
           <section className={styles.relationWorkspace} aria-labelledby="relation-title">
             <div className={styles.relationIntro}>
@@ -430,6 +439,7 @@ export default function DokumanListesiClient() {
             {DOKUMAN_DURUMLARI.map(item => <option key={item} value={item}>{item}</option>)}
           </select>
           <select className={kys.select} value={sort} onChange={event => setSort(event.target.value)}>
+            <option value="kod-grup">Kod grubuna göre (101, 102…)</option>
             <option value="guncel">Son güncellenen</option>
             <option value="kod-asc">Koda göre (A→Z)</option>
             <option value="kod-desc">Koda göre (Z→A)</option>
@@ -448,25 +458,23 @@ export default function DokumanListesiClient() {
             <table className={`${tableStyles.table} ${styles.documentTable}`}>
               <thead>
                 <tr>
+                  <th>Tür</th>
                   <th>Kod</th>
                   <th>Doküman Adı</th>
-                  <th>Tür</th>
+                  <th>Yürürlük</th>
                   <th>Rev.</th>
                   <th>Durum</th>
-                  <th>Hazırlayan</th>
-                  <th>Yürürlük</th>
-                  <th>Son güncelleme</th>
                   <th aria-label="İşlemler" />
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={`sk-${i}`}><td colSpan={9}><div className={tableStyles.skeleton} /></td></tr>
+                    <tr key={`sk-${i}`}><td colSpan={7}><div className={tableStyles.skeleton} /></td></tr>
                   ))
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={9}>
+                    <td colSpan={7}>
                       <div className={tableStyles.empty}>
                         {filtreAktif
                           ? "Filtrelere uyan doküman bulunamadı."
@@ -476,6 +484,7 @@ export default function DokumanListesiClient() {
                   </tr>
                 ) : rows.map(doc => (
                   <tr key={doc.id} className={styles.documentTableRow}>
+                    <td>{doc.tur}</td>
                     <td className={tableStyles.tdMono}>
                       <Link href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}${yetki.duzenle || yetki.kontrol || yetki.onayla ? "" : "/onizleme"}`} className={styles.documentCodeLink}>
                         {doc.kod}
@@ -491,12 +500,9 @@ export default function DokumanListesiClient() {
                         </span>
                       )}
                     </td>
-                    <td>{doc.tur}</td>
+                    <td className={tableStyles.tdMono}>{formatDate(doc.yururlukTarihi)}</td>
                     <td className={tableStyles.tdMono}>{doc.revizyonEtiket}</td>
                     <td><span className={`${styles.statusPill} ${statusTone[doc.durum] || ""}`}>{doc.durum}</span></td>
-                    <td>{doc.hazirlayanAd || "-"}</td>
-                    <td className={tableStyles.tdMono}>{formatDate(doc.yururlukTarihi)}</td>
-                    <td className={tableStyles.tdSecondary}>{formatDateTime(doc.updatedAt)}</td>
                     <td>
                       <div className={tableStyles.actionBtns}>
                         {doc.hasDosya && !hasKysPdfPreview(doc) ? (

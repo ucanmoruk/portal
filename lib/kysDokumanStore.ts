@@ -5,6 +5,7 @@
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { htmlToPlainText, sanitizeDocumentHtml } from "@/lib/htmlSanitize";
+import { normalizeProcedureHeadingCase } from "@/lib/kysTextCase";
 import { normalizeKysDocumentSpacing } from "@/lib/kysDocumentSpacing";
 
 type AnyRow = Record<string, any>;
@@ -350,7 +351,7 @@ function mapDokuman(r: AnyRow, withContent: boolean) {
     duzenlenebilir: DUZENLENEBILIR_DURUMLAR.includes(durum),
     createdAt: asDateTime(r.CreatedAt),
     updatedAt: asDateTime(r.UpdatedAt),
-    ...(withContent ? { icerik: normalizeKysDocumentSpacing(rowString(r, "Icerik")) } : {}),
+    ...(withContent ? { icerik: normalizeProcedureHeadingCase(normalizeKysDocumentSpacing(rowString(r, "Icerik")), rowString(r, "Tur")) } : {}),
   };
 }
 
@@ -358,6 +359,7 @@ export type DokumanOzet = ReturnType<typeof mapDokuman>;
 
 export async function listKysDokumanlar(params: {
   search?: string;
+  searchMode?: string;
   tur?: string;
   durum?: string;
   sort?: string;
@@ -376,12 +378,16 @@ export async function listKysDokumanlar(params: {
 
   let where = "WHERE 1=1";
   if (search) {
-    where += " AND (Kod LIKE @search OR Baslik LIKE @search OR Ozet LIKE @search OR DuzMetin LIKE @search" +
-      " OR HazirlayanAd LIKE @search OR KontrolEdenAd LIKE @search OR OnaylayanAd LIKE @search)";
+    where += params.searchMode === "content"
+      ? " AND (Baslik LIKE @search OR Ozet LIKE @search OR DuzMetin LIKE @search)"
+      : params.searchMode === "title-code"
+        ? " AND (Kod LIKE @search OR Baslik LIKE @search)"
+        : " AND Kod LIKE @search";
   }
   if (tur) where += " AND Tur = @tur";
   if (durum) where += " AND Durum = @durum";
 
+  const grouped = !params.sort || params.sort === "kod-grup";
   const order =
     params.sort === "kod-asc" ? "Kod ASC" :
     params.sort === "kod-desc" ? "Kod DESC" :
@@ -407,8 +413,23 @@ export async function listKysDokumanlar(params: {
       LEFT JOIN KysDokumanDosya kd ON kd.DokumanID = KysDokuman.ID
       ${where}
       ORDER BY ${order}
-      ${params.all ? "" : "OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY"}
+      ${params.all || grouped ? "" : "OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY"}
     `);
+
+  // Group by the main document number, independent of type prefixes (P101, F101-01).
+  // Short SOP numbers follow the main 101, 102, ... document groups.
+  // Sort before pagination so a group cannot be split by the original database order.
+  let documents = dataRes.recordset.map((r: AnyRow) => mapDokuman(r, false));
+  if (grouped) {
+    documents.sort((a: DokumanOzet, b: DokumanOzet) => {
+      const groupA = Number(a.kod.match(/\d{3,}/)?.[0] ?? Infinity);
+      const groupB = Number(b.kod.match(/\d{3,}/)?.[0] ?? Infinity);
+      return (groupA === groupB ? 0 : groupA - groupB)
+        || Number(b.tur === "Prosedür") - Number(a.tur === "Prosedür")
+        || a.kod.localeCompare(b.kod, "tr", { numeric: true }) || a.id - b.id;
+    });
+    if (!params.all) documents = documents.slice(offset, offset + limit);
+  }
 
   const statsRes = await pool.request().query(`
     SELECT Durum, COUNT(*) AS Adet FROM KysDokuman GROUP BY Durum
@@ -423,7 +444,7 @@ export async function listKysDokumanlar(params: {
 
   const total = Number(countRes.recordset[0]?.total ?? countRes.recordset[0]?.TOTAL ?? 0);
   return {
-    data: dataRes.recordset.map((r: AnyRow) => mapDokuman(r, false)),
+    data: documents,
     total,
     page,
     limit,
@@ -696,9 +717,16 @@ export async function deleteKysDokuman(id: number, user: DokumanKullanici) {
   const pool = await cosmoPool;
   await pool.request().input("ID", id).query("DELETE FROM KysDokumanDosya WHERE DokumanID = @ID");
   await pool.request().input("ID", id).query("DELETE FROM KysDokumanRevizyon WHERE DokumanID = @ID");
-  await pool.request().input("ID", id).query("DELETE FROM KysDokumanLog WHERE DokumanID = @ID");
   await pool.request().input("ID", id).query("DELETE FROM KysDokuman WHERE ID = @ID");
-  void user;
+  // Değişiklik kayıtları korunur; silinen dokümanın kodu/adı açıklamada kalır.
+  await writeLog({
+    dokumanId: id,
+    islem: "Silindi",
+    oncekiDurum: rowString(row, "Durum"),
+    revizyon: rowNumber(row, "Revizyon"),
+    aciklama: `${rowString(row, "Kod")} — ${rowString(row, "Baslik")}`,
+    user,
+  });
   return { ok: true };
 }
 
@@ -792,6 +820,29 @@ function normalizeRevizyonMaddeleri(value: unknown) {
   return rows;
 }
 
+export async function deleteKysDokumanRevizyon(dokumanId: number, revizyonId: number, user: DokumanKullanici) {
+  await ensureKysDokumanSchema();
+  const pool = await cosmoPool;
+  const tx = await pool.transaction();
+  await tx.begin();
+  try {
+    const result = await tx.request().input("ID", revizyonId).input("DokumanID", dokumanId)
+      .query("SELECT Revizyon FROM KysDokumanRevizyon WHERE ID=@ID AND DokumanID=@DokumanID");
+    const row = result.recordset[0];
+    if (!row) { await tx.rollback(); return false; }
+    const deleted = await tx.request().input("ID", revizyonId).input("DokumanID", dokumanId)
+      .query("DELETE FROM KysDokumanRevizyon WHERE ID=@ID AND DokumanID=@DokumanID");
+    if (!deleted.rowsAffected?.[0]) { await tx.rollback(); return false; }
+    await tx.request().input("ID", dokumanId).input("Rev", rowNumber(row, "Revizyon"))
+      .input("Aciklama", `Revizyon geçmişi kaydı silindi (kayıt: ${revizyonId}).`)
+      .input("UserID", user.userId).input("UserName", user.userName).query(`
+        INSERT INTO KysDokumanLog (DokumanID,Islem,Revizyon,Aciklama,KullaniciID,KullaniciAd)
+        VALUES (@ID,'Revizyon silindi',@Rev,@Aciklama,@UserID,@UserName)`);
+    await tx.commit();
+    return true;
+  } catch (error) { await tx.rollback(); throw error; }
+}
+
 export async function updateKysDokumanRevizyon(dokumanId: number, revizyonId: number, input: { revizyon?: unknown; yayinTarihi?: unknown; maddeler?: unknown; revizyonuYapan?: unknown }, user: DokumanKullanici) {
   await ensureKysDokumanSchema();
   const revizyon = Number(input.revizyon);
@@ -814,6 +865,7 @@ export async function updateKysDokumanRevizyon(dokumanId: number, revizyonId: nu
   if (!result.rowsAffected?.[0]) throw new Error("Revizyon kaydı bulunamadı.");
   await pool.request().input("ID", dokumanId).input("Revizyon", revizyon).query(`
     UPDATE KysDokuman SET Revizyon=CASE WHEN Revizyon < @Revizyon THEN @Revizyon ELSE Revizyon END, UpdatedAt=GETDATE() WHERE ID=@ID`);
+  await writeLog({dokumanId, islem:"Revizyon geçmişi düzenlendi", revizyon, maddeNo, aciklama, user});
   return { ok: true };
 }
 
@@ -1049,4 +1101,20 @@ async function sonRevizyonNotu(dokumanId: number, revizyon: number): Promise<{ m
     `);
   const row = res.recordset[0];
   return row ? { maddeNo: rowString(row, "MaddeNo"), aciklama: rowString(row, "Aciklama") } : null;
+}
+
+export async function listKysDokumanActivity(params: { search?: string; page?: number; islem?: string }) {
+  await ensureKysDokumanSchema();
+  const pool = await cosmoPool;
+  const page = Math.max(1,Math.floor(Number(params.page)||1));
+  const search = text(params.search);
+  const islem = text(params.islem);
+  const where = `WHERE 1=1 ${search ? "AND (d.Kod LIKE @Search OR d.Baslik LIKE @Search OR l.KullaniciAd LIKE @Search OR l.Islem LIKE @Search)" : ""} ${islem ? "AND l.Islem=@Islem" : ""}`;
+  const bind = (request: any) => request.input("Search",`%${search}%`).input("Islem",islem);
+  const count = await bind(pool.request()).query(`SELECT COUNT(*) AS Total FROM KysDokumanLog l LEFT JOIN KysDokuman d ON d.ID=l.DokumanID ${where}`);
+  const result = await bind(pool.request()).input("Offset",(page-1)*25).query(`
+    SELECT l.ID,l.DokumanID,d.Kod,d.Baslik,l.Islem,l.Revizyon,l.OncekiDurum,l.YeniDurum,l.Aciklama,l.KullaniciAd,l.CreatedAt
+    FROM KysDokumanLog l LEFT JOIN KysDokuman d ON d.ID=l.DokumanID ${where}
+    ORDER BY l.CreatedAt DESC,l.ID DESC OFFSET @Offset ROWS FETCH NEXT 25 ROWS ONLY`);
+  return {data:result.recordset.map((r:AnyRow)=>({id:rowNumber(r,"ID"),dokumanId:rowNumber(r,"DokumanID"),kod:rowString(r,"Kod"),baslik:rowString(r,"Baslik"),islem:rowString(r,"Islem"),revizyon:r.Revizyon,oncekiDurum:rowString(r,"OncekiDurum"),yeniDurum:rowString(r,"YeniDurum"),aciklama:rowString(r,"Aciklama").startsWith("__REV_DETAILS__")?"Revizyon değişiklikleri kaydedildi.":rowString(r,"Aciklama"),kullaniciAd:rowString(r,"KullaniciAd"),tarih:asDateTime(r.CreatedAt)})),total:rowNumber(count.recordset[0]||{},"Total"),page};
 }

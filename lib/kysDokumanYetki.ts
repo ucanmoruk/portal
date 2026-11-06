@@ -9,6 +9,7 @@ export const DOKUMAN_YETKI = {
   duzenle: "laboratuvar.kys.dokuman-yonetimi.duzenle",
   kontrol: "laboratuvar.kys.dokuman-yonetimi.kontrol",
   onayla: "laboratuvar.kys.dokuman-yonetimi.onayla",
+  revizyonSil: "laboratuvar.kys.dokuman-yonetimi.revizyon-sil",
 } as const;
 
 export type DokumanYetkiOzeti = {
@@ -18,6 +19,7 @@ export type DokumanYetkiOzeti = {
   kontrol: boolean;
   onayla: boolean;
   sil: boolean;
+  revizyonSil: boolean;
   isAdmin: boolean;
 };
 
@@ -33,6 +35,7 @@ export function dokumanYetkileri(user: PortalUser): DokumanYetkiOzeti {
     kontrol: user.can(DOKUMAN_YETKI.kontrol),
     onayla: user.can(DOKUMAN_YETKI.onayla),
     sil: user.isAdmin || user.can(DOKUMAN_YETKI.onayla),
+    revizyonSil: user.isAdmin || user.can(DOKUMAN_YETKI.revizyonSil),
     isAdmin: user.isAdmin,
   };
 }
