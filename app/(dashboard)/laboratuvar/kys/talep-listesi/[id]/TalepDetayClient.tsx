@@ -235,7 +235,7 @@ export default function TalepDetayClient({ id }: { id: number }) {
           <Link className={styles.cancelBtn} href={`/kys-talep-yazdir/${id}`} target="_blank">Yazdır</Link>
           {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("Onaylandı")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#e7f7ed",color:"#16713b",borderColor:"#a0d6b4"}} onClick={() => void setStatus("Onaylandı")}>Onayla</button>}
           {!isOrder && ["Onaylandı","İşleme Alındı","Kısmi Kabul","Tamamlandı"].includes(detail.talep.durum) && <button type="button" disabled={saving} className={styles.addBtn} onClick={()=>setApprovalOpen(true)}>Mail gönder</button>}
-          {isOrder && REQUEST_TRANSITIONS[detail.talep.durum]?.includes("İşleme Alındı")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#e8f0ff",color:"#235ac0",borderColor:"#a7c1ee"}} onClick={() => setStatus("İşleme Alındı")}>İşleme al</button>}
+          {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("İşleme Alındı")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#e8f0ff",color:"#235ac0",borderColor:"#a7c1ee"}} onClick={() => setStatus("İşleme Alındı")}>İşleme al</button>}
           {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("İptal")&&<button disabled={saving} className={styles.cancelBtn} style={{background:"#fff0ee",color:"#b42318",borderColor:"#efb2ab"}} onClick={() => setStatus("İptal")}>İptal</button>}
           {REQUEST_TRANSITIONS[detail.talep.durum]?.includes("Onay Bekliyor")&&<button type="button" disabled={saving} className={styles.cancelBtn} onClick={() => setStatus("Onay Bekliyor")}>Geri Gönder</button>}
         </div>

@@ -1442,7 +1442,6 @@ export async function updateKysRequestStatus(id: number, input: { durum?: string
     const accepted = (await pool.request().input("ID", id).query("SELECT ID FROM KysTalepKabul WHERE TalepID=@ID")).recordset;
     if (accepted.length) throw new Error("Kabul kaydı bulunan talep geri gönderilemez.");
   }
-  if(durum === "İşleme Alındı" && current.TalepTuru !== "Sipariş")throw new Error("Talep, tedarikçi mailleri gönderildiğinde otomatik olarak işleme alınır.");
   const dateFields =
     durum === "Onay Bekliyor"
       ? ", OnaylayanID = NULL, OnaylayanAd = NULL, OnayTarihi = NULL, IslemeAlanID = NULL, IslemeAlanAd = NULL, IslemeAlmaTarihi = NULL, MailOnayID = NULL"

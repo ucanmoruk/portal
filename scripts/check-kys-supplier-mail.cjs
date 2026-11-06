@@ -36,6 +36,10 @@ function request(){const args={};return {input(key,value){args[key]=value;return
   if(sql.startsWith('UPDATE KysTalep SET MailOnayID')){root.MailOnayID=args.MailOnayID;return result([],1);}
   if(sql.startsWith('UPDATE KysTalep SET Durum')){
     if(root.Durum!==args.Current)return result();
+    if(args.Durum==='İşleme Alındı'){
+      assert(sql.includes('IslemeAlanID = @UserID'));assert(sql.includes('IslemeAlanAd = @UserName'));assert(sql.includes('IslemeAlmaTarihi = GETDATE()'));
+      root.IslemeAlanID=args.UserID;root.IslemeAlanAd=args.UserName;
+    }
     root.Durum=args.Durum;if(args.Durum==='Onaylandı'){root.MailOnayID=args.MailOnayID;root.OnaylayanAd=args.UserName;}if(args.Durum==='Onay Bekliyor')root.MailOnayID=null;
     return result([],1);
   }
@@ -75,6 +79,13 @@ async function reset(){root.Durum='Onay Bekliyor';root.MailOnayID=null;jobs=[];m
 async function run(){
   assert.deepEqual(policy.supplierEmails('A@EXAMPLE.COM; b@example.com\na@example.com'),['a@example.com','b@example.com']);
   assert.throws(()=>policy.supplierEmails('ok@example.com\r\nBcc: thief@example.com'));
+  await assert.rejects(store.updateKysRequestStatus(1,{durum:'İşleme Alındı'}));
+  await approve();
+  await store.updateKysRequestStatus(1,{durum:'İşleme Alındı',userId:'external-mail-user',userName:'Dışarıdan Gönderen'});
+  assert.equal(root.Durum,'İşleme Alındı');assert.equal(root.IslemeAlanID,'external-mail-user');assert.equal(root.IslemeAlanAd,'Dışarıdan Gönderen');
+  assert.equal(jobs.length,0);assert.equal(sent.length,0);
+  await assert.rejects(store.updateKysRequestStatus(1,{durum:'İşleme Alındı'}));
+  await reset();
   assert.equal((await approve()).mailQueued,false);assert.equal(root.Durum,'Onaylandı');assert.equal(jobs.length,0);assert.equal(sent.length,0);
   await assert.rejects(mail.prepareSupplierMail(1,[]));assert.equal(root.Durum,'Onaylandı');assert.equal(jobs.length,0);
   await assert.rejects(mail.prepareSupplierMail(1,[1,3]));assert.equal(jobs.length,0);
