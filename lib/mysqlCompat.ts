@@ -471,13 +471,15 @@ class MysqlCompatRequest {
       return { recordset: [], recordsets: [[]], rowsAffected: [0] };
     }
 
+    // Native CHECK replacements must run: skipping them leaves old status rules active.
+    const replacesCheck = /^ALTER\s+TABLE\s+`?\w+`?\s+DROP\s+CONSTRAINT\s+`?\w+`?\s*,\s*ADD\s+CONSTRAINT\s+`?\w+`?\s+CHECK\s*\(/i.test(trimmed);
     // Self-migration DDL'leri NO-OP — şema zaten MySQL'e taşındı. (# temp HARİÇ)
     if (!/#/.test(trimmed) && !/\btempdb\b/i.test(trimmed) && (
       /^IF\s+NOT\s+EXISTS\s*\(\s*SELECT/i.test(trimmed) ||
       /^IF\s+COL_LENGTH/i.test(trimmed) ||
       /^IF\s+OBJECT_ID/i.test(trimmed) ||
       /^IF\s+EXISTS\s*\(\s*SELECT/i.test(trimmed) ||
-      /^ALTER\s+TABLE\b(?![\s\S]*\bADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\b)(?![\s\S]*\bCONVERT\s+TO\s+CHARACTER\s+SET\b)/i.test(trimmed) ||
+      (!replacesCheck && /^ALTER\s+TABLE\b(?![\s\S]*\bADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\b)(?![\s\S]*\bCONVERT\s+TO\s+CHARACTER\s+SET\b)/i.test(trimmed)) ||
       /^CREATE\s+TABLE\b(?!\s+IF\s+NOT\s+EXISTS)/i.test(trimmed) ||
       /^CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+|CLUSTERED\s+)?INDEX\b/i.test(trimmed)
     )) {

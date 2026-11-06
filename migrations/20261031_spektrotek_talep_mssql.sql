@@ -5,6 +5,6 @@ IF OBJECT_ID('SpektrotekTalep','U') IS NULL BEGIN CREATE TABLE SpektrotekTalep (
       Ozet NVARCHAR(1000) NULL,Konu NVARCHAR(500) NULL,Hesap NVARCHAR(100) NOT NULL,Skor TINYINT NULL,
       Durum NVARCHAR(40) NOT NULL DEFAULT N'Bekliyor',DurumTarihi DATETIME2(3) NULL,DurumKullanici NVARCHAR(100) NULL,
       OlusturmaTarihi DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),GuncellemeTarihi DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),Surum INT NOT NULL DEFAULT 1,
-      CONSTRAINT CK_SpektrotekTalep_Durum CHECK (Durum IN (N'Bekliyor',N'Teklif Gönderildi')));
+      CONSTRAINT CK_SpektrotekTalep_Durum CHECK (Durum IN (N'Bekliyor',N'Teklif Gönderildi',N'Onaylandı',N'Uygun Değil',N'Ret')));
       CREATE INDEX IX_SpektrotekTalep_Tarih ON SpektrotekTalep (Tarih DESC,Id DESC); END;
 IF COL_LENGTH('SpektrotekTalep','Surum') IS NULL ALTER TABLE SpektrotekTalep ADD Surum INT NOT NULL DEFAULT 1;

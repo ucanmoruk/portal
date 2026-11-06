@@ -6,6 +6,6 @@ CREATE TABLE IF NOT EXISTS SpektrotekTalep (
       Durum VARCHAR(40) NOT NULL DEFAULT 'Bekliyor',DurumTarihi DATETIME(3) NULL,DurumKullanici VARCHAR(100) NULL,
       OlusturmaTarihi DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),GuncellemeTarihi DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       Surum INT NOT NULL DEFAULT 1,KEY IX_SpektrotekTalep_Tarih (Tarih,Id),
-      CONSTRAINT CK_SpektrotekTalep_Durum CHECK (Durum IN ('Bekliyor','Teklif Gönderildi'))
+      CONSTRAINT CK_SpektrotekTalep_Durum CHECK (Durum IN ('Bekliyor','Teklif Gönderildi','Onaylandı','Uygun Değil','Ret'))
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci;
 ALTER TABLE SpektrotekTalep ADD COLUMN IF NOT EXISTS Surum INT NOT NULL DEFAULT 1;

@@ -6,7 +6,8 @@ const mysql=!process.argv.includes('--mssql'),rules=load('lib/spektrotekTalepRul
 const result=(recordset=[],affected=0)=>({recordset,rowsAffected:[affected]});
 const fields=p=>({Tarih:p.Date,MusteriAdi:p.Customer,KisiAdi:p.Person,Email:p.Email,Talep:p.Request,Ozet:p.Summary,Konu:p.Subject,Hesap:p.Account,Skor:p.Score});
 function request(){const p={};return {input(k,v){p[k]=v;return this},async query(raw){const sql=raw.replace(/\s+/g,' ').trim();queries.push({sql,p});
- if(/^(CREATE|ALTER|IF OBJECT_ID|IF COL_LENGTH)/.test(sql))return result();
+ if(sql.startsWith('SELECT CHECK_CLAUSE'))return result([{CHECK_CLAUSE:"Durum IN ('Bekliyor','Teklif Gönderildi')"}]);
+ if(/^(CREATE|ALTER|IF OBJECT_ID|IF COL_LENGTH|IF EXISTS)/.test(sql))return result();
  if(sql.startsWith('SELECT Id FROM SpektrotekTalep'))return result(rows.filter(r=>r.KaynakId===p.Source).map(r=>({Id:r.Id})));
  if(sql.startsWith('INSERT INTO SpektrotekTalep')){if(p.Source===failSource)throw Error('simulated batch failure');const r={Id:rows.length+1,KaynakId:p.Source,...fields(p),Durum:p.Status||'Bekliyor',DurumTarihi:p.Actor?new Date():null,DurumKullanici:p.Actor||null,Surum:1};rows.push(r);return result(sql.includes('OUTPUT')?[{Id:r.Id}]:[],1)}
  if(sql.startsWith('UPDATE SpektrotekTalep')&&sql.includes('WHERE KaynakId')){assert(!/\bDurum(?:Tarihi|Kullanici)?\s*=/.test(sql));const r=rows.find(r=>r.KaynakId===p.Source);Object.assign(r,fields(p));r.Surum++;return result([],1)}
