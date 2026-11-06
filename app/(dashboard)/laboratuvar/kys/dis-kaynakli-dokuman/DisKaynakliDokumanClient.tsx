@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, CheckCircle2, FilePlus2, FileText, Pencil, RotateCw, Search, Trash2, X } from "lucide-react";
+import { Download, ArrowUpRight, CheckCircle2, FilePlus2, FileText, Pencil, RotateCw, Search, Trash2, X } from "lucide-react";
 import tableStyles from "@/app/styles/table.module.css";
 import kys from "../kys.module.css";
 import styles from "../dokuman-yonetimi/dokumanYonetimi.module.css";
@@ -47,6 +47,7 @@ function formatDateTime(value: string | null, withSeconds = false) {
 export default function DisKaynakliDokumanClient() {
   const [rows, setRows] = useState<Row[]>([]);
   const [canCheck, setCanCheck] = useState(false);
+  const [exporting,setExporting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -76,6 +77,16 @@ export default function DisKaynakliDokumanClient() {
   const [deleteError, setDeleteError] = useState("");
   const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function exportTracking() {
+    if(exporting)return;
+    setExporting(true);setError("");
+    try {
+      const response=await fetch("/api/kys/dis-kaynakli-dokumanlar/export");
+      if(!response.ok){const data=await response.json();throw new Error(data.error||"PDF indirilemedi.");}
+      const url=URL.createObjectURL(await response.blob());const a=document.createElement("a");a.href=url;a.download="F102-01-Dis-Kaynakli-Dokuman-Takip-Formu.pdf";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(error){setError(error instanceof Error?error.message:"PDF indirilemedi.");}finally{setExporting(false);}
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -272,6 +283,7 @@ export default function DisKaynakliDokumanClient() {
             )}
           </div>
           <div className={tableStyles.toolbarRight}>
+            <button type="button" className={styles.ghostButton} disabled={exporting} onClick={()=>void exportTracking()}><Download size={15}/>{exporting?"PDF hazırlanıyor…":"Dışarı Aktar · F102-01 PDF"}</button>
             {canCheck && (
               <button type="button" className={styles.ghostButton} disabled={!selected.length || checking} onClick={() => void markChecked()}>
                 <CheckCircle2 size={15} />

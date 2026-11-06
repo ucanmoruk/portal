@@ -197,6 +197,7 @@ function mapRow(row: AnyRow) {
 export type DisKaynakliDokumanRow = ReturnType<typeof mapRow>;
 
 export async function listDisKaynakliDokumanlar(params: {
+  all?: boolean;
   search?: string;
   birim?: string;
   kontrol?: string;
@@ -238,7 +239,7 @@ export async function listDisKaynakliDokumanlar(params: {
     FROM KysDisKaynakliDokuman
     ${where}
     ORDER BY ${order}
-    OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    ${params.all ? "" : "OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY"}
   `);
   const statsRes = await pool.request().query(`
     SELECT

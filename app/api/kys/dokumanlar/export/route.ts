@@ -1,5 +1,4 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+import { getListTemplate, listHeader } from "@/lib/kysListExport";
 import { getPortalUser } from "@/lib/portalYetki";
 import { dokumanYetkileri } from "@/lib/kysDokumanYetki";
 import { listKysDokumanlar } from "@/lib/kysDokumanStore";
@@ -17,12 +16,13 @@ export async function GET(request: Request) {
   const format = params.get("format");
   if (format !== "excel" && format !== "master") return Response.json({error:"Geçersiz dışa aktarma biçimi."},{status:400});
   try {
-    const {data} = await listKysDokumanlar({search:params.get("search")||"",tur:params.get("tur")||"",durum:params.get("durum")||"",sort:params.get("sort")||"",all:true});
+    const {data} = await listKysDokumanlar(format === "master" ? { all:true } : {search:params.get("search")||"",searchMode:params.get("searchMode")||"code",tur:params.get("tur")||"",durum:params.get("durum")||"",sort:params.get("sort")||"",all:true});
     let buffer: Buffer;
     if (format === "excel") buffer = createDocumentWorkbook(data);
     else {
-      const logo = await readFile(path.join(process.cwd(),"public","kys-document-logo.png"));
-      const {html,headerTemplate} = documentMasterHtml(data,`data:image/png;base64,${logo.toString("base64")}`);
+      const template = await getListTemplate("L102-01");
+      const {html} = documentMasterHtml(data,template.logo);
+      const headerTemplate = listHeader(template,"DOKÜMAN MASTER LİSTESİ");
       buffer = await renderHtmlToPdf(html,{headerTemplate,displayHeaderFooter:true,footerTemplate:"<div></div>",paperWidth:11,paperHeight:8.5025,marginTop:1.14,marginBottom:.35,marginLeft:.35,marginRight:.35,printBackground:true});
     }
     const filename = format === "excel" ? "KYS-Dokumanlar.xlsx" : "L102-01-Dokuman-Master-Listesi.pdf";

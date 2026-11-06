@@ -13,6 +13,7 @@ function compile(file, overrides={}) {
 }
 async function run(){
   const {createDocumentWorkbook,documentMasterHtml}=compile('lib/kysDokumanExport.ts');
+  const {listHeader}=compile('lib/kysListExport.ts',{'@/lib/db':{}});
   const {renderHtmlToPdf}=compile('lib/chromiumPdf.ts',{'@/lib/loadDotenv':{loadDotenvOnce(){}}});
   const XLSX=require('xlsx');
   const documents=Array.from({length:80},(_,i)=>({kod:`P${String(i+1).padStart(3,'0')}`,baslik:i===0?'=Formül olarak çalıştırılmamalı':i%7===0?'Çok uzun bir doküman adı: Türkçe karakterler, ölçüm belirsizliği, çalışanların eğitimi ve iletişim süreçlerinin yönetimi için ayrıntılı çalışma prosedürü':'Doküman yönetimi ve kayıtların kontrolü',tur:'Prosedür',durum:'Yayında',revizyonEtiket:'02',yururlukTarihi:'2026-09-01',hazirlayanAd:'Örnek Hazırlayan',onaylayanAd:'Örnek Onaylayan',updatedAt:'2026-10-29T12:30:00Z'}));
@@ -40,6 +41,7 @@ async function run(){
     '@/lib/kysDokumanStore':{listKysDokumanlar:async filters=>{receivedFilters=filters;return {data:documents};}},
     '@/lib/kysDokumanExport':{createDocumentWorkbook,documentMasterHtml},
     '@/lib/chromiumPdf':{renderHtmlToPdf:async()=>Buffer.from('fixture PDF')},
+    '@/lib/kysListExport':{getListTemplate:async()=>({kod:'L102-01',revizyon:'02',yururluk:'01.09.2026',logo}),listHeader},
   });
   const url='http://localhost/api/kys/dokumanlar/export?format=excel&search=kontrol&tur=Prosed%C3%BCr&durum=Yay%C4%B1nda&sort=kod-asc';
   assert.equal((await route.GET(new Request(url))).status,401);
@@ -48,12 +50,13 @@ async function run(){
   allowed=true;
   assert.equal((await route.GET(new Request(url.replace('format=excel','format=invalid')))).status,400);
   const response=await route.GET(new Request(url));assert.equal(response.status,200);
-  assert.deepEqual(receivedFilters,{search:'kontrol',tur:'Prosedür',durum:'Yayında',sort:'kod-asc',all:true});
+  assert.deepEqual(receivedFilters,{search:'kontrol',searchMode:'code',tur:'Prosedür',durum:'Yayında',sort:'kod-asc',all:true});
   assert.equal(response.headers.get('cache-control'),'private, no-store');
   const exported=XLSX.read(Buffer.from(await response.arrayBuffer()),{cellDates:true});
   assert.equal(XLSX.utils.sheet_to_json(exported.Sheets[exported.SheetNames[0]]).length,80);
   const pdfResponse=await route.GET(new Request(url.replace('format=excel','format=master')));
   assert.equal(pdfResponse.headers.get('content-type'),'application/pdf');
+  assert.deepEqual(receivedFilters,{all:true});
   for(const count of [0,1,80]){
     const {html,headerTemplate}=documentMasterHtml(documents.slice(0,count),logo);
     const pdf=await renderHtmlToPdf(html,{headerTemplate,displayHeaderFooter:true,footerTemplate:'<div></div>',paperWidth:11,paperHeight:8.5025,marginTop:1.14,marginBottom:.35,marginLeft:.35,marginRight:.35});
