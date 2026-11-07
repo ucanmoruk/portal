@@ -49,7 +49,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const requestedDownload = new URL(request.url).searchParams.get("download") === "1";
   if (!requestedDownload && (file.type === "application/pdf" || (document?.tur === "Form" && isWordFile(file.type, file.name)))) {
-    return Response.redirect(new URL(`/laboratuvar/kys/dokuman-yonetimi/${documentId}/onizleme`, request.url));
+    // Keep the browser's public origin; request.url can contain Passenger's internal host.
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: `/laboratuvar/kys/dokuman-yonetimi/${documentId}/onizleme`,
+        "Cache-Control": "private, no-store",
+      },
+    });
   }
   const download = requestedDownload || file.type !== "application/pdf";
   const extension = path.extname(file.name);
