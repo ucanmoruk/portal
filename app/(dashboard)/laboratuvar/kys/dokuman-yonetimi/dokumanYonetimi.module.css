@@ -1618,3 +1618,42 @@ table.externalDocumentTable {
 .deleteRevisionButton:hover { background: #912018; border-color: #912018; }
 .deleteRevisionButton:disabled { opacity: .6; cursor: wait; }
 .deleteRevisionButton:focus-visible { outline: 3px solid #fda29b; outline-offset: 3px; }
+
+/* Document workspace uses the portal's shared colors, controls and tables. */
+.workspaceTabs { display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--color-border-light); }
+.workspaceTab { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex-shrink: 0; padding: 12px 16px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--color-text-secondary); font: inherit; font-size: .845rem; font-weight: 500; cursor: pointer; }
+.workspaceTab:hover { color: var(--color-accent); background: var(--color-accent-light); }
+.workspaceTab[data-state="active"] { color: var(--color-accent); border-bottom-color: var(--color-accent); font-weight: 600; }
+.workspaceTab:focus-visible, .workspacePanel:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.workspacePanel { display: grid; gap: 14px; min-width: 0; }
+.workspacePanel[hidden] { display: none; }
+.panelHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.panelHeader h2 { margin: 0 0 5px; color: var(--color-text-primary); font-size: 1.1rem; font-weight: 600; }
+.panelHeader p { margin: 0; color: var(--color-text-secondary); font-size: .8rem; }
+.panelFilters, .panelActions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.panelFilters > div { width: min(100%, 360px); }
+.panelFilters input { min-width: 0; }
+.referencePanel .relationIntro { align-items: center; }
+.referencePanel .relationListHeader { flex-wrap: wrap; }
+.referencePanel .relationListHeader > div { max-width: none; }
+.referencePanel .relationListHeader input { min-width: 0; }
+.activityTable { min-width: 1020px; }
+.activityTable th, .activityTable td { padding: 12px 10px; }
+.activityTable td { vertical-align: middle; }
+.activityTable td:first-child { min-width: 110px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.activityTable td:nth-child(3) { width: 1%; white-space: nowrap; }
+.activityTable td:nth-child(4) { text-align: center; font-variant-numeric: tabular-nums; }
+.activityTable td:nth-child(6) { min-width: 140px; }
+.activityTable td:nth-child(2) { min-width: 180px; white-space: normal; }
+.activityTable td:last-child { min-width: 180px; max-width: 420px; white-space: normal; overflow-wrap: anywhere; }
+.activityDocument { display: grid; gap: 4px; }
+.activityDocument a { color: var(--color-accent); font-weight: 600; }
+.activityDocument a:hover { text-decoration: underline; }
+.activityDocument span { color: var(--color-text-secondary); font-size: .78rem; }
+.activityAction { display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid var(--color-border-light); border-radius: var(--radius-sm); background: var(--color-surface-2); color: var(--color-text-secondary); font-size: .75rem; font-weight: 500; line-height: 1.5; white-space: nowrap; }
+@media (max-width: 640px) {
+  .workspaceTab { padding: 10px 12px; font-size: .78rem; }
+  .panelHeader { flex-wrap: wrap; }
+  .panelFilters > div, .panelFilters > select { width: 100%; }
+  .referencePanel .relationListHeader > div { width: 100%; }
+}

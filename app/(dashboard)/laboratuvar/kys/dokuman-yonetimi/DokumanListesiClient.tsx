@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import * as Tabs from "@radix-ui/react-tabs";
 import DokumanActivity from "./DokumanActivity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Download, Eye, FilePlus2, Network, Printer, RotateCw, Search, Trash2, Upload, X } from "lucide-react";
+import { ArrowUpRight, Download, Eye, FilePlus2, Files, History, Network, Printer, RotateCw, Search, Trash2, Upload, X } from "lucide-react";
 import { hasKysPdfPreview } from "@/lib/kysFilePreview";
 import UploadedPdfPreview from "./[id]/onizleme/UploadedPdfPreview";
 import tableStyles from "@/app/styles/table.module.css";
@@ -58,7 +59,7 @@ export default function DokumanListesiClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [activityOpen, setActivityOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("dokumanlar");
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState("");
@@ -89,7 +90,6 @@ export default function DokumanListesiClient() {
   const [previewDoc, setPreviewDoc] = useState<DokumanDetay | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
-  const [relationOpen, setRelationOpen] = useState(false);
   const [references, setReferences] = useState<DokumanAtif[]>([]);
   const [referenceSummary, setReferenceSummary] = useState({ toplamAtif: 0, atifAlanDokuman: 0 });
   const [relationSearch, setRelationSearch] = useState("");
@@ -288,7 +288,7 @@ export default function DokumanListesiClient() {
   const filteredRelations = useMemo(() => {
     const query = relationSearch.trim().toLocaleLowerCase("tr-TR");
     const cited = references.filter(item => item.atifSayisi > 0);
-    if (!query) return [];
+    if (!query) return cited;
     return cited.filter(item => [item.kod, item.baslik, ...item.kaynaklar.flatMap(source => [source.kod, source.baslik])]
       .some(value => value.toLocaleLowerCase("tr-TR").includes(query)));
   }, [references, relationSearch]);
@@ -299,98 +299,224 @@ export default function DokumanListesiClient() {
   }
 
   return (
-    <div className={styles.listShell}>
-      <div className={styles.summaryStrip}>
-        <button type="button" className={!durum ? styles.summaryActive : ""} onClick={() => setDurum("")}>
-          <strong>{stats.toplam}</strong><span>Toplam</span>
-        </button>
-        <button type="button" className={durum === "Taslak" ? styles.summaryActive : ""} onClick={() => setDurum("Taslak")}>
-          <strong>{stats.taslak}</strong><span>Taslak</span>
-        </button>
-        <button type="button" className={durum === "Onay Bekliyor" ? styles.summaryActive : ""} onClick={() => setDurum("Onay Bekliyor")}>
-          <strong>{stats.onayBekliyor}</strong><span>Onay bekliyor</span>
-        </button>
-        <button type="button" className={durum === "Yayında" ? styles.summaryActive : ""} onClick={() => setDurum("Yayında")}>
-          <strong>{stats.yayinda}</strong><span>Yayında</span>
-        </button>
-        <button type="button" className={durum === "Revize Ediliyor" ? styles.summaryActive : ""} onClick={() => setDurum("Revize Ediliyor")}>
-          <strong>{stats.revizyonda}</strong><span>Revizyonda</span>
-        </button>
-        <button type="button" className={durum === "Arşiv" ? styles.summaryActive : ""} onClick={() => setDurum("Arşiv")}>
-          <strong>{stats.arsiv}</strong><span>Arşiv</span>
-        </button>
-      </div>
+    <Tabs.Root value={activeTab} onValueChange={value => {
+      setActiveTab(value);
+      setExportOpen(false);
+      if (value === "atiflar") void fetchRelations();
+    }} className={styles.listShell}>
+      <Tabs.List className={styles.workspaceTabs} aria-label="Doküman yönetimi">
+        <Tabs.Trigger className={styles.workspaceTab} value="dokumanlar"><Files size={16} />Dokümanlar</Tabs.Trigger>
+        <Tabs.Trigger className={styles.workspaceTab} value="kayitlar"><History size={16} />Değişiklik Kayıtları</Tabs.Trigger>
+        <Tabs.Trigger className={styles.workspaceTab} value="atiflar"><Network size={16} />Atıf Kullanımı</Tabs.Trigger>
+      </Tabs.List>
+      <Tabs.Content value="dokumanlar" forceMount hidden={activeTab !== "dokumanlar"} className={styles.workspacePanel}>
+        <div className={styles.summaryStrip}>
+          <button type="button" className={!durum ? styles.summaryActive : ""} onClick={() => setDurum("")}>
+            <strong>{stats.toplam}</strong><span>Toplam</span>
+          </button>
+          <button type="button" className={durum === "Taslak" ? styles.summaryActive : ""} onClick={() => setDurum("Taslak")}>
+            <strong>{stats.taslak}</strong><span>Taslak</span>
+          </button>
+          <button type="button" className={durum === "Onay Bekliyor" ? styles.summaryActive : ""} onClick={() => setDurum("Onay Bekliyor")}>
+            <strong>{stats.onayBekliyor}</strong><span>Onay bekliyor</span>
+          </button>
+          <button type="button" className={durum === "Yayında" ? styles.summaryActive : ""} onClick={() => setDurum("Yayında")}>
+            <strong>{stats.yayinda}</strong><span>Yayında</span>
+          </button>
+          <button type="button" className={durum === "Revize Ediliyor" ? styles.summaryActive : ""} onClick={() => setDurum("Revize Ediliyor")}>
+            <strong>{stats.revizyonda}</strong><span>Revizyonda</span>
+          </button>
+          <button type="button" className={durum === "Arşiv" ? styles.summaryActive : ""} onClick={() => setDurum("Arşiv")}>
+            <strong>{stats.arsiv}</strong><span>Arşiv</span>
+          </button>
+        </div>
 
-      <div className={styles.listCard}>
-        <div className={tableStyles.toolbar}>
-          <div className={tableStyles.toolbarLeft}>
-            <select className={kys.select} aria-label="Arama alanı" value={searchMode} onChange={event => setSearchMode(event.target.value)}>
-              <option value="code">Kodda ara</option>
-              <option value="content">Başlık ve içerikte ara</option>
-            </select>
-            <div className={tableStyles.searchBox}>
-              <Search size={15} className={tableStyles.searchIcon} />
-              <input
-                className={tableStyles.searchInput}
-                placeholder={searchMode === "code" ? "Doküman kodu ara..." : "Başlık veya içerik ara..."}
-                value={search}
-                onChange={event => setSearch(event.target.value)}
-              />
-              {search && (
-                <button type="button" className={tableStyles.searchClear} onClick={() => setSearch("")} aria-label="Aramayı temizle">
-                  <X size={14} />
+        <div className={styles.listCard}>
+          <div className={tableStyles.toolbar}>
+            <div className={tableStyles.toolbarLeft}>
+              <select className={kys.select} aria-label="Arama alanı" value={searchMode} onChange={event => setSearchMode(event.target.value)}>
+                <option value="code">Kodda ara</option>
+                <option value="content">Başlık ve içerikte ara</option>
+              </select>
+              <div className={tableStyles.searchBox}>
+                <Search size={15} className={tableStyles.searchIcon} />
+                <input
+                  className={tableStyles.searchInput}
+                  placeholder={searchMode === "code" ? "Doküman kodu ara..." : "Başlık veya içerik ara..."}
+                  value={search}
+                  onChange={event => setSearch(event.target.value)}
+                />
+                {search && (
+                  <button type="button" className={tableStyles.searchClear} onClick={() => setSearch("")} aria-label="Aramayı temizle">
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <span className={tableStyles.totalCount}>{total} kayıt</span>
+              {filtreAktif && (
+                <button
+                  type="button"
+                  className={tableStyles.filterBadge}
+                  onClick={() => { setSearch(""); setTur(""); setDurum(""); }}
+                >
+                  Filtreleri temizle
                 </button>
               )}
             </div>
-            <span className={tableStyles.totalCount}>{total} kayıt</span>
-            {filtreAktif && (
-              <button
-                type="button"
-                className={tableStyles.filterBadge}
-                onClick={() => { setSearch(""); setTur(""); setDurum(""); }}
-              >
-                Filtreleri temizle
+            <div className={tableStyles.toolbarRight}>
+
+              <div className={styles.exportWrap} ref={exportRef}>
+                <button type="button" className={styles.ghostButton} disabled={exporting || loading} aria-expanded={exportOpen} aria-controls="document-export-options" onClick={()=>setExportOpen(open=>!open)}><Download size={15}/>{exporting?"Hazırlanıyor…":"Dışarı Aktar"}</button>
+                {exportOpen && <div id="document-export-options" className={styles.exportOptions}>
+                  <strong>Dışarı Aktar</strong><small>PDF: tüm dokümanlar · Excel: seçili filtreler</small>
+                  <button type="button" onClick={()=>void exportDocuments("master")}>L102-01 Doküman Master Listesi <small>PDF · Tüm dokümanlar</small></button>
+                  <button type="button" onClick={()=>void exportDocuments("excel")}>Excel <small>Filtrelenmiş doküman listesi</small></button>
+                </div>}
+              </div>
+              <button type="button" className={styles.ghostButton} onClick={() => void fetchRows()} title="Yenile">
+                <RotateCw size={15} />
+                Yenile
               </button>
-            )}
-          </div>
-          <div className={tableStyles.toolbarRight}>
-            <button type="button" className={styles.ghostButton} aria-expanded={activityOpen} onClick={()=>setActivityOpen(value=>!value)}>Değişiklik Kayıtları</button>
-            <div className={styles.exportWrap} ref={exportRef}>
-              <button type="button" className={styles.ghostButton} disabled={exporting || loading} aria-expanded={exportOpen} aria-controls="document-export-options" onClick={()=>setExportOpen(open=>!open)}><Download size={15}/>{exporting?"Hazırlanıyor…":"Dışarı Aktar"}</button>
-              {exportOpen && <div id="document-export-options" className={styles.exportOptions}>
-                <strong>Dışarı Aktar</strong><small>PDF: tüm dokümanlar · Excel: seçili filtreler</small>
-                <button type="button" onClick={()=>void exportDocuments("master")}>L102-01 Doküman Master Listesi <small>PDF · Tüm dokümanlar</small></button>
-                <button type="button" onClick={()=>void exportDocuments("excel")}>Excel <small>Filtrelenmiş doküman listesi</small></button>
-              </div>}
+              {yetki.olustur && (
+                <button className={tableStyles.addBtn} type="button" onClick={() => void openAdd()}>
+                  <FilePlus2 size={16} />
+                  Yeni doküman
+                </button>
+              )}
             </div>
-            <button type="button" className={relationOpen ? styles.relationButtonActive : styles.ghostButton} onClick={() => {
-              const next = !relationOpen;
-              setRelationOpen(next);
-              if (next && references.length === 0) void fetchRelations();
-            }}>
-              <Network size={15} />
-              Atıf kullanımı
-            </button>
-            <button type="button" className={styles.ghostButton} onClick={() => void fetchRows()} title="Yenile">
-              <RotateCw size={15} />
-              Yenile
-            </button>
-            {yetki.olustur && (
-              <button className={tableStyles.addBtn} type="button" onClick={() => void openAdd()}>
-                <FilePlus2 size={16} />
-                Yeni doküman
-              </button>
+          </div>
+
+
+          <div className={kys.filterRow}>
+            <select className={kys.select} value={tur} onChange={event => setTur(event.target.value)}>
+              <option value="">Tüm türler</option>
+              {DOKUMAN_TURLERI.map(item => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <select className={kys.select} value={durum} onChange={event => setDurum(event.target.value)}>
+              <option value="">Tüm durumlar</option>
+              {DOKUMAN_DURUMLARI.map(item => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <select className={kys.select} value={sort} onChange={event => setSort(event.target.value)}>
+              <option value="kod-grup">Kod grubuna göre (101, 102…)</option>
+              <option value="guncel">Son güncellenen</option>
+              <option value="kod-asc">Koda göre (A→Z)</option>
+              <option value="kod-desc">Koda göre (Z→A)</option>
+              <option value="baslik-asc">Başlığa göre</option>
+              <option value="yururluk-desc">Yürürlük tarihine göre</option>
+            </select>
+            <select className={tableStyles.pageSizeSelect} value={limit} onChange={event => setLimit(Number(event.target.value))}>
+              {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n} / sayfa</option>)}
+            </select>
+          </div>
+
+          <div className={tableStyles.tableCard}>
+            {exportSuccess && <p className={styles.exportSuccess} role="status">{exportSuccess}</p>}
+            {error && <div className={tableStyles.errorBar} role="alert">{error}</div>}
+            <div className={tableStyles.tableWrapper}>
+              <table className={`${tableStyles.table} ${styles.documentTable}`}>
+                <thead>
+                  <tr>
+                    <th>Tür</th>
+                    <th>Kod</th>
+                    <th>Doküman Adı</th>
+                    <th>Yürürlük</th>
+                    <th>Rev.</th>
+                    <th>Durum</th>
+                    <th aria-label="İşlemler" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={`sk-${i}`}><td colSpan={7}><div className={tableStyles.skeleton} /></td></tr>
+                    ))
+                  ) : rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={7}>
+                        <div className={tableStyles.empty}>
+                          {filtreAktif
+                            ? "Filtrelere uyan doküman bulunamadı."
+                            : "Henüz doküman yok. \"Yeni doküman\" ile ilk kaydı oluşturun."}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : rows.map(doc => (
+                    <tr key={doc.id} className={styles.documentTableRow}>
+                      <td>{doc.tur}</td>
+                      <td className={tableStyles.tdMono}>
+                        <Link href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}${yetki.duzenle || yetki.kontrol || yetki.onayla ? "" : "/onizleme"}`} className={styles.documentCodeLink}>
+                          {doc.kod}
+                        </Link>
+                      </td>
+                      <td className={tableStyles.tdName}>
+                        <Link href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}${yetki.duzenle || yetki.kontrol || yetki.onayla ? "" : "/onizleme"}`} className={styles.documentTitleLink}>
+                          {doc.baslik}
+                        </Link>
+                        {doc.onaylayanAd && (
+                          <span className={styles.documentSubText}>
+                            Onay: {doc.onaylayanAd}
+                          </span>
+                        )}
+                      </td>
+                      <td className={tableStyles.tdMono}>{formatDate(doc.yururlukTarihi)}</td>
+                      <td className={tableStyles.tdMono}>{doc.revizyonEtiket}</td>
+                      <td><span className={`${styles.statusPill} ${statusTone[doc.durum] || ""}`}>{doc.durum}</span></td>
+                      <td>
+                        <div className={tableStyles.actionBtns}>
+                          {doc.hasDosya && !hasKysPdfPreview(doc) ? (
+                            <a href={`/api/kys/dokumanlar/${doc.id}/dosya?download=1`} className={tableStyles.editBtn} title="Dosyayı indir" aria-label={`${doc.baslik} dosyasını indir`}><Download size={15} /></a>
+                          ) : <button
+                            type="button"
+                            className={tableStyles.editBtn}
+                            title="Önizle"
+                            onClick={() => void openPreview(doc.id)}
+                          >
+                            <Eye size={15} />
+                          </button>}
+                          {!doc.hasDosya && <Link
+                            href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}/onizleme`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={tableStyles.editBtn}
+                            title="Yeni sekmede aç"
+                          >
+                            <ArrowUpRight size={15} />
+                          </Link>}
+                          {yetki.sil && (
+                            <button
+                              type="button"
+                              className={tableStyles.deleteBtn}
+                              title="Dokümanı sil"
+                              onClick={() => { setSilinecek(doc); setSilmeHatasi(""); }}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {totalPages > 1 && (
+              <div className={tableStyles.pagination}>
+                <button type="button" className={tableStyles.pageBtn} disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Önceki</button>
+                <span className={tableStyles.pageInfo}>{page} / {totalPages}</span>
+                <button type="button" className={tableStyles.pageBtn} disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Sonraki</button>
+              </div>
             )}
           </div>
         </div>
 
-        {activityOpen && <DokumanActivity />}
-        {relationOpen && (
-          <section className={styles.relationWorkspace} aria-labelledby="relation-title">
+      </Tabs.Content>
+      <Tabs.Content value="kayitlar" className={styles.workspacePanel}><DokumanActivity /></Tabs.Content>
+      <Tabs.Content value="atiflar" className={styles.workspacePanel}>
+          <section className={`${styles.listCard} ${styles.referencePanel}`} aria-labelledby="relation-title" aria-busy={relationLoading}>
             <div className={styles.relationIntro}>
               <div>
-                <span className={styles.relationEyebrow}>OTOMATİK ATIF ANALİZİ</span>
-                <h2 id="relation-title">Hangi doküman, kaç yerde kullanılıyor?</h2>
+                <h2 id="relation-title">Atıf Kullanımı</h2>
                 <p>Doküman içeriklerindeki bağlı atıflar otomatik taranır. Manuel bağlantı oluşturmanız gerekmez.</p>
               </div>
               <div className={styles.referenceMetrics}>
@@ -404,16 +530,14 @@ export default function DokumanListesiClient() {
             <div className={styles.relationListHeader}>
               <div className={tableStyles.searchBox}>
                 <Search size={15} className={tableStyles.searchIcon} />
-                <input className={tableStyles.searchInput} placeholder="Doküman veya prosedür ara..." value={relationSearch} onChange={event => setRelationSearch(event.target.value)} />
+                <input aria-label="Atıf kullanılan dokümanlarda ara" className={tableStyles.searchInput} placeholder="Doküman veya prosedür ara..." value={relationSearch} onChange={event => setRelationSearch(event.target.value)} />
               </div>
-              <span>{filteredRelations.length} atıf alan doküman gösteriliyor</span>
+              <div className={styles.panelActions}><span className={tableStyles.totalCount}>{filteredRelations.length} doküman</span><button type="button" className={styles.ghostButton} disabled={relationLoading} onClick={() => void fetchRelations()}><RotateCw size={15} />Yenile</button></div>
             </div>
 
             <div className={styles.relationList}>
-              {relationLoading && references.length === 0 ? <div className={tableStyles.skeleton} /> : !relationSearch.trim() ? (
-                <div className={styles.relationEmpty}><Search size={24} /><strong>Doküman kodu veya adıyla arayın</strong><span>Sonuçlar yalnızca arama yaptıktan sonra gösterilir.</span></div>
-              ) : filteredRelations.length === 0 ? (
-                <div className={styles.relationEmpty}><Network size={24} /><strong>Bu dokümana bağlı atıf bulunamadı</strong><span>Yalnızca doküman editöründe oluşturulan bağlantılar sayılır.</span></div>
+              {relationLoading ? <div className={styles.relationEmpty} role="status">Atıflar yükleniyor…</div> : relationError ? <div className={styles.relationEmpty}>Atıflar yüklenemedi. Yenile düğmesiyle tekrar deneyin.</div> : filteredRelations.length === 0 ? (
+                <div className={styles.relationEmpty}><Network size={24} /><strong>Atıf bulunamadı</strong><span>Aramanızı değiştirin veya doküman içeriklerine atıf ekleyin.</span></div>
               ) : filteredRelations.map(item => (
                 <article className={styles.referenceRow} key={item.id}>
                   <Link href={`/laboratuvar/kys/dokuman-yonetimi/${item.id}/onizleme`} target="_blank" className={styles.relationDocument}>
@@ -427,130 +551,7 @@ export default function DokumanListesiClient() {
               ))}
             </div>
           </section>
-        )}
-
-        <div className={kys.filterRow}>
-          <select className={kys.select} value={tur} onChange={event => setTur(event.target.value)}>
-            <option value="">Tüm türler</option>
-            {DOKUMAN_TURLERI.map(item => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <select className={kys.select} value={durum} onChange={event => setDurum(event.target.value)}>
-            <option value="">Tüm durumlar</option>
-            {DOKUMAN_DURUMLARI.map(item => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <select className={kys.select} value={sort} onChange={event => setSort(event.target.value)}>
-            <option value="kod-grup">Kod grubuna göre (101, 102…)</option>
-            <option value="guncel">Son güncellenen</option>
-            <option value="kod-asc">Koda göre (A→Z)</option>
-            <option value="kod-desc">Koda göre (Z→A)</option>
-            <option value="baslik-asc">Başlığa göre</option>
-            <option value="yururluk-desc">Yürürlük tarihine göre</option>
-          </select>
-          <select className={tableStyles.pageSizeSelect} value={limit} onChange={event => setLimit(Number(event.target.value))}>
-            {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n} / sayfa</option>)}
-          </select>
-        </div>
-
-        <div className={tableStyles.tableCard}>
-          {exportSuccess && <p className={styles.exportSuccess} role="status">{exportSuccess}</p>}
-          {error && <div className={tableStyles.errorBar} role="alert">{error}</div>}
-          <div className={tableStyles.tableWrapper}>
-            <table className={`${tableStyles.table} ${styles.documentTable}`}>
-              <thead>
-                <tr>
-                  <th>Tür</th>
-                  <th>Kod</th>
-                  <th>Doküman Adı</th>
-                  <th>Yürürlük</th>
-                  <th>Rev.</th>
-                  <th>Durum</th>
-                  <th aria-label="İşlemler" />
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={`sk-${i}`}><td colSpan={7}><div className={tableStyles.skeleton} /></td></tr>
-                  ))
-                ) : rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={7}>
-                      <div className={tableStyles.empty}>
-                        {filtreAktif
-                          ? "Filtrelere uyan doküman bulunamadı."
-                          : "Henüz doküman yok. \"Yeni doküman\" ile ilk kaydı oluşturun."}
-                      </div>
-                    </td>
-                  </tr>
-                ) : rows.map(doc => (
-                  <tr key={doc.id} className={styles.documentTableRow}>
-                    <td>{doc.tur}</td>
-                    <td className={tableStyles.tdMono}>
-                      <Link href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}${yetki.duzenle || yetki.kontrol || yetki.onayla ? "" : "/onizleme"}`} className={styles.documentCodeLink}>
-                        {doc.kod}
-                      </Link>
-                    </td>
-                    <td className={tableStyles.tdName}>
-                      <Link href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}${yetki.duzenle || yetki.kontrol || yetki.onayla ? "" : "/onizleme"}`} className={styles.documentTitleLink}>
-                        {doc.baslik}
-                      </Link>
-                      {doc.onaylayanAd && (
-                        <span className={styles.documentSubText}>
-                          Onay: {doc.onaylayanAd}
-                        </span>
-                      )}
-                    </td>
-                    <td className={tableStyles.tdMono}>{formatDate(doc.yururlukTarihi)}</td>
-                    <td className={tableStyles.tdMono}>{doc.revizyonEtiket}</td>
-                    <td><span className={`${styles.statusPill} ${statusTone[doc.durum] || ""}`}>{doc.durum}</span></td>
-                    <td>
-                      <div className={tableStyles.actionBtns}>
-                        {doc.hasDosya && !hasKysPdfPreview(doc) ? (
-                          <a href={`/api/kys/dokumanlar/${doc.id}/dosya?download=1`} className={tableStyles.editBtn} title="Dosyayı indir" aria-label={`${doc.baslik} dosyasını indir`}><Download size={15} /></a>
-                        ) : <button
-                          type="button"
-                          className={tableStyles.editBtn}
-                          title="Önizle"
-                          onClick={() => void openPreview(doc.id)}
-                        >
-                          <Eye size={15} />
-                        </button>}
-                        {!doc.hasDosya && <Link
-                          href={`/laboratuvar/kys/dokuman-yonetimi/${doc.id}/onizleme`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={tableStyles.editBtn}
-                          title="Yeni sekmede aç"
-                        >
-                          <ArrowUpRight size={15} />
-                        </Link>}
-                        {yetki.sil && (
-                          <button
-                            type="button"
-                            className={tableStyles.deleteBtn}
-                            title="Dokümanı sil"
-                            onClick={() => { setSilinecek(doc); setSilmeHatasi(""); }}
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {totalPages > 1 && (
-            <div className={tableStyles.pagination}>
-              <button type="button" className={tableStyles.pageBtn} disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Önceki</button>
-              <span className={tableStyles.pageInfo}>{page} / {totalPages}</span>
-              <button type="button" className={tableStyles.pageBtn} disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Sonraki</button>
-            </div>
-          )}
-        </div>
-      </div>
+      </Tabs.Content>
 
       {modalOpen && (
         <div className={tableStyles.modalOverlay} role="dialog" aria-modal="true" aria-label="Yeni doküman">
@@ -731,6 +732,6 @@ export default function DokumanListesiClient() {
           </div>
         </div>
       )}
-    </div>
+    </Tabs.Root>
   );
 }
