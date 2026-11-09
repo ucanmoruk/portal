@@ -2,6 +2,8 @@
 import { pendingMessageNotifications } from "@/lib/kysMessageReply";
 import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
+import { recurringTaskDates } from "@/lib/kysTaskPlanning";
+import { randomUUID } from "node:crypto";
 
 type User = { userId: string; userName: string };
 type Row = Record<string, any>;
@@ -91,7 +93,7 @@ function mapItem(row: Row) {
   return { id:number(row,"ID"), tur:string(row,"Tur"), baslik:string(row,"Baslik"), icerik:string(row,"Icerik"),
     olusturanId:string(row,"OlusturanID"), olusturanAd:string(row,"OlusturanAd"), aliciId:string(row,"AliciID"), aliciAd:string(row,"AliciAd"),
     konusmaId:row.KonusmaID==null?null:number(row,"KonusmaID"), durum:string(row,"Durum"), terminTarihi:date(row.TerminTarihi), kategori:string(row,"Kategori")||null,
-    baslangicTarihi:date(row.BaslangicTarihi), bitisTarihi:date(row.BitisTarihi),
+    gunluk: /^(gunluk|haftalik|aylik):/.test(string(row,"BildirimAnahtari")), baslangicTarihi:date(row.BaslangicTarihi), bitisTarihi:date(row.BitisTarihi),
     createdAt:date(row.CreatedAt), updatedAt:date(row.UpdatedAt), okundu:Boolean(number(row,"Okundu")) };
 }
 
@@ -139,6 +141,25 @@ export async function createKysIletisim(input:Record<string,unknown>,user:User){
   }
   const kategori=text(input.kategori);if(tur==="Görev"&&!['Rutin','Satış','Rutin Dışı'].includes(kategori))throw new Error("Görev kategorisi seçilmelidir.");
   const baslangic=text(input.baslangicTarihi);const bitis=text(input.bitisTarihi);
+  if (tur === "Görev" && text(input.tekrar) && !["yok", "gunluk", "haftalik", "aylik"].includes(text(input.tekrar))) throw new Error("Geçersiz tekrar seçeneği.");
+  if (tur === "Görev" && ["gunluk", "haftalik", "aylik"].includes(text(input.tekrar))) {
+    const dates = recurringTaskDates(baslangic, input.gunSayisi, text(input.tekrar));
+    const targets = [...new Map(recipients.map(recipient => [recipient.id, recipient])).values()];
+    if (targets.length * dates.length > 2000) throw new Error("Bir işlemde en fazla 2000 görev planlanabilir.");
+    const series = randomUUID();
+    const tx = await pool.transaction(); await tx.begin();
+    try {
+      for (const day of dates) for (const recipient of targets) {
+        const result = await tx.request().input("Baslik", baslik.slice(0,220)).input("Icerik", icerik)
+          .input("OlusturanID", user.userId).input("OlusturanAd", user.userName).input("AliciID", recipient.id).input("AliciAd", recipient.name)
+          .input("Gun", day).input("Kategori", kategori).input("Key", `${text(input.tekrar)}:${series}:${recipient.id}:${day}`)
+          .query("INSERT INTO KysIletisim (Tur,Baslik,Icerik,OlusturanID,OlusturanAd,AliciID,AliciAd,Durum,TerminTarihi,BaslangicTarihi,BitisTarihi,Kategori,BildirimAnahtari) OUTPUT INSERTED.ID VALUES ('Görev',@Baslik,@Icerik,@OlusturanID,@OlusturanAd,@AliciID,@AliciAd,'Atandı',@Gun,@Gun,@Gun,@Kategori,@Key)");
+        const id = Number(result.recordset[0]?.ID); created.push(id);
+        await tx.request().input("ID",id).input("UserID",user.userId).input("UserName",user.userName).query("INSERT INTO KysIletisimGorevLog (GorevID,Durum,KullaniciID,KullaniciAd) VALUES (@ID,'Atandı',@UserID,@UserName)");
+      }
+      await tx.commit(); return { id: created[0], ids: created };
+    } catch (error) { await tx.rollback(); throw error; }
+  }
   if(tur==="Görev"&&(!baslangic||!bitis))throw new Error("Görev için başlama ve bitiş tarihleri zorunludur.");
   if(tur==="Görev"&&bitis<baslangic)throw new Error("Bitiş tarihi başlama tarihinden önce olamaz.");
   for(const recipient of recipients){const result=await pool.request().input("Tur",tur).input("Baslik",baslik.slice(0,220)).input("Icerik",icerik)
@@ -173,7 +194,7 @@ export async function markKysIletisimRead(id:number,user:User){
   }
   await pool.request().input("ID",id).input("UserID",user.userId).query(hasMysqlConfig()?"INSERT IGNORE INTO KysIletisimOkuma (IcerikID,KullaniciID) VALUES (@ID,@UserID)":"IF NOT EXISTS (SELECT 1 FROM KysIletisimOkuma WHERE IcerikID=@ID AND KullaniciID=@UserID) INSERT INTO KysIletisimOkuma (IcerikID,KullaniciID) VALUES (@ID,@UserID)");
 }
-export async function markAllKysIletisimRead(user:User){await ensureKysIletisimSchema();const pool=await cosmoPool;const visible="(i.Tur='Duyuru' AND i.OlusturanID<>@UserID) OR i.AliciID=@UserID OR (i.Tur='Mesaj' AND i.OlusturanID<>@UserID AND EXISTS (SELECT 1 FROM KysIletisimKatilimci k WHERE k.KonusmaID=COALESCE(i.KonusmaID,i.ID) AND k.KullaniciID=@UserID))";await pool.request().input("UserID",user.userId).query(hasMysqlConfig()?`INSERT IGNORE INTO KysIletisimOkuma (IcerikID,KullaniciID) SELECT i.ID,@UserID FROM KysIletisim i WHERE ${visible}`:`INSERT INTO KysIletisimOkuma (IcerikID,KullaniciID) SELECT i.ID,@UserID FROM KysIletisim i WHERE (${visible}) AND NOT EXISTS (SELECT 1 FROM KysIletisimOkuma o WHERE o.IcerikID=i.ID AND o.KullaniciID=@UserID)`);}
+export async function markAllKysIletisimRead(user:User){await ensureKysIletisimSchema();const pool=await cosmoPool;const visible="(i.Tur='Duyuru' AND i.OlusturanID<>@UserID) OR i.AliciID=@UserID OR (i.Tur='Mesaj' AND i.OlusturanID<>@UserID AND EXISTS (SELECT 1 FROM KysIletisimKatilimci k WHERE k.KonusmaID=COALESCE(i.KonusmaID,i.ID) AND k.KullaniciID=@UserID))";await pool.request().input("UserID",user.userId).input("Today",new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Istanbul"})).query(hasMysqlConfig()?`INSERT IGNORE INTO KysIletisimOkuma (IcerikID,KullaniciID) SELECT i.ID,@UserID FROM KysIletisim i WHERE (${visible}) AND (i.BildirimAnahtari IS NULL OR (i.BildirimAnahtari NOT LIKE 'gunluk:%' AND i.BildirimAnahtari NOT LIKE 'haftalik:%' AND i.BildirimAnahtari NOT LIKE 'aylik:%') OR i.BaslangicTarihi<=@Today)`:`INSERT INTO KysIletisimOkuma (IcerikID,KullaniciID) SELECT i.ID,@UserID FROM KysIletisim i WHERE (${visible}) AND (i.BildirimAnahtari IS NULL OR (i.BildirimAnahtari NOT LIKE 'gunluk:%' AND i.BildirimAnahtari NOT LIKE 'haftalik:%' AND i.BildirimAnahtari NOT LIKE 'aylik:%') OR i.BaslangicTarihi<=@Today) AND NOT EXISTS (SELECT 1 FROM KysIletisimOkuma o WHERE o.IcerikID=i.ID AND o.KullaniciID=@UserID)`);}
 
 export async function updateKysGorev(id:number,durum:string,user:User){
   await ensureKysIletisimSchema();
@@ -250,7 +271,7 @@ export async function getKysBildirimler(user:User){
   )).recordset.map(row=>string(row,"BildirimAnahtari")));
   for(const task of tasks){
     const end=date(task.BitisTarihi||task.TerminTarihi)?.slice(0,10);
-    if(!end||end>tomorrow)continue;
+    if(!end||end>tomorrow||(/^(gunluk|haftalik|aylik):/.test(string(task,"BildirimAnahtari"))&&end>today))continue;
     const stage=end<today?"Gecikti":end===today?"Bugün":"Yarın";
     const key=`termin:${number(task,"ID")}:${user.userId}:${end}:${stage}`;
     if(existingKeys.has(key))continue;
@@ -274,6 +295,6 @@ export async function getKysBildirimler(user:User){
     if(event.etiket!=="Termin Hatırlatma")return true;
     const due=String(event.terminTarihi).slice(0,10);
     return event.baslik.startsWith(due<today?"Gecikti:":due===today?"Bugün:":"Yarın:");
-  }),...data.duyurular.filter((x:any)=>!x.okundu&&x.olusturanId!==user.userId).map((x:any)=>({...x,etiket:"Duyuru"})),...pendingMessageNotifications(data.mesajlar,user.userId),...data.gorevler.filter((x:any)=>!x.okundu&&x.aliciId===user.userId).map((x:any)=>({...x,etiket:"Görev"}))].sort((a:any,b:any)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  }),...data.duyurular.filter((x:any)=>!x.okundu&&x.olusturanId!==user.userId).map((x:any)=>({...x,etiket:"Duyuru"})),...pendingMessageNotifications(data.mesajlar,user.userId),...data.gorevler.filter((x:any)=>!x.okundu&&x.aliciId===user.userId&&(!x.gunluk||String(x.baslangicTarihi).slice(0,10)<=today)).map((x:any)=>({...x,etiket:"Görev"}))].sort((a:any,b:any)=>String(b.createdAt).localeCompare(String(a.createdAt)));
   return {count:items.length,items:items.slice(0,8)};
 }

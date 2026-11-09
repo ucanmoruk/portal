@@ -952,3 +952,13 @@
 @media(max-width:760px){.taskDetail{padding:16px}.taskMain strong{font-size:.875rem}.taskSummary{padding-right:80px}.taskQuickActions{right:12px}.taskActions{flex-wrap:wrap}.taskDiscussion textarea{min-width:0}}
 .messageReplyStatus { display:inline-flex; width:fit-content; margin-top:5px; padding:3px 8px; border-radius:6px; background:#eef2f6; color:#475569; font-size:12px; font-weight:600; }
 .messageReplyStatus[data-pending="true"] { background:#fff3d6; color:#875800; }
+
+.form > .repeatHelp {
+  grid-column: 1 / -1;
+  margin: -4px 0 0;
+  font-size: .75rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  max-width: 65ch;
+}

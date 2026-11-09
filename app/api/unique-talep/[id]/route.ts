@@ -99,7 +99,10 @@ export async function POST(request: Request, context: Context) {
     if (setting("MAIL_USER").toLowerCase() !== "info@uniqueanalyse.com") throw new Error("Gönderim için info@uniqueanalyse.com SMTP hesabı tanımlanmalıdır.");
     const transporter = nodemailer.createTransport({ host: setting("MAIL_HOST"), port: Number(setting("MAIL_PORT", "465")), secure: setting("MAIL_SECURE", "true") === "true",
       auth: { user: setting("MAIL_USER"), pass: setting("MAIL_PASS") }, connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 60000 });
-    item = await saveUniqueRequest({ ...item, mailState: "Gönderiliyor" });
+    item = await saveUniqueRequest({ ...item, mailState: "Gönderiliyor", mailLog: [...(item.mailLog || []), {
+      startedAt: new Date().toISOString(), by: String(user.userId), to: offer.email, cc: "oguzhan@uniqueanalyse.com",
+      subject: offer.replySubject!, attachment: `Unique_Analyse_Teklif_${item.quoteId}.pdf`, state: "Gönderiliyor",
+    }] });
     smtpStarted = true;
     const text = `${offer.replyBody!.trim()}\n\n${UNIQUE_SIGNATURE_TEXT}`;
     const result = await transporter.sendMail({ from: { name: "Oğuzhan Eker | Unique Analyse", address: "info@uniqueanalyse.com" },
@@ -108,12 +111,24 @@ export async function POST(request: Request, context: Context) {
       ...(item.messageId ? { inReplyTo: item.messageId, references: [item.messageId] } : {}),
       attachments: [{ filename: `Unique_Analyse_Teklif_${item.quoteId}.pdf`, content: pdf, contentType: "application/pdf" },
         { filename: "unique-logo.png", path: path.join(process.cwd(), "public", "unique-logo.png"), cid: "unique-mail-signature", contentDisposition: "inline" }] });
+    const address = (value: string | { address: string }) => typeof value === "string" ? value : value.address;
+    item = { ...item, mailLog: item.mailLog!.map((entry, index, entries) => index === entries.length - 1 ? {
+      ...entry, completedAt: new Date().toISOString(), messageId: result.messageId,
+      accepted: (result.accepted || []).map(address), rejected: (result.rejected || []).map(address), response: String(result.response || "").slice(0, 2000),
+    } : entry) };
     if (!result.accepted?.length || result.rejected?.length) throw new Error("SMTP alıcı adresini kabul etmedi. Gönderimi kontrol edin.");
+    item.mailLog![item.mailLog!.length - 1].state = "Gönderildi";
     item = await saveUniqueRequest({ ...item, status: "Teklif Gönderildi", mailState: "Gönderildi", sentAt: new Date().toISOString(), sentMessageId: result.messageId, error: "" });
     reserved = false;
     await (await cosmoPool).request().input("ID", item.quoteId).query("UPDATE TeklifBaslik SET TeklifDurum=N'Onay Bekleniyor' WHERE ID=@ID AND TeklifDurum='Taslak'");
     return Response.json({ item });
   } catch (error) {
+    if (smtpStarted && item?.mailLog?.length) {
+      const entry = item.mailLog[item.mailLog.length - 1];
+      entry.state = "Belirsiz"; entry.completedAt ||= new Date().toISOString();
+      const code = (error as { code?: unknown })?.code;
+      if (typeof code === "string") entry.errorCode = code.slice(0, 80);
+    }
     if (reserved && item) await saveUniqueRequest({ ...item, mailState: smtpStarted ? "Belirsiz" : "Taslak", error: smtpStarted ? "SMTP sonucu belirsiz; yeniden göndermeden önce posta kutusunu kontrol edin." : "Hazırlık tamamlanamadı; teklif kaydını kontrol edip tekrar deneyebilirsiniz." }).catch(() => {});
     return Response.json({ error: error instanceof z.ZodError ? "Girilen bilgileri kontrol edin." : error instanceof Error ? error.message : "İşlem tamamlanamadı." }, { status: 400 });
   }

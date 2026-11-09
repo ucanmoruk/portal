@@ -92,6 +92,8 @@ export default function IletisimClient({
     terminTarihi: "",
     baslangicTarihi: "",
     bitisTarihi: "",
+    tekrar: "yok",
+    gunSayisi: "30",
     kategori: "Rutin",
   });
   const [reply, setReply] = useState<Record<number, string>>({});
@@ -190,7 +192,12 @@ export default function IletisimClient({
     () => new Map(people.map((p) => [String(p.ID), p.Ad])),
     [people],
   );
+  const createBusy = useRef(false);
+  const [creating, setCreating] = useState(false);
   async function create() {
+    if (createBusy.current) return;
+    createBusy.current = true; setCreating(true);
+    try {
     setError("");
     const aliciAdlar = form.aliciIds.map((id) => peopleById.get(id) || id);
     const r = await fetch("/api/kys/iletisim", {
@@ -217,9 +224,13 @@ export default function IletisimClient({
       terminTarihi: "",
       baslangicTarihi: "",
       bitisTarihi: "",
+      tekrar: "yok",
+      gunSayisi: "30",
       kategori: "Rutin",
     });
     await load();
+    } catch (error) { setError(error instanceof Error ? error.message : "Görev oluşturulamadı."); }
+    finally { createBusy.current = false; setCreating(false); }
   }
   const [taskBusy, setTaskBusy] = useState(false);
   const [taskComments, setTaskComments] = useState<Record<number, string>>({});
@@ -262,14 +273,18 @@ export default function IletisimClient({
     setEditingTask(null); await load();
   }
   async function deleteTask(task: Item) {
+    if (taskBusy) return;
     if (!window.confirm(`"${task.baslik}" görevini silmek istediğinize emin misiniz?`)) return;
-    setError("");
-    const response = await fetch("/api/kys/iletisim", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: task.id }) });
-    const json = await response.json().catch(() => ({}));
-    if (!response.ok) { setError(json.error || "Görev silinemedi."); return; }
-    setCalendarTaskId(null);
-    setEditingTask(null);
-    await load();
+    setTaskBusy(true); setError("");
+    try {
+      const response = await fetch("/api/kys/iletisim", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: task.id }) });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || "Görev silinemedi.");
+      setData(current => ({ ...current, gorevler: current.gorevler.filter(item => item.id !== task.id) }));
+      setCalendarTaskId(null); setEditingTask(null);
+      setExpanded(current => { const next = new Set(current); next.delete(task.id); return next; });
+    } catch (error) { setError(error instanceof Error ? error.message : "Görev silinemedi."); }
+    finally { setTaskBusy(false); }
   }
   async function answer(id: number) {
     const value = reply[id]?.trim();
@@ -436,6 +451,8 @@ export default function IletisimClient({
               terminTarihi: "",
               baslangicTarihi: "",
               bitisTarihi: "",
+              tekrar: "yok",
+              gunSayisi: "30",
               kategori: "Rutin",
             });
             setCompose(true);
@@ -884,7 +901,7 @@ export default function IletisimClient({
               {calendarTask.tur === "Görev" && taskDiscussion(calendarTask)}
               <div className={styles.taskActions}>
                 {calendarTask.tur === "Görev" && calendarTask.olusturanId === currentUserId && calendarTask.durum !== "Tamamlandı" && (
-                  <><button className={styles.editTask} onClick={() => openTaskEdit(calendarTask)}><Pencil size={15} />Düzenle</button><button className={styles.deleteTask} onClick={() => void deleteTask(calendarTask)}><Trash2 size={15} />Sil</button></>
+                  <><button className={styles.editTask} onClick={() => openTaskEdit(calendarTask)}><Pencil size={15} />Düzenle</button><button disabled={taskBusy} className={styles.deleteTask} onClick={() => void deleteTask(calendarTask)}><Trash2 size={15} />Sil</button></>
                 )}
                 {calendarTask.tur === "Görev" && calendarTask.durum === "Atandı" && calendarTask.aliciId === currentUserId && <button disabled={taskBusy} className={styles.start} onClick={()=>void action({islem:"gorev",id:calendarTask.id,durum:"Kabul Edildi"})}><Check size={15}/>Görevi kabul et</button>}
                 {calendarTask.tur === "Görev" && calendarTask.durum === "Kabul Edildi" &&
@@ -975,7 +992,7 @@ export default function IletisimClient({
                 {item.olusturanId === currentUserId && item.durum !== "Tamamlandı" && (
                   <div className={styles.taskQuickActions}>
                     <button type="button" onClick={() => openTaskEdit(item)} aria-label={`${item.baslik} görevini düzenle`} title="Düzenle"><Pencil size={14} /></button>
-                    <button type="button" className={styles.quickDelete} onClick={() => void deleteTask(item)} aria-label={`${item.baslik} görevini sil`} title="Sil"><Trash2 size={14} /></button>
+                    <button type="button" disabled={taskBusy} className={styles.quickDelete} onClick={() => void deleteTask(item)} aria-label={`${item.baslik} görevini sil`} title="Sil"><Trash2 size={14} /></button>
                   </div>
                 )}
                 {open && (
@@ -1106,7 +1123,8 @@ export default function IletisimClient({
               {form.tur === "Görev" && <label>Kategori<select value={form.kategori} onChange={(e) => setForm((f) => ({ ...f, kategori: e.target.value }))}><option>Rutin</option><option>Satış</option><option>Rutin Dışı</option></select></label>}
               {form.tur === "Görev" && <>
                 <label>Başlama tarihi<input required type="date" value={form.baslangicTarihi} onChange={(e) => setForm((f) => ({ ...f, baslangicTarihi: e.target.value }))} /></label>
-                <label>Bitiş tarihi<input required type="date" min={form.baslangicTarihi || undefined} value={form.bitisTarihi} onChange={(e) => setForm((f) => ({ ...f, bitisTarihi: e.target.value, terminTarihi: e.target.value }))} /></label>
+                <label>Tekrar<select value={form.tekrar} onChange={e => setForm(f => ({ ...f, tekrar: e.target.value }))}><option value="yok">Tek seferlik</option><option value="gunluk">Günlük</option><option value="haftalik">Haftalık</option><option value="aylik">Aylık</option></select></label>
+                {form.tekrar !== "yok" ? <><label>{form.tekrar === "gunluk" ? "Kaç gün sürecek?" : form.tekrar === "haftalik" ? "Kaç hafta sürecek?" : "Kaç ay sürecek?"}<input type="number" aria-describedby="task-repeat-help" min={1} max={366} step={1} value={form.gunSayisi} onChange={e => setForm(f => ({ ...f, gunSayisi: e.target.value }))} /></label><p id="task-repeat-help" className={styles.repeatHelp}>Her {form.tekrar === "gunluk" ? "gün" : form.tekrar === "haftalik" ? "hafta" : "ay"} ayrı görev oluşturulur; bildirimi görev günü gelir.{form.tekrar === "aylik" && <span> Tarih o ayda yoksa ayın son günü kullanılır.</span>}</p></> : <label>Bitiş tarihi<input required type="date" min={form.baslangicTarihi || undefined} value={form.bitisTarihi} onChange={(e) => setForm((f) => ({ ...f, bitisTarihi: e.target.value, terminTarihi: e.target.value }))} /></label>}
               </>}
               {form.tur === "Duyuru" && (
                 <label>
@@ -1133,8 +1151,8 @@ export default function IletisimClient({
             </div>
             <footer>
               <button onClick={() => setCompose(false)}>Vazgeç</button>
-              <button className={styles.primary} onClick={() => void create()}>
-                Yayınla
+              <button disabled={creating} className={styles.primary} onClick={() => void create()}>
+                {creating ? "Kaydediliyor…" : "Yayınla"}
               </button>
             </footer>
           </div>

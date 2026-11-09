@@ -69,6 +69,25 @@ export default function UniqueRequestDetail({ id }: { id: string }) {
     <div className={table.pageHeader}><div><h1 className={table.pageTitle}>Unique Talep #{item.id}</h1><p className={table.pageSubtitle}>{item.companyName || item.name} · {item.status}</p></div><div className={styles.actions}><Link className={styles.button} href="/iletisim/unique-talep">Talep listesi</Link><button className={styles.button} disabled={busy} onClick={() => void load()}>Kaydı yenile</button>{item.quoteId && <Link className={styles.button} target="_blank" href={`/teklif-print/${item.quoteId}`}>Teklifi önizle #{item.quoteId}</Link>}</div></div>
     {error && <p className={styles.error} role="alert">{error}</p>}{notice && <p className={styles.notice} role="status">{notice}</p>}
     {item.error && <p className={styles.error} role="alert">{item.error}</p>}
+    <section className={`${styles.editor} ${ui.card}`} aria-label="E-posta gönderim kaydı">
+      <h2>E-posta gönderim kaydı</h2>
+      <p className={styles.muted}>Durum: <strong>{item.mailState}</strong> · Gönderen: info@uniqueanalyse.com</p>
+      {item.mailLog?.length ? <div className={ui.stack}>{[...item.mailLog].reverse().map((entry, index) => <details key={`${entry.startedAt}-${index}`} open={index === 0}>
+        <summary>{new Date(entry.startedAt).toLocaleString("tr-TR")} · {entry.state}</summary>
+        <dl className={ui.mailLog}>
+          <dt>Alıcı (To)</dt><dd>{entry.to}</dd><dt>Bilgi (CC)</dt><dd>{entry.cc || "Yok"}</dd>
+          <dt>Konu</dt><dd>{entry.subject}</dd><dt>Ek</dt><dd>{entry.attachment}</dd>
+          <dt>İşlemi başlatan kullanıcı</dt><dd>{entry.by}</dd>
+          <dt>Tamamlanma zamanı</dt><dd>{entry.completedAt ? new Date(entry.completedAt).toLocaleString("tr-TR") : "Sonuç kaydı bekleniyor"}</dd>
+          <dt>Sunucunun kabul ettiği adresler</dt><dd>{entry.accepted?.join(", ") || "Kayıt yok"}</dd>
+          <dt>Sunucunun reddettiği adresler</dt><dd>{entry.rejected ? entry.rejected.join(", ") || "Yok" : "Kayıt yok"}</dd>
+          <dt>Mesaj kimliği</dt><dd>{entry.messageId || "Kayıt yok"}</dd>
+          <dt>SMTP yanıtı</dt><dd>{entry.response || "Kayıt yok"}</dd>
+          {entry.errorCode && <><dt>Hata kodu</dt><dd>{entry.errorCode}</dd></>}
+        </dl>
+      </details>)}</div> : <p className={styles.muted}>{item.sentAt ? `Gönderim zamanı: ${new Date(item.sentAt).toLocaleString("tr-TR")}. Mesaj kimliği: ${item.sentMessageId || "Kayıt yok"}. Bu eski gönderim için To/CC ve SMTP yanıtı saklanmamış.` : "Henüz bir SMTP gönderim kaydı yok."}</p>}
+      <p className={styles.muted}>SMTP kabulü, e-postanın alıcı tarafından okunduğu veya gelen kutusuna ulaştığı anlamına gelmez. Belirsiz sonuçlarda tekrar göndermeden önce posta sunucusu kayıtlarını kontrol edin.</p>
+    </section>
     <div className={ui.grid}>
       <section className={`${styles.editor} ${ui.card}`}><h2>Gelen e-posta</h2><p><strong>{item.subject}</strong></p><p className={styles.muted}>{item.name} &lt;{item.email}&gt;<br />{new Date(item.date).toLocaleString("tr-TR")}</p><pre className={ui.mailText}>{item.text}</pre><p className={styles.muted}>{item.reason}</p>
         <fieldset className={styles.fields} disabled={busy || ["Hazırlanıyor", "Gönderiliyor", "Belirsiz"].includes(item.mailState)}><label>Sınıf<select value={item.category} onChange={e => void act("edit", { category: e.target.value })}>{UNIQUE_CATEGORIES.map(s => <option key={s}>{s}</option>)}</select></label><label>Durum<select value={item.status} onChange={e => void act("edit", { status: e.target.value })}>{UNIQUE_STATUSES.map(s => <option key={s}>{s}</option>)}</select></label><label className={styles.wide}><span><input type="checkbox" checked={item.potential} onChange={e => void act("edit", { potential: e.target.checked })} /> Potansiyel müşteri</span></label></fieldset>

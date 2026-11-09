@@ -25,13 +25,14 @@ function request(){
     if(sql.startsWith('INSERT INTO KysIletisim ')||sql.startsWith('INSERT IGNORE INTO KysIletisim ')){
       if(args.Key&&rows.some(row=>row.BildirimAnahtari===args.Key))return result();
       const reminder=sql.includes("VALUES ('Termin Hatırlatma'");const comment=sql.includes("VALUES ('Görev Yorumu'");
-      const row={ID:++sequence,Tur:reminder?'Termin Hatırlatma':comment?'Görev Yorumu':args.Tur,Baslik:args.Baslik,Icerik:args.Icerik,OlusturanID:args.OlusturanID||args.UserID,OlusturanAd:args.OlusturanAd||args.UserName,AliciID:reminder?args.UserID:args.AliciID,AliciAd:args.AliciAd,Durum:reminder||comment?'Aktif':'Atandı',KonusmaID:reminder||comment?args.ID:null,TerminTarihi:args.Termin,BitisTarihi:args.Bitis,BaslangicTarihi:args.Baslangic,BildirimAnahtari:args.Key,CreatedAt:new Date().toISOString()};rows.push(row);return result([{ID:row.ID}],1);
+      const row={ID:++sequence,Tur:reminder?'Termin Hatırlatma':comment?'Görev Yorumu':args.Gun?'Görev':args.Tur,Baslik:args.Baslik,Icerik:args.Icerik,OlusturanID:args.OlusturanID||args.UserID,OlusturanAd:args.OlusturanAd||args.UserName,AliciID:reminder?args.UserID:args.AliciID,AliciAd:args.AliciAd,Durum:reminder||comment?'Aktif':'Atandı',KonusmaID:reminder||comment?args.ID:null,TerminTarihi:args.Gun||args.Termin,BitisTarihi:args.Gun||args.Bitis,BaslangicTarihi:args.Gun||args.Baslangic,BildirimAnahtari:args.Key,CreatedAt:new Date().toISOString()};rows.push(row);return result([{ID:row.ID}],1);
     }
     if(sql.startsWith('SELECT i.*,CASE'))return result(rows.filter(row=>row.OlusturanID===args.UserID||row.AliciID===args.UserID).map(row=>({...row,Okundu:reads.some(read=>read.IcerikID===row.ID&&read.KullaniciID===args.UserID)?1:0})));
     if(sql.startsWith('SELECT i.* FROM KysIletisim i'))return result(rows.filter(row=>{
       const task=rows.find(task=>task.ID===row.KonusmaID);return task&&row.AliciID===args.UserID&&!reads.some(read=>read.IcerikID===row.ID&&read.KullaniciID===args.UserID)&&(row.Tur==='Görev Yorumu'||row.Tur==='Termin Hatırlatma'&&task.Durum!=='Tamamlandı'&&task.AliciID===args.UserID&&(task.BitisTarihi||task.TerminTarihi)===row.TerminTarihi);
     }));
     if(sql.startsWith('SELECT IcerikID'))return result(reads);
+    if(sql.startsWith('SELECT DISTINCT BildirimAnahtari'))return result(rows.filter(row=>row.Tur==='Termin Hatırlatma'&&row.AliciID===args.UserID));
     if(sql.startsWith('SELECT GorevID'))return result(logs);
     if(sql.startsWith('SELECT KonusmaID'))return result();
     if(sql.startsWith('SELECT TOP 1 Tur,'))return result(rows.filter(row=>row.ID===args.ID));
@@ -41,7 +42,7 @@ function request(){
   }};
 }
 const pool={request,async transaction(){return {request,async begin(){},async commit(){},async rollback(){}};}};
-const store = compile('lib/kysIletisimStore.ts', { '@/lib/kysMessageReply': compile('lib/kysMessageReply.ts'), '@/lib/db': { cosmoPool: Promise.resolve(pool) }, '@/lib/mysqlCompat': {hasMysqlConfig:()=>true} });
+const store = compile('lib/kysIletisimStore.ts', { '@/lib/kysTaskPlanning': compile('lib/kysTaskPlanning.ts'), '@/lib/kysMessageReply': compile('lib/kysMessageReply.ts'), '@/lib/db': { cosmoPool: Promise.resolve(pool) }, '@/lib/mysqlCompat': {hasMysqlConfig:()=>true} });
 const marker = `__task_check_${Date.now()}`;
 const owner = { userId: `${marker}_owner`, userName: 'Görev kontrolü' };
 const assignee = { userId: `${marker}_assignee`, userName: 'Alıcı kontrolü' };
@@ -49,6 +50,28 @@ const outsider = { userId: `${marker}_other`, userName: 'Yetkisiz kontrol' };
 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' });
 async function run() {
   try {
+    const planning = compile('lib/kysTaskPlanning.ts');
+    assert.equal(planning.dailyTaskDates('2026-12-20', 30).at(-1), '2027-01-18');
+    assert.deepEqual(planning.dailyTaskDates('2028-02-28', 3), ['2028-02-28','2028-02-29','2028-03-01']);
+    for (const value of [0, -1, 1.5, 367, 'abc']) assert.throws(() => planning.dailyTaskDates(today, value));
+    assert.throws(() => planning.dailyTaskDates('2026-02-30', 2));
+    assert.deepEqual(planning.recurringTaskDates('2026-12-28', 3, 'haftalik'), ['2026-12-28','2027-01-04','2027-01-11']);
+    assert.deepEqual(planning.recurringTaskDates('2028-01-31', 3, 'aylik'), ['2028-01-31','2028-02-29','2028-03-31']);
+    assert.deepEqual(planning.recurringTaskDates('2026-01-31', 3, 'aylik'), ['2026-01-31','2026-02-28','2026-03-31']);
+    assert.throws(() => planning.recurringTaskDates(today, 2, 'invalid'));
+    for (const frequency of ['haftalik','aylik']) {
+      const scheduled = await store.createKysIletisim({tur:'Görev',baslik:marker,icerik:'Tekrarlayan kontrol',aliciId:assignee.userId,baslangicTarihi:'2099-01-31',tekrar:frequency,gunSayisi:3,kategori:'Rutin'},owner);
+      assert.equal(scheduled.ids.length,3);
+      const expected = planning.recurringTaskDates('2099-01-31',3,frequency);
+      assert.deepEqual(rows.filter(row=>scheduled.ids.includes(row.ID)).map(row=>row.BaslangicTarihi),expected);
+    }
+    const daily = await store.createKysIletisim({tur:'Görev',baslik:marker,icerik:'Günlük kontrol',aliciIds:[owner.userId,assignee.userId],baslangicTarihi:'2099-01-01',tekrar:'gunluk',gunSayisi:30,kategori:'Rutin'},owner);
+    assert.equal(daily.ids.length,60);
+    const dailyRows = rows.filter(row => daily.ids.includes(row.ID));
+    assert.equal(new Set(dailyRows.map(row=>row.BildirimAnahtari)).size,60);
+    assert(dailyRows.every(row=>row.BaslangicTarihi===row.BitisTarihi));
+    assert.equal(dailyRows.at(-1).BitisTarihi,'2099-01-30');
+    assert.equal((await store.getKysBildirimler(assignee)).count,0,'Future daily tasks must not notify early');
     const { id } = await store.createKysIletisim({ tur: 'Görev', baslik: marker, icerik: 'Geçici entegrasyon kontrolü', aliciId: assignee.userId, aliciAd: assignee.userName, baslangicTarihi: today, bitisTarihi: today, kategori: 'Rutin' }, owner);
     await assert.rejects(store.updateKysGorev(id, 'Kabul Edildi', owner));
     await assert.rejects(store.updateKysGorev(id, 'Başladı', assignee));

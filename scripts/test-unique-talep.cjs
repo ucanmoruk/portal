@@ -68,10 +68,14 @@ async function post(action, extra = {}) {
   badPdf = false; assert.equal((await post('send')).status, 200); assert.equal(quotes, 1); assert.equal(sent.length, 1);
   assert.equal(row.status, 'Teklif Gönderildi'); assert.equal(row.mailState, 'Gönderildi'); assert.ok(row.sentAt); assert.equal(updates, 1);
   assert.equal(sent[0].cc, 'oguzhan@uniqueanalyse.com');
+  assert.equal(row.mailLog.length, 1); assert.equal(row.mailLog[0].state, 'Gönderildi');
+  assert.equal(row.mailLog[0].to, offer.email); assert.equal(row.mailLog[0].cc, sent[0].cc);
+  assert.equal(row.mailLog[0].messageId, 'sent-fixture'); assert.deepEqual(row.mailLog[0].accepted, [offer.email]);
   assert.equal(sent[0].attachments[0].contentType, 'application/pdf'); assert.equal(sent[0].to, offer.email); assert.ok(sent[0].text.includes('Oğuzhan EKER')); assert.ok(!sent[0].html.includes('<script>')); assert.equal(sent[0].inReplyTo, '<test@example.com>'); assert(sent[0].html.includes('font-family:Tahoma')); assert(sent[0].html.includes('cid:unique-mail-signature')); assert.equal(sent[0].attachments[1].cid, 'unique-mail-signature');
   assert.equal((await post('send')).status, 400); assert.equal(sent.length, 1);
   assert.equal((await post('edit', { status: 'Onaylandı' })).status, 200);
   row = fixture(); smtpError = true; assert.equal((await post('send')).status, 400); assert.equal(row.mailState, 'Belirsiz'); assert.equal(row.status, 'Bekliyor');
+  assert.equal(row.mailLog[0].state, 'Belirsiz'); assert.ok(row.mailLog[0].completedAt);
   smtpError = false; assert.equal((await post('send')).status, 400); assert.equal(sent.length, 1);
   const context = { params: Promise.resolve({ id: '1' }) };
   const deletion = version => new Request('https://portal.example/api/unique-talep/1', { method: 'DELETE', body: JSON.stringify({ version }) });

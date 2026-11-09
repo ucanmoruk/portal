@@ -3,6 +3,11 @@ import type { CrmOffer } from "./crmOffer";
 
 export const UNIQUE_STATUSES = ["Bekliyor", "Teklif Gönderildi", "Onaylandı", "Uygun Değil", "Ret"] as const;
 export const UNIQUE_CATEGORIES = ["Fiyat Teklifi", "Analiz Talebi", "Bilgi Talebi", "Diğer"] as const;
+export type UniqueMailLog = {
+  startedAt: string; completedAt?: string; by: string; to: string; cc: string;
+  subject: string; attachment: string; state: "Gönderiliyor" | "Gönderildi" | "Belirsiz";
+  messageId?: string; accepted?: string[]; rejected?: string[]; response?: string; errorCode?: string;
+};
 export type UniqueRequest = {
   id: number; version: number; source: string; date: string; name: string; email: string;
   messageId: string; subject: string; text: string; category: typeof UNIQUE_CATEGORIES[number];
@@ -10,6 +15,7 @@ export type UniqueRequest = {
   companyId: number | null; companyName: string; offer: CrmOffer | null; quoteId: number | null;
   mailState: "Taslak" | "Hazırlanıyor" | "Gönderiliyor" | "Gönderildi" | "Belirsiz";
   sentAt: string | null; sentMessageId: string; error: string;
+  mailLog?: UniqueMailLog[];
   deletedAt?: string | null; deletedBy?: string;
 };
 export const uniqueEdit = z.object({
