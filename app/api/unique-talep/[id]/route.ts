@@ -103,7 +103,7 @@ export async function POST(request: Request, context: Context) {
     smtpStarted = true;
     const text = `${offer.replyBody!.trim()}\n\n${UNIQUE_SIGNATURE_TEXT}`;
     const result = await transporter.sendMail({ from: { name: "Oğuzhan Eker | Unique Analyse", address: "info@uniqueanalyse.com" },
-      to: offer.email, subject: offer.replySubject!, text,
+      to: offer.email, cc: "oguzhan@uniqueanalyse.com", subject: offer.replySubject!, text,
       html: uniqueReplyHtml(offer.replyBody!),
       ...(item.messageId ? { inReplyTo: item.messageId, references: [item.messageId] } : {}),
       attachments: [{ filename: `Unique_Analyse_Teklif_${item.quoteId}.pdf`, content: pdf, contentType: "application/pdf" },

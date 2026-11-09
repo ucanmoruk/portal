@@ -56,6 +56,9 @@ async function post(action, extra = {}) {
   assert.equal(rules.classifyUniqueMail('Merhaba', 'İyi günler', 'a@example.com').potential, false);
   row = fixture(); authorized = false; assert.equal((await post('send')).status, 401); authorized = true;
   assert.equal((await post('send', { version: 999 })).status, 409); assert.equal(sent.length, 0);
+  row.potential = false;
+  assert.equal((await post('edit', { potential: true })).status, 200);
+  assert.equal(row.potential, true); assert.equal(row.status, 'Bekliyor'); assert.equal(sent.length, 0);
   assert.equal((await post('edit', { status: 'Teklif Gönderildi' })).status, 200); assert.equal(row.status, 'Teklif Gönderildi'); assert.equal(row.sentAt, null);
   assert.equal((await post('analyze')).status, 200); assert.equal(row.offer.items[0].price, 150);
   assert.equal((await post('draft')).status, 200); assert.equal(quotes, 0); assert.equal(sent.length, 0);
@@ -64,6 +67,7 @@ async function post(action, extra = {}) {
   badPdf = true; assert.equal((await post('send')).status, 400); assert.equal(sent.length, 0); assert.equal(row.mailState, 'Taslak'); assert.equal(row.quoteId, 77);
   badPdf = false; assert.equal((await post('send')).status, 200); assert.equal(quotes, 1); assert.equal(sent.length, 1);
   assert.equal(row.status, 'Teklif Gönderildi'); assert.equal(row.mailState, 'Gönderildi'); assert.ok(row.sentAt); assert.equal(updates, 1);
+  assert.equal(sent[0].cc, 'oguzhan@uniqueanalyse.com');
   assert.equal(sent[0].attachments[0].contentType, 'application/pdf'); assert.equal(sent[0].to, offer.email); assert.ok(sent[0].text.includes('Oğuzhan EKER')); assert.ok(!sent[0].html.includes('<script>')); assert.equal(sent[0].inReplyTo, '<test@example.com>'); assert(sent[0].html.includes('font-family:Tahoma')); assert(sent[0].html.includes('cid:unique-mail-signature')); assert.equal(sent[0].attachments[1].cid, 'unique-mail-signature');
   assert.equal((await post('send')).status, 400); assert.equal(sent.length, 1);
   assert.equal((await post('edit', { status: 'Onaylandı' })).status, 200);
