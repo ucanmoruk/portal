@@ -25,7 +25,7 @@ async function sender(chatId:string){
   const access=recipient?await telegramEligibility(recipient.userId):null;
   return recipient&&access?{userId:recipient.userId,name:access.name}:null;
 }
-const preview=(draft:Draft,person:Candidate)=>`Görev taslağı\nKişi: ${person.name}\nBaşlangıç / termin: ${draft.date.split("-").reverse().join(".")}\nKategori: Rutin\n\n${draft.title}\n\nOnayladığınızda portalda Atandı olarak kaydedilir.`;
+const preview=(draft:Draft,person:Candidate)=>`Görev taslağı\nKişi: ${person.name}\nBaşlangıç / termin: ${draft.date.split("-").reverse().join(".")}\nKategori: Rutin\n\n${draft.title}\n\nOnayladığınızda portalda Başladı olarak kaydedilir.`;
 const cancelButton=(key:string)=>({text:"İptal",callback_data:`kys:cancel:${key}`});
 export async function receiveTelegramTaskText(chatId:string,messageId:number,text:string,now=new Date()){
   const actor=await sender(chatId);
@@ -75,9 +75,9 @@ export async function handleTelegramAssignment(chatId:string,data:string,now=new
     if(!selected||!await telegramEligibility(selected.id))throw new Error("Seçilen kişinin güncel KYS erişimi bulunmuyor.");
     if(draft.date<istanbulClock(now).today)throw new Error("Görev tarihi geçmişte kaldı. Görevi yeniden yazın.");
     if(action==="new"){
-      const result=await tx.request().input("Title",draft.title.slice(0,220)).input("Body",draft.title).input("Actor",actor.userId).input("ActorName",actor.name).input("Target",selected.id).input("TargetName",selected.name).input("Date",draft.date).query("INSERT INTO KysIletisim (Tur,Baslik,Icerik,OlusturanID,OlusturanAd,AliciID,AliciAd,Durum,TerminTarihi,BaslangicTarihi,BitisTarihi,Kategori) OUTPUT INSERTED.ID VALUES ('Görev',@Title,@Body,@Actor,@ActorName,@Target,@TargetName,'Atandı',@Date,@Date,@Date,'Rutin')");
+      const result=await tx.request().input("Title",draft.title.slice(0,220)).input("Body",draft.title).input("Actor",actor.userId).input("ActorName",actor.name).input("Target",selected.id).input("TargetName",selected.name).input("Date",draft.date).query("INSERT INTO KysIletisim (Tur,Baslik,Icerik,OlusturanID,OlusturanAd,AliciID,AliciAd,Durum,TerminTarihi,BaslangicTarihi,BitisTarihi,Kategori) OUTPUT INSERTED.ID VALUES ('Görev',@Title,@Body,@Actor,@ActorName,@Target,@TargetName,'Başladı',@Date,@Date,@Date,'Rutin')");
       taskId=Number(result.recordset[0]?.ID);if(!Number.isSafeInteger(taskId)||taskId<=0)throw new Error("Görev kimliği alınamadı.");
-      await tx.request().input("ID",taskId).input("Actor",actor.userId).input("Name",`${actor.name.slice(0,145)} · Telegram`).query("INSERT INTO KysIletisimGorevLog (GorevID,Durum,KullaniciID,KullaniciAd) VALUES (@ID,'Atandı',@Actor,@Name)");
+      await tx.request().input("ID",taskId).input("Actor",actor.userId).input("Name",`${actor.name.slice(0,145)} · Telegram`).query("INSERT INTO KysIletisimGorevLog (GorevID,Durum,KullaniciID,KullaniciAd) VALUES (@ID,'Başladı',@Actor,@Name)");
       await tx.request().input("Key",key).input("Task",taskId).query("UPDATE KysTelegramTaskDraft SET State='created',TaskID=@Task WHERE DraftKey=@Key");
     }
     await tx.commit();

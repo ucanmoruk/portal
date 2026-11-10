@@ -15,21 +15,26 @@ function request(){
   const args={};
   return {input(key,value){args[key]=value;return this;},async query(sql){
     if(/^(CREATE|ALTER|INSERT IGNORE INTO KysIletisimKatilimci)/.test(sql))return result();
+    if(sql.startsWith('SELECT TOP 1 * FROM KysIletisim WHERE ID='))return result(rows.filter(row=>row.ID===args.ID&&row.Tur==='Görev'));
     if(sql.startsWith('SELECT * FROM KysIletisim WHERE ID='))return result(rows.filter(row=>row.ID===args.ID&&row.Tur==='Görev'));
     if(sql.startsWith("SELECT * FROM KysIletisim WHERE Tur='Görev'"))return result(rows.filter(row=>row.Tur==='Görev'&&row.AliciID===args.UserID&&row.Durum!=='Tamamlandı'));
+    if(sql.startsWith('UPDATE KysIletisim SET Durum=CASE')) {
+      const row=rows.find(row=>row.ID===args.ID); if(!row)return result();
+      Object.assign(row,{Baslik:args.Baslik,Icerik:args.Icerik,AliciID:args.AliciID,AliciAd:args.AliciAd,TerminTarihi:args.Termin,BaslangicTarihi:args.Baslangic,BitisTarihi:args.Bitis,Kategori:args.Kategori,AraKontrolTarihleri:args.Kontroller});return result([],1);
+    }
     if(sql.startsWith('UPDATE KysIletisim SET Durum=')){
       const row=rows.find(row=>row.ID===args.ID&&row.Durum===args.Onceki);if(!row)return result();row.Durum=args.Durum;return result([],1);
     }
-    if(sql.startsWith('INSERT INTO KysIletisimGorevLog')){logs.push({GorevID:args.ID,Durum:args.Durum||'Atandı',KullaniciAd:args.UserName,CreatedAt:new Date().toISOString()});return result([],1);}
+    if(sql.startsWith('INSERT INTO KysIletisimGorevLog')){logs.push({GorevID:args.ID,Durum:args.Durum||'Başladı',KullaniciAd:args.UserName,CreatedAt:new Date().toISOString()});return result([],1);}
     if(sql.startsWith('INSERT IGNORE INTO KysIletisimOkuma')){if(!reads.some(row=>row.IcerikID===args.ID&&row.KullaniciID===args.UserID))reads.push({ID:reads.length+1,IcerikID:args.ID,KullaniciID:args.UserID});return result([],1);}
     if(sql.startsWith('INSERT INTO KysIletisim ')||sql.startsWith('INSERT IGNORE INTO KysIletisim ')){
       if(args.Key&&rows.some(row=>row.BildirimAnahtari===args.Key))return result();
       const reminder=sql.includes("VALUES ('Termin Hatırlatma'");const comment=sql.includes("VALUES ('Görev Yorumu'");
-      const row={ID:++sequence,Tur:reminder?'Termin Hatırlatma':comment?'Görev Yorumu':args.Gun?'Görev':args.Tur,Baslik:args.Baslik,Icerik:args.Icerik,OlusturanID:args.OlusturanID||args.UserID,OlusturanAd:args.OlusturanAd||args.UserName,AliciID:reminder?args.UserID:args.AliciID,AliciAd:args.AliciAd,Durum:reminder||comment?'Aktif':'Atandı',KonusmaID:reminder||comment?args.ID:null,TerminTarihi:args.Gun||args.Termin,BitisTarihi:args.Gun||args.Bitis,BaslangicTarihi:args.Gun||args.Baslangic,BildirimAnahtari:args.Key,CreatedAt:new Date().toISOString()};rows.push(row);return result([{ID:row.ID}],1);
+      const row={ID:++sequence,Tur:reminder?'Termin Hatırlatma':comment?'Görev Yorumu':args.Gun?'Görev':args.Tur,Baslik:args.Baslik,Icerik:args.Icerik,OlusturanID:args.OlusturanID||args.UserID,OlusturanAd:args.OlusturanAd||args.UserName,AliciID:reminder?args.UserID:args.AliciID,AliciAd:args.AliciAd,Durum:reminder||comment?'Aktif':'Başladı',KonusmaID:reminder||comment?args.ID:null,TerminTarihi:args.Gun||args.Termin,BitisTarihi:args.Gun||args.Bitis,BaslangicTarihi:args.Gun||args.Baslangic,AraKontrolTarihleri:args.Kontroller,BildirimAnahtari:args.Key,CreatedAt:new Date().toISOString()};rows.push(row);return result([{ID:row.ID}],1);
     }
     if(sql.startsWith('SELECT i.*,CASE'))return result(rows.filter(row=>row.OlusturanID===args.UserID||row.AliciID===args.UserID).map(row=>({...row,Okundu:reads.some(read=>read.IcerikID===row.ID&&read.KullaniciID===args.UserID)?1:0})));
     if(sql.startsWith('SELECT i.* FROM KysIletisim i'))return result(rows.filter(row=>{
-      const task=rows.find(task=>task.ID===row.KonusmaID);return task&&row.AliciID===args.UserID&&!reads.some(read=>read.IcerikID===row.ID&&read.KullaniciID===args.UserID)&&(row.Tur==='Görev Yorumu'||row.Tur==='Termin Hatırlatma'&&task.Durum!=='Tamamlandı'&&task.AliciID===args.UserID&&(task.BitisTarihi||task.TerminTarihi)===row.TerminTarihi);
+      const task=rows.find(task=>task.ID===row.KonusmaID);return task&&row.AliciID===args.UserID&&!reads.some(read=>read.IcerikID===row.ID&&read.KullaniciID===args.UserID)&&(row.Tur==='Görev Yorumu'||row.Tur==='Termin Hatırlatma'&&task.Durum!=='Tamamlandı'&&task.AliciID===args.UserID&&((task.BitisTarihi||task.TerminTarihi)===row.TerminTarihi||row.BildirimAnahtari?.startsWith("ara:")));
     }));
     if(sql.startsWith('SELECT IcerikID'))return result(reads);
     if(sql.startsWith('SELECT DISTINCT BildirimAnahtari'))return result(rows.filter(row=>row.Tur==='Termin Hatırlatma'&&row.AliciID===args.UserID));
@@ -73,13 +78,22 @@ async function run() {
     assert.equal(dailyRows.at(-1).BitisTarihi,'2099-01-30');
     assert.equal((await store.getKysBildirimler(assignee)).count,0,'Future daily tasks must not notify early');
     const { id } = await store.createKysIletisim({ tur: 'Görev', baslik: marker, icerik: 'Geçici entegrasyon kontrolü', aliciId: assignee.userId, aliciAd: assignee.userName, baslangicTarihi: today, bitisTarihi: today, kategori: 'Rutin' }, owner);
-    await assert.rejects(store.updateKysGorev(id, 'Kabul Edildi', owner));
-    await assert.rejects(store.updateKysGorev(id, 'Başladı', assignee));
-    await store.updateKysGorev(id, 'Kabul Edildi', assignee);
-    await store.updateKysGorev(id, 'Kabul Edildi', assignee);
+    await assert.rejects(store.updateKysGorev(id, 'Kabul Edildi', assignee));
+    await assert.rejects(store.updateKysGorev(id, 'Devam Ediyor', assignee));
+    await assert.rejects(store.updateKysGorev(id, 'Başladı', outsider));
+    await store.updateKysGorev(id, 'Başladı', assignee);
     let task = (await store.listKysIletisim(owner)).gorevler.find(task => task.id === id);
-    assert.equal(task.durum, 'Kabul Edildi');
-    assert.equal(task.akış.filter(log => log.durum === 'Kabul Edildi').length, 1);
+    assert.equal(task.durum, 'Başladı');
+    assert.equal(task.akış.length, 1);
+    const long = await store.createKysIletisim({tur:'Görev',baslik:marker,icerik:'Uzun görev',aliciId:assignee.userId,baslangicTarihi:'2099-01-01',bitisTarihi:'2099-01-30',kategori:'Stabilite',araKontrolTarihleri:['2099-01-15','2099-01-07','2099-01-15']},owner);
+    await store.updateKysGorev(long.id,'Devam Ediyor',assignee);
+    const longTask = (await store.listKysIletisim(owner)).gorevler.find(task=>task.id===long.id);
+    assert.equal(longTask.durum,'Devam Ediyor');
+    assert.deepEqual(longTask.araKontrolTarihleri,['2099-01-07','2099-01-15']);
+    assert.throws(()=>planning.taskCheckpoints(['2099-02-01'],'2099-01-01','2099-01-30'));
+    assert.throws(()=>planning.taskCheckpoints(['not-a-date'],'2099-01-01','2099-01-30'));
+    assert.equal(planning.normalizeTaskStatus('Kabul Edildi'),'Başladı');
+    for (const category of ['Günlük kontrol','Kalite','Stabilite','Challenge']) assert(planning.TASK_CATEGORIES.includes(category));
     await assert.rejects(store.commentKysGorev(id, 'Yetkisiz', outsider));
     await assert.rejects(store.commentKysGorev(id, ' ', assignee));
     await store.commentKysGorev(id, 'Alıcının yorumu', assignee);
@@ -103,6 +117,16 @@ async function run() {
       const notification=(await store.getKysBildirimler(assignee)).items.find(item=>item.etiket==='Termin Hatırlatma'&&item.gorevId===fixture.id);
       if(label)assert(notification?.baslik.startsWith(label));else assert.equal(notification,undefined);
     }
+    const checkpointEnd = new Date(new Date(`${today}T12:00:00Z`).getTime()+10*86400000).toISOString().slice(0,10);
+    const checkpointTask = await store.createKysIletisim({tur:'Görev',baslik:marker,icerik:'Ara kontrol bildirimi',aliciId:assignee.userId,baslangicTarihi:today,bitisTarihi:checkpointEnd,kategori:'Kalite',araKontrolTarihleri:[today,checkpointEnd]},owner);
+    const checkpointAlerts = (await store.getKysBildirimler(assignee)).items.filter(item=>item.gorevId===checkpointTask.id&&item.araKontrol);
+    assert.equal(checkpointAlerts.length,1); assert(checkpointAlerts[0].baslik.startsWith('Ara kontrol:'));
+    assert.equal((await store.getKysBildirimler(assignee)).items.filter(item=>item.gorevId===checkpointTask.id&&item.araKontrol).length,1);
+    await store.updateKysGorevDetails(checkpointTask.id,{baslik:marker,icerik:'Güncel',aliciId:assignee.userId,baslangicTarihi:today,bitisTarihi:checkpointEnd,kategori:'Challenge',araKontrolTarihleri:[]},owner);
+    assert.deepEqual((await store.listKysIletisim(owner)).gorevler.find(task=>task.id===checkpointTask.id).araKontrolTarihleri,[]);
+    assert(!(await store.getKysBildirimler(assignee)).items.some(item=>item.gorevId===checkpointTask.id&&item.araKontrol),'Removed checkpoints must not leave stale notifications');
+    await store.updateKysGorev(checkpointTask.id,'Tamamlandı',assignee);
+    assert(!(await store.getKysBildirimler(assignee)).items.some(item=>item.gorevId===checkpointTask.id));
     const {messageReplyStatus,pendingMessageNotifications}=compile('lib/kysMessageReply.ts');
     const incoming=[{id:91,olusturanId:'sender',okundu:true}];
     assert.equal(messageReplyStatus([], 'recipient'),null);
@@ -114,7 +138,7 @@ async function run() {
     assert.equal(pendingMessageNotifications([{id:90,messages:replied}],'recipient').length,0);
     assert.equal(pendingMessageNotifications([{id:90,messages:replied}],'sender')[0].konusmaId,90);
     assert.equal(pendingMessageNotifications([{id:90,messages:[...incoming,...incoming]}],'recipient').length,1);
-    console.log('PASS: acceptance permissions/order/idempotency, comments/privacy, reminder boundaries/deduplication/read/completion; message read-without-reply, reply resolution, sender/recipient status, one alert per conversation.');
+    console.log('PASS: direct assignment, multi-day status restrictions, checkpoints, categories, permissions/idempotency, comments/privacy, reminder boundaries/deduplication/read/completion; message read-without-reply, reply resolution, sender/recipient status, one alert per conversation.');
   } finally {
     const rows = (await pool.request().input('UserID', owner.userId).input('Assignee', assignee.userId).query('SELECT ID FROM KysIletisim WHERE OlusturanID=@UserID OR OlusturanID=@Assignee')).recordset;
     for (const row of rows) {

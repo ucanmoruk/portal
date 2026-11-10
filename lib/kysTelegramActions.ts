@@ -15,7 +15,7 @@ export async function completeTelegramTask(chatId:string,taskId:number){
   await ensureKysIletisimSchema();
   const tx=await (await cosmoPool).transaction();await tx.begin();
   try{
-    const result=await tx.request().input("ID",taskId).input("User",recipient.userId).query("UPDATE KysIletisim SET Durum='Tamamlandı',UpdatedAt=GETDATE() WHERE ID=@ID AND Tur='Görev' AND AliciID=@User AND Durum IN ('Atandı','Kabul Edildi','Başladı')");
+    const result=await tx.request().input("ID",taskId).input("User",recipient.userId).query("UPDATE KysIletisim SET Durum='Tamamlandı',UpdatedAt=GETDATE() WHERE ID=@ID AND Tur='Görev' AND AliciID=@User AND Durum IN ('Atandı','Kabul Edildi','Başladı','Devam Ediyor')");
     if(result.rowsAffected[0]){
       await tx.request().input("ID",taskId).input("User",recipient.userId).input("Name",`${access.name.slice(0,145)} · Telegram`).query("INSERT INTO KysIletisimGorevLog (GorevID,Durum,KullaniciID,KullaniciAd) VALUES (@ID,'Tamamlandı',@User,@Name)");
     }else{

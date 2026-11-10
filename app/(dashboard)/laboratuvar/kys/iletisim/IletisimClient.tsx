@@ -25,7 +25,7 @@ import {
   Users,
 } from "lucide-react";
 import { messageReplyStatus } from "@/lib/kysMessageReply";
-import { TASK_CATEGORIES, isOverdue } from "@/lib/kysTaskPlanning";
+import { TASK_CATEGORIES, isOverdue, isMultiDayTask } from "@/lib/kysTaskPlanning";
 import LabAkisi from "./LabAkisi";
 import styles from "./iletisim.module.css";
 
@@ -45,6 +45,7 @@ type Item = {
   baslangicTarihi?: string | null;
   bitisTarihi?: string | null;
   kategori: string | null;
+  araKontrolTarihleri?: string[];
   createdAt: string;
   okundu: boolean;
   yorumlar?: Array<{ id: number; icerik: string; olusturanAd: string; createdAt: string }>;
@@ -66,6 +67,12 @@ const taskDateRange = (task: Item): [string, string] | null => {
   const end = String(task.bitisTarihi || task.terminTarihi || task.baslangicTarihi || "").slice(0, 10);
   return start && end ? [start, end] : null;
 };
+function CheckpointFields({ dates, start, end, onChange }: { dates: string[]; start: string; end: string; onChange: (dates: string[]) => void }) {
+  return <fieldset className={styles.checkpointFields}><legend>Ara kontrol tarihleri <span>(isteğe bağlı)</span></legend>
+    {dates.map((day, index) => <div key={index}><input type="date" aria-label={`${index + 1}. ara kontrol tarihi`} min={start || undefined} max={end || undefined} value={day} onChange={event => onChange(dates.map((value,i) => i === index ? event.target.value : value))} /><button type="button" aria-label={`${index + 1}. ara kontrolü kaldır`} onClick={() => onChange(dates.filter((_,i) => i !== index))}>Kaldır</button></div>)}
+    <button type="button" disabled={dates.length >= 50} onClick={() => onChange([...dates, ""])}>+ Ara kontrol ekle</button>
+  </fieldset>;
+}
 export default function IletisimClient({
   currentUserId,
 }: {
@@ -94,6 +101,7 @@ export default function IletisimClient({
     bitisTarihi: "",
     tekrar: "yok",
     gunSayisi: "30",
+    araKontrolTarihleri: [] as string[],
     kategori: "Rutin",
   });
   const [reply, setReply] = useState<Record<number, string>>({});
@@ -111,7 +119,7 @@ export default function IletisimClient({
   const [calendarView, setCalendarView] = useState<"ay" | "hafta" | "gun">("ay");
   const [calendarTaskId, setCalendarTaskId] = useState<number | null>(null);
   const [editingTask, setEditingTask] = useState<Item | null>(null);
-  const [editTaskForm, setEditTaskForm] = useState({ baslik: "", icerik: "", aliciId: "", baslangicTarihi: "", bitisTarihi: "", kategori: "Rutin" });
+  const [editTaskForm, setEditTaskForm] = useState({ baslik: "", icerik: "", aliciId: "", baslangicTarihi: "", bitisTarihi: "", kategori: "Rutin", araKontrolTarihleri: [] as string[] });
   const [calendarDate, setCalendarDate] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -226,7 +234,8 @@ export default function IletisimClient({
       bitisTarihi: "",
       tekrar: "yok",
       gunSayisi: "30",
-      kategori: "Rutin",
+      araKontrolTarihleri: [] as string[],
+    kategori: "Rutin",
     });
     await load();
     } catch (error) { setError(error instanceof Error ? error.message : "Görev oluşturulamadı."); }
@@ -253,7 +262,15 @@ export default function IletisimClient({
       setTaskComments(current=>({...current,[id]:""}));await load();
     }catch(e){setError(e instanceof Error?e.message:"Yorum eklenemedi.");}finally{setTaskBusy(false);}
   }
+  function taskStatusActions(task: Item) {
+    if (task.durum === "Tamamlandı") return null;
+    return <>
+      {task.aliciId === currentUserId && isMultiDayTask(task) && task.durum !== "Devam Ediyor" && <button disabled={taskBusy} className={styles.start} onClick={() => void action({islem:"gorev",id:task.id,durum:"Devam Ediyor"})}><Clock3 size={15}/>Devam Ediyor</button>}
+      {(task.aliciId === currentUserId || task.olusturanId === currentUserId) && <button disabled={taskBusy} className={styles.finish} onClick={() => void action({islem:"gorev",id:task.id,durum:"Tamamlandı"})}><CheckCircle2 size={15}/>Tamamla</button>}
+    </>;
+  }
   function taskDiscussion(task:Item){return <section className={styles.taskDiscussion} aria-label="Görev yorumları">
+    <h3>Ara kontroller</h3>{task.araKontrolTarihleri?.length ? <ul>{task.araKontrolTarihleri.map(day => <li key={day}>{new Date(`${day}T12:00:00`).toLocaleDateString("tr-TR")}</li>)}</ul> : <p>Ara kontrol planlanmamış.</p>}
     <h3>Yorumlar <span>({task.yorumlar?.length || 0})</span></h3>
     {task.yorumlar?.length ? task.yorumlar.map(comment=><article key={comment.id}><header><strong>{comment.olusturanAd}</strong><time>{fmt(comment.createdAt)}</time></header><p>{comment.icerik}</p></article>):<p>Henüz yorum eklenmemiş.</p>}
     <label htmlFor={`task-comment-${task.id}`}>Yorumunuz</label>
@@ -263,7 +280,7 @@ export default function IletisimClient({
 
   function openTaskEdit(task: Item) {
     setEditingTask(task);
-    setEditTaskForm({ baslik: task.baslik, icerik: task.icerik, aliciId: task.aliciId, baslangicTarihi: String(task.baslangicTarihi || task.terminTarihi || "").slice(0, 10), bitisTarihi: String(task.bitisTarihi || task.terminTarihi || "").slice(0, 10), kategori: task.kategori || "Rutin" });
+    setEditTaskForm({ baslik: task.baslik, icerik: task.icerik, aliciId: task.aliciId, baslangicTarihi: String(task.baslangicTarihi || task.terminTarihi || "").slice(0, 10), bitisTarihi: String(task.bitisTarihi || task.terminTarihi || "").slice(0, 10), kategori: task.kategori || "Rutin", araKontrolTarihleri: task.araKontrolTarihleri || [] });
   }
   async function saveTaskEdit() {
     if (!editingTask) return;
@@ -453,7 +470,8 @@ export default function IletisimClient({
               bitisTarihi: "",
               tekrar: "yok",
               gunSayisi: "30",
-              kategori: "Rutin",
+              araKontrolTarihleri: [] as string[],
+    kategori: "Rutin",
             });
             setCompose(true);
           }}
@@ -508,10 +526,9 @@ export default function IletisimClient({
               onChange={(e) => setTaskFilter(e.target.value)}
             >
               <option>Tümü</option>
-              <option>Atandı</option>
               <option>Termini Geçmiş</option>
               <option>Başladı</option>
-              <option>Kabul Edildi</option>
+              <option>Devam Ediyor</option>
               <option>Tamamlandı</option>
             </select>
             <select
@@ -520,9 +537,7 @@ export default function IletisimClient({
               onChange={(e) => setTaskCategoryFilter(e.target.value)}
             >
               <option>Tümü</option>
-              <option>Rutin</option>
-              <option>Satış</option>
-              <option>Rutin Dışı</option>
+              {TASK_CATEGORIES.map(category => <option key={category}>{category}</option>)}
             </select>
             <select
               aria-label="Görev atama filtresi"
@@ -566,7 +581,7 @@ export default function IletisimClient({
         <section className={styles.statistics}>
           <div><h2>Görev istatistikleri</h2><p>Erişiminiz olan görevler · Yukarıdaki filtreler tüm sayılara uygulanır. Her alıcıya atanan kayıt ayrı bir görev olarak sayılır.</p></div>
           <div className={styles.typeCards}>
-            {[["Atanan toplam", tasks.length], ["Tamamlanan", tasks.filter(task => task.durum === "Tamamlandı").length], ["Geciken", tasks.filter(task => isOverdue(task)).length], ["Devam eden", tasks.filter(task => task.durum === "Başladı").length], ["Başlamayan", tasks.filter(task => task.durum === "Atandı").length]].map(([label, count], index) => <article key={label} data-tone={index}><span>{label}</span><strong>{count}</strong></article>)}
+            {[["Atanan toplam", tasks.length], ["Tamamlanan", tasks.filter(task => task.durum === "Tamamlandı").length], ["Geciken", tasks.filter(task => isOverdue(task)).length], ["Devam eden", tasks.filter(task => ["Başladı", "Devam Ediyor"].includes(task.durum)).length]].map(([label, count], index) => <article key={label} data-tone={index}><span>{label}</span><strong>{count}</strong></article>)}
           </div>
           <p>Geciken sayısı, tamamlanmamış ve bitiş tarihi geçmiş görevleri kapsar; başlamayan veya devam eden görevlerle örtüşebilir.</p>
           <div className={styles.statsTableWrap}><table className={styles.statsTable}><caption>Görev türlerine göre dağılım</caption><thead><tr><th>Görev türü</th><th>Atanan</th><th>Tamamlanan</th><th>Geciken</th><th>Tamamlanma</th></tr></thead><tbody>
@@ -903,40 +918,7 @@ export default function IletisimClient({
                 {calendarTask.tur === "Görev" && calendarTask.olusturanId === currentUserId && calendarTask.durum !== "Tamamlandı" && (
                   <><button className={styles.editTask} onClick={() => openTaskEdit(calendarTask)}><Pencil size={15} />Düzenle</button><button disabled={taskBusy} className={styles.deleteTask} onClick={() => void deleteTask(calendarTask)}><Trash2 size={15} />Sil</button></>
                 )}
-                {calendarTask.tur === "Görev" && calendarTask.durum === "Atandı" && calendarTask.aliciId === currentUserId && <button disabled={taskBusy} className={styles.start} onClick={()=>void action({islem:"gorev",id:calendarTask.id,durum:"Kabul Edildi"})}><Check size={15}/>Görevi kabul et</button>}
-                {calendarTask.tur === "Görev" && calendarTask.durum === "Kabul Edildi" &&
-                  calendarTask.aliciId === currentUserId && (
-                    <button
-                      className={styles.start} disabled={taskBusy}
-                      onClick={() =>
-                        void action({
-                          islem: "gorev",
-                          id: calendarTask.id,
-                          durum: "Başladı",
-                        })
-                      }
-                    >
-                      <Clock3 size={15} />
-                      Başlat
-                    </button>
-                  )}
-                {calendarTask.tur === "Görev" && calendarTask.durum === "Başladı" &&
-                  (calendarTask.aliciId === currentUserId ||
-                    calendarTask.olusturanId === currentUserId) && (
-                    <button
-                      className={styles.finish} disabled={taskBusy}
-                      onClick={() =>
-                        void action({
-                          islem: "gorev",
-                          id: calendarTask.id,
-                          durum: "Tamamlandı",
-                        })
-                      }
-                    >
-                      <CheckCircle2 size={15} />
-                      Tamamla
-                    </button>
-                  )}
+                {calendarTask.tur === "Görev" && taskStatusActions(calendarTask)}
               </div>
             </aside>
             </div>
@@ -958,7 +940,7 @@ export default function IletisimClient({
             const open = expanded.has(item.id);
             return (
               <article
-                className={`${styles.taskRow} ${styles[`state${state}`] || ""}`}
+                className={`${styles.taskRow} ${styles[`state${state.replace(/\s/g, "")}`] || ""}`}
                 key={item.id}
               >
                 <button
@@ -1014,40 +996,7 @@ export default function IletisimClient({
                     </div>
                     {taskDiscussion(item)}
                     <div className={styles.taskActions}>
-                      {item.durum === "Atandı" && item.aliciId === currentUserId && <button disabled={taskBusy} className={styles.start} onClick={()=>void action({islem:"gorev",id:item.id,durum:"Kabul Edildi"})}><Check size={15}/>Görevi kabul et</button>}
-                      {item.durum === "Kabul Edildi" &&
-                        item.aliciId === currentUserId && (
-                          <button
-                            className={styles.start} disabled={taskBusy}
-                            onClick={() =>
-                              void action({
-                                islem: "gorev",
-                                id: item.id,
-                                durum: "Başladı",
-                              })
-                            }
-                          >
-                            <Clock3 size={15} />
-                            Başlat
-                          </button>
-                        )}
-                      {item.durum === "Başladı" &&
-                        (item.aliciId === currentUserId ||
-                          item.olusturanId === currentUserId) && (
-                          <button
-                            className={styles.finish} disabled={taskBusy}
-                            onClick={() =>
-                              void action({
-                                islem: "gorev",
-                                id: item.id,
-                                durum: "Tamamlandı",
-                              })
-                            }
-                          >
-                            <CheckCircle2 size={15} />
-                            Tamamla
-                          </button>
-                        )}
+                      {taskStatusActions(item)}
                     </div>
                   </div>
                 )}
@@ -1120,12 +1069,13 @@ export default function IletisimClient({
                   }
                 />
               </label>
-              {form.tur === "Görev" && <label>Kategori<select value={form.kategori} onChange={(e) => setForm((f) => ({ ...f, kategori: e.target.value }))}><option>Rutin</option><option>Satış</option><option>Rutin Dışı</option></select></label>}
+              {form.tur === "Görev" && <label>Kategori<select value={form.kategori} onChange={(e) => setForm((f) => ({ ...f, kategori: e.target.value }))}>{TASK_CATEGORIES.map(category => <option key={category}>{category}</option>)}</select></label>}
               {form.tur === "Görev" && <>
                 <label>Başlama tarihi<input required type="date" value={form.baslangicTarihi} onChange={(e) => setForm((f) => ({ ...f, baslangicTarihi: e.target.value }))} /></label>
                 <label>Tekrar<select value={form.tekrar} onChange={e => setForm(f => ({ ...f, tekrar: e.target.value }))}><option value="yok">Tek seferlik</option><option value="gunluk">Günlük</option><option value="haftalik">Haftalık</option><option value="aylik">Aylık</option></select></label>
                 {form.tekrar !== "yok" ? <><label>{form.tekrar === "gunluk" ? "Kaç gün sürecek?" : form.tekrar === "haftalik" ? "Kaç hafta sürecek?" : "Kaç ay sürecek?"}<input type="number" aria-describedby="task-repeat-help" min={1} max={366} step={1} value={form.gunSayisi} onChange={e => setForm(f => ({ ...f, gunSayisi: e.target.value }))} /></label><p id="task-repeat-help" className={styles.repeatHelp}>Her {form.tekrar === "gunluk" ? "gün" : form.tekrar === "haftalik" ? "hafta" : "ay"} ayrı görev oluşturulur; bildirimi görev günü gelir.{form.tekrar === "aylik" && <span> Tarih o ayda yoksa ayın son günü kullanılır.</span>}</p></> : <label>Bitiş tarihi<input required type="date" min={form.baslangicTarihi || undefined} value={form.bitisTarihi} onChange={(e) => setForm((f) => ({ ...f, bitisTarihi: e.target.value, terminTarihi: e.target.value }))} /></label>}
               </>}
+              {form.tur === "Görev" && <CheckpointFields dates={form.araKontrolTarihleri} start={form.baslangicTarihi} end={form.tekrar === "yok" ? form.bitisTarihi : form.baslangicTarihi} onChange={dates => setForm(f => ({...f,araKontrolTarihleri:dates}))} />}
               {form.tur === "Duyuru" && (
                 <label>
                   Takvim tarihi (isteğe bağlı)
@@ -1167,7 +1117,8 @@ export default function IletisimClient({
               <label>Alıcı<select value={editTaskForm.aliciId} onChange={(event) => setEditTaskForm((form) => ({ ...form, aliciId: event.target.value }))}>{people.map((person) => <option key={String(person.ID)} value={String(person.ID)}>{person.Ad}</option>)}</select></label>
               <label>Başlama tarihi<input required type="date" value={editTaskForm.baslangicTarihi} onChange={(event) => setEditTaskForm((form) => ({ ...form, baslangicTarihi: event.target.value }))} /></label>
               <label>Bitiş tarihi<input required type="date" min={editTaskForm.baslangicTarihi || undefined} value={editTaskForm.bitisTarihi} onChange={(event) => setEditTaskForm((form) => ({ ...form, bitisTarihi: event.target.value }))} /></label>
-              <label>Kategori<select value={editTaskForm.kategori} onChange={(event) => setEditTaskForm((form) => ({ ...form, kategori: event.target.value }))}><option>Rutin</option><option>Satış</option><option>Rutin Dışı</option></select></label>
+              <label>Kategori<select value={editTaskForm.kategori} onChange={(event) => setEditTaskForm((form) => ({ ...form, kategori: event.target.value }))}>{TASK_CATEGORIES.map(category => <option key={category}>{category}</option>)}</select></label>
+              <CheckpointFields dates={editTaskForm.araKontrolTarihleri} start={editTaskForm.baslangicTarihi} end={editTaskForm.bitisTarihi} onChange={dates => setEditTaskForm(f => ({...f,araKontrolTarihleri:dates}))} />
               <label className={styles.full}>Açıklama<textarea rows={5} value={editTaskForm.icerik} onChange={(event) => setEditTaskForm((form) => ({ ...form, icerik: event.target.value }))} /></label>
             </div>
             <footer><button onClick={() => setEditingTask(null)}>Vazgeç</button><button className={styles.primary} onClick={() => void saveTaskEdit()}>Güncelle</button></footer>
