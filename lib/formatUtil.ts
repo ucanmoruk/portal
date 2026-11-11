@@ -14,5 +14,5 @@ export function normFormat(f: string | null | undefined): string {
 
 // "Diğer" formatı mı? ("Diğer", "Diger", "DİĞER", "DIGER" … hepsi eşleşir)
 export function isDigerFormat(f: string | null | undefined): boolean {
-  return normFormat(f) === "DIGER";
+  return ["DIGER", "DIGEREN"].includes(normFormat(f));
 }

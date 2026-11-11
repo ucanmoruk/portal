@@ -19,6 +19,7 @@ const normalizeReportFormat = (format: string) => String(format || "")
   .toUpperCase();
 const englishPreviewFormat = (format: string): string | null => {
   const normalized = normalizeReportFormat(format);
+  if (normalized === "DIGER") return "DigerEn";
   if (normalized === "GENEL") return "GenelEn";
   if (normalized === "CHALLENGE") return "ChallengeEn";
   if (normalized === "STABILITE") return "StabiliteEn";

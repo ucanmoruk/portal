@@ -10,6 +10,7 @@ import { cosmoPool } from "@/lib/db";
 import { maybeMergeEk } from "@/lib/raporEkMerge";
 
 const DATA_FORMAT_ALIAS: Record<string, string> = {
+  DigerEn: "Diğer",
   GenelEn: "Genel",
   ChallengeEn: "Challenge",
   StabiliteEn: "Stabilite",

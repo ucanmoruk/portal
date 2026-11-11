@@ -16,6 +16,7 @@ function normalizeFormatKey(format: string): string {
 export function baseReportFormat(format: string): string {
   const value = String(format || "").trim();
   const normalized = normalizeFormatKey(value);
+  if (normalized === "DIGEREN") return "Diğer";
   if (normalized === "GENELEN") return "Genel";
   if (normalized === "CHALLENGEEN") return "Challenge";
   if (normalized === "STABILITEEN") return "Stabilite";
@@ -25,6 +26,7 @@ export function baseReportFormat(format: string): string {
 export function englishReportFormat(format: string): string | null {
   const base = baseReportFormat(format);
   const normalized = normalizeFormatKey(base);
+  if (normalized === "DIGER") return "DigerEn";
   if (normalized === "GENEL") return "GenelEn";
   if (normalized === "CHALLENGE") return "ChallengeEn";
   if (normalized === "STABILITE") return "StabiliteEn";

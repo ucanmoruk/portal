@@ -20,6 +20,7 @@ export const dynamic = "force-dynamic";
 // Rapor türüne göre format bileşeni. Yeni format eklemek için formats/ altında
 // bir bileşen oluşturup buraya kaydetmek yeterli.
 const FORMAT_COMPONENTS: Record<string, ComponentType<ReportFormatProps>> = {
+  DigerEn: DigerReport,
   Genel: GenelReport,
   GenelEn: GenelReport,
   Challenge: ChallengeReport,
@@ -33,6 +34,7 @@ const FORMAT_COMPONENTS: Record<string, ComponentType<ReportFormatProps>> = {
 // Bazı formatlar veriyi başka bir formattan yükler (örn. DetayRapor → Genel).
 // StokAnalizListesi.RaporFormati alanı sorgulanırken bu eşleştirme kullanılır.
 const DATA_FORMAT_ALIAS: Record<string, string> = {
+  DigerEn: "Diğer",
   GenelEn: "Genel",
   ChallengeEn: "Challenge",
   StabiliteEn: "Stabilite",

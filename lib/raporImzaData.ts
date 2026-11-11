@@ -5,6 +5,7 @@ import { loadRaporEdit } from "./raporDuzenleme";
 import { applyManualServiceOrder } from "./raporServiceOrder";
 
 const DATA_FORMAT_ALIAS: Record<string, string> = {
+  DigerEn: "Diğer",
   GenelEn: "Genel",
   ChallengeEn: "Challenge",
   StabiliteEn: "Stabilite",

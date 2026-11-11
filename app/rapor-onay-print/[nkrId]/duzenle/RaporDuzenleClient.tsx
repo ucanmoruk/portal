@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
+import DigerReport from "../formats/DigerReport";
+import { isDigerFormat } from "@/lib/formatUtil";
 import GenelReport from "../formats/GenelReport";
 import EkYukleBox from "./EkYukleBox";
 import type { HizmetRow, RaporHeader, ReportFormatProps } from "../reportTypes";
@@ -125,7 +127,8 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
     window.open(`/rapor-onay-print/${nkrId}?format=${encodeURIComponent(format)}`, "_blank", "noopener,noreferrer");
   };
 
-  const wysiwyg = WYSIWYG_FORMATS.has(format) && Boolean(view && header);
+  const EditableReport = isDigerFormat(format) ? DigerReport : GenelReport;
+  const wysiwyg = (WYSIWYG_FORMATS.has(format) || isDigerFormat(format)) && Boolean(view && header);
 
   return (
     <div style={{ minHeight: "100vh", background: "#e9ecef", color: "#1d1d1f", fontFamily: "system-ui, sans-serif" }}>
@@ -159,7 +162,7 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
       {loading ? (
         <div style={{ padding: 40, textAlign: "center", color: "#6e6e73" }}>Yükleniyor...</div>
       ) : wysiwyg && view && header ? (
-        <GenelReport
+        <EditableReport
           {...view}
           nkrId={nkrId}
           format={format}

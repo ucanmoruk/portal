@@ -6,6 +6,7 @@ import { loadRaporEdit, saveRaporEdit, type RaporEditPayload } from "@/lib/rapor
 import { type NextRequest } from "next/server";
 
 const DATA_FORMAT_ALIAS: Record<string, string> = {
+  DigerEn: "Diğer",
   GenelEn: "Genel",
   ChallengeEn: "Challenge",
   StabiliteEn: "Stabilite",

@@ -4,6 +4,42 @@ import OnayToolbar from "../OnayToolbar";
 import type { ReportFormatProps, KarekodInfo } from "../reportTypes";
 import { disRaporLabel } from "@/lib/disKod";
 
+const englishLabels: Record<string, string> = {
+  "DENEY RAPORU": "TEST REPORT",
+  "Rapor No - Rev. No:": "Report No - Rev. No:",
+  "Rapor Yayın Tarihi:": "Report Issue Date:",
+  "Numune Kabul Tarihi:": "Sample Receipt Date:",
+  "Raporu Hazırlayan": "Prepared by",
+  "✓ E-İmzalıdır": "✓ Electronically signed",
+  "Raportör": "Report Author",
+  "Onaylayan": "Approved by",
+  "Laboratuvar Müdürü": "Laboratory Manager",
+  "MÜŞTERİ BİLGİLERİ": "CUSTOMER INFORMATION",
+  "NUMUNE BİLGİLERİ": "SAMPLE INFORMATION",
+  "Miktar: ": "Quantity: ",
+  "Üretim Tarihi: ": "Production Date: ",
+  "Son Kullanım Tarihi: ": "Expiry Date: ",
+  "Seri/Lot No/Ürün Kodu: ": "Serial/Lot No/Product Code: ",
+  "TEST SONUÇLARI": "TEST RESULTS",
+  "Analiz Adı": "Analysis Name",
+  "Metot": "Method",
+  "Sonuç": "Result",
+  "Değerlendirme": "Evaluation",
+  "Atanmış test bulunmuyor.": "No tests assigned.",
+  "Bkz. Ek-1": "See Annex-1",
+  "AÇIKLAMALAR": "NOTES",
+  "Revizyon No: ": "Revision No: ",
+  "Revizyon Açıklaması: ": "Revision Notes: ",
+  "Sayfa: 1": "Page: 1",
+  "UYGUN": "PASS",
+  "UYGUN DEĞİL": "FAIL",
+  "D.Y.": "N/A",
+  "Uygun": "Pass",
+  "Uygun Değil": "Fail",
+  "Değerlendirilemez": "Not evaluable"
+};
+function label(english: boolean, value: string) { return english ? englishLabels[value] || value : value; }
+
 const jetbrains = JetBrains_Mono({
   subsets: ["latin", "latin-ext"],
   weight: ["400", "500", "600", "700", "800"],
@@ -58,7 +94,8 @@ function AkrediteBox({ kod, yayinTarihi, fontSize }: {
 // akrediteInHeader: kutuyu başlık satırı yerine logo satırında (logonun karşısında)
 //                   göster — logo, kutuyla aynı satırda dikey ortalanarak biraz aşağı iner
 function HeaderBlock({
-  title = "DENEY RAPORU",
+  title,
+  english = false,
   showAkredite = true,
   showAkrediteLogo = showAkredite,
   akrediteInHeader = false,
@@ -69,6 +106,7 @@ function HeaderBlock({
   akrKodFontSize,
 }: {
   title?: string;
+  english?: boolean;
   showAkredite?: boolean;
   showAkrediteLogo?: boolean;
   akrediteInHeader?: boolean;
@@ -95,7 +133,7 @@ function HeaderBlock({
       </div>
 
       <div className="title-row" style={akrediteInHeader ? { marginTop: "6mm" } : undefined}>
-        <div className="report-title">{title}</div>
+        <div className="report-title">{title || label(english, "DENEY RAPORU")}</div>
         {showAkredite && !akrediteInHeader && (
           <AkrediteBox kod={raporKodu} yayinTarihi={yayinTarihi} fontSize={akrKodFontSize} />
         )}
@@ -104,7 +142,7 @@ function HeaderBlock({
       <table className="meta-table">
         <tbody>
           <tr>
-            <td style={{ paddingBottom: "4px", width: "20%" }}><strong>Rapor No - Rev. No:</strong></td>
+            <td style={{ paddingBottom: "4px", width: "20%" }}><strong>{label(english, "Rapor No - Rev. No:")}</strong></td>
             <td style={{ paddingBottom: "4px", width: "50%" }}>{raporKodu}</td>
             {showKabulTarihi ? (
               <>
@@ -113,16 +151,16 @@ function HeaderBlock({
               </>
             ) : (
               <>
-                <td style={{ paddingBottom: "4px" }}><strong>Rapor Yayın Tarihi:</strong> </td>
+                <td style={{ paddingBottom: "4px" }}><strong>{label(english, "Rapor Yayın Tarihi:")}</strong> </td>
                 <td style={{ paddingBottom: "4px" }}>{yayinTarihi}</td>
               </>
             )}
           </tr>
           {showKabulTarihi && (
             <tr>
-              <td style={{ paddingBottom: "4px", width: "20%" }}><strong>Numune Kabul Tarihi:</strong> </td>
+              <td style={{ paddingBottom: "4px", width: "20%" }}><strong>{label(english, "Numune Kabul Tarihi:")}</strong> </td>
               <td style={{ paddingBottom: "4px" }}>{kabulTarihi}</td>
-              <td style={{ paddingBottom: "4px" }}><strong>Rapor Yayın Tarihi:</strong> </td>
+              <td style={{ paddingBottom: "4px" }}><strong>{label(english, "Rapor Yayın Tarihi:")}</strong> </td>
               <td style={{ paddingBottom: "4px" }}>{yayinTarihi}</td>
             </tr>
           )}
@@ -134,21 +172,21 @@ function HeaderBlock({
 }
 
 // İmza bloğu — son sayfada (2. sayfa)
-function ApprovalBlock({ hazirlayanAd, karekod }: { hazirlayanAd: string; karekod: KarekodInfo | null }) {
+function ApprovalBlock({ hazirlayanAd, karekod, english = false }: { hazirlayanAd: string; karekod: KarekodInfo | null; english?: boolean }) {
   return (
     <div className="approval-block">
       <div className="approval-cell" style={{ width: 200, paddingTop: "15px" }}>
-        <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>Raporu Hazırlayan</div>
-        <div className="e-imza-pill" style={{ marginTop: 10 }}>✓ E-İmzalıdır</div>
+        <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>{label(english, "Raporu Hazırlayan")}</div>
+        <div className="e-imza-pill" style={{ marginTop: 10 }}>{label(english, "✓ E-İmzalıdır")}</div>
         <div className="approval-cell-body">
-          <div className="approval-name">{hazirlayanAd} <span style={{ fontSize: "9px", color: "#646464" }}>Raportör</span></div>
+          <div className="approval-name">{hazirlayanAd} <span style={{ fontSize: "9px", color: "#646464" }}>{label(english, "Raportör")}</span></div>
         </div>
       </div>
       <div className="approval-cell" style={{ width: 300, paddingTop: "15px" }}>
-        <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>Onaylayan</div>
-        <div className="e-imza-pill" style={{ marginTop: 10 }}>✓ E-İmzalıdır</div>
+        <div className="approval-cell-title" style={{ paddingLeft: "5px" }}>{label(english, "Onaylayan")}</div>
+        <div className="e-imza-pill" style={{ marginTop: 10 }}>{label(english, "✓ E-İmzalıdır")}</div>
         <div className="approval-cell-body">
-          <div className="approval-name">Selin EKER <span style={{ fontSize: "9px", color: "#646464" }}>Laboratuvar Müdürü</span></div>
+          <div className="approval-name">Selin EKER <span style={{ fontSize: "9px", color: "#646464" }}>{label(english, "Laboratuvar Müdürü")}</span></div>
         </div>
       </div>
       <div className="approval-cell">
@@ -200,7 +238,11 @@ export default function DigerReport({
   onay,
   meta,
   karekod,
+  edit,
+  hideToolbar,
 }: ReportFormatProps) {
+  const english = /en$/i.test(format);
+  const field = (value: unknown, change: (value: string) => void) => edit ? <input className="rd-edit" aria-label={english ? "Report field" : "Rapor alanı"} value={String(value ?? "")} onChange={event => change(event.target.value)} /> : String(value || "—");
   const {
     revNo,
     revizeNot,
@@ -261,6 +303,7 @@ export default function DigerReport({
           print-color-adjust: exact;
           min-height: 100vh;
         }
+        .rd-edit { width: 100%; min-width: 0; font: inherit; color: inherit; border: 1px dashed #aaa; background: #fffbe8; padding: 2px; }
         .page {
           max-width: 210mm;
           min-height: 296mm;
@@ -641,46 +684,46 @@ export default function DigerReport({
       `}</style>
 
       <div className={`root ${ttInterphases.variable} ${jetbrains.variable}`}>
-        <OnayToolbar
+        {!hideToolbar && <OnayToolbar
           nkrId={nkrId}
           format={format}
           initialOnay={onay}
           raporNo={header.RaporNo}
-        />
+        />}
 
         {/* ═══════════════════════════════════════════════════════════
             SAYFA 1 — SERTİFİKA/DİĞER TASARIMI (Ek-1 PDF merge ile eklenir)
             ═══════════════════════════════════════════════════════════ */}
         <div className="page">
-          <HeaderBlock showAkredite={hasAkredite} raporKodu={raporKodu} kabulTarihi={kabulTarihi} yayinTarihi={yayinTarihi} akrKodFontSize={akrKodFontSize} />
+          <HeaderBlock english={english} showAkredite={hasAkredite} raporKodu={raporKodu} kabulTarihi={kabulTarihi} yayinTarihi={yayinTarihi} akrKodFontSize={akrKodFontSize} />
 
           {/* ───── MÜŞTERİ / NUMUNE BİLGİLERİ (2 sütun) ───── */}
           <table className="info-table" style={{ marginTop: 20 }}>
             <thead>
               <tr>
-                <th>MÜŞTERİ BİLGİLERİ</th>
-                <th>NUMUNE BİLGİLERİ</th>
+                <th>{label(english, "MÜŞTERİ BİLGİLERİ")}</th>
+                <th>{label(english, "NUMUNE BİLGİLERİ")}</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>
-                  <div className="firma-ad">{header.FirmaAd || "—"}</div>
-                  <div className="info-line" style={{ width: "90%" }}>{header.FirmaAdres}</div>
-                  <div className="info-line">{header.FirmaYetkili || "—"}</div>
-                  <div className="info-line">{header.FirmaEmail}</div>
+                  <div className="firma-ad">{field(header.FirmaAd, value => edit?.onHeaderChange({ FirmaAd: value }))}</div>
+                  <div className="info-line" style={{ width: "90%" }}>{field(header.FirmaAdres, value => edit?.onHeaderChange({ FirmaAdres: value }))}</div>
+                  <div className="info-line">{field(header.FirmaYetkili, value => edit?.onHeaderChange({ FirmaYetkili: value }))}</div>
+                  <div className="info-line">{field(header.FirmaEmail, value => edit?.onHeaderChange({ FirmaEmail: value }))}</div>
                 </td>
                 <td>
-                  <div className="firma-ad">{header.Numune_Adi}</div>
-                  {(header.TesteMiktar || header.TesteMiktarBirim) && (
+                  <div className="firma-ad">{field(english ? header.Numune_Adi_En || header.Numune_Adi : header.Numune_Adi, value => edit?.onHeaderChange(english ? { Numune_Adi_En: value } : { Numune_Adi: value }))}</div>
+                  {(edit || header.TesteMiktar || header.TesteMiktarBirim) && (
                     <div className="info-line">
-                      <span className="info-label">Miktar: </span>
-                      {header.TesteMiktar} {header.TesteMiktarBirim}
+                      <span className="info-label">{label(english, "Miktar: ")}</span>
+                      {field(header.TesteMiktar, value => edit?.onHeaderChange({ TesteMiktar: value }))} {field(header.TesteMiktarBirim, value => edit?.onHeaderChange({ TesteMiktarBirim: value }))}
                     </div>
                   )}
-                  <div className="info-line"><span className="info-label">Üretim Tarihi: </span>{String(header.UretimTarihi || "—")}</div>
-                  <div className="info-line"><span className="info-label">Son Kullanım Tarihi: </span>{String(header.SKT || "—")}</div>
-                  <div className="info-line"><span className="info-label">Seri/Lot No/Ürün Kodu: </span>{header.SeriNo || "—"}</div>
+                  <div className="info-line"><span className="info-label">{label(english, "Üretim Tarihi: ")}</span>{field(header.UretimTarihi, value => edit?.onHeaderChange({ UretimTarihi: value }))}</div>
+                  <div className="info-line"><span className="info-label">{label(english, "Son Kullanım Tarihi: ")}</span>{field(header.SKT, value => edit?.onHeaderChange({ SKT: value }))}</div>
+                  <div className="info-line"><span className="info-label">{label(english, "Seri/Lot No/Ürün Kodu: ")}</span>{field(header.SeriNo, value => edit?.onHeaderChange({ SeriNo: value }))}</div>
                 </td>
               </tr>
             </tbody>
@@ -688,48 +731,49 @@ export default function DigerReport({
 
           {/* ───── TEST SONUÇLARI ───── */}
           <div className="results-section" style={{ marginTop: 30 }}>
-            <div className="results-title">TEST SONUÇLARI</div>
+            <div className="results-title">{label(english, "TEST SONUÇLARI")}</div>
             <div className="notlar-body"> </div>
             <table className="results">
               <thead>
                 <tr>
-                  <th style={{ width: 120 }}>Analiz Adı</th> 
-                  <th style={{ width: 150, paddingLeft: 5 }}>Metot</th>
-                  <th style={{ width: 70 }}>Sonuç</th>
-                  <th style={{ width: 100, textAlign: "center" }}>Değerlendirme</th>
+                  <th style={{ width: 120 }}>{label(english, "Analiz Adı")}</th>
+                  <th style={{ width: 150, paddingLeft: 5 }}>{label(english, "Metot")}</th>
+                  <th style={{ width: 70 }}>{label(english, "Sonuç")}</th>
+                  <th style={{ width: 100, textAlign: "center" }}>{label(english, "Değerlendirme")}</th>
                 </tr>
               </thead>
               <tbody>
                 {hizmetler.length === 0 ? (
-                  <tr><td colSpan={4} className="center" style={{ padding: "8px" }}>Atanmış test bulunmuyor.</td></tr>
+                  <tr><td colSpan={4} className="center" style={{ padding: "8px" }}>{label(english, "Atanmış test bulunmuyor.")}</td></tr>
                 ) : (
                   hizmetler.map((h, i) => {
                     const akr = String(h.Akreditasyon || "").trim().toLowerCase() === "var";
                     const deg = degerlendirmeLabel(h.Degerlendirme ?? null);
                     return (
                       <tr key={i}>
-                        <td style={{ paddingRight: 10 }}>{akr ? "*" : ""}{h.Ad}</td>
-                        <td className="center" style={{ paddingLeft: 5 }}>{h.Metot || "—"}</td>
-                        <td className="center">Bkz. Ek-1</td>
-                        <td className={deg.cls} style={{ textAlign: "center" }}>{deg.text}</td>
+                        <td style={{ paddingRight: 10 }}>{akr ? "*" : ""}{field(english ? h.AdEn || h.Ad : h.Ad, value => edit?.onRowChange(i, english ? { AdEn: value } : { Ad: value }))}</td>
+                        <td className="center" style={{ paddingLeft: 5 }}>{field(h.Metot, value => edit?.onRowChange(i, { Metot: value }))}</td>
+                        <td className="center">{label(english, "Bkz. Ek-1")}</td>
+                        <td className={deg.cls} style={{ textAlign: "center" }}>{edit ? <select aria-label={label(english, "Değerlendirme")} value={h.Degerlendirme || ""} onChange={event => edit.onRowChange(i, { Degerlendirme: event.target.value })}><option value="">—</option>{["Uygun", "Uygun Değil", "Değerlendirilemez"].map(value => <option key={value} value={value}>{label(english, value)}</option>)}</select> : label(english, deg.text)}{edit && <button type="button" onClick={() => edit.onRemoveRow(i)}>Sil</button>}</td>
                       </tr>
                     );
                   })
                 )}
               </tbody>
             </table>
+            {edit && <button type="button" onClick={edit.onAddRow}>Satır Ekle</button>}
           </div>
 
           {/* ───── NOTLAR ───── */}
           <div className="notlar">
-            <div className="results-title" style={{ marginBottom: "7px" }}>AÇIKLAMALAR</div>
+            <div className="results-title" style={{ marginBottom: "7px" }}>{label(english, "AÇIKLAMALAR")}</div>
             {testBaslangic && testBitis ? (
               <>
-                Analiz Periyodu: {" "}
+                {english ? "Analysis Period: " : "Analiz Periyodu: "}{" "}
                 <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
               </>
             ) : null}
-            <br />Müşteri talebi doğrultusunda yapılan testler &apos;TİTCK Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz&apos;a göre değerlendirilmiştir.
+            <br />{edit ? <textarea aria-label={label(english, "AÇIKLAMALAR")} value={header.Aciklamalar || ""} onChange={event => edit.onHeaderChange({ Aciklamalar: event.target.value })} /> : header.Aciklamalar || (english ? "The tests performed at the customer’s request were evaluated according to the TİTCK Guideline on Microbiological Control of Cosmetic Products." : <> Müşteri talebi doğrultusunda yapılan testler &apos;TİTCK Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz&apos;a göre değerlendirilmiştir.</>)}
             {(parseInt(revNo, 10) || 0) > 0 && (
               <div style={{ marginTop: 8, fontWeight: "bold" }}>
                 Revizyon No: {revNo}
@@ -739,11 +783,11 @@ export default function DigerReport({
           </div>
 
           {/* ───── İMZA BLOĞU ───── */}
-          <ApprovalBlock hazirlayanAd={hazirlayanAd} karekod={karekod} />
+          <ApprovalBlock english={english} hazirlayanAd={hazirlayanAd} karekod={karekod} />
 
           {/* ───── FOOTER NOTU ───── */}
           <div className="FooterNot">
-            &ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Deney Raporları geçersizdir.{" "}{sirketAdi}&apos;nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya herhangi bir başka amaçla kullanılamaz.Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal zorunluluklardan laboratuvarımız sorumlu değildir. Karar Kuralı: Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır.
+            {english ? <>Analyses marked “*” are within our scope of accreditation by TÜRKAK according to TS EN ISO/IEC 17025. Sampling was not performed by our laboratory. Test reports without signature and seal are invalid. This report may not be partially copied, reproduced or used for another purpose without written permission from {sirketAdi}. Results apply only to the sample identified above and may not represent its lot. Sample identification information affecting the validity of results was supplied by the customer. Our laboratory is not responsible for its accuracy or losses and legal obligations arising from its use. Decision rule: The customer requested a statement of conformity without including measurement uncertainty. For microbiological analyses, conformity is assessed without taking measurement uncertainty into account.</> : <>&ldquo;*&rdquo; işaretli analizler TÜRKAK tarafından TS EN ISO/IEC 17025&apos;e göre akredite kapsamımızda yer almaktadır.Numune alma işlemi tarafımızdan yapılmamıştır. İmzasız ve mühürsüz Deney Raporları geçersizdir.{" "}{sirketAdi}&apos;nin yazılı izni olmadan bu Analiz Raporu kısmen kopyalanamaz, çoğaltılamaz veya herhangi bir başka amaçla kullanılamaz.Test sonuçları, yukarıda belirtilen numune için geçerlidir. Numunenin ait olduğu lotu temsil etmeyebilir.Deney raporunda yer alan ve sonuçların geçerliliğini etkileyen tanımsal bilgiler müşteri tarafından beyan edilmiştir. Bu bilgilerin doğruluğundan ve kullanımına bağlı oluşabilecek tüm kayıplardan/yasal zorunluluklardan laboratuvarımız sorumlu değildir. Karar Kuralı: Müşteri, “Ölçüm belirsizliği dahil edilmeden” uygunluk beyanı verilmesini istediğini belirtmiştir. Mikrobiyolojik analizler için uygunluk değerlendirilmesine ilişkin karar kuralı, ölçüm belirsizliği dikkate alınmaksızın uygulanır.</>}
           </div>
 
           <div style={{ marginTop: "10px" }}></div>
