@@ -1,3 +1,4 @@
+import { approvalFormatSql } from "@/lib/raporApprovalFormatSql";
 import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
@@ -6,7 +7,7 @@ import { cosmoPool } from "@/lib/db";
 import { type NextRequest } from "next/server";
 
 const normSql = (expr: string) => `
-  UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${expr},
+  UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${expr}, N'i', N'I'),
     N'Ü', N'U'), N'ü', N'U'), N'İ', N'I'), N'ı', N'I'), N'Ö', N'O'), N'ö', N'O'),
     N'Ç', N'C'), N'ç', N'C'), N'Ğ', N'G'), N'ğ', N'G'), N'Ş', N'S'), N'ş', N'S'))
 `;
@@ -100,7 +101,7 @@ export async function GET(request: NextRequest) {
           SELECT 1
           FROM NKR_RaporOnay ro
           WHERE ro.NkrID = n.ID
-            AND ${formatMatchesSql("ro.RaporFormati", "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')")}
+            AND (${formatMatchesSql("ro.RaporFormati", "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')")} OR ${approvalFormatSql(normSql("ro.RaporFormati"))} = ${normSql("COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')")})
             AND ro.Durum IN (N'Onaylandı', N'Onaylandi', N'Yayınlandı', N'Yayinlandi', N'Arşiv', N'Arsiv')
         )`
       : "";

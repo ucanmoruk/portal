@@ -379,7 +379,7 @@ export default function OnayToolbar({ nkrId, format, initialOnay, raporNo, sampl
         </button>
       </div>
 
-      {showEk && <div className="onay-toolbar"><EkYukleBox nkrId={nkrId} format={format} locked={onaylandi || !canApprove}
+      {showEk && <div className="onay-toolbar"><EkYukleBox nkrId={nkrId} raporNo={raporNo} format={format} locked={onaylandi || !canApprove}
         onChanged={() => { setEkVersion(v => v + 1); setShowMerged(true); }} /></div>}
       {showMerged && <div className="onay-toolbar" style={{ padding: 16 }}>
         <iframe key={ekVersion} title="Ek dahil rapor PDF önizlemesi" src={`/api/rapor-takip/${nkrId}/imzali-pdf?format=${encodeURIComponent(format)}&preview=1`}

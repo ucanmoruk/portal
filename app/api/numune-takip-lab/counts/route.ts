@@ -1,3 +1,4 @@
+import { approvalFormatSql } from "@/lib/raporApprovalFormatSql";
 import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
@@ -7,7 +8,7 @@ import { type NextRequest } from "next/server";
 
 const RAPOR_FORMAT_EXPR = "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')";
 const normSql = (expr: string) => `
-  UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${expr},
+  UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${expr}, N'i', N'I'),
     N'Ü', N'U'), N'ü', N'U'), N'İ', N'I'), N'ı', N'I'), N'Ö', N'O'), N'ö', N'O'),
     N'Ç', N'C'), N'ç', N'C'), N'Ğ', N'G'), N'ğ', N'G'))
 `;
@@ -134,7 +135,7 @@ export async function GET(request: NextRequest) {
            SELECT 1
            FROM NKR_RaporOnay ro
            WHERE ro.NkrID = n.ID
-             AND ${formatMatchesSql("ro.RaporFormati", RAPOR_FORMAT_EXPR)}
+             AND (${formatMatchesSql("ro.RaporFormati", RAPOR_FORMAT_EXPR)} OR ${approvalFormatSql(bucketSql("ro.RaporFormati"))} = ${bucketSql(RAPOR_FORMAT_EXPR)})
              AND ro.Durum IN (N'Onaylandı', N'Onaylandi', N'Yayınlandı', N'Yayinlandi', N'Arşiv', N'Arsiv')
          )`
       : "";
@@ -233,10 +234,10 @@ export async function GET(request: NextRequest) {
           GROUP BY n.ID, LTRIM(RTRIM(n.Grup)), ${RAPOR_FORMAT_EXPR}, ${bucketSql(RAPOR_FORMAT_EXPR)}
         )${hasRaporOnay ? `,
         OS AS (
-          SELECT ro.NkrID, ${bucketSql("ro.RaporFormati")} AS NormFmt,
+          SELECT ro.NkrID, ${approvalFormatSql(bucketSql("ro.RaporFormati"))} AS NormFmt,
             MAX(ro.Durum) AS RaporOnayDurum
           FROM NKR_RaporOnay ro
-          GROUP BY ro.NkrID, ${bucketSql("ro.RaporFormati")}
+          GROUP BY ro.NkrID, ${approvalFormatSql(bucketSql("ro.RaporFormati"))}
         )` : ``}${hasOverride ? `,
         OV AS (
           SELECT o.NkrID, ${bucketSql("o.RaporFormati")} AS NormFmt,

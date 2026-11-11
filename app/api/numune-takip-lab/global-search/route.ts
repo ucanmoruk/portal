@@ -1,3 +1,4 @@
+import { approvalFormatSql } from "@/lib/raporApprovalFormatSql";
 import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
@@ -8,7 +9,7 @@ import { type NextRequest } from "next/server";
 const RAPOR_FORMAT_EXPR = "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')";
 
 const normSql = (expr: string) => `
-  UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${expr},
+  UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${expr}, N'i', N'I'),
     N'Ü', N'U'), N'ü', N'U'), N'İ', N'I'), N'ı', N'I'), N'Ö', N'O'), N'ö', N'O'),
     N'Ç', N'C'), N'ç', N'C'), N'Ğ', N'G'), N'ğ', N'G'), N'Ş', N'S'), N'ş', N'S'))
 `;
@@ -137,12 +138,12 @@ export async function GET(request: NextRequest) {
       INTO #Pending
       FROM #Rap r;
 
-      ${hasRaporOnay ? `SELECT ro.NkrID, ${bucketSql("ro.RaporFormati")} AS NormFmt,
+      ${hasRaporOnay ? `SELECT ro.NkrID, ${approvalFormatSql(bucketSql("ro.RaporFormati"))} AS NormFmt,
         MAX(ro.Durum) AS RaporOnayDurum,
         ${hasDisRaporKodu ? "MAX(ro.DisRaporKodu)" : "CAST(NULL AS NVARCHAR(80))"} AS DisRaporKodu
       INTO #OS
       FROM NKR_RaporOnay ro
-      GROUP BY ro.NkrID, ${bucketSql("ro.RaporFormati")};` : ""}
+      GROUP BY ro.NkrID, ${approvalFormatSql(bucketSql("ro.RaporFormati"))};` : ""}
 
       ${hasOverride ? `SELECT o.NkrID, ${bucketSql("o.RaporFormati")} AS NormFmt,
         MAX(o.Durum) AS OverrideDurum

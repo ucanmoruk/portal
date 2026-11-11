@@ -156,7 +156,7 @@ export default function RaporDuzenleClient({ nkrId, format }: Props) {
 
       {/* "Diğer" formatı: Ek-1 PDF yükleme (yayın/imza anında birleştirilir) */}
       {(
-        <EkYukleBox nkrId={nkrId} format={format} locked={locked} />
+        <EkYukleBox nkrId={nkrId} raporNo={header?.RaporNo} format={format} locked={locked} />
       )}
 
       {loading ? (

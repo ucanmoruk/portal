@@ -1,3 +1,4 @@
+import { approvalFormatSql } from "@/lib/raporApprovalFormatSql";
 import { numuneWorkspaceSql } from "@/lib/numuneWorkspace";
 import { getLabScope, labScopeSql } from "@/lib/labResultAccess";
 import { getServerSession } from "next-auth";
@@ -5,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { cosmoPool } from "@/lib/db";
 
 const normSql = (expr: string) => `
-  UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${expr},
+  UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${expr}, N'i', N'I'),
     N'Ü', N'U'), N'ü', N'U'), N'İ', N'I'), N'ı', N'I'), N'Ö', N'O'), N'ö', N'O'),
     N'Ç', N'C'), N'ç', N'C'), N'Ğ', N'G'), N'ğ', N'G'))
 `;
@@ -97,15 +98,8 @@ export async function GET(request: Request) {
     const raporTuruExpr = "COALESCE(NULLIF(s.RaporFormati, ''), N'Genel')";
     const raporTuruNormExpr = bucketSql(raporTuruExpr);
     const raporTuruParamNorm = bucketSql("@raporTuru");
-    const raporOnayNormExpr = `
-      CASE
-        WHEN ${bucketSql("ro.RaporFormati")} = N'GENELEN' THEN N'GENEL'
-        WHEN ${bucketSql("ro.RaporFormati")} = N'CHALLENGEEN' THEN N'CHALLENGE'
-        WHEN ${bucketSql("ro.RaporFormati")} = N'STABILITEEN' THEN N'STABILITE'
-        ELSE ${bucketSql("ro.RaporFormati")}
-      END
-    `;
-    const raporOnayIsEnglishExpr = `${bucketSql("ro.RaporFormati")} IN (N'GENELEN', N'CHALLENGEEN', N'STABILITEEN')`;
+    const raporOnayNormExpr = approvalFormatSql(bucketSql("ro.RaporFormati"));
+    const raporOnayIsEnglishExpr = `${bucketSql("ro.RaporFormati")} IN (N'GENELEN', N'CHALLENGEEN', N'STABILITEEN', N'DIGEREN')`;
 
     const raporTuruFilter = raporTuru
       ? `AND ${raporTuruNormExpr} = ${raporTuruParamNorm}`

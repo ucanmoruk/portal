@@ -8,11 +8,13 @@ type Ek = { ekUrl: string; ekToken: string | null } | null;
 // Yüklenen PDF, yayın/imza anında raporun ilk sayfasının arkasına eklenir.
 export default function EkYukleBox({
   nkrId,
+  raporNo,
   format,
   locked,
   onChanged,
 }: {
   nkrId: number;
+  raporNo?: string;
   format: string;
   locked: boolean;
   onChanged?: () => void;
@@ -25,6 +27,8 @@ export default function EkYukleBox({
 
   useEffect(() => {
     let alive = true;
+    setEk(null);
+    setError("");
     (async () => {
       try {
         const r = await fetch(base, { cache: "no-store" });
@@ -80,7 +84,7 @@ export default function EkYukleBox({
 
   return (
     <div style={box}>
-      <div style={{ fontWeight: 700, fontSize: 14 }}>📎 Ek-1 PDF</div>
+      <div style={{ fontWeight: 700, fontSize: 14 }}>📎 Ek-1 PDF · {raporNo || `Kayıt ${nkrId}`} · {format}</div>
       <div style={{ fontSize: 12, color: "#6e6e73", flex: 1, minWidth: 200 }}>
         PDF, raporun sonuna rapor numarası ve sayfa bilgileriyle eklenir.
       </div>
