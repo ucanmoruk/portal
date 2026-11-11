@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, pushGraphicsState, popGraphicsState } from "pdf-lib";
 import { getRaporEk } from "@/lib/raporEk";
+import { isDigerFormat } from "@/lib/formatUtil";
 
 // Ek sayfaları, raporun kendi logo/üst bilgi ve doküman alt bilgisini taşır.
 // Dosya adı belgeye yazılmaz. Birleştirme dijital imzadan önce yapılır.
@@ -51,6 +52,9 @@ export async function maybeMergeEk(
   nkrId: number,
   format: string,
 ): Promise<Buffer> {
+  // Diğer/Diğer EN already render complete raster annex pages in the report
+  // template, shared by browser preview and every PDF generation entry point.
+  if (isDigerFormat(format)) return baseBuf;
   const ek = await getRaporEk(pool, nkrId, format);
   if (!ek?.ekUrl) return baseBuf;
 

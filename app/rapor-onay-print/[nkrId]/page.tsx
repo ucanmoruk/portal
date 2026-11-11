@@ -10,6 +10,8 @@ import DigerReport from "./formats/DigerReport";
 import type { ReportFormatProps } from "./reportTypes";
 import { loadRaporViewData } from "@/lib/raporViewData";
 import { isDigerFormat } from "@/lib/formatUtil";
+import { cosmoPool } from "@/lib/db";
+import { loadRaporAnnexPages } from "@/lib/raporEkRaster";
 
 export const metadata = { title: "Analiz Raporu — Onay Önizleme" };
 
@@ -77,6 +79,9 @@ export default async function RaporOnayPrintPage({
   }
 
   const ReportComponent = resolveFormatComponent(format);
+  const annexPages = isDigerFormat(format)
+    ? await loadRaporAnnexPages(await cosmoPool, nkrIdNum, format)
+    : undefined;
 
   return (
     <ReportComponent
@@ -89,6 +94,7 @@ export default async function RaporOnayPrintPage({
       onay={data.onay}
       meta={data.meta}
       karekod={data.karekod}
+      annexPages={annexPages}
     />
   );
 }

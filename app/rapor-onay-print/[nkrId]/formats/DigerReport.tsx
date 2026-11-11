@@ -228,6 +228,26 @@ function ApprovalBlock({ hazirlayanAd, karekod, english = false }: { hazirlayanA
   );
 }
 
+function ReportFooter({ english, page, total }: { english: boolean; page: number; total: number }) {
+  return (
+          <div className="rapor-altbilgi">
+            <div className="sirket-bilgisi">
+              <strong>UNIQUE ANALİZ BELGELENDİRME ve GÖZETİM HİZMETLERİ LTD. ŞTİ.</strong>
+              <span>Atatürk Mah. Hadımköy Yolu Cad. No:10 İç Kapı No:7 Esenyurt / İstanbul | info@uniqueanalyse.com</span>
+            </div>
+
+            <div className="dokuman-bilgisi">
+              <div className="sol-alt">
+                Ek-1.PR.20/Rev.02/12.06.2026
+              </div>
+              <div className="sag-alt">
+                {english ? "Page" : "Sayfa"}: {page} / {total}
+              </div>
+            </div>
+          </div>
+  );
+}
+
 export default function DigerReport({
   nkrId,
   format,
@@ -240,6 +260,7 @@ export default function DigerReport({
   karekod,
   edit,
   hideToolbar,
+  annexPages = [],
 }: ReportFormatProps) {
   const english = /en$/i.test(format);
   const defaultNotes = english
@@ -412,6 +433,14 @@ export default function DigerReport({
           margin-top: 5mm;
           font-size: 10px;
         }
+        .annex-title {
+          font-family: var(--font-rapor), monospace;
+          font-size: 11.5px; font-weight: 700; letter-spacing: -0.03em;
+          margin: 20px 0 8px; color: var(--ink-strong);
+        }
+        .annex-page { height: 296mm; }
+        .annex-content { position: relative; flex: 1; min-height: 0; display: flex; justify-content: center; align-items: center; }
+        .annex-image { position: absolute; inset: 0; display: block; width: 100%; height: 100%; min-height: 0; object-fit: contain; }
         .info-table th {
           background: #ffffff;
           color: var(--ink-strong);
@@ -700,7 +729,7 @@ export default function DigerReport({
         {/* ═══════════════════════════════════════════════════════════
             SAYFA 1 — SERTİFİKA/DİĞER TASARIMI (Ek-1 PDF merge ile eklenir)
             ═══════════════════════════════════════════════════════════ */}
-        <div className="page">
+        <div className={annexPages.length ? "page break" : "page"}>
           <HeaderBlock english={english} showAkredite={hasAkredite} raporKodu={raporKodu} kabulTarihi={kabulTarihi} yayinTarihi={yayinTarihi} akrKodFontSize={akrKodFontSize} />
 
           {/* ───── MÜŞTERİ / NUMUNE BİLGİLERİ (2 sütun) ───── */}
@@ -809,23 +838,19 @@ export default function DigerReport({
           <div style={{ marginTop: "10px" }}></div>
 
           {/* ───── ALT BİLGİ ───── */}
-          <div className="rapor-altbilgi">
-            <div className="sirket-bilgisi">
-              <strong>UNIQUE ANALİZ BELGELENDİRME ve GÖZETİM HİZMETLERİ LTD. ŞTİ.</strong>
-              <span>Atatürk Mah. Hadımköy Yolu Cad. No:10 İç Kapı No:7 Esenyurt / İstanbul | info@uniqueanalyse.com</span>
-            </div>
-
-            <div className="dokuman-bilgisi">
-              <div className="sol-alt">
-                Ek-1.PR.20/Rev.02/12.06.2026
-              </div>
-              <div className="sag-alt">
-                Sayfa: 1
-              </div>
-            </div>
-          </div>
+          <ReportFooter english={english} page={1} total={annexPages.length + 1} />
         </div>
-
+        {annexPages.map((page, index) => (
+          <div className={`page annex-page${index < annexPages.length - 1 ? " break" : ""}`} key={index}>
+            <HeaderBlock english={english} showAkredite={hasAkredite} raporKodu={raporKodu} kabulTarihi={kabulTarihi} yayinTarihi={yayinTarihi} akrKodFontSize={akrKodFontSize} />
+            <div className="annex-title">{english ? "Annex-1" : "Ek-1"}</div>
+            <div className="annex-content">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="annex-image" src={page.dataUrl} alt={`${english ? "Annex-1" : "Ek-1"} - ${index + 1}`} />
+            </div>
+            <ReportFooter english={english} page={index + 2} total={annexPages.length + 1} />
+          </div>
+        ))}
       </div>
     </>
   );

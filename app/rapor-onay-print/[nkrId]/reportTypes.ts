@@ -122,6 +122,12 @@ export interface ReportEditHandlers {
   onRemoveRow: (index: number) => void;
 }
 
+export interface ReportAnnexPage {
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
 export interface ReportFormatProps {
   nkrId: number;
   format: string;
@@ -136,4 +142,5 @@ export interface ReportFormatProps {
   edit?: ReportEditHandlers;
   /** Düzenleme ekranında onay toolbar'ı gizlenir (kendi toolbar'ı vardır). */
   hideToolbar?: boolean;
+  annexPages?: ReportAnnexPage[];
 }

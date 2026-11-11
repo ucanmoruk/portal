@@ -5,6 +5,14 @@ const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["nodemailer", "imapflow", "mailparser", "mssql", "mysql2", "jszip", "docx", "pizzip", "docxtemplater", "mammoth", "pdf-parse", "pdfjs-dist"],
   outputFileTracingIncludes: {
+    "/rapor-onay-print/**": [
+      "./node_modules/pdf-parse/dist/**/*",
+      "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
+      "./node_modules/pdfjs-dist/standard_fonts/**/*",
+      "./node_modules/pdfjs-dist/cmaps/**/*",
+      "./node_modules/pdfjs-dist/wasm/**/*",
+      "./node_modules/@napi-rs/canvas*/**/*",
+    ],
     "/api/kys/pdf-worker": ["./node_modules/pdfjs-dist/build/pdf.mjs", "./node_modules/pdfjs-dist/build/pdf.worker.min.mjs"],
     "/api/kys/dokumanlar/[id]/pdf": ["./scripts/convert-word-to-pdf.ps1"],
     "/api/urunler/rapor-sablon": ["./node_modules/@sparticuz/chromium/bin/**/*"],

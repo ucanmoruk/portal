@@ -61,4 +61,14 @@ assert.ok(!changedNotes.includes('The tests performed'));
 const clearedNotes = renderToStaticMarkup(React.createElement(Report, { ...props, format: 'DigerEn', header: { ...props.header, Aciklamalar: '' } }));
 assert.ok(!clearedNotes.includes('The tests performed'));
 assert.ok(all.some(node => node.type === 'select'));
+const annexReport = renderToStaticMarkup(React.createElement(Report, { ...props, format: 'DigerEn', annexPages: [
+  { dataUrl: 'data:image/png;base64,example', width: 2480, height: 3508 },
+  { dataUrl: 'data:image/png;base64,example2', width: 3508, height: 2480 },
+] }));
+assert.equal((annexReport.match(/class="page annex-page/g) || []).length, 2);
+assert.equal((annexReport.match(/CUSTOMER INFORMATION/g) || []).length, 1);
+assert.equal((annexReport.match(/SAMPLE INFORMATION/g) || []).length, 1);
+assert.equal((annexReport.match(/class="annex-title">Annex-1/g) || []).length, 2);
+assert.ok(!annexReport.includes('>EK-1<'));
+assert.ok(annexReport.includes('Page: 3 / 3'));
 console.log('PASS: Diğer TR/EN mapping, translated report, inline edits, English field isolation, read-only preview.');
