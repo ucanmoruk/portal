@@ -242,6 +242,10 @@ export default function DigerReport({
   hideToolbar,
 }: ReportFormatProps) {
   const english = /en$/i.test(format);
+  const defaultNotes = english
+    ? "The tests performed at the customer’s request were evaluated according to the TİTCK Guideline on Microbiological Control of Cosmetic Products."
+    : "Müşteri talebi doğrultusunda yapılan testler 'TİTCK Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz'a göre değerlendirilmiştir.";
+  const notes = header.Aciklamalar ?? defaultNotes;
   const field = (value: unknown, change: (value: string) => void) => edit ? <input className="rd-edit" aria-label={english ? "Report field" : "Rapor alanı"} value={String(value ?? "")} onChange={event => change(event.target.value)} /> : String(value || "—");
   const {
     revNo,
@@ -304,6 +308,8 @@ export default function DigerReport({
           min-height: 100vh;
         }
         .rd-edit { width: 100%; min-width: 0; font: inherit; color: inherit; border: 1px dashed #aaa; background: #fffbe8; padding: 2px; }
+        .report-notes { white-space: pre-wrap; margin-top: 6px; }
+        .rd-notes { display: block; min-height: 100px; resize: vertical; line-height: 1.5; }
         .page {
           max-width: 210mm;
           min-height: 296mm;
@@ -773,7 +779,17 @@ export default function DigerReport({
                 <strong>{fmtTarih(testBaslangic)} - {fmtTarih(testBitis)}</strong>{" "}
               </>
             ) : null}
-            <br />{edit ? <textarea aria-label={label(english, "AÇIKLAMALAR")} value={header.Aciklamalar || ""} onChange={event => edit.onHeaderChange({ Aciklamalar: event.target.value })} /> : header.Aciklamalar || (english ? "The tests performed at the customer’s request were evaluated according to the TİTCK Guideline on Microbiological Control of Cosmetic Products." : <> Müşteri talebi doğrultusunda yapılan testler &apos;TİTCK Kozmetik Ürünlerin Mikrobiyolojik Kontrolüne İlişkin Kılavuz&apos;a göre değerlendirilmiştir.</>)}
+            <div className="report-notes">
+              {edit ? (
+                <textarea
+                  className="rd-edit rd-notes"
+                  aria-label={label(english, "AÇIKLAMALAR")}
+                  rows={5}
+                  value={notes}
+                  onChange={event => edit.onHeaderChange({ Aciklamalar: event.target.value })}
+                />
+              ) : notes}
+            </div>
             {(parseInt(revNo, 10) || 0) > 0 && (
               <div style={{ marginTop: 8, fontWeight: "bold" }}>
                 Revizyon No: {revNo}

@@ -50,5 +50,15 @@ all.find(node => node.type === 'input' && node.props.value === 'English analysis
 assert.equal(changes[0].Numune_Adi_En, 'Edited sample');
 assert.equal(changes[1][1].AdEn, 'Edited analysis');
 assert.ok(all.some(node => node.type === 'textarea'));
+const notesInput = all.find(node => node.type === 'textarea');
+assert.match(notesInput.props.value, /The tests performed/);
+assert.equal(notesInput.props.rows, 5);
+notesInput.props.onChange({ target: { value: 'Edited notes\nSecond line' } });
+assert.equal(changes[2].Aciklamalar, 'Edited notes\nSecond line');
+const changedNotes = renderToStaticMarkup(React.createElement(Report, { ...props, format: 'DigerEn', header: { ...props.header, ...changes[2] } }));
+assert.ok(changedNotes.includes('Edited notes\nSecond line'));
+assert.ok(!changedNotes.includes('The tests performed'));
+const clearedNotes = renderToStaticMarkup(React.createElement(Report, { ...props, format: 'DigerEn', header: { ...props.header, Aciklamalar: '' } }));
+assert.ok(!clearedNotes.includes('The tests performed'));
 assert.ok(all.some(node => node.type === 'select'));
 console.log('PASS: Diğer TR/EN mapping, translated report, inline edits, English field isolation, read-only preview.');
