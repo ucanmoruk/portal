@@ -387,7 +387,7 @@ async function balance(
           : "SELECT ID,Miktar FROM KysStokBirimMiktar WITH (UPDLOCK,HOLDLOCK) WHERE StokID=@S AND BirimID=@U",
       )
   ).recordset[0];
-  if (Number(r?.Miktar || 0) + delta < -0.00001)
+  if (delta < 0 && Number(r?.Miktar || 0) + delta < -0.00001)
     throw new Error(
       "Düzeltme ilgili birimin stok miktarını negatife düşürüyor. Kullanılmış stok önce kontrol edilmelidir.",
     );
@@ -402,12 +402,12 @@ async function balance(
       : "INSERT INTO KysStokBirimMiktar (StokID,BirimID,Miktar) VALUES (@S,@U,@D)",
   );
 }
-export async function deleteKysAcceptance(talepId: number, kabulId: number, userId: string) {
+export async function deleteKysAcceptance(talepId: number, kabulId: number, userId: string, executor?: any) {
   await ensureKysPurchaseSchema();
   if (!Number.isSafeInteger(kabulId) || kabulId <= 0) throw new Error("Geçerli kabul kaydı seçin.");
   const base = await cosmoPool;
-  const tx = await base.transaction();
-  await tx.begin();
+  const tx = executor || await base.transaction();
+  if (!executor) await tx.begin();
   try {
     const parent = (await tx.request().input("ID", talepId).query(hasMysqlConfig()
       ? "SELECT * FROM KysTalep WHERE ID=@ID FOR UPDATE"
@@ -431,7 +431,7 @@ export async function deleteKysAcceptance(talepId: number, kabulId: number, user
       const stock = (await tx.request().input("ID", before.StokID).query(hasMysqlConfig()
         ? "SELECT * FROM KysStokKart WHERE ID=@ID FOR UPDATE"
         : "SELECT * FROM KysStokKart WITH (UPDLOCK,HOLDLOCK) WHERE ID=@ID")).recordset[0];
-      if (!stock || Number(stock.StokMiktari) + reversal < -0.00001) throw new Error("Kabul edilen stok kullanılmış; silme işlemi stok miktarını negatife düşüremez.");
+      if (!stock || (reversal < 0 && Number(stock.StokMiktari) + reversal < -0.00001)) throw new Error("Kabul edilen stok kullanılmış; silme işlemi stok miktarını negatife düşüremez.");
       await tx.request().input("ID", before.StokID).input("D", reversal)
         .query("UPDATE KysStokKart SET StokMiktari=StokMiktari+@D,UpdatedAt=GETDATE() WHERE ID=@ID");
       await balance(tx, Number(before.StokID), movement.HedefBirimID == null
@@ -447,9 +447,9 @@ export async function deleteKysAcceptance(talepId: number, kabulId: number, user
       .query("UPDATE KysTalepKalem SET KabulMiktari=@Q,Durum=CASE WHEN @Q=0 THEN 'Bekliyor' WHEN @Q>=Miktar THEN 'Tamamlandı' ELSE 'Kısmi Kabul' END WHERE ID=@ID");
     if (parent.Durum !== "İptal") await tx.request().input("ID", talepId).query("UPDATE KysTalep SET Durum=CASE WHEN NOT EXISTS(SELECT 1 FROM KysTalepKalem WHERE TalepID=@ID AND KabulMiktari>0) THEN 'Onaylandı' WHEN NOT EXISTS(SELECT 1 FROM KysTalepKalem WHERE TalepID=@ID AND Durum<>'Tamamlandı') THEN 'Tamamlandı' ELSE 'Kısmi Kabul' END,UpdatedAt=GETDATE() WHERE ID=@ID");
     await log(tx, talepId, kabulId, before, { silindi: true }, { degerlendirenId: userId, duzeltmeAciklamasi: "Hatalı stok kabulü silindi; stok miktarı geri alındı." });
-    await tx.commit();
+    if (!executor) await tx.commit();
     return { ok: true };
-  } catch (e) { await tx.rollback(); throw e; }
+  } catch (e) { if (!executor) await tx.rollback(); throw e; }
 }
 
 export async function correctKysAcceptance(

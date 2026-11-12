@@ -82,6 +82,30 @@
   border-color: #ff3b3030;
 }
 
+.orderPending {
+  background: #fef3c7;
+  color: #854d0e;
+  border-color: #f0d475;
+}
+
+.orderApproved {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #a9cafa;
+}
+
+.orderProcessing {
+  background: #ede9fe;
+  color: #5b21b6;
+  border-color: #cfc0f5;
+}
+
+.orderNeutral {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
 .lowStock {
   color: var(--color-danger);
   font-weight: 800;

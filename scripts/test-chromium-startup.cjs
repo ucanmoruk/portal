@@ -3,7 +3,7 @@ const fs = require('node:fs'), path = require('node:path'), { pathToFileURL } = 
 const ts = require('typescript'), assert = require('node:assert/strict'), { EventEmitter } = require('node:events');
 const file = 'lib/chromiumPdf.ts';
 const input = fs.readFileSync(file, 'utf8').replaceAll('import.meta.url', JSON.stringify(pathToFileURL(path.resolve(file)).href))
-  + '\nexport { waitForDevtoolsUrl, withChromeSpawnRetry, closeChromeProcess, withChromeRenderSlot };';
+  + '\nexport { waitForDevtoolsUrl, withChromeSpawnRetry, closeChromeProcess, withChromeRenderSlot, withDevtoolsTimeout, withChromeHostSlot };';
 const source = ts.transpileModule(input, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
 const mod = { exports: {} }, timers = [];
 new Function('require', 'module', 'exports', 'process', 'setTimeout', 'clearTimeout', source)(
@@ -13,6 +13,8 @@ new Function('require', 'module', 'exports', 'process', 'setTimeout', 'clearTime
 );
 (async () => {
   const api = mod.exports;
+  await assert.rejects(api.withDevtoolsTimeout(new Promise(() => {}), 'test command'), /PDF motoru yanıt vermedi/);
+  assert.equal(await api.withDevtoolsTimeout(Promise.resolve('ready'), 'test command'), 'ready');
   const proc = new EventEmitter(); proc.stderr = new EventEmitter();
   await assert.rejects(api.waitForDevtoolsUrl(proc), error => error.code === 'CHROME_STARTUP_TIMEOUT');
   assert(timers.includes(45000), 'Startup should not retain the legacy 10-second deadline');
@@ -28,5 +30,17 @@ new Function('require', 'module', 'exports', 'process', 'setTimeout', 'clearTime
   let active = 0, peak = 0;
   await Promise.all(Array.from({ length: 5 }, () => api.withChromeRenderSlot(async () => { peak = Math.max(peak, ++active); await new Promise(resolve => setImmediate(resolve)); active--; })));
   assert.equal(peak, 1);
+  // A separately evaluated Next route bundle must share the process-wide queue.
+  const other = { exports: {} };
+  new Function('require', 'module', 'exports', source)(
+    name => name === '@/lib/loadDotenv' ? { loadDotenvOnce() {} } : require(name), other, other.exports,
+  );
+  active = 0; peak = 0;
+  const render = async () => { peak = Math.max(peak, ++active); await new Promise(resolve => setImmediate(resolve)); active--; };
+  await Promise.all([api.withChromeRenderSlot(render), other.exports.withChromeRenderSlot(render)]);
+  assert.equal(peak, 1, 'Separate route bundles must not start Chrome concurrently');
+  // Host lock must also be released after a failed render.
+  await assert.rejects(api.withChromeHostSlot(async () => { throw new Error('render failed'); }), /render failed/);
+  assert.equal(await api.withChromeHostSlot(async () => 'released'), 'released');
   console.log('PASS: 45-second startup window, transient startup retry, permanent error handling, forced process cleanup and serial PDF rendering. No Chrome or server used.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { constants, existsSync } from "node:fs";
-import { access, chmod, copyFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -256,25 +256,81 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function withDevtoolsTimeout<T>(operation: Promise<T>, label: string, ms = 20000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`PDF motoru yanıt vermedi: ${label}.`)), ms);
+    operation.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
+
 function chromeRenderConcurrency(): number {
   const configured = Number(process.env.CHROME_RENDER_CONCURRENCY || process.env.RAPOR_PDF_CONCURRENCY || 0);
   return Number.isFinite(configured) && configured > 0 ? Math.min(Math.floor(configured), 3) : 1;
 }
 
-let activeChromeRenders = 0;
-const chromeRenderQueue: Array<() => void> = [];
+// Passenger/cluster worker'ları aynı dosya sisteminde tek Chromium slotunu paylaşır.
+// Kilit dosyası process sahibini taşır; çöken worker'ın kilidi geri alınabilir.
+async function withChromeHostSlot<T>(fn: () => Promise<T>): Promise<T> {
+  loadDotenvOnce();
+  const dir = await configureChromiumTempDir();
+  const lockPath = path.join(dir, "pdf-render.lock");
+  const deadline = Date.now() + 45000;
+  let lock: Awaited<ReturnType<typeof open>>;
+  while (true) {
+    try {
+      lock = await open(lockPath, "wx");
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      try {
+        const owner = Number(await readFile(lockPath, "utf8"));
+        if (Number.isSafeInteger(owner) && owner > 0) {
+          try {
+            process.kill(owner, 0);
+          } catch (probeError) {
+            if ((probeError as NodeJS.ErrnoException).code === "ESRCH") {
+              await rm(lockPath, { force: true });
+              continue;
+            }
+          }
+        }
+      } catch (readError) {
+        if ((readError as NodeJS.ErrnoException).code === "ENOENT") continue;
+        throw readError;
+      }
+      if (Date.now() >= deadline) throw new Error("PDF motoru başka bir raporu hazırlıyor. Lütfen biraz sonra tekrar deneyin.");
+      await delay(250);
+    }
+  }
+  try {
+    await lock.writeFile(String(process.pid));
+    return await fn();
+  } finally {
+    await lock.close();
+    await rm(lockPath, { force: true });
+  }
+}
+
+// Next ayrı route bundle'larında bu modülün birden fazla kopyasını yükleyebilir.
+// Aynı Node sürecindeki tüm PDF uçları tek kuyruğu paylaşmalıdır.
+const pdfGlobal = globalThis as typeof globalThis & {
+  __rootportalChromeQueue?: { active: number; waiting: Array<() => void> };
+};
+const chromeRenderState = pdfGlobal.__rootportalChromeQueue ??= { active: 0, waiting: [] };
 
 async function withChromeRenderSlot<T>(fn: () => Promise<T>): Promise<T> {
   const concurrency = chromeRenderConcurrency();
-  if (activeChromeRenders >= concurrency) {
-    await new Promise<void>((resolve) => chromeRenderQueue.push(resolve));
+  if (chromeRenderState.active >= concurrency) {
+    await new Promise<void>((resolve) => chromeRenderState.waiting.push(resolve));
+  } else {
+    chromeRenderState.active += 1;
   }
-  activeChromeRenders += 1;
   try {
     return await fn();
   } finally {
-    activeChromeRenders = Math.max(0, activeChromeRenders - 1);
-    chromeRenderQueue.shift()?.();
+    const next = chromeRenderState.waiting.shift();
+    if (next) next(); // Ayrılan slot doğrudan sıradaki işe devredilir.
+    else chromeRenderState.active = Math.max(0, chromeRenderState.active - 1);
   }
 }
 
@@ -407,15 +463,25 @@ async function renderTargetToPdfCore(target: RenderTarget, options: PdfRenderOpt
       "--remote-debugging-port=0",
       `--user-data-dir=${profilePath}`,
     ]);
+    // Kullanılmayan stdout dolarsa Chrome'un kendisi de yazarken kilitlenebilir.
+    chrome.stdout.resume();
 
     const wsUrl = await waitForDevtoolsUrl(chrome);
     ws = new WebSocket(wsUrl);
-    await new Promise<void>((resolve, reject) => {
+    await withDevtoolsTimeout(new Promise<void>((resolve, reject) => {
       ws!.addEventListener("open", () => resolve(), { once: true });
       ws!.addEventListener("error", () => reject(new Error("Chrome DevTools WebSocket bağlantısı kurulamadı.")), {
         once: true,
       });
-    });
+      ws!.addEventListener("close", () => reject(new Error("PDF motoru bağlantıyı kapattı.")), { once: true });
+    }), "DevTools bağlantısı");
+
+    const rejectPending = () => {
+      for (const item of pending.values()) item.reject(new Error("PDF motoru bağlantısı kesildi."));
+      pending.clear();
+    };
+    ws.addEventListener("close", rejectPending);
+    ws.addEventListener("error", rejectPending);
 
     ws.addEventListener("message", (event) => {
       let msg: any;
@@ -434,8 +500,16 @@ async function renderTargetToPdfCore(target: RenderTarget, options: PdfRenderOpt
 
     const send = (method: string, params: Record<string, unknown> = {}, sessionId?: string) => {
       const id = ++messageId;
-      ws!.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
-      return new Promise<any>((resolve, reject) => pending.set(id, { resolve, reject }));
+      const response = new Promise<any>((resolve, reject) => {
+        pending.set(id, { resolve, reject });
+        try {
+          if (ws!.readyState !== WebSocket.OPEN) throw new Error("PDF motoru bağlantısı kapalı.");
+          ws!.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+        } catch (error) {
+          reject(error);
+        }
+      });
+      return withDevtoolsTimeout(response, method).finally(() => pending.delete(id));
     };
 
     const { targetId } = await send("Target.createTarget", { url: "about:blank" });
@@ -586,15 +660,21 @@ async function renderTargetToPdfCore(target: RenderTarget, options: PdfRenderOpt
 
     return Buffer.from(result.data, "base64");
   } finally {
-    ws?.close();
-    await closeChromeProcess(chrome);
-    await cleanupWorkDir(workDir);
+    try {
+      ws?.close();
+    } finally {
+      try {
+        await closeChromeProcess(chrome);
+      } finally {
+        await cleanupWorkDir(workDir);
+      }
+    }
   }
 }
 
 // Verilen HTML'i A4 PDF'e dönüştürür. Buffer döner.
 function renderTargetToPdf(target: RenderTarget, options: PdfRenderOptions): Promise<Buffer> {
-  return withChromeRenderSlot(() => withChromeSpawnRetry(() => renderTargetToPdfCore(target, options)));
+  return withChromeRenderSlot(() => withChromeHostSlot(() => withChromeSpawnRetry(() => renderTargetToPdfCore(target, options))));
 }
 
 export async function renderHtmlToPdf(html: string, options: PdfRenderOptions = {}): Promise<Buffer> {

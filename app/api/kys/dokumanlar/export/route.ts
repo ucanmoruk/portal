@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   const format = params.get("format");
   if (format !== "excel" && format !== "master") return Response.json({error:"Geçersiz dışa aktarma biçimi."},{status:400});
   try {
-    const {data} = await listKysDokumanlar(format === "master" ? { all:true } : {search:params.get("search")||"",searchMode:params.get("searchMode")||"code",tur:params.get("tur")||"",durum:params.get("durum")||"",sort:params.get("sort")||"",all:true});
+    const {data} = await listKysDokumanlar(format === "master" ? { all:true } : {search:params.get("search")||"",searchMode:params.get("searchMode")||"title-code",tur:params.get("tur")||"",durum:params.get("durum")||"",sort:params.get("sort")||"",all:true});
     let buffer: Buffer;
     if (format === "excel") buffer = createDocumentWorkbook(data);
     else {

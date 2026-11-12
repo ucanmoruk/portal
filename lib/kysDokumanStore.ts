@@ -379,7 +379,7 @@ export async function listKysDokumanlar(params: {
   let where = "WHERE 1=1";
   if (search) {
     where += params.searchMode === "content"
-      ? " AND (Baslik LIKE @search OR Ozet LIKE @search OR DuzMetin LIKE @search)"
+      ? " AND DuzMetin LIKE @search"
       : params.searchMode === "title-code"
         ? " AND (Kod LIKE @search OR Baslik LIKE @search)"
         : " AND Kod LIKE @search";

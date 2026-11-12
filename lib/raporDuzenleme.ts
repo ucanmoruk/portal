@@ -248,6 +248,10 @@ export function applyRaporEdit<T extends { header: RaporHeader; hizmetler: Hizme
     meta: payload.meta ? {
       ...data.meta,
       ...payload.meta,
+      // Unlocked reports must use the latest imported Challenge results.
+      ...(!kilitli && data.meta.challengeVeri
+        ? { challengeVeri: data.meta.challengeVeri }
+        : {}),
       // Revizyon kimliği eski snapshot'tan değil güncel onay/NKR kaydından gelir.
       revNo: data.meta.revNo,
       revizeNot: data.meta.revizeNot,

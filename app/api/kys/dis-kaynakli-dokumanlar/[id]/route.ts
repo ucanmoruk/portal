@@ -88,7 +88,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const docId = Number(id);
     if (!Number.isInteger(docId) || docId <= 0) return fail("Geçersiz doküman ID", 400);
 
-    const { pdfPath } = await deleteDisKaynakliDokuman(docId);
+    const { pdfPath } = await deleteDisKaynakliDokuman(docId, user);
     if (pdfPath) await deleteDisKaynakliPdfFromFtp(pdfPath);
 
     return Response.json({ ok: true });

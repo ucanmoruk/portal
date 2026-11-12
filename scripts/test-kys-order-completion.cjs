@@ -33,13 +33,13 @@ async function main() {
     const draft = { kabulTarihi: "2026-10-18", hedefBirimId: depot, degerlendirenAd: "Rollback test" };
     const before = await store.getKysRequestDetail(orderId);
     await store.acceptKysRequestItem(orderId, { ...draft, kalemId: before.kalemler[0].id, gelenMiktar: 1 });
-    await assert.rejects(store.completeKysOrder(orderId, draft), /yeterli stok/);
-    let detail = await store.getKysRequestDetail(orderId);
-    assert.equal(detail.kabuller.length, 1, "A later shortage rolls back all new shipment rows");
-    assert.equal(Number(detail.kalemler[0].kabulMiktari), 1);
-    await store.createKysStockMovement(stocks[1], { hareketTipi: "Giriş", miktar: 2, hedefBirimId: depot });
     await store.completeKysOrder(orderId, draft);
-    detail = await store.getKysRequestDetail(orderId);
+    let detail = await store.getKysRequestDetail(orderId);
+    const negativeStock = await store.getKysStockDetail(stocks[1]);
+    assert.equal(negativeStock.stock.stokMiktari, -1, "Short stock must allow shipment into negative balance");
+    const negativeDepot = (await outer.request().input("ID", stocks[1]).input("Depot", depot)
+      .query("SELECT Miktar FROM KysStokBirimMiktar WHERE StokID=@ID AND BirimID=@Depot")).recordset[0];
+    assert.equal(Number(negativeDepot.Miktar), -1);
     assert.equal(detail.talep.durum, "Tamamlandı");
     assert.deepEqual(detail.kalemler.map(item => Number(item.kabulMiktari)), [2, 2]);
     await assert.rejects(store.completeKysOrder(orderId, draft), /işleme alınmış/);
@@ -92,12 +92,14 @@ async function main() {
       await store.editKysRequest(automaticOrder, { firmaAdi: "Updated catalogue test", talepTuru: "Sipariş", kalemler: [{ kod: code, malzemeAdi: "Automatic product", miktar: 3, birim: "Adet" }] });
       automatic = await store.getKysRequestDetail(automaticOrder);
       assert.equal(automatic.kalemler[0].stokId, automaticStock, "Edits reuse the product card");
-      await store.createKysStockMovement(automaticStock, { hareketTipi: "Giriş", miktar: 10, hedefBirimId: depot });
       await store.updateKysRequestStatus(automaticOrder, { durum: "Onaylandı" });
       await store.updateKysRequestStatus(automaticOrder, { durum: "İşleme Alındı" });
       await store.completeKysOrder(automaticOrder, draft);
       product = await store.getKysStockDetail(automaticStock);
-      assert.equal(product.stock.stokMiktari, 7);
+      assert.equal(product.stock.stokMiktari, -3, "New product without depot inventory can be shipped");
+      const emptyDepot = (await outer.request().input("ID", automaticStock).input("Depot", depot)
+        .query("SELECT Miktar FROM KysStokBirimMiktar WHERE StokID=@ID AND BirimID=@Depot")).recordset[0];
+      assert.equal(Number(emptyDepot.Miktar), -3);
       assert.ok(product.movements.some(row => row.siparis && row.talepId === automaticOrder));
       const companyOrders = await store.listKysRequests({ tur: "Sipariş", seri: series, allowedFirmalar: [series] });
       assert.ok(companyOrders.data.some(row => row.id === automaticOrder));
@@ -113,7 +115,7 @@ async function main() {
       await store.updateKysRequestStatus(automaticPurchase, { durum: "Onaylandı" });
       await store.updateKysRequestStatus(automaticPurchase, { durum: "İşleme Alındı" });
       await store.acceptKysRequestItem(automaticPurchase, { ...draft, kalemId: purchaseDetail.kalemler[0].id, gelenMiktar: 1 });
-      assert.equal((await store.getKysStockDetail(automaticStock)).stock.stokMiktari, 8);
+      assert.equal((await store.getKysStockDetail(automaticStock)).stock.stokMiktari, -2);
       const failedCode = `${code}-ROLLBACK`;
       await assert.rejects(store.createKysRequest({ seri: series, talepTuru: "Sipariş", firmaAdi: "Invalid second item", kalemler: [
         { kod: failedCode, malzemeAdi: "Must roll back", miktar: 1, birim: "Adet" },
@@ -125,8 +127,21 @@ async function main() {
       const converted = await store.getKysRequestDetail(convertible);
       assert.match(converted.talep.talepNo, series === "Root" ? /^R\d+$/ : /^S\d+$/);
       assert.equal(converted.kalemler[0].stokId, automaticStock);
+      await store.updateKysRequestStatus(automaticOrder, { durum: "Onay Bekliyor", userId: "test" });
+      const reopened = await store.getKysRequestDetail(automaticOrder);
+      assert.equal(reopened.talep.durum, "Onay Bekliyor");
+      assert.equal(reopened.talep.onayTarihi, null);
+      assert.equal(reopened.kabuller.length, 0);
+      assert.ok(reopened.kalemler.every(item => Number(item.kabulMiktari) === 0));
+      assert.equal((await store.getKysStockDetail(automaticStock)).stock.stokMiktari, 1, "Returning the order reverses only its shipments");
+      await store.editKysRequest(automaticOrder, { firmaAdi: "Editable again", talepTuru: "Sipariş", kalemler: [
+        { kod: code, malzemeAdi: "Automatic product", miktar: 3, birim: "Adet" },
+        { kod: `${code}-EXTRA`, malzemeAdi: "Added product", miktar: 1, birim: "Adet" },
+      ] });
+      assert.equal((await store.getKysRequestDetail(automaticOrder)).kalemler.length, 2);
+
     }
-    console.log("PASS: shipment rollback, completion, invoice/payment links, combined purchase/sale product search, filtering, permissions and stock movement links.");
+    console.log("PASS: negative inventory shipment, completion, invoice/payment links, combined purchase/sale product search, filtering, permissions and stock movement links.");
   } finally { cosmoPool.then = originalThen; await outer.rollback(); }
   assert.equal((await real.request().input("ID", orderId).query("SELECT ID FROM KysTalep WHERE ID=@ID")).recordset.length, 0);
   console.log("PASS: all integration fixtures rolled back.");

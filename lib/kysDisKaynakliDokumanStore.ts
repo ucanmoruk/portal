@@ -143,6 +143,9 @@ async function createSchema() {
       Tarih DATETIME NOT NULL DEFAULT GETDATE(), DokumanKodu NVARCHAR(80) NOT NULL,
       DokumanAdi NVARCHAR(260) NOT NULL, YayinTarihi NVARCHAR(80) NULL, Aciklama NVARCHAR(500) NULL,
       Aktarildi INT NOT NULL DEFAULT 0)`);
+  await pool.request().query(hasMysqlConfig()
+    ? "ALTER TABLE KysDisKaynakliDokumanLog ADD COLUMN IF NOT EXISTS Degisiklikler TEXT NULL"
+    : "IF COL_LENGTH('KysDisKaynakliDokumanLog', 'Degisiklikler') IS NULL ALTER TABLE KysDisKaynakliDokumanLog ADD Degisiklikler NVARCHAR(MAX) NULL");
   const insert = hasMysqlConfig() ? "INSERT IGNORE" : "INSERT";
   const key = (prefix: string) => hasMysqlConfig() ? `CONCAT('${prefix}',d.ID)` : `'${prefix}'+CAST(d.ID AS NVARCHAR(20))`;
   await pool.request().query(`${insert} INTO KysDisKaynakliDokumanLog
@@ -157,11 +160,11 @@ async function createSchema() {
 
 }
 
-async function appendDocumentLog(executor: any, id: number, islem: string, user?: DisKaynakliDokumanKullanici, aciklama = "") {
+async function appendDocumentLog(executor: any, id: number, islem: string, user?: DisKaynakliDokumanKullanici, aciklama = "", changes: Array<{ alan: string; onceki: string; yeni: string }> = []) {
   await executor.request().input("ID",id).input("Key",islem === "Oluşturuldu" ? `created:${id}` : randomUUID())
-    .input("Islem",islem).input("UserID",user?.userId || null).input("UserName",user?.userName || null).input("Note",aciklama)
-    .query(`INSERT INTO KysDisKaynakliDokumanLog (DokumanID,KaynakAnahtar,Islem,KullaniciID,KullaniciAd,Tarih,DokumanKodu,DokumanAdi,YayinTarihi,Aciklama)
-      SELECT ID,@Key,@Islem,@UserID,@UserName,CASE WHEN @Islem=N'Kontrol edildi' THEN KontrolTarihi ELSE GETDATE() END,DokumanKodu,DokumanAdi,YayinTarihi,@Note
+    .input("Islem",islem).input("UserID",user?.userId || null).input("UserName",user?.userName || null).input("Note",aciklama).input("Changes",JSON.stringify(changes))
+    .query(`INSERT INTO KysDisKaynakliDokumanLog (DokumanID,KaynakAnahtar,Islem,KullaniciID,KullaniciAd,Tarih,DokumanKodu,DokumanAdi,YayinTarihi,Aciklama,Degisiklikler)
+      SELECT ID,@Key,@Islem,@UserID,@UserName,CASE WHEN @Islem=N'Kontrol edildi' THEN KontrolTarihi ELSE GETDATE() END,DokumanKodu,DokumanAdi,YayinTarihi,@Note,@Changes
       FROM KysDisKaynakliDokuman WHERE ID=@ID`);
 }
 
@@ -169,10 +172,28 @@ export async function listDisKaynakliDokumanHistory(id: number) {
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Geçersiz doküman ID.");
   await ensureKysDisKaynakliDokumanSchema();
   const pool = await cosmoPool;
-  const result = await pool.request().input("ID",id).query(`SELECT ID,Islem,KullaniciAd,Tarih,DokumanKodu,DokumanAdi,YayinTarihi,Aciklama,Aktarildi
+  const result = await pool.request().input("ID",id).query(`SELECT ID,DokumanID,Islem,KullaniciAd,Tarih,DokumanKodu,DokumanAdi,YayinTarihi,Aciklama,Aktarildi,Degisiklikler
     FROM KysDisKaynakliDokumanLog WHERE DokumanID=@ID ORDER BY Tarih DESC,ID DESC`);
-  return result.recordset.map((row: AnyRow) => ({ id:rowNumber(row,"ID"), islem:rowString(row,"Islem"), kullaniciAd:rowString(row,"KullaniciAd"), tarih:asDateTime(row.Tarih ?? row.tarih),
-    dokumanKodu:rowString(row,"DokumanKodu"), dokumanAdi:rowString(row,"DokumanAdi"), yayinTarihi:rowString(row,"YayinTarihi"), aciklama:rowString(row,"Aciklama"), aktarildi:rowBool(row,"Aktarildi") }));
+  return result.recordset.map(mapHistory);
+}
+
+function mapHistory(row: AnyRow) {
+  let degisiklikler: Array<{ alan: string; onceki: string; yeni: string }> = [];
+  try { degisiklikler = JSON.parse(rowString(row,"Degisiklikler") || "[]"); } catch { /* Older entries have no field details. */ }
+  return { degisiklikler, dokumanId:rowNumber(row,"DokumanID"), id:rowNumber(row,"ID"), islem:rowString(row,"Islem"), kullaniciAd:rowString(row,"KullaniciAd"), tarih:asDateTime(row.Tarih ?? row.tarih),
+    dokumanKodu:rowString(row,"DokumanKodu"), dokumanAdi:rowString(row,"DokumanAdi"), yayinTarihi:rowString(row,"YayinTarihi"), aciklama:rowString(row,"Aciklama"), aktarildi:rowBool(row,"Aktarildi") };
+}
+
+export async function listDisKaynakliDokumanActivity(params: { search?: string; islem?: string; page?: number }) {
+  await ensureKysDisKaynakliDokumanSchema();
+  const pool = await cosmoPool;
+  const page = Number.isSafeInteger(params.page) && Number(params.page) > 0 ? Number(params.page) : 1;
+  const search = text(params.search).slice(0,260), islem = text(params.islem).slice(0,60);
+  const where = "WHERE (@Search='' OR DokumanKodu LIKE @Pattern OR DokumanAdi LIKE @Pattern OR KullaniciAd LIKE @Pattern OR Aciklama LIKE @Pattern) AND (@Islem='' OR Islem=@Islem)";
+  const bind = (request: any) => request.input("Search",search).input("Pattern",`%${search}%`).input("Islem",islem).input("Offset",(page-1)*25).input("Limit",25);
+  const count = await bind(pool.request()).query(`SELECT COUNT(*) AS Total FROM KysDisKaynakliDokumanLog ${where}`);
+  const result = await bind(pool.request()).query(`SELECT * FROM KysDisKaynakliDokumanLog ${where} ORDER BY Tarih DESC,ID DESC OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY`);
+  return { data: result.recordset.map(mapHistory), total: Number(count.recordset[0]?.Total ?? count.recordset[0]?.total ?? 0), page };
 }
 
 function mapRow(row: AnyRow) {
@@ -324,7 +345,7 @@ export async function updateDisKaynakliDokuman(id: number, input: DisKaynakliDok
   await ensureKysDisKaynakliDokumanSchema();
   const pool = await cosmoPool;
   const existingRes = await pool.request().input("ID", id).query(
-    "SELECT PdfPath, PdfOriginalName FROM KysDisKaynakliDokuman WHERE ID = @ID",
+    "SELECT * FROM KysDisKaynakliDokuman WHERE ID = @ID",
   );
   const existing = existingRes.recordset[0] as AnyRow | undefined;
   if (!existing) throw new Error("Doküman bulunamadı.");
@@ -361,7 +382,13 @@ export async function updateDisKaynakliDokuman(id: number, input: DisKaynakliDok
         WHERE ID = @ID
       `);
 
-    await appendDocumentLog(transaction,id,"Güncellendi",user,pdfReplaced ? "PDF dosyası değiştirildi." : "Doküman bilgileri güncellendi.");
+    const fields = [
+      ["Birim","Birim",birim], ["DokumanKodu","Doküman kodu",dokumanKodu], ["DokumanAdi","Doküman adı",dokumanAdi],
+      ["Yayincisi","Yayıncı",text(input.yayincisi)], ["YayinTarihi","Yayın tarihi",text(input.yayinTarihi)],
+      ["YayinLinki","Yayın bağlantısı",cleanUrl(input.yayinLinki) || ""], ["PdfPath","PDF bağlantısı",nextPdfPath], ["PdfOriginalName","PDF dosyası",nextPdfOriginalName || ""],
+    ];
+    const changes = fields.filter(([key,,value]) => rowString(existing,key) !== value).map(([key,alan,yeni]) => ({alan,onceki:rowString(existing,key),yeni}));
+    await appendDocumentLog(transaction,id,"Güncellendi",user,pdfReplaced ? "PDF dosyası değiştirildi." : "Doküman bilgileri güncellendi.",changes);
     await transaction.commit();
   } catch (error) { await transaction.rollback(); throw error; }
 
@@ -369,7 +396,7 @@ export async function updateDisKaynakliDokuman(id: number, input: DisKaynakliDok
 }
 
 /** Kaydı siler ve route'un FTP'den de silebilmesi için eski PdfPath'i döner. */
-export async function deleteDisKaynakliDokuman(id: number) {
+export async function deleteDisKaynakliDokuman(id: number, user?: DisKaynakliDokumanKullanici) {
   await ensureKysDisKaynakliDokumanSchema();
   const pool = await cosmoPool;
   const existingRes = await pool.request().input("ID", id).query(
@@ -378,7 +405,12 @@ export async function deleteDisKaynakliDokuman(id: number) {
   const existing = existingRes.recordset[0] as AnyRow | undefined;
   if (!existing) throw new Error("Doküman bulunamadı.");
 
-  await pool.request().input("ID", id).query("DELETE FROM KysDisKaynakliDokuman WHERE ID = @ID");
+  const transaction = await pool.transaction(); await transaction.begin();
+  try {
+    await appendDocumentLog(transaction,id,"Silindi",user,"Doküman listeden silindi.");
+    await transaction.request().input("ID", id).query("DELETE FROM KysDisKaynakliDokuman WHERE ID = @ID");
+    await transaction.commit();
+  } catch (error) { await transaction.rollback(); throw error; }
   return { pdfPath: rowString(existing, "PdfPath") };
 }
 

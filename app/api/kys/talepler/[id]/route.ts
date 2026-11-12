@@ -1,7 +1,7 @@
 import { listSupplierMail, prepareSupplierMail, sendQueuedSupplierMail } from "@/lib/kysSupplierMail";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { completeKysOrder, updateKysOrderBilling, editSpektrotekRequestNumber, editKysRequest, getKysRequestDetail, updateKysRequestStatus } from "@/lib/kysStore";
+import { completeKysOrder, updateKysOrderBilling, editSpektrotekRequestNumber, editKysRequest, getKysRequestUnitBalances, getKysRequestDetail, updateKysRequestStatus } from "@/lib/kysStore";
 import { getPortalUser } from "@/lib/portalYetki";
 import {
   deleteKysRequest,
@@ -33,6 +33,7 @@ export async function GET(
       return Response.json({ error: "Bu firmanın talebini görüntüleme yetkiniz yok." }, { status: 403 });
     return Response.json({
       ...detail,
+      stokBirimMiktarlari: await getKysRequestUnitBalances(Number(id)),
       belgeler: await getKysRequestFiles(Number(id)),
       satinAlmaYetkisi,
       tedarikciMailleri:await listSupplierMail(Number(id)),

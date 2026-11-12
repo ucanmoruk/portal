@@ -31,3 +31,8 @@ export function requireRequestAcceptance(
   if (!Number.isFinite(next) || next <= 0)
     throw new Error("Gelen miktar pozitif olmalıdır.");
 }
+
+export function canReturnKysRequest(status: string, isOrder: boolean): boolean {
+  return Boolean(REQUEST_TRANSITIONS[status]?.includes("Onay Bekliyor")) ||
+    (isOrder && ["Kısmi Kabul", "Tamamlandı"].includes(status));
+}

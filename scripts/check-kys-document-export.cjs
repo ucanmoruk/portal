@@ -50,7 +50,7 @@ async function run(){
   allowed=true;
   assert.equal((await route.GET(new Request(url.replace('format=excel','format=invalid')))).status,400);
   const response=await route.GET(new Request(url));assert.equal(response.status,200);
-  assert.deepEqual(receivedFilters,{search:'kontrol',searchMode:'code',tur:'Prosedür',durum:'Yayında',sort:'kod-asc',all:true});
+  assert.deepEqual(receivedFilters,{search:'kontrol',searchMode:'title-code',tur:'Prosedür',durum:'Yayında',sort:'kod-asc',all:true});
   assert.equal(response.headers.get('cache-control'),'private, no-store');
   const exported=XLSX.read(Buffer.from(await response.arrayBuffer()),{cellDates:true});
   assert.equal(XLSX.utils.sheet_to_json(exported.Sheets[exported.SheetNames[0]]).length,80);

@@ -65,7 +65,7 @@ export default function DokumanListesiClient() {
   const [exportSuccess, setExportSuccess] = useState("");
   const exportRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
-  const [searchMode, setSearchMode] = useState("code");
+  const [searchMode, setSearchMode] = useState("title-code");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [tur, setTur] = useState("");
   const [durum, setDurum] = useState("");
@@ -335,14 +335,15 @@ export default function DokumanListesiClient() {
           <div className={tableStyles.toolbar}>
             <div className={tableStyles.toolbarLeft}>
               <select className={kys.select} aria-label="Arama alanı" value={searchMode} onChange={event => setSearchMode(event.target.value)}>
-                <option value="code">Kodda ara</option>
-                <option value="content">Başlık ve içerikte ara</option>
+                <option value="title-code">Kod ve başlıkta ara</option>
+                <option value="content">İçerikte ara</option>
               </select>
               <div className={tableStyles.searchBox}>
                 <Search size={15} className={tableStyles.searchIcon} />
                 <input
                   className={tableStyles.searchInput}
-                  placeholder={searchMode === "code" ? "Doküman kodu ara..." : "Başlık veya içerik ara..."}
+                  placeholder={searchMode === "title-code" ? "Kod ve başlıkta ara..." : "İçerikte ara..."}
+                  aria-label={searchMode === "title-code" ? "Kod ve başlıkta ara" : "İçerikte ara"}
                   value={search}
                   onChange={event => setSearch(event.target.value)}
                 />

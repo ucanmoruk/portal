@@ -55,6 +55,18 @@ function statusClass(status: string) {
   return kys.pill;
 }
 
+function orderStatusClass(status: string) {
+  switch (status) {
+    case "Tamamlandı": return kys.pillOk;
+    case "Kısmi Kabul": return kys.pillWarn;
+    case "Onay Bekliyor": return kys.orderPending;
+    case "Onaylandı": return kys.orderApproved;
+    case "İşleme Alındı": return kys.orderProcessing;
+    case "İptal": return kys.pillDanger;
+    default: return kys.orderNeutral;
+  }
+}
+
 const pageNums = (page: number, totalPages: number) => {
   const nums: Array<number | "..."> = [];
   for (let i = 1; i <= totalPages; i += 1) {
@@ -194,7 +206,7 @@ export default function TalepListesiClient({ordersOnly=false}:{ordersOnly?:boole
       <div className={styles.tableCard}>
         {error && <div className={styles.errorBar}>{error}</div>}
         <div className={styles.tableWrapper}>
-          {ordersOnly ? (          <table className={styles.table}><thead><tr><th>Sipariş Kodu</th><th>Firma Adı</th><th>Sipariş Durumu</th><th>Fatura No</th><th>Fatura Tutarı</th><th>Vade</th><th>Ödeme Durumu</th><th></th></tr></thead><tbody>{loading?<tr><td colSpan={8}>Yükleniyor…</td></tr>:rows.length===0?<tr><td colSpan={8} className={styles.empty}>Sipariş bulunamadı.</td></tr>:rows.map(row=><tr key={row.id}><td><Link className={kys.requestLink} href={`/laboratuvar/kys/talep-listesi/${row.id}`}>{row.talepNo}</Link></td><td>{row.firmaAdi}</td><td>{row.durum}</td><td>{row.faturaNo||"-"}</td><td>{row.faturaTutari==null?"-":row.faturaTutari.toLocaleString("tr-TR",{minimumFractionDigits:2})}</td><td>{dateFmt(row.vade)}</td><td><span className={`${kys.pill} ${row.odemeDurumu==="Ödendi"?kys.pillOk:row.odemeDurumu==="Kısmen Ödendi"?kys.pillWarn:""}`}>{row.faturaId ? <select aria-label={`${row.talepNo} ödeme durumu`} value={row.odemeDurumu} disabled={paymentSaving !== null} onChange={e => savePayment(row,e.target.value)}>{ODEME_DURUMLARI.map(status => <option key={status}>{status}</option>)}</select> : "-"}</span></td><td><button type="button" className={`${styles.editBtn} ${kys.iconButton}`} title="Fatura seç" aria-label={`${row.talepNo} için fatura seç`} onClick={()=>{setFormError("");setCreatingInvoice(false);setBilling(row);setBillingInvoice(row.faturaId?{ID:row.faturaId,FaturaNo:row.faturaNo,FirmaAd:"",Toplam:row.faturaTutari||0,VadeTarihi:row.vade,OdemeDurumu:row.odemeDurumu}:null);}}><Pencil size={16} aria-hidden="true" /></button></td></tr>)}</tbody></table>) : (          <table className={styles.table}>
+          {ordersOnly ? (          <table className={styles.table}><thead><tr><th>Sipariş Kodu</th><th>Firma Adı</th><th>Sipariş Durumu</th><th>Fatura No</th><th>Fatura Tutarı</th><th>Vade</th><th>Ödeme Durumu</th><th></th></tr></thead><tbody>{loading?<tr><td colSpan={8}>Yükleniyor…</td></tr>:rows.length===0?<tr><td colSpan={8} className={styles.empty}>Sipariş bulunamadı.</td></tr>:rows.map(row=><tr key={row.id}><td><Link className={kys.requestLink} href={`/laboratuvar/kys/talep-listesi/${row.id}`}>{row.talepNo}</Link></td><td>{row.firmaAdi}</td><td><span className={`${kys.pill} ${orderStatusClass(row.durum)}`}>{row.durum}</span></td><td>{row.faturaNo||"-"}</td><td>{row.faturaTutari==null?"-":row.faturaTutari.toLocaleString("tr-TR",{minimumFractionDigits:2})}</td><td>{dateFmt(row.vade)}</td><td><span className={`${kys.pill} ${row.odemeDurumu==="Ödendi"?kys.pillOk:row.odemeDurumu==="Kısmen Ödendi"?kys.pillWarn:""}`}>{row.faturaId ? <select aria-label={`${row.talepNo} ödeme durumu`} value={row.odemeDurumu} disabled={paymentSaving !== null} onChange={e => savePayment(row,e.target.value)}>{ODEME_DURUMLARI.map(status => <option key={status}>{status}</option>)}</select> : "-"}</span></td><td><button type="button" className={`${styles.editBtn} ${kys.iconButton}`} title="Fatura seç" aria-label={`${row.talepNo} için fatura seç`} onClick={()=>{setFormError("");setCreatingInvoice(false);setBilling(row);setBillingInvoice(row.faturaId?{ID:row.faturaId,FaturaNo:row.faturaNo,FirmaAd:"",Toplam:row.faturaTutari||0,VadeTarihi:row.vade,OdemeDurumu:row.odemeDurumu}:null);}}><Pencil size={16} aria-hidden="true" /></button></td></tr>)}</tbody></table>) : (          <table className={styles.table}>
             <thead><tr><th>Talep no</th><th>Tür</th><th>Durum</th><th>Kalem</th><th>Oluşturan</th><th>Onaylayan</th><th>İşleme alan</th><th></th></tr></thead>
             <tbody>
               {loading ? <tr><td colSpan={8}><div className={styles.skeleton} /></td></tr> : rows.length === 0 ? <tr><td colSpan={8}><div className={styles.empty}>Talep bulunamadı.</div></td></tr> : rows.map(row => (
