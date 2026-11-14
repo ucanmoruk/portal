@@ -205,7 +205,8 @@ function mapRow(row: AnyRow) {
     yayincisi: rowString(row, "Yayincisi"),
     yayinTarihi: rowString(row, "YayinTarihi"),
     yayinLinki: rowString(row, "YayinLinki"),
-    pdfPath: rowString(row, "PdfPath"),
+    // PDF'lere doğrudan web adresi verilmez: yalnızca oturum ve yetki kontrolü yapan portal yolu döner.
+    pdfPath: rowString(row, "PdfPath") ? `/api/kys/dis-kaynakli-dokumanlar/${rowNumber(row, "ID")}/pdf` : "",
     pdfOriginalName: rowString(row, "PdfOriginalName"),
     kontrolEdildi: rowBool(row, "KontrolEdildi"),
     kontrolTarihi: asDateTime(row.KontrolTarihi ?? row.kontroltarihi),
@@ -333,6 +334,15 @@ export async function getDisKaynakliDokuman(id: number) {
   `);
   const row = res.recordset[0] as AnyRow | undefined;
   return row ? mapRow(row) : null;
+}
+
+/** Yalnızca sunucu tarafı: saklanan ham PDF referansı (dosya adını taşır, web adresi değildir). */
+export async function getDisKaynakliPdfRef(id: number): Promise<{ pdfPath: string; pdfOriginalName: string } | null> {
+  await ensureKysDisKaynakliDokumanSchema();
+  const pool = await cosmoPool;
+  const res = await pool.request().input("ID", id).query("SELECT PdfPath, PdfOriginalName FROM KysDisKaynakliDokuman WHERE ID = @ID");
+  const row = res.recordset[0] as AnyRow | undefined;
+  return row ? { pdfPath: rowString(row, "PdfPath"), pdfOriginalName: rowString(row, "PdfOriginalName") } : null;
 }
 
 /**

@@ -4,7 +4,8 @@ export async function workspaceAccess(module: string) {
   const user = await getPortalUser();
   if (!user) return null;
   if (user.isAdmin) return { user, view: true, edit: true, approve: true };
-  const permissionModule = module === "yazilim-raporlari" ? "yazilim-dogrulama" : module === "kalibrasyon-belirsizlikleri" ? "cihaz-listesi" : module;
+  // Alt sekmeler, bağlı oldukları menünün yetkisini kullanır.
+  const permissionModule = ["yazilim-raporlari", "yazilim-testleri", "degisiklik-kontrolu"].includes(module) ? "yazilim-dogrulama" : module === "kalibrasyon-belirsizlikleri" ? "cihaz-listesi" : module;
   const key = `laboratuvar.kys.${permissionModule}`;
   const pool = await getPermissionPool();
   const result = await pool.request().input("UserID", Number(user.userId)).query("SELECT MenuKey,Yetki FROM PortalYetki WHERE KullaniciID=@UserID");

@@ -29,10 +29,10 @@ WORKSPACES["toplanti-kararlari"].columns = ["meetingTitle", "meetingDate", "deci
 WORKSPACES["toplanti-kararlari"].fields = [f("meetingTitle", "Toplantı konusu", { required: true }), date("meetingDate", "Toplantı tarihi", true), memo("participants", "Katılımcılar"), ...WORKSPACES["toplanti-kararlari"].fields.filter(field => field.key !== "meetingId")];
 WORKSPACES["yazilim-raporlari"] = { title: "Yazılım Doğrulama Raporları", description: "Otomatik teknik testlerin sürüm ve tarih bazlı sonuçları.", columns: ["title", "date", "revision", "passed", "failed"], status: ["Başarılı", "Başarısız"], fields: [f("title", "Rapor başlığı", { required: true }), date("date", "Tarih", true), f("revision", "Commit / kaynak özeti", { required: true }), f("scope", "Test kapsamı"), f("passed", "Başarılı kontrol"), f("failed", "Başarısız kontrol"), memo("results", "Testler ve çıktıları", true), memo("limitations", "Kapsam ve sınırlar")] };
 export const WORKSPACE_GROUPS = [
-  { label: "Cihaz Yönetimi", modules: ["cihaz-listesi", "kalibrasyon-kontrol", "cihaz-islemleri"] },
+  { label: "Cihaz Yönetimi", modules: ["cihaz-listesi", "kalibrasyon-kontrol", "cihaz-islemleri", "kalibrasyon-belirsizlikleri"] },
   { label: "Yeterlilik", modules: ["yeterlilik-testleri"] },
   { label: "Toplantılar", modules: ["toplanti-kararlari"] },
-  { label: "Yazılım Güvencesi", modules: ["yazilim-raporlari"] },
+  { label: "Yazılım Güvencesi", modules: ["yazilim-dogrulama", "yazilim-testleri", "degisiklik-kontrolu", "yazilim-raporlari"] },
 ];
 export type WorkspaceRecord = { id: string; module: string; version: number; status: string; data: Record<string, string>; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string };
 export type WorkspaceAudit = { id: string; recordId: string; actor: string; at: string; action: string; before: WorkspaceRecord | null; after: WorkspaceRecord };

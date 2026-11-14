@@ -125,7 +125,7 @@ export default function QcCardsPage() {
       <ReadOnlyBanner menuKey="eurolab.qc-kartlar" />
       <div className={styles.pageHeader}>
         <div>
-          <h1 className={styles.pageTitle}>QC Kartlar</h1>
+          <h1 className={styles.pageTitle}>{paths.brand === "Unique" ? "QC Kartları" : "QC Kartlar"}</h1>
           <p className={styles.pageSubtitle}>Validasyon geri kazanım verilerinden oluşturulan kalite kontrol kartları.</p>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { cosmoPool } from "@/lib/db";
 import { hasMysqlConfig } from "@/lib/mysqlCompat";
 import { WORKSPACES, type WorkspaceRecord, type WorkspaceAudit } from "./kysWorkspaceConfig";
 
+const MYSQL_UTF8 = "CHARACTER SET utf8mb4 COLLATE utf8mb4_turkish_ci";
 let ready: Promise<void> | undefined;
 export async function ensureWorkspaceSchema() {
   if (!ready) ready = (async () => {
@@ -10,13 +11,20 @@ export async function ensureWorkspaceSchema() {
     await pool.request().query(hasMysqlConfig() ? `CREATE TABLE IF NOT EXISTS KysWorkspaceRecord (
       ID VARCHAR(36) PRIMARY KEY, Module VARCHAR(60) NOT NULL, Code VARCHAR(120) NULL,
       Version INT NOT NULL, Payload LONGTEXT NOT NULL, UNIQUE KEY UQ_KysWorkspaceCode (Module,Code)
-    )` : `IF OBJECT_ID('KysWorkspaceRecord','U') IS NULL CREATE TABLE KysWorkspaceRecord (
+    ) ${MYSQL_UTF8}` :`IF OBJECT_ID('KysWorkspaceRecord','U') IS NULL CREATE TABLE KysWorkspaceRecord (
       ID VARCHAR(36) PRIMARY KEY, Module VARCHAR(60) NOT NULL, Code VARCHAR(120) NULL, Version INT NOT NULL, Payload NVARCHAR(MAX) NOT NULL);
       IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='UQ_KysWorkspaceCode' AND object_id=OBJECT_ID('KysWorkspaceRecord')) CREATE UNIQUE INDEX UQ_KysWorkspaceCode ON KysWorkspaceRecord(Module,Code) WHERE Code IS NOT NULL`);
     await pool.request().query(hasMysqlConfig() ? `CREATE TABLE IF NOT EXISTS KysWorkspaceAudit (
       ID VARCHAR(36) PRIMARY KEY, RecordID VARCHAR(36) NOT NULL, Payload LONGTEXT NOT NULL, INDEX IX_KysWorkspaceAudit (RecordID)
-    )` : `IF OBJECT_ID('KysWorkspaceAudit','U') IS NULL CREATE TABLE KysWorkspaceAudit (
+    ) ${MYSQL_UTF8}` : `IF OBJECT_ID('KysWorkspaceAudit','U') IS NULL CREATE TABLE KysWorkspaceAudit (
       ID VARCHAR(36) PRIMARY KEY, RecordID VARCHAR(36) NOT NULL, Payload NVARCHAR(MAX) NOT NULL)`);
+    if (hasMysqlConfig()) {
+      // Veritabanı varsayılanı latin1 olduğu için tablolar bu kümeyle oluşmuştu ve ş, ı, ğ, İ, Ş, Ğ "?" olarak kaydediliyordu.
+      for (const table of ["KysWorkspaceRecord", "KysWorkspaceAudit"]) {
+        const info = await pool.request().input("TableName", table).query("SELECT TABLE_COLLATION AS collation_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @TableName");
+        if (!String(info.recordset[0]?.collation_name || "").startsWith("utf8mb4")) await pool.request().query(`ALTER TABLE ${table} CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_turkish_ci`);
+      }
+    }
     const tx = await pool.transaction(); await tx.begin();
     try {
       const rows = (await tx.request().query(hasMysqlConfig() ? "SELECT Payload FROM KysWorkspaceRecord FOR UPDATE" : "SELECT Payload FROM KysWorkspaceRecord WITH (UPDLOCK,HOLDLOCK)")).recordset.map((r: { Payload: string }) => JSON.parse(r.Payload) as WorkspaceRecord);

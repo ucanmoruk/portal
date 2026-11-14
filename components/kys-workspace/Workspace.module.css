@@ -14,7 +14,18 @@
 .primary { background:var(--color-accent); color:white; border-color:var(--color-accent); }
 .button:focus-visible, .nav a:focus-visible { outline:2px solid var(--color-accent); outline-offset:3px; }
 .input { border:1px solid var(--color-border); border-radius:var(--radius-sm); padding:9px 11px; background:var(--color-surface); color:var(--color-text-primary); font:inherit; font-size:.84rem; min-width:0; }
-.pill { display:inline-flex; white-space:nowrap; border-radius:var(--radius-sm); background:var(--color-accent-light); color:var(--color-accent); padding:4px 8px; font-size:.75rem; }
+.pill { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; border-radius:var(--radius-sm); background:var(--color-accent-light); color:var(--color-accent); padding:4px 8px; font-size:.75rem; font-weight:500; }
+.ok { background:var(--color-success-light); color:color-mix(in srgb, var(--color-success) 60%, var(--color-text-primary)); }
+.warn { background:var(--color-warning-light); color:color-mix(in srgb, var(--color-warning) 55%, var(--color-text-primary)); }
+.bad { background:var(--color-danger-light); color:var(--color-danger); }
+.muted { background:var(--color-border-light); color:var(--color-text-secondary); }
+.info { background:var(--color-accent-light); color:var(--color-accent); }
+.soon { color:color-mix(in srgb, var(--color-warning) 55%, var(--color-text-primary)); }
+.flag { font-size:.72rem; font-weight:600; }
+.ellipsis { display:inline-block; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.76rem; }
+.sortBtn { display:inline-flex; align-items:center; gap:4px; padding:0; border:0; background:none; color:inherit; font:inherit; letter-spacing:inherit; text-transform:inherit; cursor:pointer; }
+.sortBtn:hover { color:var(--color-accent); }
+.sortBtn:focus-visible { outline:2px solid var(--color-accent); outline-offset:3px; border-radius:2px; }
 .overdue { color:var(--color-danger); }
 .empty { display:grid; gap:8px; padding:50px 16px; justify-items:center; text-align:center; color:var(--color-text-secondary); }
 .detail { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }

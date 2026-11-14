@@ -1,6 +1,12 @@
 import { Suspense } from "react";
-import { redirect,notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import WorkspaceClient from "@/components/kys-workspace/WorkspaceClient";
+import { WORKSPACES } from "@/lib/kysWorkspaceConfig";
 import { workspaceAccess } from "@/lib/kysWorkspaceAccess";
-import VerificationReports from "@/components/kys-workspace/VerificationReports";
-export const metadata={title:"Yazılım Doğrulama Raporları"};
-export default async function Page(){const a=await workspaceAccess('yazilim-dogrulama');if(!a)redirect('/login');if(!a.view)notFound();return <Suspense fallback={<p>Yükleniyor…</p>}><VerificationReports/></Suspense>}
+export const metadata = { title: "KYS - " + WORKSPACES["yazilim-dogrulama"].title };
+export default async function Page() {
+  const access = await workspaceAccess("yazilim-dogrulama");
+  if (!access) redirect("/login");
+  if (!access.view) notFound();
+  return <Suspense fallback={<p>Yükleniyor…</p>}><WorkspaceClient module="yazilim-dogrulama" /></Suspense>;
+}

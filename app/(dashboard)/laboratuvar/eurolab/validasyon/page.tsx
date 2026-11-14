@@ -266,7 +266,7 @@ export default function ValidationDashboard() {
       <ReadOnlyBanner menuKey="eurolab.validasyon" />
       <div className={styles.pageHeader}>
         <div>
-          <h1 className={styles.pageTitle}>Validasyon</h1>
+          <h1 className={styles.pageTitle}>{paths.brand === "Unique" ? "Validasyon / Verifikasyon" : "Validasyon"}</h1>
           <p className={styles.pageSubtitle}>{paths.brand} metot validasyon ve verifikasyon kayıtları.</p>
         </div>
         <div className={styles.toolbarRight}>
