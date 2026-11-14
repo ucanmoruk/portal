@@ -1,4 +1,5 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -58,7 +59,7 @@ export default function HamveriTable() {
     setError("");
     try {
       const params = new URLSearchParams({ search, page: String(page), pageSize: String(pageSize) });
-      const res = await fetch(`/api/eurolab/rawdata?${params.toString()}`, { credentials: "same-origin" });
+      const res = await fetch(analysisApi(`/api/eurolab/rawdata?${params.toString()}`), { credentials: "same-origin" });
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
         throw new Error("Eurolab hamveri servisi oturum veya bağlantı yanıtı döndürmedi.");
@@ -84,7 +85,7 @@ export default function HamveriTable() {
     setDeletingId(row.id);
     setError("");
     try {
-      const res = await fetch(`/api/eurolab/rawdata/${row.id}`, {
+      const res = await fetch(analysisApi(`/api/eurolab/rawdata/${row.id}`), {
         method: "DELETE",
         credentials: "same-origin",
       });

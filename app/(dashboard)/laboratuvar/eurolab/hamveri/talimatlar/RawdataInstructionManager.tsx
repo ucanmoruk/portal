@@ -1,4 +1,5 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
 
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -120,7 +121,7 @@ export default function RawdataInstructionManager() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/eurolab/rawdata-instructions?standard=${encodeURIComponent(form.standard)}`, { credentials: "same-origin" });
+      const res = await fetch(analysisApi(`/api/eurolab/rawdata-instructions?standard=${encodeURIComponent(form.standard)}`), { credentials: "same-origin" });
       const json: InstructionRow[] & { error?: string } = await res.json();
       if (!res.ok) throw new Error(json.error || "Talimat listesi alınamadı.");
       setRows(Array.isArray(json) ? json : []);
@@ -171,7 +172,7 @@ export default function RawdataInstructionManager() {
       body.append("title", form.title || `Madde ${form.clause}`);
       body.append("file", file);
 
-      const res = await fetch("/api/eurolab/rawdata-instructions", {
+      const res = await fetch(analysisApi("/api/eurolab/rawdata-instructions"), {
         method: "POST",
         body,
         credentials: "same-origin",
@@ -198,7 +199,7 @@ export default function RawdataInstructionManager() {
     setError("");
     setMessage("");
     try {
-      const res = await fetch(`/api/eurolab/rawdata-instructions/${row.id}`, {
+      const res = await fetch(analysisApi(`/api/eurolab/rawdata-instructions/${row.id}`), {
         method: "DELETE",
         credentials: "same-origin",
       });
@@ -296,7 +297,7 @@ export default function RawdataInstructionManager() {
                     {row.test_id && <div className={styles.tdSecondary}>{row.test_id}</div>}
                   </td>
                   <td>
-                    <a className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline" href={`/api/eurolab/rawdata-instructions/${row.id}/file`} target="_blank" rel="noopener noreferrer">
+                    <a className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline" href={analysisApi(`/api/eurolab/rawdata-instructions/${row.id}/file`)} target="_blank" rel="noopener noreferrer">
                       {row.file_name} <ExternalLink size={13} />
                     </a>
                   </td>

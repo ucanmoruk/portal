@@ -1,4 +1,5 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
 
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -50,7 +51,7 @@ export default function RequirementVisualManager() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/eurolab/rawdata-requirement-visuals?standard=${encodeURIComponent(form.standard)}`, { credentials: "same-origin" });
+      const res = await fetch(analysisApi(`/api/eurolab/rawdata-requirement-visuals?standard=${encodeURIComponent(form.standard)}`), { credentials: "same-origin" });
       const json: VisualRow[] & { error?: string } = await res.json();
       if (!res.ok) throw new Error(json.error || "Gereklilik görselleri alınamadı.");
       setRows(Array.isArray(json) ? json : []);
@@ -98,7 +99,7 @@ export default function RequirementVisualManager() {
       body.append("title", form.title || `Madde ${form.clause} gereklilik kontrol görseli`);
       body.append("file", file);
 
-      const res = await fetch("/api/eurolab/rawdata-requirement-visuals", {
+      const res = await fetch(analysisApi("/api/eurolab/rawdata-requirement-visuals"), {
         method: "POST",
         body,
         credentials: "same-origin",
@@ -125,7 +126,7 @@ export default function RequirementVisualManager() {
     setError("");
     setMessage("");
     try {
-      const res = await fetch(`/api/eurolab/rawdata-requirement-visuals/${row.id}`, {
+      const res = await fetch(analysisApi(`/api/eurolab/rawdata-requirement-visuals/${row.id}`), {
         method: "DELETE",
         credentials: "same-origin",
       });
@@ -209,7 +210,7 @@ export default function RequirementVisualManager() {
                   <td className={styles.tdMono}>Madde {row.clause}</td>
                   <td className={styles.tdName}>{row.title || "-"}</td>
                   <td>
-                    <a className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline" href={`/api/eurolab/rawdata-requirement-visuals/${row.id}/file`} target="_blank" rel="noopener noreferrer">
+                    <a className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline" href={analysisApi(`/api/eurolab/rawdata-requirement-visuals/${row.id}/file`)} target="_blank" rel="noopener noreferrer">
                       {row.file_name} <ExternalLink size={13} />
                     </a>
                   </td>

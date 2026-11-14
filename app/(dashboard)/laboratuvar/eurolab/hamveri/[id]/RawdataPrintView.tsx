@@ -1,4 +1,5 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -77,7 +78,7 @@ export default function RawdataPrintView({ id }: { id: string }) {
       setLoading(true);
       setError("");
       try {
-        const response = await fetch(`/api/eurolab/rawdata/${id}`, { credentials: "same-origin" });
+        const response = await fetch(analysisApi(`/api/eurolab/rawdata/${id}`), { credentials: "same-origin" });
         const json: RawdataDetail & { error?: string } = await response.json();
         if (!response.ok) throw new Error(json.error || "Hamveri kaydı alınamadı.");
         if (alive) setData(json);
@@ -99,7 +100,7 @@ export default function RawdataPrintView({ id }: { id: string }) {
 
     async function loadInstructions() {
       try {
-        const response = await fetch("/api/eurolab/rawdata-instructions?standard=EN%2071-1%3A2026", { credentials: "same-origin" });
+        const response = await fetch(analysisApi("/api/eurolab/rawdata-instructions?standard=EN%2071-1%3A2026"), { credentials: "same-origin" });
         const json: InstructionRow[] & { error?: string } = await response.json();
         if (!response.ok) throw new Error(json.error || "Analiz talimatları alınamadı.");
         if (!alive) return;
@@ -231,7 +232,7 @@ function InstructionLink({ value, instructions }: { value: string; instructions:
     parts.push(instruction ? (
       <a
         key={`${number}-${index}`}
-        href={`/api/eurolab/rawdata-instructions/${instruction.id}/file`}
+        href={analysisApi(`/api/eurolab/rawdata-instructions/${instruction.id}/file`)}
         target="_blank"
         rel="noopener noreferrer"
         className="font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-800 print:text-slate-900 print:no-underline"

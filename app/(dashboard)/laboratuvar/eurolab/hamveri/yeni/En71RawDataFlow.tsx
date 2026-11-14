@@ -1,4 +1,5 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -801,7 +802,7 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
 
     async function loadInstructions() {
       try {
-        const response = await fetch("/api/eurolab/rawdata-instructions?standard=EN%2071-1%3A2026", { credentials: "same-origin" });
+        const response = await fetch(analysisApi("/api/eurolab/rawdata-instructions?standard=EN%2071-1%3A2026"), { credentials: "same-origin" });
         const json: InstructionRow[] & { error?: string } = await response.json();
         if (!response.ok) throw new Error(json.error || "Analiz talimatları alınamadı.");
         if (!alive) return;
@@ -828,7 +829,7 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
 
     async function loadRequirementVisuals() {
       try {
-        const response = await fetch("/api/eurolab/rawdata-requirement-visuals?standard=EN%2071-1%3A2026", { credentials: "same-origin" });
+        const response = await fetch(analysisApi("/api/eurolab/rawdata-requirement-visuals?standard=EN%2071-1%3A2026"), { credentials: "same-origin" });
         const json: RequirementVisualRow[] & { error?: string } = await response.json();
         if (!response.ok) throw new Error(json.error || "Gereklilik görselleri alınamadı.");
         if (!alive) return;
@@ -852,7 +853,7 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
       setLoadingRecord(true);
       setSaveError("");
       try {
-        const response = await fetch(`/api/eurolab/rawdata/${rawdataId}`, { credentials: "same-origin" });
+        const response = await fetch(analysisApi(`/api/eurolab/rawdata/${rawdataId}`), { credentials: "same-origin" });
         const json: RawdataDetail & { error?: string } = await response.json();
         if (!response.ok) throw new Error(json.error || "Hamveri kaydı alınamadı.");
         if (!alive) return;
@@ -1055,7 +1056,7 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
             .map(([key]) => key)
             .join(", ");
 
-      const response = await fetch(rawdataId ? `/api/eurolab/rawdata/${rawdataId}` : "/api/eurolab/rawdata", {
+      const response = await fetch(rawdataId ? analysisApi(`/api/eurolab/rawdata/${rawdataId}`) : analysisApi("/api/eurolab/rawdata"), {
         method: rawdataId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
@@ -1087,7 +1088,7 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
       window.alert("Önce kaydetmelisiniz (DOCX indirme kayıtlı hamveri gerektirir).");
       return;
     }
-    window.location.href = `/api/eurolab/rawdata/${rawdataId}/docx`;
+    window.location.href = analysisApi(`/api/eurolab/rawdata/${rawdataId}/docx`);
   };
 
   return (
@@ -1261,7 +1262,7 @@ export default function En71RawDataFlow({ rawdataId }: { rawdataId?: string }) {
                     {activeRequirementVisuals.map(visual => (
                       <a
                         key={visual.id}
-                        href={`/api/eurolab/rawdata-requirement-visuals/${visual.id}/file`}
+                        href={analysisApi(`/api/eurolab/rawdata-requirement-visuals/${visual.id}/file`)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center justify-between gap-3 rounded-lg border border-blue-100 bg-blue-50 text-blue-800 hover:bg-blue-100"
@@ -1775,7 +1776,7 @@ function InstructionLink({ value, instructions }: { value: string; instructions:
     parts.push(instruction ? (
       <a
         key={`${number}-${index}`}
-        href={`/api/eurolab/rawdata-instructions/${instruction.id}/file`}
+        href={analysisApi(`/api/eurolab/rawdata-instructions/${instruction.id}/file`)}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex rounded-md bg-blue-50 px-2 py-1 font-bold text-blue-700 underline underline-offset-2 hover:bg-blue-100 hover:text-blue-800"

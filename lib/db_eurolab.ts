@@ -1,3 +1,4 @@
+import { scopedAnalysisSql, inUniqueAnalysis } from "./analysisScope";
 import { createPool } from '@vercel/postgres';
 
 /**
@@ -7,7 +8,7 @@ import { createPool } from '@vercel/postgres';
 let pool: ReturnType<typeof createPool> | undefined;
 
 export const hasEurolabDatabaseConfig = () =>
-  Boolean(process.env.EUROLAB_POSTGRES_URL || process.env.POSTGRES_URL);
+  Boolean(process.env.EUROLAB_POSTGRES_URL || process.env.POSTGRES_URL) || inUniqueAnalysis();
 
 const getPool = () => {
   const connectionString = process.env.EUROLAB_POSTGRES_URL || process.env.POSTGRES_URL;
@@ -27,7 +28,7 @@ const getPool = () => {
 export const query = async (text: string, params?: unknown[]) => {
   const start = Date.now();
   try {
-    const res = await getPool().query(text, params);
+    const res = await getPool().query(scopedAnalysisSql(text), params);
     const duration = Date.now() - start;
     console.log('Executed query', { text, duration, rows: res.rowCount });
     return res;

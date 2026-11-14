@@ -2,6 +2,7 @@
 // next dev'in spawn ettiği Turbopack jest-worker'ları env'i (NODE_OPTIONS) miras
 // aldığı için guard ONLARDA da kurulur → EPIPE worker çökmesi ("Jest worker
 // exceeding retry limit") önlenir. Port: argv[2] || 1038 (NEXTAUTH_URL ile uyumlu).
+import { watchKysVerification } from "./watch-kys-verification.mjs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -22,4 +23,5 @@ const child = spawn("npx", ["next", "dev", "-p", String(port)], {
   env,
   shell: process.platform === "win32",
 });
-child.on("exit", (code) => process.exit(code ?? 0));
+const stopVerification = watchKysVerification();
+child.on("exit", (code) => { stopVerification(); process.exit(code ?? 0); });

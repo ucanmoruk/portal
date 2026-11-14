@@ -1,4 +1,6 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
+import { useAnalysisPaths } from "@/components/eurolab/useAnalysisPaths";
 
 import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
@@ -295,6 +297,7 @@ function getReproducibilityDateRange(moduleData: Record<string, Record<string, u
 }
 
 export default function ValidationReportPrintPage({ params }: { params: Promise<{ id: string }> }) {
+    const paths = useAnalysisPaths();
     const { id } = use(params);
     const searchParams = useSearchParams();
     // pdfMode=1 → bu sayfa PDF üretimi için chromium tarafından yükleniyor;
@@ -322,7 +325,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
             setLoading(true);
             setError("");
             try {
-                const response = await fetch(`/api/eurolab/validations/${id}`, { credentials: "same-origin" });
+                const response = await fetch(analysisApi(`/api/eurolab/validations/${id}`), { credentials: "same-origin" });
                 const json: ValidationDetail & { error?: string } = await response.json();
                 if (!response.ok) throw new Error(json.error || "Validasyon raporu alınamadı.");
                 if (alive) {
@@ -350,7 +353,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
 
         async function loadPersonnelDirectory() {
             try {
-                const response = await fetch("/api/eurolab/personnel", { credentials: "same-origin" });
+                const response = await fetch(analysisApi("/api/eurolab/personnel"), { credentials: "same-origin" });
                 const json: PersonnelDirectoryRow[] = await response.json();
                 if (response.ok && alive && Array.isArray(json)) setPersonnelDirectory(json);
             } catch {
@@ -377,7 +380,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                 const components = validation?.config?.components || [];
                 const devices = validation?.config?.devices || [];
                 const allParams = new URLSearchParams({ search: "", page: "1", pageSize: "500" });
-                const allResponse = await fetch(`/api/eurolab/inventory?${allParams.toString()}`, { credentials: "same-origin" });
+                const allResponse = await fetch(analysisApi(`/api/eurolab/inventory?${allParams.toString()}`), { credentials: "same-origin" });
                 const allJson: { rows?: InventoryRow[] } = await allResponse.json();
                 const allRows = allResponse.ok && Array.isArray(allJson.rows) ? allJson.rows : [];
 
@@ -393,7 +396,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
 
                 const responses = await Promise.all(searches.map(async search => {
                     const params = new URLSearchParams({ search, page: "1", pageSize: "200" });
-                    const response = await fetch(`/api/eurolab/inventory?${params.toString()}`, { credentials: "same-origin" });
+                    const response = await fetch(analysisApi(`/api/eurolab/inventory?${params.toString()}`), { credentials: "same-origin" });
                     const json: { rows?: InventoryRow[] } = await response.json();
                     return response.ok && Array.isArray(json.rows) ? json.rows : [];
                 }));
@@ -511,7 +514,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
                 revisionDate: docRevisionDate,
                 revisions,
             };
-            const res = await fetch(`/api/eurolab/validations/${validation.id}`, {
+            const res = await fetch(analysisApi(`/api/eurolab/validations/${validation.id}`), {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 credentials: "same-origin",
@@ -529,7 +532,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
     };
     const markDirty = () => setRevisionsStatus({ kind: "idle", text: "" });
 
-    const pdfUrl = `/api/eurolab/validations/${id}/pdf`;
+    const pdfUrl = analysisApi(`/api/eurolab/validations/${id}/pdf`);
 
     return (
         <div className="space-y-5">
@@ -545,7 +548,7 @@ export default function ValidationReportPrintPage({ params }: { params: Promise<
             {!pdfMode && (
                 <div className="flex flex-nowrap items-center justify-between gap-3 print:hidden" style={{marginBottom: "10px"}}>
                     <Link
-                        href="/laboratuvar/eurolab/validasyon"
+                        href={paths.validations}
                         className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-slate-300 bg-white text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                         style={{ padding: "8px 16px" }}
                     >

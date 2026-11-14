@@ -1,6 +1,8 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
 
 import { useMemo, useState } from "react";
+import { type WorkspaceRecord } from "@/lib/kysWorkspaceConfig";
 import { Calculator, FlaskConical, RefreshCw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -40,7 +42,7 @@ interface SamplePreparationUncertaintyFormProps {
     onReportDataChange?: (data: any) => void;
 }
 
-type VolumeRows = Record<string, { value: string; uncertainty: string }>;
+type VolumeRows = Record<string, { value: string; uncertainty: string; coverage?: string; calibrationSource?: string; certificate?: string; calibrationVersion?: number }>;
 type ChemicalRows = Record<string, { purity: string; impurity: string }>;
 
 const parseNumber = (value: string | number | null | undefined) => {
@@ -138,6 +140,10 @@ export function SamplePreparationUncertaintyForm({
     const [notes, setNotes] = useState(() => initialData.notes || "");
     const [calculatedAt, setCalculatedAt] = useState("");
     // Envanterden güncelle butonu durum bilgisi
+    const [calibrations, setCalibrations] = useState<WorkspaceRecord[]>([]);
+    const [calibrationDevices, setCalibrationDevices] = useState<WorkspaceRecord[]>([]);
+    const [calibrationError, setCalibrationError] = useState("");
+    const [calibrationLoading, setCalibrationLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [refreshStatus, setRefreshStatus] = useState<{ kind: "idle" | "ok" | "error"; text: string }>({ kind: "idle", text: "" });
 
@@ -192,7 +198,7 @@ export function SamplePreparationUncertaintyForm({
         const volumetric = preparationDevices.flatMap(device => {
             const key = device.id || device.code || device.name;
             const row = getVolumeRow(key, device);
-            const factor = distributionFactor(device.distributionType);
+            const factor = row.coverage ? Number(row.coverage) : distributionFactor(device.distributionType);
             const ux = calculateUx(row.uncertainty, factor);
             const temperatureRow = getTemperatureRow(device);
             const temperatureFactor = TEMPERATURE_FACTOR;
@@ -206,7 +212,10 @@ export function SamplePreparationUncertaintyForm({
                     name: device.name,
                     unit: device.unit || "-",
                     uncertaintyComponent: device.uncertaintyComponent || "Belirsizlik",
-                    distribution: normalizeDistribution(device.distributionType),
+                    distribution: row.calibrationSource ? "Normal (sertifika)" : normalizeDistribution(device.distributionType),
+                    calibrationSource: row.calibrationSource,
+                    certificate: row.certificate,
+                    calibrationVersion: row.calibrationVersion,
                     factor,
                     value: row.value,
                     uncertainty: row.uncertainty,
@@ -252,6 +261,7 @@ export function SamplePreparationUncertaintyForm({
         return {
             notes,
             volumeRows: Object.fromEntries(volumetric.map(row => [row.key, {
+                ...volumeRows[row.key],
                 value: row.value,
                 uncertainty: row.uncertainty,
             }])),
@@ -312,7 +322,7 @@ export function SamplePreparationUncertaintyForm({
 
             const responses = await Promise.all(Array.from(searches).map(async search => {
                 const params = new URLSearchParams({ search, page: "1", pageSize: "200" });
-                const res = await fetch(`/api/eurolab/inventory?${params.toString()}`, { credentials: "same-origin" });
+                const res = await fetch(analysisApi(`/api/eurolab/inventory?${params.toString()}`), { credentials: "same-origin" });
                 if (!res.ok) return [];
                 const json = await res.json();
                 return Array.isArray(json?.rows) ? json.rows : [];
@@ -377,8 +387,26 @@ export function SamplePreparationUncertaintyForm({
         setCalculatedAt(new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }));
     };
 
+    async function loadCalibrations() {
+        setCalibrationLoading(true); setCalibrationError("");
+        try {
+            const response = await fetch("/api/kys/workspace/kalibrasyon-belirsizlikleri");
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.error || "Kalibrasyon kayıtları alınamadı.");
+            const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Istanbul" });
+            setCalibrations(body.data.filter((r: WorkspaceRecord) => r.status === "Onaylandı" && r.data.validUntil >= today && body.relations["kalibrasyon-kontrol"]?.some((c: WorkspaceRecord) => c.id === r.data.calibrationId && c.status === "Uygun" && c.data.kind === "Kalibrasyon") && body.relations["cihaz-listesi"]?.some((d: WorkspaceRecord) => d.id === r.data.deviceId && d.status === "Kullanımda")));
+            setCalibrationDevices(body.relations["cihaz-listesi"] || []);
+        } catch (error) { setCalibrationError(error instanceof Error ? error.message : "Kayıtlar alınamadı."); }
+        finally { setCalibrationLoading(false); }
+    }
     return (
         <div className="overflow-hidden rounded-[14px] border [border-color:var(--color-border-light)] bg-[var(--color-surface)]">
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+                <Button type="button" variant="outline" onClick={() => void loadCalibrations()} disabled={calibrationLoading}>{calibrationLoading ? "Yükleniyor…" : "KYS kalibrasyon belirsizliklerini getir"}</Button>
+                <span className="text-xs text-slate-500">Onaylı, süresi geçmemiş ve cihaz kodu/birimi eşleşen noktalar seçilebilir. Kayıt değerleri çalışma içine kopyalanır.</span>
+                {calibrationError && <span role="alert" className="text-sm text-red-600">{calibrationError}</span>}
+            </div>
+
             <div
                 className="flex flex-col gap-2 border-b [border-color:var(--color-border-light)] bg-[var(--color-surface-2)] sm:flex-row sm:items-center sm:justify-between"
                 style={{ display: "flex", padding: "14px 16px" }}
@@ -439,7 +467,7 @@ export function SamplePreparationUncertaintyForm({
                                 ) : preparationDevices.flatMap(device => {
                                     const key = device.id || device.code || device.name;
                                     const row = getVolumeRow(key, device);
-                                    const factor = distributionFactor(device.distributionType);
+                                    const factor = row.coverage ? Number(row.coverage) : distributionFactor(device.distributionType);
                                     const ux = calculateUx(row.uncertainty, factor);
                                     const relative = calculateRelative(ux, row.value);
                                     const tempKey = temperatureKey(device);
@@ -455,13 +483,19 @@ export function SamplePreparationUncertaintyForm({
                                             <TableCell style={tableBorderStyle} className="font-medium">{device.name}</TableCell>
                                             <TableCell style={tableBorderStyle}>{device.unit || "-"}</TableCell>
                                             <TableCell style={tableBorderStyle}>{device.uncertaintyComponent || "Belirsizlik"}</TableCell>
-                                            <TableCell style={tableBorderStyle}>{normalizeDistribution(device.distributionType)}</TableCell>
+                                            <TableCell style={tableBorderStyle}>{row.calibrationSource ? "Normal (sertifika)" : normalizeDistribution(device.distributionType)}</TableCell>
                                             <TableCell style={tableBorderStyle}>{formatFactor(factor)}</TableCell>
                                             <TableCell>
                                                 <input className={inputClassName} value={row.value} onChange={event => updateVolumeRow(key, "value", event.target.value)} />
                                             </TableCell>
                                             <TableCell>
-                                                <input className={inputClassName} value={row.uncertainty} onChange={event => updateVolumeRow(key, "uncertainty", event.target.value)} />
+                                                <input aria-label={`${device.code || device.name} belirsizlik`} className={inputClassName} value={row.uncertainty} onChange={event => { updateVolumeRow(key, "uncertainty", event.target.value); setVolumeRows(current => ({ ...current, [key]: { ...current[key], calibrationSource: undefined, certificate: undefined, calibrationVersion: undefined, coverage: undefined } })); }} />
+                                                {calibrations.length > 0 && <select aria-label={`${device.code || device.name} kalibrasyon kaydı`} className="block mt-2 max-w-52 border rounded p-1 text-xs" value={row.calibrationSource || ""} onChange={event => {
+                                                    const selected = calibrations.find(r => r.id === event.target.value);
+                                                    if (!selected) return;
+                                                    setVolumeRows(current => ({ ...current, [key]: { ...getVolumeRow(key, device), uncertainty: selected.data.uncertainty, coverage: selected.data.coverage, calibrationSource: selected.id, certificate: selected.data.certificate, calibrationVersion: selected.version } }));
+                                                }}><option value="">Kalibrasyon noktası seçin</option>{calibrations.filter(r => calibrationDevices.find(d => d.id === r.data.deviceId)?.data.code.toLocaleLowerCase("tr-TR") === device.code?.toLocaleLowerCase("tr-TR") && r.data.unit.trim() === device.unit?.trim()).map(r => <option key={r.id} value={r.id}>{r.data.point} · U={r.data.uncertainty} · k={r.data.coverage} · {r.data.certificate}</option>)}</select>}
+                                                {row.calibrationSource && <small className="block text-xs mt-1">{row.certificate} · kayıt sürümü {row.calibrationVersion}</small>}
                                             </TableCell>
                                             <TableCell style={tableBorderStyle}>{formatNumber(ux)}</TableCell>
                                             <TableCell style={tableBorderStyle}>{formatNumber(relative)}</TableCell>

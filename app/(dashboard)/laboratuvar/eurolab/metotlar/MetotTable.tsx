@@ -1,4 +1,6 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
+import { useAnalysisPaths } from "@/components/eurolab/useAnalysisPaths";
 
 import { type ChangeEvent, useState, useEffect, useCallback } from "react";
 import styles from '@/app/styles/table.module.css';
@@ -49,6 +51,7 @@ const emptyForm = {
 };
 
 export default function MetotTable() {
+    const paths = useAnalysisPaths();
     const router = useRouter();
     const [data, setData] = useState<Method[]>([]);
     const [loading, setLoading] = useState(true);
@@ -77,7 +80,7 @@ export default function MetotTable() {
         setLoading(true);
         setError("");
         try {
-            const res = await fetch(`/api/eurolab/methods?search=${encodeURIComponent(s)}`, {
+            const res = await fetch(analysisApi(`/api/eurolab/methods?search=${encodeURIComponent(s)}`), {
                 credentials: "same-origin",
             });
             const contentType = res.headers.get("content-type") || "";
@@ -104,7 +107,7 @@ export default function MetotTable() {
         async function loadPersonnel() {
             setPersonnelLoading(true);
             try {
-                const res = await fetch("/api/eurolab/personnel", { credentials: "same-origin" });
+                const res = await fetch(analysisApi("/api/eurolab/personnel"), { credentials: "same-origin" });
                 const json = await res.json();
                 if (!res.ok) throw new Error(json.error || "Personel listesi alınamadı.");
                 if (alive) setPersonnelOptions(json);
@@ -152,7 +155,7 @@ export default function MetotTable() {
         setSaving(true);
         setFormError("");
         try {
-            const url = modalMode === "edit" ? `/api/eurolab/methods/${editId}` : "/api/eurolab/methods";
+            const url = modalMode === "edit" ? analysisApi(`/api/eurolab/methods/${editId}`) : analysisApi("/api/eurolab/methods");
             const method = modalMode === "edit" ? "PUT" : "POST";
             const res = await fetch(url, {
                 method,
@@ -173,7 +176,7 @@ export default function MetotTable() {
         if (!deleteTarget) return;
         setDeleting(true);
         try {
-            const res = await fetch(`/api/eurolab/methods/${deleteTarget.id}`, { method: "DELETE" });
+            const res = await fetch(analysisApi(`/api/eurolab/methods/${deleteTarget.id}`), { method: "DELETE" });
             if (!res.ok) throw new Error("İşlem başarısız");
             setDeleteTarget(null);
             fetchData(search);
@@ -195,7 +198,7 @@ export default function MetotTable() {
         try {
             const formData = new FormData();
             formData.append("file", file);
-            const res = await fetch("/api/eurolab/methods/import", {
+            const res = await fetch(analysisApi("/api/eurolab/methods/import"), {
                 method: "POST",
                 body: formData,
                 credentials: "same-origin",
@@ -218,7 +221,7 @@ export default function MetotTable() {
         setPreviewError("");
 
         try {
-            const res = await fetch(`/api/eurolab/methods/${m.id}`, {
+            const res = await fetch(analysisApi(`/api/eurolab/methods/${m.id}`), {
                 credentials: "same-origin",
             });
             const contentType = res.headers.get("content-type") || "";
@@ -266,7 +269,7 @@ export default function MetotTable() {
 
                 <div className={styles.toolbarRight}>
                     <span className={styles.totalCount}>{data.length} kayıt</span>
-                    <button className={styles.cancelBtn} onClick={() => window.location.assign("/api/eurolab/methods/import")}>
+                    <button className={styles.cancelBtn} onClick={() => window.location.assign(analysisApi("/api/eurolab/methods/import"))}>
                         Şablon
                     </button>
                     <label className={styles.cancelBtn} style={{ cursor: importing ? "not-allowed" : "pointer" }}>
@@ -316,9 +319,9 @@ export default function MetotTable() {
                             ) : data.map((m) => (
                                 <tr key={m.id}>
                                     <td className={styles.tdMono}>
-                                        <a 
-                                            href={`/laboratuvar/eurolab/metotlar/${m.id}/talimat`} 
-                                            target="_blank" 
+                                        <a
+                                            href={`${paths.methods}/${m.id}/talimat`}
+                                            target="_blank"
                                             rel="noopener noreferrer"
                                             className="text-blue-600 hover:underline font-semibold"
                                             style={{
@@ -350,7 +353,7 @@ export default function MetotTable() {
                                                     <circle cx="10" cy="10" r="2.25" />
                                                 </svg>
                                             </button>
-                                            <button className={styles.editBtn} onClick={() => router.push(`/laboratuvar/eurolab/metotlar/${m.id}/validasyon`)} title="Validasyon Detayları">
+                                            <button className={styles.editBtn} onClick={() => router.push(`${paths.validations}?search=${encodeURIComponent(m.method_code)}`)} title="Validasyon Detayları">
                                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
                                                     <path d="M9 11l3 3L22 4" />
                                                     <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
@@ -419,9 +422,9 @@ export default function MetotTable() {
                                             const p = person.name;
                                             return (
                                             <label key={p} className="flex items-center gap-2 cursor-pointer text-sm">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={form.personnel.includes(p)} 
+                                                <input
+                                                    type="checkbox"
+                                                    checked={form.personnel.includes(p)}
                                                     onChange={() => togglePersonnel(p)}
                                                     className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                                 />

@@ -1,3 +1,4 @@
+import { inUniqueAnalysis } from "@/lib/analysisScope";
 // ─────────────────────────────────────────────────────────────────────────────
 // Validasyon Raporu PDF Üretimi
 //
@@ -147,7 +148,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const forceDownload = req.nextUrl.searchParams.get("download") === "1";
     const origin = getRaporPdfBaseUrl(req);
-    const reportUrl = `${origin}/laboratuvar/eurolab/validasyon/${encodeURIComponent(id)}/rapor?pdfMode=1`;
+    const reportUrl = `${origin}/laboratuvar/${inUniqueAnalysis() ? "kys" : "eurolab"}/validasyon/${encodeURIComponent(id)}/rapor?pdfMode=1`;
     const cookieHeader = req.headers.get("cookie") || "";
 
     const chromeConfig = await resolveChromeLaunchConfig();

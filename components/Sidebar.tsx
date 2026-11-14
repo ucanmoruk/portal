@@ -98,6 +98,13 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Doküman Yönetimi", href: "/laboratuvar/kys/dokuman-yonetimi", menuKey: "laboratuvar.kys.dokuman-yonetimi" },
       { label: "Dış Kaynaklı Doküman", href: "/laboratuvar/kys/dis-kaynakli-dokuman", menuKey: "laboratuvar.kys.dis-kaynakli-dokuman" },
+      { label: "Cihaz Listesi", href: "/laboratuvar/kys/cihaz-listesi", menuKey: "laboratuvar.kys.cihaz-listesi" },
+      { label: "Kalibrasyon ve Ara Kontrol", href: "/laboratuvar/kys/kalibrasyon-kontrol", menuKey: "laboratuvar.kys.kalibrasyon-kontrol" },
+      { label: "Yeterlilik Testleri", href: "/laboratuvar/kys/yeterlilik-testleri", menuKey: "laboratuvar.kys.yeterlilik-testleri" },
+      { label: "Toplantı Karar ve Takip", href: "/laboratuvar/kys/toplanti-kararlari", menuKey: "laboratuvar.kys.toplanti-kararlari" },
+      { label: "Yazılım Doğrulama", href: "/laboratuvar/kys/yazilim-dogrulama", menuKey: "laboratuvar.kys.yazilim-dogrulama" },
+      { label: "Validasyon / Verifikasyon", href: "/laboratuvar/kys/validasyon", menuKey: "eurolab.validasyon" },
+      { label: "QC Kartları", href: "/laboratuvar/kys/qc-kartlar", menuKey: "eurolab.qc-kartlar" },
       { label: "Stok Listesi", href: "/laboratuvar/kys/stok-listesi", menuKey: "laboratuvar.kys.stok-listesi" },
       { label: "Ürün Listesi", href: "/laboratuvar/kys/urun-listesi", menuKey: "laboratuvar.kys.urun-listesi" },
       { label: "Stok Ekle / Düş", href: "/laboratuvar/kys/stok-hareketleri", menuKey: "laboratuvar.kys.stok-hareketleri" },

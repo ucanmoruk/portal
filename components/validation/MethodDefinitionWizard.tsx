@@ -1,4 +1,6 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
+import { useAnalysisPaths } from "@/components/eurolab/useAnalysisPaths";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -152,6 +154,7 @@ const STEPS = [
 ];
 
 export function MethodDefinitionWizard({ editId }: { editId?: string }) {
+    const paths = useAnalysisPaths();
     const router = useRouter();
     const [step, setStep] = useState(1);
     const [methods, setMethods] = useState<Method[]>([]);
@@ -217,7 +220,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
             setMethodsLoading(true);
             setMethodsError("");
             try {
-                const res = await fetch("/api/eurolab/methods", { credentials: "same-origin" });
+                const res = await fetch(analysisApi("/api/eurolab/methods"), { credentials: "same-origin" });
                 const contentType = res.headers.get("content-type") || "";
                 if (!contentType.includes("application/json")) {
                     throw new Error("Metot listesi için oturum veya bağlantı yanıtı alınamadı.");
@@ -249,7 +252,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
             setPersonnelLoading(true);
             setPersonnelError("");
             try {
-                const res = await fetch("/api/eurolab/personnel", { credentials: "same-origin" });
+                const res = await fetch(analysisApi("/api/eurolab/personnel"), { credentials: "same-origin" });
                 const contentType = res.headers.get("content-type") || "";
                 if (!contentType.includes("application/json")) {
                     throw new Error("Personel listesi için oturum veya bağlantı yanıtı alınamadı.");
@@ -317,7 +320,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
             setLoadingValidation(true);
             setSaveError("");
             try {
-                const res = await fetch(`/api/eurolab/validations/${editId}`, { credentials: "same-origin" });
+                const res = await fetch(analysisApi(`/api/eurolab/validations/${editId}`), { credentials: "same-origin" });
                 const contentType = res.headers.get("content-type") || "";
                 if (!contentType.includes("application/json")) {
                     throw new Error("Validasyon bilgisi alınamadı.");
@@ -453,7 +456,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
     };
 
     const loadInventory = async (search: string, intendedUses: string[]): Promise<InventoryItem[]> => {
-        const res = await fetch(`/api/eurolab/inventory?${new URLSearchParams({ search, page: "1", pageSize: "100" }).toString()}`, {
+        const res = await fetch(analysisApi(`/api/eurolab/inventory?${new URLSearchParams({ search, page: "1", pageSize: "100" }).toString()}`), {
             credentials: "same-origin",
         });
         const json = await res.json();
@@ -505,7 +508,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
     };
 
     const createInventoryItem = async (payload: Record<string, unknown>) => {
-        const res = await fetch("/api/eurolab/inventory", {
+        const res = await fetch(analysisApi("/api/eurolab/inventory"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "same-origin",
@@ -771,7 +774,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
         setSaving(true);
         setSaveError("");
         try {
-            const res = await fetch(editId ? `/api/eurolab/validations/${editId}` : "/api/eurolab/validations", {
+            const res = await fetch(editId ? analysisApi(`/api/eurolab/validations/${editId}`) : analysisApi("/api/eurolab/validations"), {
                 method: editId ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "same-origin",
@@ -799,7 +802,7 @@ export function MethodDefinitionWizard({ editId }: { editId?: string }) {
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || (editId ? "Validasyon güncellenemedi." : "Validasyon oluşturulamadı."));
-            router.push(`/laboratuvar/eurolab/validasyon/${json.id ?? editId ?? json.code}`);
+            router.push(`${paths.validations}/${json.id ?? editId ?? json.code}`);
         } catch (error: any) {
             setSaveError(error.message);
         } finally {

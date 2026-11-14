@@ -1,4 +1,6 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
+import { useAnalysisPaths } from "@/components/eurolab/useAnalysisPaths";
 
 import Link from "next/link";
 import { use, useEffect, useMemo, useRef, useState } from "react";
@@ -151,6 +153,7 @@ const findRecoveryLimit = (targetValue: number | null | undefined, unit?: string
 };
 
 export default function QcCardDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const paths = useAnalysisPaths();
   const { id: cardId } = use(params);
   const [card, setCard] = useState<QcCard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -172,7 +175,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/eurolab/qc-cards/${id}`, { credentials: "same-origin" });
+      const res = await fetch(analysisApi(`/api/eurolab/qc-cards/${id}`), { credentials: "same-origin" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "QC kart alınamadı.");
       setCard(json);
@@ -192,7 +195,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/eurolab/personnel", { credentials: "same-origin" })
+    fetch(analysisApi("/api/eurolab/personnel"), { credentials: "same-origin" })
       .then(res => res.ok ? res.json() : [])
       .then((rows: Array<{ name?: string }>) => {
         if (!alive) return;
@@ -360,7 +363,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
             component_card_id: activeComponent.id,
           }
         : { ...form, point_id: editingId, component_card_id: activeComponent.id };
-      const res = await fetch(`/api/eurolab/qc-cards/${cardId}`, {
+      const res = await fetch(analysisApi(`/api/eurolab/qc-cards/${cardId}`), {
         method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
@@ -415,7 +418,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     setWorkingPointId(pointId);
     setError("");
     try {
-      const res = await fetch(`/api/eurolab/qc-cards/${cardId}`, {
+      const res = await fetch(analysisApi(`/api/eurolab/qc-cards/${cardId}`), {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
@@ -435,7 +438,7 @@ export default function QcCardDetailPage({ params }: { params: Promise<{ id: str
     <div className={styles.page} style={{ width: "100%", maxWidth: 1300, minWidth: 0, overflowX: "hidden", gap: 12 }}>
       <div className={styles.pageHeader}>
         <div>
-          <Link href="/laboratuvar/eurolab/qc-kartlar" className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline mb-2">
+          <Link href={paths.qc} className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline mb-2">
             <ArrowLeft size={15} /> QC Kartlar
           </Link>
           <h1 className={styles.pageTitle}>{card?.code || "QC Kart"}</h1>

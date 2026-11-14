@@ -1,4 +1,6 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
+import { useAnalysisPaths } from "@/components/eurolab/useAnalysisPaths";
 
 import { useState, useEffect, use } from "react";
 import styles from '@/app/styles/table.module.css';
@@ -43,6 +45,7 @@ const instructionTabs = [
 ];
 
 export default function AnalysisInstructionPage({ params }: { params: Promise<{ id: string }> }) {
+    const paths = useAnalysisPaths();
     const { id } = use(params);
     const [method, setMethod] = useState<any>(null);
     const [instruction, setInstruction] = useState<InstructionData>(defaultInstruction);
@@ -55,7 +58,7 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
     useEffect(() => {
         const loadData = async () => {
             try {
-                const res = await fetch(`/api/eurolab/methods/${id}`);
+                const res = await fetch(analysisApi(`/api/eurolab/methods/${id}`));
                 if (!res.ok) throw new Error("Veri alınamadı");
                 const data = await res.json();
                 setMethod(data);
@@ -74,7 +77,7 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
     const handleSave = async () => {
         setSaving(true);
         try {
-            const res = await fetch(`/api/eurolab/methods/${id}`, {
+            const res = await fetch(analysisApi(`/api/eurolab/methods/${id}`), {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ instruction })
@@ -90,7 +93,7 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
 
     const downloadWord = async () => {
         try {
-            const res = await fetch(`/api/eurolab/methods/${id}/download`, {
+            const res = await fetch(analysisApi(`/api/eurolab/methods/${id}/download`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ instruction, method })
@@ -164,7 +167,7 @@ export default function AnalysisInstructionPage({ params }: { params: Promise<{ 
             <div className={styles.pageHeader}>
                 <div>
                     <div className="flex items-center gap-2 mb-1">
-                        <Link href="/laboratuvar/eurolab/metotlar" className="text-slate-400 hover:text-blue-600 transition-colors">
+                        <Link href={paths.methods} className="text-slate-400 hover:text-blue-600 transition-colors">
                             <ChevronLeft className="h-5 w-5" />
                         </Link>
                         <span className="text-[10px] font-bold text-blue-600 px-2 py-0.5 bg-blue-50 rounded-full border border-blue-100 uppercase">

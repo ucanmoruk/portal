@@ -1,4 +1,5 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
 
 import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import styles from "@/app/styles/table.module.css";
@@ -111,7 +112,7 @@ export default function InventoryTable() {
         pageSize: String(pageSize),
       });
       if (intendedUseFilter) params.set("intendedUse", intendedUseFilter);
-      const res = await fetch(`/api/eurolab/inventory?${params.toString()}`, { credentials: "same-origin" });
+      const res = await fetch(analysisApi(`/api/eurolab/inventory?${params.toString()}`), { credentials: "same-origin" });
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
         throw new Error("Eurolab envanter servisi oturum veya bağlantı yanıtı döndürmedi.");
@@ -172,7 +173,7 @@ export default function InventoryTable() {
     setSaving(true);
     setFormError("");
     try {
-      const url = modalMode === "edit" ? `/api/eurolab/inventory/${editId}` : "/api/eurolab/inventory";
+      const url = modalMode === "edit" ? analysisApi(`/api/eurolab/inventory/${editId}`) : analysisApi("/api/eurolab/inventory");
       const method = modalMode === "edit" ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
@@ -195,7 +196,7 @@ export default function InventoryTable() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/eurolab/inventory/${deleteTarget.id}`, {
+      const res = await fetch(analysisApi(`/api/eurolab/inventory/${deleteTarget.id}`), {
         method: "DELETE",
         credentials: "same-origin",
       });
@@ -221,7 +222,7 @@ export default function InventoryTable() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/eurolab/inventory/import", {
+      const res = await fetch(analysisApi("/api/eurolab/inventory/import"), {
         method: "POST",
         body: formData,
         credentials: "same-origin",
@@ -245,7 +246,7 @@ export default function InventoryTable() {
     setUsageLoading(true);
 
     try {
-      const res = await fetch(`/api/eurolab/inventory/${row.id}/validations`, { credentials: "same-origin" });
+      const res = await fetch(analysisApi(`/api/eurolab/inventory/${row.id}/validations`), { credentials: "same-origin" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Validasyon kullanımları alınamadı.");
       setUsageRows(json.rows || []);
@@ -310,7 +311,7 @@ export default function InventoryTable() {
 
         <div className={styles.toolbarRight}>
           <span className={styles.totalCount}>{total} kayıt</span>
-          <button className={styles.cancelBtn} onClick={() => window.location.assign("/api/eurolab/inventory/import")}>
+          <button className={styles.cancelBtn} onClick={() => window.location.assign(analysisApi("/api/eurolab/inventory/import"))}>
             Şablon
           </button>
           <label className={styles.cancelBtn} style={{ cursor: importing ? "not-allowed" : "pointer" }}>

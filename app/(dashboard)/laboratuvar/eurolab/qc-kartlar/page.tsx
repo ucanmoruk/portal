@@ -1,4 +1,6 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
+import { useAnalysisPaths } from "@/components/eurolab/useAnalysisPaths";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -34,6 +36,7 @@ const cardTypeLabel = (type: string) => {
 };
 
 export default function QcCardsPage() {
+    const paths = useAnalysisPaths();
   const [rows, setRows] = useState<QcCardRow[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -50,7 +53,7 @@ export default function QcCardsPage() {
       try {
         const params = new URLSearchParams();
         if (search.trim()) params.set("search", search.trim());
-        const res = await fetch(`/api/eurolab/qc-cards?${params.toString()}`, { credentials: "same-origin" });
+        const res = await fetch(analysisApi(`/api/eurolab/qc-cards?${params.toString()}`), { credentials: "same-origin" });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "QC kartları alınamadı.");
         if (alive) setRows(json);
@@ -82,7 +85,7 @@ export default function QcCardsPage() {
     setError("");
 
     try {
-      const res = await fetch(`/api/eurolab/qc-cards?id=${row.id}`, {
+      const res = await fetch(analysisApi(`/api/eurolab/qc-cards?id=${row.id}`), {
         method: "DELETE",
         credentials: "same-origin",
       });
@@ -193,7 +196,7 @@ export default function QcCardsPage() {
                                                 fontWeight: 700,
                                                 textDecoration: "underline",
                                                 textUnderlineOffset: 3
-                                            }} href={`/laboratuvar/eurolab/qc-kartlar/${row.id}`}>
+                                            }} href={`${paths.qc}/${row.id}`}>
                       {row.code}
                     </Link>
                   </td>
@@ -205,7 +208,7 @@ export default function QcCardsPage() {
                   <td className={styles.tdMono}>{formatDate(row.updated_at)}</td>
                   <td>
                     <div className={styles.actionBtns}>
-                      <Link href={`/laboratuvar/eurolab/qc-kartlar/${row.id}`}>
+                      <Link href={`${paths.qc}/${row.id}`}>
                         <button className={styles.editBtn} title="QC karta gir">
                           <ExternalLink size={14} />
                         </button>

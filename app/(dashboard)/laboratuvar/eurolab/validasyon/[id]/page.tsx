@@ -1,4 +1,6 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
+import { useAnalysisPaths } from "@/components/eurolab/useAnalysisPaths";
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -192,6 +194,7 @@ const buildParameterTabs = (parameters: Array<{ id: string; name: string; isEnab
 };
 
 export default function ValidationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const paths = useAnalysisPaths();
     const { id } = use(params);
     const canEdit = useCanEdit("eurolab.validasyon");
     const [validation, setValidation] = useState<ValidationDetail | null>(null);
@@ -205,7 +208,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
         if (!validation) return;
         try {
             setExcelBusy("downloading");
-            const res = await fetch(`/api/eurolab/validations/${validation.id}/excel-template`, {
+            const res = await fetch(analysisApi(`/api/eurolab/validations/${validation.id}/excel-template`), {
                 credentials: "same-origin",
             });
             if (!res.ok) {
@@ -237,7 +240,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
             setExcelBusy("uploading");
             const formData = new FormData();
             formData.append("file", file);
-            const res = await fetch(`/api/eurolab/validations/${validation.id}/excel-import`, {
+            const res = await fetch(analysisApi(`/api/eurolab/validations/${validation.id}/excel-import`), {
                 method: "POST",
                 body: formData,
                 credentials: "same-origin",
@@ -305,7 +308,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
 
         async function loadPersonnelDirectory() {
             try {
-                const res = await fetch("/api/eurolab/personnel", { credentials: "same-origin" });
+                const res = await fetch(analysisApi("/api/eurolab/personnel"), { credentials: "same-origin" });
                 const json: PersonnelDirectoryRow[] = await res.json();
                 if (alive && res.ok && Array.isArray(json)) setPersonnelDirectory(json);
             } catch {
@@ -326,7 +329,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
             setLoading(true);
             setError("");
             try {
-                const res = await fetch(`/api/eurolab/validations/${id}`, { credentials: "same-origin" });
+                const res = await fetch(analysisApi(`/api/eurolab/validations/${id}`), { credentials: "same-origin" });
                 const contentType = res.headers.get("content-type") || "";
                 if (!contentType.includes("application/json")) {
                     throw new Error("Validasyon detayı için oturum veya bağlantı yanıtı alınamadı.");
@@ -392,7 +395,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
 
         setValidation(current => current ? { ...current, config: nextConfig } : current);
 
-        const res = await fetch(`/api/eurolab/validations/${validation.id}`, {
+        const res = await fetch(analysisApi(`/api/eurolab/validations/${validation.id}`), {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             credentials: "same-origin",
@@ -633,7 +636,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
             <ReadOnlyBanner menuKey="eurolab.validasyon" />
             <div className={`${detailStyles.hero} no-print`}>
                 <div className={detailStyles.heroMain}>
-                    <div className={detailStyles.crumb}>Eurolab Validasyon</div>
+                    <div className={detailStyles.crumb}>{paths.brand} Validasyon</div>
                     <div className={detailStyles.badgeRow}>
                         <Badge variant="outline">{visibleCode}</Badge>
                         <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">{statusLabel(validation.status)}</Badge>
@@ -678,7 +681,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                         variant="outline"
                         className={detailStyles.printButton}
                         onClick={() => {
-                            window.open(`/api/eurolab/validations/${validation.id}/protocol-docx`, "_blank");
+                            window.open(analysisApi(`/api/eurolab/validations/${validation.id}/protocol-docx`), "_blank");
                         }}
                         title="Validasyon planı şablonunu doldurulmuş olarak indir"
                     >
@@ -767,7 +770,7 @@ export default function ValidationDetailPage({ params }: { params: Promise<{ id:
                         <div className={detailStyles.sectionCard}>
                             <div className={detailStyles.sectionHeader}>
                                 <span className={detailStyles.sectionTitle}>Protokol Özeti</span>
-                                <Link href={`/laboratuvar/eurolab/validasyon/yeni?edit=${validation.id}`}>
+                                <Link href={`${paths.validations}/yeni?edit=${validation.id}`}>
                                     <Button variant="outline" size="sm" className={detailStyles.updateButton}>
                                         Protokolü Güncelle
                                     </Button>

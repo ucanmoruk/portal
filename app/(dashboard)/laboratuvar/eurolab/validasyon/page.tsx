@@ -1,8 +1,10 @@
 "use client";
+import { analysisApi } from "@/components/eurolab/analysisApi";
+import { useAnalysisPaths } from "@/components/eurolab/useAnalysisPaths";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BarChart3, Printer, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useCanEdit } from "@/components/eurolab/EurolabAccessProvider";
@@ -110,6 +112,7 @@ const sortByValidationCode = (items: ValidationRow[]) =>
   }));
 
 export default function ValidationDashboard() {
+    const paths = useAnalysisPaths();
   const router = useRouter();
   const [rows, setRows] = useState<ValidationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,7 +121,8 @@ export default function ValidationDashboard() {
   const [qcDialogRow, setQcDialogRow] = useState<ValidationRow | null>(null);
   const [creatingQcId, setCreatingQcId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [search, setSearch] = useState("");
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(searchParams.get("search") || "");
 
   const filteredRows = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase("tr-TR");
@@ -148,7 +152,7 @@ export default function ValidationDashboard() {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch("/api/eurolab/validations", { credentials: "same-origin" });
+        const res = await fetch(analysisApi("/api/eurolab/validations"), { credentials: "same-origin" });
         const contentType = res.headers.get("content-type") || "";
         if (!contentType.includes("application/json")) {
           throw new Error("Validasyon servisi oturum veya bağlantı yanıtı döndürmedi.");
@@ -176,7 +180,7 @@ export default function ValidationDashboard() {
     setError("");
 
     try {
-      const res = await fetch(`/api/eurolab/validations/${row.id}`, {
+      const res = await fetch(analysisApi(`/api/eurolab/validations/${row.id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
@@ -199,7 +203,7 @@ export default function ValidationDashboard() {
     setError("");
 
     try {
-      const res = await fetch(`/api/eurolab/validations/${row.id}`, {
+      const res = await fetch(analysisApi(`/api/eurolab/validations/${row.id}`), {
         method: "DELETE",
         credentials: "same-origin",
       });
@@ -218,7 +222,7 @@ export default function ValidationDashboard() {
     setError("");
 
     try {
-      const res = await fetch("/api/eurolab/qc-cards", {
+      const res = await fetch(analysisApi("/api/eurolab/qc-cards"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
@@ -227,7 +231,7 @@ export default function ValidationDashboard() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "QC kart oluşturulamadı.");
       setQcDialogRow(null);
-      router.push(`/laboratuvar/eurolab/qc-kartlar/${json.id}`);
+      router.push(`${paths.qc}/${json.id}`);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "QC kart oluşturulamadı."));
     } finally {
@@ -239,12 +243,12 @@ export default function ValidationDashboard() {
     setCreatingQcId(row.id);
     setError("");
     try {
-      const res = await fetch(`/api/eurolab/qc-cards?validation_id=${row.id}`, { credentials: "same-origin" });
+      const res = await fetch(analysisApi(`/api/eurolab/qc-cards?validation_id=${row.id}`), { credentials: "same-origin" });
       const json: QcCardGroupRow[] & { error?: string } = await res.json();
       if (!res.ok) throw new Error(json.error || "QC kart kontrol edilemedi.");
       const existing = Array.isArray(json) ? json.find(card => card.card_type === "RECOVERY") || json[0] : null;
       if (existing) {
-        router.push(`/laboratuvar/eurolab/qc-kartlar/${existing.id}`);
+        router.push(`${paths.qc}/${existing.id}`);
         return;
       }
       setQcDialogRow(row);
@@ -263,11 +267,11 @@ export default function ValidationDashboard() {
       <div className={styles.pageHeader}>
         <div>
           <h1 className={styles.pageTitle}>Validasyon</h1>
-          <p className={styles.pageSubtitle}>Eurolab metot validasyon ve verifikasyon kayıtları.</p>
+          <p className={styles.pageSubtitle}>{paths.brand} metot validasyon ve verifikasyon kayıtları.</p>
         </div>
         <div className={styles.toolbarRight}>
           {canEdit && (
-            <Link href="/laboratuvar/eurolab/validasyon/yeni">
+            <Link href={`${paths.validations}/yeni`}>
               <button className={styles.addBtn}>
                 <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
                   <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
@@ -354,7 +358,7 @@ export default function ValidationDashboard() {
                                                 fontWeight: 700,
                                                 textDecoration: "underline",
                                                 textUnderlineOffset: 3
-                                            }} href={`/laboratuvar/eurolab/validasyon/${row.id}`}>
+                                            }} href={`${paths.validations}/${row.id}`}>
                       {displayValidationCode(row)}
                     </Link>
                   </td>
@@ -386,14 +390,14 @@ export default function ValidationDashboard() {
                           {creatingQcId === row.id ? <span className={styles.loader} style={{ width: 13, height: 13 }} /> : <BarChart3 size={14} />}
                         </button>
                       )}
-                      <Link href={`/laboratuvar/eurolab/validasyon/${row.id}`}>
+                      <Link href={`${paths.validations}/${row.id}`}>
                         <button className={styles.editBtn} title={canEdit ? "Düzenle" : "Görüntüle"}>
                           <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
                             <path d="m5.433 13.917 1.262-3.155A4 4 0 0 1 7.58 9.42l6.92-6.918a2.121 2.121 0 0 1 3 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 0 1-.65-.65Z" />
                           </svg>
                         </button>
                       </Link>
-                      <Link href={`/laboratuvar/eurolab/validasyon/${row.id}/rapor`}>
+                      <Link href={`${paths.validations}/${row.id}/rapor`}>
                         <button className={styles.editBtn} title="Rapor yazdır">
                           <Printer size={14} />
                         </button>
