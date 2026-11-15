@@ -6,7 +6,7 @@ export function normalizeTelegramName(value:string){
 export function parseTelegramTaskText(text:string,now=new Date()){
   const input=text.trim().replace(/^\/(?:gorev|görev)(?:@[a-zA-Z0-9_]+)?\s+/iu,"");
   const match=/^(.+?)\s+(bugün|bugun|yarın|yarin|b[iİıI]r\s+hafta\s+sonra|1\s+hafta\s+sonra|\d{4}-\d{2}-\d{2}|\d{1,2}[./-]\d{1,2}[./-]\d{4})\s+([\s\S]+)$/iu.exec(input);
-  if(!match)throw new Error("Kişi, tarih ve görev yazın. Örnek: Selin yarın teklifleri kontrol et. Tarih: bugün, yarın, bir hafta sonra veya 05.11.2026.");
+  if(!match)throw new Error("Kişi, tarih ve görev bilgilerini belirtin. Tarih için bugün, yarın, bir hafta sonra veya gün.ay.yıl biçimini kullanabilirsiniz.");
   const person=match[1].trim(),title=match[3].trim(),dateText=match[2].toLocaleLowerCase("tr-TR").replace(/\s+/g," ");
   if(person.length>160||!title||title.length>2000)throw new Error("Kişi adı en fazla 160, görev açıklaması en fazla 2000 karakter olabilir.");
   const today=istanbulClock(now).today;

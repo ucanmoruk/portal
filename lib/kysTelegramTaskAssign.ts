@@ -31,7 +31,7 @@ export async function receiveTelegramTaskText(chatId:string,messageId:number,tex
   const actor=await sender(chatId);
   if(!actor){await telegramCall("sendMessage",{chat_id:chatId,text:"Görev atamak için Telegram hesabınızın portal kullanıcısıyla eşleştirilmiş ve açık olması, ayrıca KYS erişiminizin bulunması gerekiyor."});return;}
   if(/^\/(start|help|yardim|yardım|gorev|görev)(?:@[a-zA-Z0-9_]+)?\s*$/iu.test(text.trim())){
-    await telegramCall("sendMessage",{chat_id:chatId,text:"Hızlı görev atama:\nSelin bugün teklifleri kontrol et\nOğuzhan Eker yarın kargo durumunu sor\nSelin bir hafta sonra stokları kontrol et\nSelin 05.11.2026 raporu hazırla\n\nBot önce kişi ve tarihi gösterir; onaylayınca görev kaydedilir. Başlangıç ve termin seçilen gündür. Kategori: Rutin."});return;
+    await telegramCall("sendMessage",{chat_id:chatId,text:"Portal bağlantınız aktif. Size ait görev bildirimlerini bu özel sohbetten takip edebilirsiniz."});return;
   }
   let parsed:ReturnType<typeof parseTelegramTaskText>;
   try{parsed=parseTelegramTaskText(text,now);}catch(error){await telegramCall("sendMessage",{chat_id:chatId,text:error instanceof Error?error.message:"Görev anlaşılamadı."});return;}
