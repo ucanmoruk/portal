@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { workspaceAccess } from "@/lib/kysWorkspaceAccess";
 import { listWorkspaceRecords } from "@/lib/kysWorkspaceStore";
 import DeviceLabel from "@/components/kys-workspace/DeviceLabel";
+import { latestDeviceCalibrations } from '@/lib/kysDeviceProcedure';
 export const metadata = { title: "Cihaz Etiketi" };
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
  const access = await workspaceAccess("cihaz-listesi");
@@ -10,6 +11,6 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
  const device = (await listWorkspaceRecords("cihaz-listesi")).find(row => row.id === id);
  if (!device) notFound();
  const calibrationAccess = await workspaceAccess("kalibrasyon-kontrol");
- const calibration = calibrationAccess?.view ? (await listWorkspaceRecords("kalibrasyon-kontrol")).filter(row => row.data.deviceId === id && row.status === "Uygun" && row.data.kind === "Kalibrasyon").sort((a,b) => (b.data.performedAt || "").localeCompare(a.data.performedAt || ""))[0] : undefined;
+ const calibration = calibrationAccess?.view ? latestDeviceCalibrations(await listWorkspaceRecords('kalibrasyon-kontrol')).get(id) : undefined;
  return <DeviceLabel device={device} calibration={calibration} />;
 }

@@ -1,0 +1,24 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+require('./register-local-ts.cjs');
+const assert=require('node:assert/strict');
+const {planDeviceImport,deviceImportId}=require('../lib/kysDeviceImport.ts');
+const {latestDeviceCalibrations,deviceOperationHistory}=require('../lib/kysDeviceProcedure.ts');
+const source=[{'Cihaz Kodu':'C.K.35','Cihaz Adı':'İletkenlik Cihazı','Seri No':'REAL','Marka / Model':'Milwaukee'}];
+const legacy={cihazlar:[{ID:1,Kod:'C.K.35',Ad:'İletkenlik Ölçer',Seri:'',Marka:'',Durum:'Aktif'},{ID:2,Kod:'C.K.35',Ad:'İletkenlik Cihazı',Seri:'REAL',Marka:'Milwaukee',Durum:'Aktif',Birim:'Kimya',Tarih:'2025',Durumu:'Kullanımda'}],bakimlar:[{ID:4,CihazID:2,PfSiklik:'Günlük',PfDetay:'Üç ölçüm',Durum:'Aktif'}],kalibrasyonlar:[{ID:8,CihazID:2,KalTip:'Sıcaklık',KalSiklik:'Yılda 1',Kalibrasyon:'20 °C\n25 °C',Durum:'Aktif'}],islemler:[{ID:10,CihazID:1,Tur:'Kalibrasyon',Tarih1:'2025-01-01',Durum:'Aktif'},{ID:11,CihazID:2,Tur:'Kalibrasyon',Tarih1:'2024-01-01',Tarih2:'2025-01-01',Aciklama:'Uygun',Durum:'Aktif',Path:'old.pdf'},{ID:12,CihazID:2,Tur:'Kalibrasyon',Tarih1:'2025-01-01',Tarih2:'2026-01-01',Durum:'Aktif'},{ID:13,CihazID:2,Tur:'Kalibrasyon',Tarih1:'2026-01-01',Durum:'Pasif'},{ID:14,CihazID:2,Tur:'Bakım',Tarih1:'2025-02-01',Aciklama:'Bakım yapıldı',Durum:'Aktif'}]};
+const plan=planDeviceImport(legacy,source,[],'2026-11-17T00:00:00Z');
+assert.equal(plan.counts['cihaz-listesi'],1);assert.equal(plan.excludedDevices.length,1);
+assert(!plan.records.some(r=>r.source.table==='CihazIslem'&&r.source.id===10),'Do not merge duplicate code histories');
+const device=plan.records.find(r=>r.module==='cihaz-listesi');
+assert(plan.records.filter(r=>r.module!=='cihaz-listesi').every(r=>r.data.deviceId===device.id));
+assert.equal(device.data.purchaseDate,'2025');assert.equal(device.data.commissionedAt,'');assert.equal(device.data.owner,'');
+const old=plan.records.find(r=>r.source.table==='CihazIslem'&&r.source.id===11);
+assert.equal(old.status,'Aktarıldı');assert.equal(old.data.evaluation,'Uygun');assert.equal(old.data.certificate,'');assert.equal(old.data.legacyDocument,'old.pdf');assert.equal(old.data.dueDate,'');
+assert.equal(latestDeviceCalibrations(plan.records).get(device.id).source.id,12,'Passive newer record must not hide last active application');
+assert.equal(deviceOperationHistory(plan.records)[0].source.id,13);
+const edited=plan.records.map(r=>({...r,version:3,data:{...r.data,notes:'Portal edit'}}));
+const rerun=planDeviceImport(legacy,source,edited);assert.equal(rerun.records.length,0);assert.equal(rerun.skipped,plan.records.length);assert.equal(edited[0].data.notes,'Portal edit');
+assert.throws(()=>planDeviceImport(legacy,[...source,...source],[]),/mükerrer/);
+assert.throws(()=>planDeviceImport(legacy,source,[{...device,id:'other'}]),/farklı bir cihaz/);
+assert.throws(()=>planDeviceImport(legacy,[{...source[0],'Seri No':'wrong'}],[]),/eşleşmedi/);
+assert.equal(deviceImportId('CihazListesi',2),device.id);
+console.log('PASS: exact Excel/SQL device identity, duplicate-code isolation, linked plans and full history, source dates, no invented approvals/certificates, passive handling, conflict rejection and idempotent import.');

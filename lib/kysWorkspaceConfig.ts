@@ -29,12 +29,28 @@ WORKSPACES["toplanti-kararlari"].columns = ["meetingTitle", "meetingDate", "deci
 WORKSPACES["toplanti-kararlari"].fields = [f("meetingTitle", "Toplantı konusu", { required: true }), date("meetingDate", "Toplantı tarihi", true), memo("participants", "Katılımcılar"), ...WORKSPACES["toplanti-kararlari"].fields.filter(field => field.key !== "meetingId")];
 WORKSPACES["yazilim-raporlari"] = { title: "Yazılım Doğrulama Raporları", description: "Otomatik teknik testlerin sürüm ve tarih bazlı sonuçları.", columns: ["title", "date", "revision", "passed", "failed"], status: ["Başarılı", "Başarısız"], fields: [f("title", "Rapor başlığı", { required: true }), date("date", "Tarih", true), f("revision", "Commit / kaynak özeti", { required: true }), f("scope", "Test kapsamı"), f("passed", "Başarılı kontrol"), f("failed", "Başarısız kontrol"), memo("results", "Testler ve çıktıları", true), memo("limitations", "Kapsam ve sınırlar")] };
 export const WORKSPACE_GROUPS = [
-  { label: "Cihaz Yönetimi", modules: ["cihaz-listesi", "kalibrasyon-kontrol", "cihaz-islemleri", "kalibrasyon-belirsizlikleri"] },
+  { label: "Cihaz Yönetimi", modules: ["cihaz-listesi", "cihaz-bakim-sartlari", "cihaz-kalibrasyon-sartname", "kalibrasyon-kontrol", "cihaz-islemleri", "kalibrasyon-belirsizlikleri"] },
   { label: "Yeterlilik", modules: ["yeterlilik-testleri"] },
   { label: "Toplantılar", modules: ["toplanti-kararlari"] },
   { label: "Yazılım Güvencesi", modules: ["yazilim-dogrulama", "yazilim-testleri", "degisiklik-kontrolu", "yazilim-raporlari"] },
 ];
-export type WorkspaceRecord = { id: string; module: string; version: number; status: string; data: Record<string, string>; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string };
+export type WorkspaceRecord = { id: string; module: string; version: number; status: string; data: Record<string, string>; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; source?: { table: string; id: number; state: string; batch: string } };
 export type WorkspaceAudit = { id: string; recordId: string; actor: string; at: string; action: string; before: WorkspaceRecord | null; after: WorkspaceRecord };
 export function recordLabel(row: WorkspaceRecord) { return [row.data.code || row.data.program || row.data.title || row.data.control || row.data.decision || row.data.point || row.id.slice(0, 8), row.data.name].filter(Boolean).join(" · "); }
 export function standardUncertainty(row: WorkspaceRecord) { const u = Number(row.data.uncertainty), k = Number(row.data.coverage); return Number.isFinite(u) && k > 0 ? u / k : null; }
+
+WORKSPACES['cihaz-listesi'].fields.push(f('supplier','Tedarikçi firma'),f('purchaseDate','Alım tarihi / yılı'),memo('technicalDetails','Teknik özellikler / yardımcı ekipmanlar'));
+WORKSPACES['cihaz-bakim-sartlari'] = {
+  title:'Performans ve Bakım Şartları',description:'Cihaz koduyla bağlı performans kontrol kriterleri, bakım sıklıkları ve uygulama detayları.',parent:'cihaz-listesi',
+  columns:['deviceId','performanceFrequency','performanceDetail','maintenanceFrequency','maintenanceDetail'],status:['Aktif','Arşiv'],
+  fields:[device,f('performanceFrequency','Performans kontrol sıklığı'),memo('performanceDetail','Performans kontrol detayı'),f('maintenanceFrequency','Bakım sıklığı'),memo('maintenanceDetail','Bakım detayı')],
+};
+WORKSPACES['cihaz-kalibrasyon-sartname'] = {
+  title:'Kalibrasyon Teknik Şartnamesi',description:'Cihaza bağlı kalibrasyon ve ara kontrol sıklıkları, ölçüm noktaları ve kabul kriterleri.',parent:'cihaz-listesi',
+  columns:['deviceId','type','frequency','intermediateFrequency','range','points','criteria','reference'],status:['Aktif','Arşiv'],
+  fields:[device,f('type','Kalibrasyon tipi'),f('frequency','Kalibrasyon sıklığı'),f('intermediateFrequency','Ara kontrol sıklığı'),f('range','Çalışma aralığı'),memo('points','Kalibrasyon noktaları / aralığı'),memo('criteria','Kabul kriteri'),memo('reference','Kaynak')],
+};
+WORKSPACES['kalibrasyon-kontrol'].status.push('Aktarıldı','Pasif Eski Kayıt');
+WORKSPACES['cihaz-islemleri'].status.push('Aktarıldı','Pasif Eski Kayıt');
+WORKSPACES['kalibrasyon-kontrol'].fields.push(f('legacyDocument','Eski belge adı'));
+WORKSPACES['cihaz-islemleri'].fields.push(date('nextDate','Sonraki planlanan tarih'),f('legacyDocument','Eski belge adı'));

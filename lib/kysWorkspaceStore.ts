@@ -124,7 +124,8 @@ export async function saveWorkspaceRecord(module: string, input: unknown, actor:
     }
     if (status === "Onaylandı" && ["yazilim-dogrulama", "kalibrasyon-belirsizlikleri", "degisiklik-kontrolu"].includes(module)) { data.reviewer = actor.userName; data.approvedAt = new Date().toISOString(); }
     const now = new Date().toISOString();
-    const record: WorkspaceRecord = { id: id || randomUUID(), module, data, status, version: (before?.version || 0) + 1, createdAt: before?.createdAt || now, updatedAt: now, createdBy: before?.createdBy || actor.userName, updatedBy: actor.userName };
+    if (['Aktarıldı','Pasif Eski Kayıt'].includes(status) && !before?.source) throw new WorkspaceError('Aktarım durumları yalnızca eski sistemden gelen kayıtlar içindir.');
+    const record: WorkspaceRecord = { id: id || randomUUID(), module, data, status, version: (before?.version || 0) + 1, createdAt: before?.createdAt || now, updatedAt: now, createdBy: before?.createdBy || actor.userName, updatedBy: actor.userName, ...(before?.source ? {source:before.source} : {}) };
     const request = tx.request().input("ID", record.id).input("Module", module).input("Code", module === "cihaz-listesi" ? data.code : null).input("Version", record.version).input("Payload", JSON.stringify(record));
     if (before) {
       const result = await request.input("Previous", version).query("UPDATE KysWorkspaceRecord SET Payload=@Payload,Code=@Code,Version=@Version WHERE ID=@ID AND Module=@Module AND Version=@Previous");
