@@ -1,13 +1,12 @@
-import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
-import WorkspaceClient from "@/components/kys-workspace/WorkspaceClient";
 import { WORKSPACES } from "@/lib/kysWorkspaceConfig";
 import { workspaceAccess } from "@/lib/kysWorkspaceAccess";
 export const metadata = { title: "KYS - " + WORKSPACES["kalibrasyon-belirsizlikleri"].title };
-export default async function Page() {
+export default async function Page({searchParams}:{searchParams:Promise<{deviceId?:string}>}) {
   const access = await workspaceAccess("kalibrasyon-belirsizlikleri");
   if (!access) redirect("/login");
   if (!access.view) notFound();
   
-  return <Suspense fallback={<p>Yükleniyor…</p>}><WorkspaceClient module="kalibrasyon-belirsizlikleri" /></Suspense>;
+  const {deviceId}=await searchParams;
+  redirect(deviceId?`/laboratuvar/kys/cihaz-listesi/${encodeURIComponent(deviceId)}?sekme=belirsizlikler`:'/laboratuvar/kys/cihaz-listesi');
 }

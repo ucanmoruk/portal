@@ -10,6 +10,8 @@ export async function workspaceAccess(module: string) {
   const pool = await getPermissionPool();
   const result = await pool.request().input("UserID", Number(user.userId)).query("SELECT MenuKey,Yetki FROM PortalYetki WHERE KullaniciID=@UserID");
   const permissions = new Map<string, string>(result.recordset.map((r: { MenuKey: string; Yetki: string }) => [r.MenuKey, r.Yetki]));
-  const level = permissions.get(key);
+  const level = ['cihaz-bakim-sartlari','cihaz-kalibrasyon-sartname'].includes(module)
+    ? permissions.get(`laboratuvar.kys.${module}`) ?? permissions.get(key)
+    : permissions.get(key);
   return { user, view: level !== undefined, edit: level === "edit", approve: permissions.has(`${key}.onayla`) && permissions.get(`${key}.onayla`) !== "view" };
 }

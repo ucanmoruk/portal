@@ -6,11 +6,13 @@ import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import styles from "./Sidebar.module.css";
 import { useSidebar } from "./SidebarProvider";
+import { DEVICE_PROCEDURE_PAGES, isDeviceProcedurePath } from '@/lib/kysDeviceNavigation';
 
 interface NavItem {
   label: string;
   href: string;
   menuKey: string;
+  section?: string;
 }
 
 interface NavGroup {
@@ -98,8 +100,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Doküman Yönetimi", href: "/laboratuvar/kys/dokuman-yonetimi", menuKey: "laboratuvar.kys.dokuman-yonetimi" },
       { label: "Dış Kaynaklı Doküman", href: "/laboratuvar/kys/dis-kaynakli-dokuman", menuKey: "laboratuvar.kys.dis-kaynakli-dokuman" },
-      { label: "Cihaz Listesi", href: "/laboratuvar/kys/cihaz-listesi", menuKey: "laboratuvar.kys.cihaz-listesi" },
-      { label: "Kalibrasyon ve Ara Kontrol", href: "/laboratuvar/kys/kalibrasyon-kontrol", menuKey: "laboratuvar.kys.kalibrasyon-kontrol" },
+      ...DEVICE_PROCEDURE_PAGES.map(page=>({label:page.label,href:`/laboratuvar/kys/${page.module}`,menuKey:page.menuKey,section:'cihaz-proseduru'})),
       { label: "Yeterlilik Testleri", href: "/laboratuvar/kys/yeterlilik-testleri", menuKey: "laboratuvar.kys.yeterlilik-testleri" },
       { label: "Toplantı Karar ve Takip", href: "/laboratuvar/kys/toplanti-kararlari", menuKey: "laboratuvar.kys.toplanti-kararlari" },
       { label: "Yazılım Doğrulama", href: "/laboratuvar/kys/yazilim-dogrulama", menuKey: "laboratuvar.kys.yazilim-dogrulama" },
@@ -224,6 +225,7 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
   const { isOpen, close, isCollapsed, toggleCollapsed } = useSidebar();
   const [mounted, setMounted] = useState(false);
   const [openGroups, setOpenGroups] = useState<string[]>(() => openGroupsForPath(pathname));
+  const [deviceProcedureOpen,setDeviceProcedureOpen] = useState(()=>isDeviceProcedurePath(pathname));
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -233,6 +235,7 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpenGroups(openGroupsForPath(pathname));
+    setDeviceProcedureOpen(isDeviceProcedurePath(pathname));
     close(); // Sayfa değişince mobilde sidebar kapat
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -296,7 +299,7 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
         {/* Gruplar — yetki filtrelidir */}
         {mounted && navGroups.map(group => {
           // Üst anahtar grup başlığını, alt anahtarlar yalnız kendi sayfalarını açar.
-          const visibleItems = group.items.filter(item => canSee(item.menuKey));
+          const visibleItems = group.items.filter(item => canSee(item.menuKey) || (item.section==='cihaz-proseduru' && canSee(`laboratuvar.kys.${item.href.split('/').pop()}`)));
           const groupVisible = canSee(group.menuKey) || visibleItems.length > 0;
           if (!groupVisible) return null;
 
@@ -323,7 +326,14 @@ export default function Sidebar({ allowedKeys, isAdmin }: Props) {
 
               {isOpen && visibleItems.length > 0 && (
                 <div className={styles.navGroupItems}>
-                  {visibleItems.map(item => {
+                  {group.id==='kys' && visibleItems.some(item=>item.section==='cihaz-proseduru') && <div className={styles.nestedGroup}>
+                    <button className={`${styles.navSubLink} ${styles.nestedHeader} ${isDeviceProcedurePath(pathname)?styles.navSubLinkActive:''}`} aria-expanded={deviceProcedureOpen} aria-controls="device-procedure-links" onClick={()=>setDeviceProcedureOpen(open=>!open)}>
+                      <span className={styles.navSubDot}/><span>Cihaz Prosedürü</span>
+                      <svg className={`${styles.chevron} ${deviceProcedureOpen?styles.chevronOpen:''}`} viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden><path d="m5 7 5 5 5-5"/></svg>
+                    </button>
+                    {deviceProcedureOpen?<div id="device-procedure-links" className={styles.nestedLinks}>{visibleItems.filter(item=>item.section==='cihaz-proseduru').map(item=><Link key={item.href} href={item.href} className={`${styles.navSubLink} ${pathname===item.href||pathname.startsWith(item.href+'/')?styles.navSubLinkActive:''}`}><span className={styles.navSubDot}/>{item.label}</Link>)}</div>:null}
+                  </div>}
+                  {visibleItems.filter(item=>!item.section).map(item => {
                     const isActive = item.href === "/laboratuvar/spektrotek"
                       ? pathname === item.href
                       : pathname === item.href || pathname.startsWith(item.href + "/");
