@@ -14,7 +14,9 @@ assert.equal(config.WORKSPACES['toplanti-kararlari'].fields.some(f=>f.relation==
 assert.equal(config.WORKSPACES['toplanti-kararlari'].fields.find(f=>f.key==='meetingDate').required,true);
 const sidebar=fs.readFileSync('components/Sidebar.tsx','utf8');
 for(const removed of ['ara-kontrol-plani','kalibrasyon-belirsizlikleri','toplantilar','yazilim-testleri','degisiklik-kontrolu','analiz-listesi'])assert.equal(sidebar.includes(`href: "/laboratuvar/kys/${removed}"`),false,removed);
-assert.ok(sidebar.includes('/laboratuvar/kys/kalibrasyon-kontrol'));
+const deviceNavigation=load('lib/kysDeviceNavigation.ts');
+assert.ok(sidebar.includes('DEVICE_PROCEDURE_PAGES'));
+assert.ok(deviceNavigation.DEVICE_PROCEDURE_PAGES.some(page=>page.module==='kalibrasyon-kontrol'));
 assert.ok(fs.readFileSync('lib/uniqueAnalysis.ts','utf8').includes("WHERE Tur='SOP'"));
 console.log('PASS: concurrent Unique/Eurolab query isolation, merged controls, device uncertainty relation, standalone meeting decisions and simplified sidebar.');
 })().catch(e=>{console.error(e);process.exitCode=1});
