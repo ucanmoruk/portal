@@ -17,6 +17,8 @@ for(const removed of ['ara-kontrol-plani','kalibrasyon-belirsizlikleri','toplant
 const deviceNavigation=load('lib/kysDeviceNavigation.ts');
 assert.ok(sidebar.includes('DEVICE_PROCEDURE_PAGES'));
 assert.ok(deviceNavigation.DEVICE_PROCEDURE_PAGES.some(page=>page.module==='kalibrasyon-kontrol'));
+const permissionTree=load('lib/menuConfig.ts').MENU_TREE.find(item=>item.key==='laboratuvar.kys');
+for(const page of deviceNavigation.DEVICE_PROCEDURE_PAGES)assert.ok(permissionTree.children.some(item=>item.href===`/laboratuvar/kys/${page.module}`),'Device pages remain assignable in the existing permission editor');
 assert.ok(fs.readFileSync('lib/uniqueAnalysis.ts','utf8').includes("WHERE Tur='SOP'"));
 console.log('PASS: concurrent Unique/Eurolab query isolation, merged controls, device uncertainty relation, standalone meeting decisions and simplified sidebar.');
 })().catch(e=>{console.error(e);process.exitCode=1});

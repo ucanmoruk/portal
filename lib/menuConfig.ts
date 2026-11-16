@@ -77,12 +77,11 @@ export const MENU_TREE: MenuItem[] = [
       { key: "laboratuvar.kys.dokuman-yonetimi.onayla", label: "Doküman Yayın Onayı", href: "#", virtual: true },
       { key: "laboratuvar.kys.dis-kaynakli-dokuman", label: "Dış Kaynaklı Doküman", href: "/laboratuvar/kys/dis-kaynakli-dokuman" },
       { key: "laboratuvar.kys.dis-kaynakli-dokuman.kontrol", label: "Dış Kaynaklı Doküman Kontrol", href: "#", virtual: true },
-      { key: "laboratuvar.kys.cihaz-proseduru", label: "Cihaz Prosedürü", children: [
-        { key: "laboratuvar.kys.cihaz-listesi", label: "Cihaz Listesi", href: "/laboratuvar/kys/cihaz-listesi" },
-        { key: "laboratuvar.kys.kalibrasyon-kontrol", label: "Kalibrasyon ve Ara Kontrol", href: "/laboratuvar/kys/kalibrasyon-kontrol" },
-        { key: "laboratuvar.kys.cihaz-kalibrasyon-sartname", label: "Teknik Şartname", href: "/laboratuvar/kys/cihaz-kalibrasyon-sartname" },
-        { key: "laboratuvar.kys.cihaz-bakim-sartlari", label: "Performans Bakım", href: "/laboratuvar/kys/cihaz-bakim-sartlari" },
-      ] },
+      // Sidebar nesting is presentation-only; permission leaves stay editable in the two-level permission screen.
+      { key: "laboratuvar.kys.cihaz-listesi", label: "Cihaz Prosedürü - Cihaz Listesi", href: "/laboratuvar/kys/cihaz-listesi" },
+      { key: "laboratuvar.kys.kalibrasyon-kontrol", label: "Cihaz Prosedürü - Kalibrasyon ve Ara Kontrol", href: "/laboratuvar/kys/kalibrasyon-kontrol" },
+      { key: "laboratuvar.kys.cihaz-kalibrasyon-sartname", label: "Cihaz Prosedürü - Teknik Şartname", href: "/laboratuvar/kys/cihaz-kalibrasyon-sartname" },
+      { key: "laboratuvar.kys.cihaz-bakim-sartlari", label: "Cihaz Prosedürü - Performans Bakım", href: "/laboratuvar/kys/cihaz-bakim-sartlari" },
       { key: "laboratuvar.kys.cihaz-islemleri", label: "Cihaz Sicil Kartı - İşlem Kayıtları", href: "#", virtual: true },
       { key: "laboratuvar.kys.kalibrasyon-belirsizlikleri", label: "Cihaz Sicil Kartı - Kalibrasyon Belirsizlikleri", href: "#", virtual: true },
       { key: "laboratuvar.kys.yeterlilik-testleri", label: "Yeterlilik Testleri", href: "/laboratuvar/kys/yeterlilik-testleri" },
