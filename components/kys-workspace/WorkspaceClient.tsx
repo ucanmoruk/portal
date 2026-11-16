@@ -108,12 +108,13 @@ export default function WorkspaceClient({ module, recordId, deviceId, embedded =
   // Aktarıldı is source provenance, not a new technical approval.
   const latestCalibration = useMemo(() => latestDeviceCalibrations(children), [children]);
   function valueFor(row: WorkspaceRecord, key: string) {
+    if (module === 'cihaz-listesi' && key === 'brand') return [row.data.brand,row.data.model].filter(Boolean).join(' / ');
     if (module === "cihaz-listesi" && ["calibrationDate", "nextCalibrationDate"].includes(key)) {
       return dateText(latestCalibration.get(row.id)?.data[key === "calibrationDate" ? "performedAt" : "nextDate"]);
     }
     return row.data[key];
   }
-  const columnTitle = (key: string) => (deviceWorkspace ? ({type:'Tür',frequency:'Sıklık',intermediateFrequency:'Ara Kontrol Sıklığı',points:'Kalibrasyon Noktaları',performanceFrequency:'Performans Sıklığı',performanceDetail:'Kontrol Detayı'} as Record<string,string>)[key] : '') || config.fields.find(f => f.key === key)?.label || key;
+  const columnTitle = (key: string) => (module==='cihaz-listesi'&&key==='brand'?'Marka / Model':'') || (deviceWorkspace ? ({type:'Tür',frequency:'Sıklık',intermediateFrequency:'Ara Kontrol Sıklığı',points:'Kalibrasyon Noktaları',performanceFrequency:'Performans Sıklığı',performanceDetail:'Kontrol Detayı'} as Record<string,string>)[key] : '') || config.fields.find(f => f.key === key)?.label || key;
   const label = (key: string, value: string) => {
     const field = config.fields.find(f => f.key === key);
     if (field?.relation) return recordLabel(relations[field.relation]?.find(r => r.id === value) || { id: value, data: {} } as WorkspaceRecord);
