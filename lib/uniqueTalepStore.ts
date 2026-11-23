@@ -31,6 +31,10 @@ export async function listUniqueRequests() {
   const result = await (await uniquePool()).request().query("SELECT ID,Payload,Version FROM UniqueTalep ORDER BY ID DESC");
   return result.recordset.map(map).filter(item => !item.deletedAt).sort(newestUniqueFirst);
 }
+export async function getUniqueRequestBySource(source: string) {
+  const result = await (await uniquePool()).request().input("Source", source).query("SELECT ID,Payload,Version FROM UniqueTalep WHERE SourceKey=@Source");
+  return result.recordset[0] ? map(result.recordset[0]) : null;
+}
 export async function insertUniqueRequest(value: Omit<UniqueRequest, "id" | "version">) {
   const pool = await uniquePool();
   const found = await pool.request().input("Source", value.source).query("SELECT ID FROM UniqueTalep WHERE SourceKey=@Source");

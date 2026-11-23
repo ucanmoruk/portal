@@ -135,7 +135,7 @@ function sanitizeAttributes(tag: string, attrText: string): string {
 }
 
 /** Doküman HTML'ini beyaz listeye göre temizler. */
-export function sanitizeDocumentHtml(input: unknown): string {
+export function sanitizeDocumentHtml(input: unknown, options: { preserveHeadingCase?: boolean } = {}): string {
   let html = String(input ?? "");
   if (!html.trim()) return "";
 
@@ -152,7 +152,7 @@ export function sanitizeDocumentHtml(input: unknown): string {
   });
 
   // Birinci düzey doküman başlıkları (h2) veri katmanında da büyük harfli tutulur.
-  html = html.replace(/(<h2\b[^>]*>)([\s\S]*?)(<\/h2>)/gi, (_full, open: string, content: string, close: string) => {
+  if (!options.preserveHeadingCase) html = html.replace(/(<h2\b[^>]*>)([\s\S]*?)(<\/h2>)/gi, (_full, open: string, content: string, close: string) => {
     const upper = content.replace(/(^|>)([^<]+)/g, (_part, prefix: string, text: string) => `${prefix}${text.toLocaleUpperCase("tr-TR")}`);
     return `${open}${upper}${close}`;
   });

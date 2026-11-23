@@ -13,7 +13,7 @@ function render(file, detail, sent = false) {
   const row = { ...fixture, ...(sent ? { sentAt: new Date().toISOString(), mailState: 'Gönderildi', status: 'Teklif Gönderildi', quoteId: 77 } : {}) };
   const values = detail ? [row, offer, [], [], false, '', '', fixture.name, [], '', '', '', ''] : [[{ ...row, summary: row.text }], false, '', '', '', '', 'potential', 1, null];
   const hooks = { ...React, useEffect() {}, useRef(initial) { return { current: initial }; }, useState(initial) { const i = index++; return [i < values.length ? values[i] : initial, () => {}]; } };
-  const mocks = { react: hooks, 'next/link': { __esModule: true, default: ({ children, ...props }) => React.createElement('a', props, children) }, '@/lib/uniqueTalepRules': rules, '@/lib/crmOffer': crm };
+  const mocks = { './UniqueCompanyPicker': { __esModule: true, default: () => null }, react: hooks, 'next/link': { __esModule: true, default: ({ children, ...props }) => React.createElement('a', props, children) }, '@/lib/uniqueTalepRules': rules, '@/lib/crmOffer': crm };
   const source = ts.transpileModule(fs.readFileSync(root + file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
   const mod = { exports: {} };
   new Function('require', 'module', 'exports', source)(name => name in mocks ? mocks[name] : name.endsWith('.css') ? cssModule : require(name), mod, mod.exports);
@@ -34,7 +34,7 @@ function render(file, detail, sent = false) {
         assert(!overflow, `horizontal page overflow: ${width}, detail=${detail}`);
         if (detail) { assert.equal(await page.getByRole('button', { name: 'Yanıt ve PDF teklifi gönder' }).count(), 1); assert(await page.getByLabel('Mail açıklaması').isVisible()); assert((await page.locator('[aria-label="Oğuzhan Eker e-posta imzası"]>div').evaluate(el => getComputedStyle(el).fontFamily)).includes('Tahoma')); }
         else {
-          assert.equal(await page.getByRole('link', { name: 'İncele' }).count(), 1);
+          assert.equal(await page.getByRole('link', { name: /talebini incele/ }).count(), 1);
           assert.equal(await page.getByRole('columnheader', { name: 'Sınıf', exact: true }).count(), 0);
           assert.equal(await page.getByRole('button', { name: /talebini listeden sil/ }).count(), 1);
           assert.equal(await page.locator('tbody select').count(), 1);

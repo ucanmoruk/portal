@@ -17,7 +17,15 @@ export type UniqueRequest = {
   sentAt: string | null; sentMessageId: string; error: string;
   mailLog?: UniqueMailLog[];
   deletedAt?: string | null; deletedBy?: string;
+  createdBy?: string;
 };
+export const UniqueManualCreate = z.object({
+  action: z.literal("manual"), requestId: z.string().uuid(),
+  companyName: z.string().trim().min(1).max(300), name: z.string().trim().max(200).default(""),
+  companyId: z.number().int().positive().nullable().optional().default(null),
+  email: z.string().trim().email().max(320), subject: z.string().trim().min(1).max(500).refine(value => !/[\r\n]/.test(value)),
+  text: z.string().trim().min(1).max(12000), category: z.enum(UNIQUE_CATEGORIES).default("Fiyat Teklifi"),
+}).strict();
 export const uniqueEdit = z.object({
   version: z.number().int().positive(),
   status: z.enum(UNIQUE_STATUSES).optional(), category: z.enum(UNIQUE_CATEGORIES).optional(),

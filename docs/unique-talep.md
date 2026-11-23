@@ -2,6 +2,16 @@
 
 İletişim menüsünde Spektrotek Talep'in altındadır. `iletisim.unique-talep` yetkisi gerekir; yöneticide otomatik açıktır.
 
+## Manuel talep
+
+Listedeki **Manuel talep ekle** düğmesiyle firma/müşteri adı, isteğe bağlı yetkili, e-posta adresi, talep türü, konu ve açıklama girilir. Talep, mevcut veritabanında `manual:<UUID>` kaynak anahtarıyla, oluşturma tarihi ve kullanıcı adıyla saklanır. İlk durum `Bekliyor`, mail durumu `Taslak`, potansiyel müşteri işareti açıktır. Kaydetmek müşteri veya teklif oluşturmaz ve mail göndermez. Firma eşleştirme, teklif hazırlama ve yanıt gönderme mevcut İncele ekranından sürdürülür.
+
+Firma adında en az iki harf yazıldığında mevcut Müşteriler → Müşteri Listesi'nin aktif `Firma` kayıtları aranır. İlk 20 eşleşme gösterilir; fare veya ok tuşları/Enter ile seçim yapılabilir. Seçimde firma kimliği talebe bağlanır, yetkili/e-posta doldurulur; iletişim alanları yine düzenlenebilir. Firma adını yeniden yazmak eşleşmeyi kaldırır ve değişmeden kalan otomatik iletişim bilgilerini temizler. “Bu adla manuel devam et” veya “Seçimi kaldır” seçeneğiyle kayıtlı firmaya bağlamadan devam edilir. Eşleşme bulunmaması veya arama hatası manuel girişi engellemez. Yeni müşteri kaydı otomatik oluşturulmaz. Sunucu kaydederken seçilen kimliğin hâlâ aktif olduğunu doğrular ve firma adını veritabanından alır.
+
+`POST /api/unique-talep` gövdesindeki `action: "manual"` manuel oluşturmayı seçer. Boş gövdeli POST mevcut posta kutusu taramasıdır. Manuel talepler IMAP taraması başlatmaz. UUID form açıldığında üretilir; hata sonrası tekrar denemede korunur. Aynı kimlikle yapılan tekrarlı/eşzamanlı kayıt tek talep oluşturur. Farklı içerikle veya silinmiş bir kayıt kimliğiyle tekrar gönderim 409 döner. Form hatada açık kalır; başarıda filtreler yeni kaydı gösterecek şekilde sıfırlanır.
+
+Kontroller: `node scripts/test-unique-manual.cjs`, `node scripts/check-unique-manual-ui.cjs` ve mevcut `node scripts/test-unique-talep.cjs`. Testler sentetik verilerle çalışır; gerçek firma, IMAP veya SMTP işlemi yapmaz.
+
 ## Posta kutusu
 
 `info@uniqueanalyse.com` hesabının INBOX klasörü IMAP üzerinden **salt okunur** taranır; okundu bayrakları, klasörler ve mesajlar değiştirilmez. Son 30 günün yeni mesajları her çalışmada en fazla 40 adet alınır. Önce güncel mesajlar işlenir; eski mesajlar sonraki çalışmalarda tamamlanır. Kaynak anahtarı hesap, klasör, UIDVALIDITY ve UID'den oluşur; tekrarlanan taramalar kullanıcı düzenlemelerini değiştirmez. Ekler indirilse de saklanmaz veya yapay zekâya gönderilmez. 5 MB üzerindeki mesajlarda yalnızca zarf bilgileri alınır; içeriğin posta kutusundan incelenmesi belirtilir.

@@ -129,6 +129,7 @@ const navGroups: NavGroup[] = [
       { label: "İç İletişim", href: "/laboratuvar/kys/iletisim", menuKey: "laboratuvar.kys" },
       { label: "Müşteri Takip", href: "/musteriler/notlar", menuKey: "musteriler.notlar" },
       { label: "CRM Agent", href: "/iletisim/crm-agent", menuKey: "musteriler.notlar" },
+      { label: "CRM", href: "/iletisim/crm", menuKey: "iletisim.crm" },
       { label: "Müşteri Talep", href: "/iletisim/musteri-talep", menuKey: "iletisim.musteri-talep" },
       { label: "Spektrotek Talep", href: "/iletisim/spektrotek-talep", menuKey: "iletisim.spektrotek-talep" },
       { label: "Unique Talep", href: "/iletisim/unique-talep", menuKey: "iletisim.unique-talep" },
