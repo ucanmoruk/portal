@@ -23,7 +23,11 @@ export function claudeSchema(value: unknown): unknown {
 }
 
 export async function requestCrmAnalysis(config: Config, system: string, messages: Message[], fetcher: typeof fetch = fetch) {
-  const schema = z.toJSONSchema(CrmAnalysis);
+  return requestCrmOutput(config, system, messages, CrmAnalysis, fetcher);
+}
+
+export async function requestCrmOutput<T extends z.ZodType>(config: Config, system: string, messages: Message[], output: T, fetcher: typeof fetch = fetch): Promise<z.infer<T>> {
+  const schema = z.toJSONSchema(output);
   const anthropic = config.provider === "anthropic";
   const response = await fetcher(anthropic ? "https://api.anthropic.com/v1/messages" : "https://api.openai.com/v1/responses", {
     method: "POST", signal: AbortSignal.timeout(90000),
@@ -41,6 +45,6 @@ export async function requestCrmAnalysis(config: Config, system: string, message
   if (data.stop_reason === "max_tokens" || data.status === "incomplete") throw new Error("AI yanıtı uzunluk sınırına takıldı. Talebi daha az hizmetle tekrar deneyin.");
   const text = anthropic ? data.content?.filter((item: { type: string }) => item.type === "text").map((item: { text: string }) => item.text).join("\n")
     : data.output_text || data.output?.flatMap((item: { content?: { text?: string }[] }) => item.content || []).map((item: { text?: string }) => item.text || "").join("\n");
-  try { return CrmAnalysis.parse(JSON.parse(text || "")); }
+  try { return output.parse(JSON.parse(text || "")); }
   catch { throw new Error("AI yanıtı doğrulanamadı. Lütfen tekrar deneyin."); }
 }

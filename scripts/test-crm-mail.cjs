@@ -17,7 +17,7 @@ const store = { CrmError, async findCrmRecord(id) { return structuredClone(rows.
 };
 const mailer = compile('lib/crmMailer.ts', {
   '@/lib/crmStore': store,
-  '@/lib/settings': { async getAllSettings() { return configReady ? { MAIL_HOST: 'smtp.example.test', MAIL_PORT: '587', MAIL_SECURE: 'false', MAIL_USER: 'sender@example.test', MAIL_PASS: 'synthetic-secret', MAIL_FROM: 'Test Portal <sender@example.test>' } : { MAIL_HOST: '', MAIL_USER: '', MAIL_PASS: '' }; } },
+  '@/lib/settings': { async getAllSettings() { return configReady ? { MAIL_HOST: 'smtp.example.test', MAIL_PORT: '587', MAIL_SECURE: 'false', MAIL_USER: 'sender@example.test', MAIL_PASS: 'synthetic-secret', MAIL_FROM: 'Oğuzhan Eker <oguzhan@uniqueanalyse.com>' } : { MAIL_HOST: '', MAIL_USER: '', MAIL_PASS: '' }; } },
   nodemailer: { createTransport(config) { options.push(config); return { async sendMail(message) { if (delaySend) await delaySend; if (smtpError) throw Object.assign(Error('synthetic SMTP failure'), { code: smtpError }); messages.push(message); return { accepted: [message.envelope.to[0]], rejected: [], messageId: message.messageId }; }, close() {} }; } }
 });
 const route = compile('app/api/crm/mail/route.ts', {
@@ -28,7 +28,7 @@ const post = body => route.POST(new Request('https://portal.example/api/crm/mail
 async function ok(body) { const response = await post(body); assert.equal(response.status, 200, JSON.stringify(await response.clone().json())); return (await response.json()).record; }
 let company;
 async function draft(extra = {}) { return ok({ action: 'draft', id: randomUUID(), version: 0, companyId: company.id, subject: '{{firma}} için özel yanıt', body: '<h2>Sayın {{yetkili}}</h2><p>Özel açıklama</p>', format: 'html', ...extra }); }
-const send = record => post({ action: 'send', id: record.id, version: record.version, confirmTo: record.data.to, confirmFrom: 'Test Portal <sender@example.test>' });
+const send = record => post({ action: 'send', id: record.id, version: record.version, confirmTo: record.data.to, confirmFrom: 'Oğuzhan Eker <oguzhan@uniqueanalyse.com>' });
 const log = console.error;
 (async () => {
   console.error = () => {};
@@ -43,9 +43,9 @@ const log = console.error;
   const original = await draft({ id: creationId }); assert.equal(record.id, original.id); assert.equal(rows.filter(r => r.kind === 'mail').length, 1);
   assert(record.data.html.includes('Sayın Ayşe Hanım')); assert(record.data.renderedSubject.includes('Örnek Firma'));
   canSend = false; assert.equal((await send(record)).status, 403); canSend = true;
-  assert.equal((await post({ action: 'send', id: record.id, version: record.version, confirmTo: 'other@example.test', confirmFrom: 'Test Portal <sender@example.test>' })).status, 409);
+  assert.equal((await post({ action: 'send', id: record.id, version: record.version, confirmTo: 'other@example.test', confirmFrom: 'Oğuzhan Eker <oguzhan@uniqueanalyse.com>' })).status, 409);
   assert.equal((await post({ action: 'send', id: record.id, version: record.version, confirmTo: record.data.to, confirmFrom: 'Different Sender <other@example.test>' })).status, 409);
-  assert.equal((await post({ action: 'send', id: record.id, version: record.version, confirmTo: record.data.to, confirmFrom: 'Test Portal <sender@example.test>', cc: 'other@example.test' })).status, 400);
+  assert.equal((await post({ action: 'send', id: record.id, version: record.version, confirmTo: record.data.to, confirmFrom: 'Oğuzhan Eker <oguzhan@uniqueanalyse.com>', cc: 'other@example.test' })).status, 400);
   assert.equal((await post({ action: 'draft', id: randomUUID(), version: 0, companyId: company.id, subject: 'Test\r\nBcc: other@example.test', body: '<p>Test</p>', format: 'html' })).status, 400);
   configReady = false; assert.equal((await send(record)).status, 503); assert.equal(rows.find(r => r.id === record.id).data.state, 'Taslak'); configReady = true;
   // Concurrent identical send clicks result in one SMTP call.

@@ -25,6 +25,6 @@ export default function CrmContactsEditor({ value, disabled, onChange }: Props) 
       <label>Görev / bölüm {index + 2}<input maxLength={100} value={contact.role} disabled={disabled} onChange={e => onChange({ ...value, contacts: contacts.map((c, i) => i === index ? { ...c, role: e.target.value } : c) })} /></label>
       <label>E-posta {index + 2}<input required type="email" maxLength={320} value={contact.email} disabled={disabled} onChange={e => onChange({ ...value, contacts: contacts.map((c, i) => i === index ? { ...c, email: e.target.value } : c) })} /></label>
     </div></div>)}
-    <p className={styles.muted}>En fazla 20 adres. Gönderimde yalnızca seçtiğiniz kişiye mail gider; tüm adreslere otomatik gönderilmez.</p>
+    <p className={styles.muted}>En fazla 20 kişi. E-posta adresi olan kişiler gönderim kontrolünde listelenir.</p>
   </section>;
 }

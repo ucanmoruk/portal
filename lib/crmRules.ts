@@ -1,8 +1,11 @@
 import { z } from "zod";
+import type { CrmNote, CrmOutreach, CrmReply } from "@/lib/crmSales";
 
 export const CRM_STATUSES = ["Yeni", "Firma arandı", "Mail atıldı", "Görüşüldü", "Ulaşılamadı", "Cevap bekleniyor", "Tekrar aranacak", "İşe dönüştü", "İlgilenmiyor"] as const;
 export const CRM_PERMISSIONS = ["Belirtilmedi", "Onaylı", "Tacir / esnaf", "Ret"] as const;
-export const CrmContactFields = z.object({ email: z.string().trim().email().max(320), name: z.string().trim().max(200).default(""), role: z.string().trim().max(100).default("") });
+export const CRM_CATEGORIES = ["Kozmetik", "İlaç", "Medikal", "Deterjan", "Biyosidal", "Hammadde", "Diğer"] as const;
+export const CRM_SALES_STATUSES = ["Yeni", "1. mail", "2. temas", "Telefon / ziyaret", "Yanıt alındı", "Teklif aşamasında", "Kazanıldı", "Olumsuz"] as const;
+export const CrmContactFields = z.object({ email: z.union([z.literal(""), z.string().trim().email().max(320)]), name: z.string().trim().max(200).default(""), role: z.string().trim().max(100).default("") });
 export type CrmContact = z.infer<typeof CrmContactFields>;
 export const CompanyFields = z.object({
   name: z.string().trim().min(1).max(300), contact: z.string().trim().max(200).default(""),
@@ -11,10 +14,15 @@ export const CompanyFields = z.object({
   taxNumber: z.string().trim().max(30).default(""), permission: z.enum(CRM_PERMISSIONS).default("Belirtilmedi"),
   permissionNote: z.string().trim().max(2000).default(""),
   emailRole: z.string().trim().max(100).default(""), contacts: z.array(CrmContactFields).max(19).default([]),
+  website: z.union([z.literal(""), z.string().trim().url().max(500).refine(value => /^https?:\/\//i.test(value), "Web sitesi http veya https ile başlamalıdır.")]).optional(),
+  categories: z.array(z.enum(CRM_CATEGORIES)).max(7).optional(),
+  keywords: z.array(z.string().trim().min(1).max(100)).max(40).optional(),
+  priority: z.enum(["Yüksek", "Orta", "Düşük"]).optional(),
+  salesStatus: z.enum(CRM_SALES_STATUSES).optional(),
 }).superRefine((company, context) => {
-  if (!company.email && company.contacts.length) context.addIssue({ code: "custom", path: ["email"], message: "Ek adresler için önce bir ana e-posta belirleyin." });
   const seen = new Set(company.email ? [company.email.toLowerCase()] : []);
   company.contacts.forEach((contact, index) => {
+    if (!contact.email) return;
     const key = contact.email.toLowerCase();
     if (seen.has(key)) context.addIssue({ code: "custom", path: ["contacts", index, "email"], message: "Aynı e-posta adresi tekrar eklenemez." });
     seen.add(key);
@@ -29,13 +37,14 @@ export type CrmCampaign = { name: string; listId: string; templateId: string; su
 export const CRM_MAIL_STATES = ["Taslak", "Gönderiliyor", "Gönderildi", "Hata", "Belirsiz"] as const;
 export type CrmMailState = typeof CRM_MAIL_STATES[number];
 export type CrmMail = {
+  outreachId?: string; cc?: CrmContact[]; acceptedRecipients?: string[]; rejectedRecipients?: string[];
   name: string; companyId: string; companyVersion: number; companyName: string; to: string; toName?: string; toRole?: string;
   subject: string; body: string; format: "text" | "html"; html: string; renderedSubject: string;
   state: CrmMailState; from: string; startedAt: string | null; sentAt: string | null;
   messageId: string; error: string; history: { at: string; by: string; state: CrmMailState; note: string }[];
 };
-export type CrmPayload = (CrmCompany | CrmList | CrmTemplate | CrmCampaign | CrmMail) & { _deleted?: { at: string; by: string } };
-export type CrmKind = "company" | "list" | "template" | "campaign" | "mail";
+export type CrmPayload = (CrmCompany | CrmList | CrmTemplate | CrmCampaign | CrmMail | CrmNote | CrmOutreach | CrmReply) & { _deleted?: { at: string; by: string } };
+export type CrmKind = "company" | "list" | "template" | "campaign" | "mail" | "note" | "outreach" | "reply";
 export type CrmRecord<T = CrmPayload> = { id: string; kind: CrmKind; version: number; updatedBy: string; updatedAt: string; deletedAt?: string; data: T };
 export type CrmData = { companies: CrmRecord<CrmCompany>[]; lists: CrmRecord<CrmList>[]; templates: CrmRecord<CrmTemplate>[]; campaigns: CrmRecord<CrmCampaign>[]; deleted?: CrmRecord[] };
 export function renderCrmTemplate(text: string, company: CrmCompany) {

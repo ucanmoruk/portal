@@ -10,7 +10,7 @@ export interface MenuItem {
 }
 
 export const MENU_TREE: MenuItem[] = [
-  { key: "iletisim.crm", label: "CRM", href: "/iletisim/crm" },
+  { key: "iletisim.crm", label: "AI Satış Asistanı", href: "/iletisim/crm" },
   { key: "iletisim.crm.mail-gonder", label: "CRM — Firmaya mail gönder", virtual: true },
   { key: "iletisim.spektrotek-talep", label: "Spektrotek Talep", href: "/iletisim/spektrotek-talep" },
   { key: "iletisim.unique-talep", label: "Unique Talep", href: "/iletisim/unique-talep" },

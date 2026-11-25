@@ -17,3 +17,10 @@ export function renderCrmEmail(body: string, format: "text" | "html" | undefined
 export function emailPreviewDocument(html: string) {
   return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>body{margin:0;padding:20px;font:14px/1.6 Arial,sans-serif;color:#20242a;background:#fff;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%;border-collapse:collapse}td,th{padding:8px}pre{white-space:pre-wrap}a{color:#1769aa}</style></head><body>${sanitizeCrmEmailHtml(html)}</body></html>`;
 }
+
+/** Preserve a template's existing signature instead of adding a second copy. */
+export function appendCrmSignature(html: string, signature: string) {
+  const text = htmlToPlainText(html).toLocaleLowerCase("tr-TR");
+  if (text.includes("managing director") && /oğuzhan|oguzhan/.test(text)) return html;
+  return `${html}<div style="margin-top:20px">${signature}</div>`;
+}

@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { uniqueMailSignatureHtml } from "@/lib/uniqueMailSignature";
 import nodemailer from "nodemailer";
 import { z } from "zod";
 import { getAllSettings } from "@/lib/settings";
@@ -17,9 +20,8 @@ export async function crmMailConfig() {
   const port = Number(setting("MAIL_PORT", "465"));
   const secure = setting("MAIL_SECURE", port === 465 ? "true" : "false") === "true";
   if (!host || /[\s/\\]/.test(host) || !user || !pass || !Number.isInteger(port) || port < 1 || port > 65535) throw new CrmError("SMTP ayarları eksik veya geçersiz. Yönetim › Ayarlar bölümündeki mail ayarlarını kontrol edin.", 503);
-  const from = address(setting("MAIL_FROM", user));
-  from.name ||= setting("MAIL_FROM_NAME", "Unique Analyse").replace(/[\r\n]/g, " ");
-  const replyTo = address(setting("MAIL_REPLY_TO", from.address));
+  const from = address("Oğuzhan Eker <oguzhan@uniqueanalyse.com>");
+  const replyTo = { ...from };
   return { host, port, secure, user, pass, from, replyTo };
 }
 /** Converts only in-memory raster image data. Never reads files or fetches user URLs. */
@@ -36,4 +38,9 @@ export function createCrmTransport(config: Awaited<ReturnType<typeof crmMailConf
   return nodemailer.createTransport({ host: config.host, port: config.port, secure: config.secure, requireTLS: !config.secure,
     auth: { user: config.user, pass: config.pass }, connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 45000,
     disableFileAccess: true, disableUrlAccess: true });
+}
+
+export async function crmSalesSignatureHtml() {
+  const logo = await readFile(path.join(process.cwd(), "public", "unique-logo.png"));
+  return uniqueMailSignatureHtml(`data:image/png;base64,${logo.toString("base64")}`);
 }

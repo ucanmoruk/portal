@@ -12,7 +12,7 @@ import CrmContactsEditor from "./CrmContactsEditor";
 import { emailPreviewDocument, renderCrmEmail } from "@/lib/crmEmail";
 
 type Tab = "Listeler" | "Firmalar" | "Mail şablonları" | "Kampanyalar" | "Silinenler";
-const kindLabel = { company: "Firma", list: "Liste", template: "Mail şablonu", campaign: "Kampanya", mail: "Mail" };
+const kindLabel = { note: "Not", outreach: "Gönderim", reply: "Yanıt", company: "Firma", list: "Liste", template: "Mail şablonu", campaign: "Kampanya", mail: "Mail" };
 type Customer = { ID: number; name: string; email: string; contact: string };
 const emptyCompany = (): CrmCompany => ({ name: "", email: "", contact: "", emailRole: "", contacts: [], phone: "", address: "", taxNumber: "", permission: "Belirtilmedi", permissionNote: "", customerId: null, source: "Manuel" });
 const editableCompany = (company: CrmCompany): CrmCompany => {

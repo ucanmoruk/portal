@@ -12,7 +12,7 @@ const command = z.discriminatedUnion("action", [
   z.object({ action: z.literal("restore"), id, version: z.number().int().positive(), kind: z.enum(["company", "list", "template", "campaign"]) }),
   z.object({ action: z.literal("list"), name, description: z.string().trim().max(2000).default("") }),
   z.object({ action: z.literal("companies"), listId: id.optional(), companies: z.array(CompanyFields).min(1).max(500), imported: z.boolean().default(false) }),
-  z.object({ action: z.literal("customers"), listId: id, customerIds: z.array(z.number().int().positive()).min(1).max(100) }),
+  z.object({ action: z.literal("customers"), listId: id.optional(), customerIds: z.array(z.number().int().positive()).min(1).max(100) }),
   z.object({ action: z.literal("company"), id, version: z.number().int().positive(), company: CompanyFields }),
   z.object({ action: z.literal("membership"), id, version: z.number().int().positive(), companyIds: z.array(id).max(10000) }),
   z.object({ action: z.literal("template"), id: id.optional(), version: z.number().int().positive().optional(), name, subject: z.string().trim().min(1).max(500), body: z.string().trim().min(1).max(CRM_EMAIL_LIMIT), format: z.enum(["text", "html"]).default("text") }),
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
         companies.push(record); ids.push(record.id); added++;
       }
       if (list) await saveCrmRecord(list, { ...list.data, companyIds: [...new Set([...list.data.companyIds, ...ids])] }, by);
-      return Response.json({ message: `${added} yeni firma eklendi; ${input.length - added} mevcut kayıt kullanıldı.${list ? " Liste güncellendi." : ""}` });
+      return Response.json({ ids, message: `${added} yeni firma eklendi; ${input.length - added} mevcut kayıt kullanıldı.${list ? " Liste güncellendi." : ""}` });
     } else if (body.action === "company") {
       const record = get<CrmCompany>(body.id, "company", body.version);
       if (record.data.conversion) throw new CrmError("Müşteriye aktarım kontrolü devam ediyor.", 409);
