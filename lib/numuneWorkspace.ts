@@ -1,13 +1,13 @@
 export type NumuneWorkspace = "laboratuvar" | "root";
 
 export function workspaceGroups(workspace: NumuneWorkspace): readonly string[] {
-  return workspace === "root" ? ["K.D.", "Belge"] : ["Özel"];
+  return workspace === "root" ? ["K.D.", "Özel", "Belge"] : ["Özel"];
 }
 
 /** Fixed SQL fragments only; request values are never interpolated into SQL. */
 export function numuneWorkspaceSql(request: Request, alias = "n"): string {
   const root = new URL(request.url).searchParams.get("workspace") === "root";
-  return `LTRIM(RTRIM(${alias}.Grup)) IN (${root ? "N'K.D.', N'Belge'" : "N'Özel'"})`;
+  return `LTRIM(RTRIM(${alias}.Grup)) IN (${root ? "N'K.D.', N'Özel', N'Belge'" : "N'Özel'"})`;
 }
 
 export function groupMatchesWorkspace(request: Request, group: unknown): boolean {
