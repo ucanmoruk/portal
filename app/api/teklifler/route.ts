@@ -302,9 +302,9 @@ export async function POST(request: Request) {
       .input("KID",          userId ? parseInt(userId) : null)
       .input("OlusturanAd",  userName || null)
       .query(`
-        INSERT INTO TeklifBaslik (TeklifNo, DisTeklifKodu, RevNo, MusteriID, Tarih, Toplam, Notlar, TeklifKonusu, KisaAciklama, TeklifVeren, KdvOran, GenelIskonto, Durum, KID, OlusturanAd)
+        INSERT INTO TeklifBaslik (TeklifNo, DisTeklifKodu, RevNo, MusteriID, Tarih, Toplam, Notlar, TeklifKonusu, KisaAciklama, TeklifVeren, KdvOran, GenelIskonto, TeklifDurum, Durum, KID, OlusturanAd)
         OUTPUT INSERTED.ID
-        VALUES (@TeklifNo, @DisTeklifKodu, @RevNo, @MusteriID, @Tarih, @Toplam, @Notlar, @TeklifKonusu, @KisaAciklama, @TeklifVeren, @KdvOran, @GenelIskonto, 'Aktif', @KID, @OlusturanAd)
+        VALUES (@TeklifNo, @DisTeklifKodu, @RevNo, @MusteriID, @Tarih, @Toplam, @Notlar, @TeklifKonusu, @KisaAciklama, @TeklifVeren, @KdvOran, @GenelIskonto, N'Taslak', 'Aktif', @KID, @OlusturanAd)
       `);
 
     const teklifId = insertRes.recordset[0].ID;

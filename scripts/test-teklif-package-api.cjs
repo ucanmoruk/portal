@@ -7,7 +7,11 @@ const pool = { request() {
     if (/INSERT INTO TeklifKalem/.test(sql)) lines.push({ ...params, ID: lines.length + 1 });
     if (/DELETE FROM TeklifKalem/.test(sql)) lines = [];
     if (/INSERT INTO TeklifBaslik|UPDATE TeklifBaslik SET/.test(sql)) total = params.Toplam;
-    if (/INSERT INTO TeklifBaslik/.test(sql)) return { recordset: [{ ID: 501 }] };
+    if (/INSERT INTO TeklifBaslik/.test(sql)) {
+      assert.match(sql, /GenelIskonto, TeklifDurum, Durum/);
+      assert.match(sql, /@GenelIskonto, N'Taslak', 'Aktif'/);
+      return { recordset: [{ ID: 501 }] };
+    }
     if (/AS nextNo/.test(sql)) return { recordset: [{ nextNo: 260201 }] };
     if (/SELECT TeklifNo/.test(sql)) return { recordset: [{ TeklifNo: 260201, RevNo: 0 }] };
     if (/FROM TeklifBaslik t/.test(sql)) return { recordset: [{ ID: 501, TeklifNo: 260201, MusteriID: 10, Toplam: total }] };

@@ -212,7 +212,7 @@ export async function POST(
     // Durumu "Onay Bekleniyor" yap (müşteri kararı bekleniyor)
     await pool.request()
       .input("ID", Number(id))
-      .query(`UPDATE TeklifBaslik SET TeklifDurum = N'Onay Bekleniyor' WHERE ID = @ID AND TeklifDurum = 'Taslak'`);
+      .query(`UPDATE TeklifBaslik SET TeklifDurum = N'Onay Bekleniyor' WHERE ID = @ID AND (TeklifDurum IS NULL OR LTRIM(RTRIM(TeklifDurum)) IN (N'', N'Taslak', N'Gönderildi'))`);
 
     return Response.json({
       success: true,

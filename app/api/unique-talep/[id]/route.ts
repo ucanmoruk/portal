@@ -120,7 +120,7 @@ export async function POST(request: Request, context: Context) {
     item.mailLog![item.mailLog!.length - 1].state = "Gönderildi";
     item = await saveUniqueRequest({ ...item, status: "Teklif Gönderildi", mailState: "Gönderildi", sentAt: new Date().toISOString(), sentMessageId: result.messageId, error: "" });
     reserved = false;
-    await (await cosmoPool).request().input("ID", item.quoteId).query("UPDATE TeklifBaslik SET TeklifDurum=N'Onay Bekleniyor' WHERE ID=@ID AND TeklifDurum='Taslak'");
+    await (await cosmoPool).request().input("ID", item.quoteId).query("UPDATE TeklifBaslik SET TeklifDurum=N'Onay Bekleniyor' WHERE ID=@ID AND (TeklifDurum IS NULL OR LTRIM(RTRIM(TeklifDurum)) IN (N'', N'Taslak', N'Gönderildi'))");
     return Response.json({ item });
   } catch (error) {
     if (smtpStarted && item?.mailLog?.length) {
