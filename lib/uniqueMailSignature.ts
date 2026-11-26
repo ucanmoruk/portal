@@ -14,5 +14,6 @@ export function uniqueMailSignatureHtml(logoSrc = "/unique-logo.png") {
 </div>`;
 }
 export function uniqueReplyHtml(body: string) {
-  return `<div style="font-family:Tahoma,Arial,sans-serif;font-size:10pt;line-height:1.5;color:#000"><div style="white-space:pre-wrap">${esc(body.trim())}</div><div style="margin-top:20px">${uniqueMailSignatureHtml("cid:unique-mail-signature")}</div></div>`;
+  const content = esc(body.trim()).replace(/\r\n|\r|\n/g, "<br>");
+  return `<div style="font-family:Tahoma,Arial,sans-serif;font-size:10pt;line-height:1.5;color:#000"><div>${content}</div><div style="margin-top:20px">${uniqueMailSignatureHtml("cid:unique-mail-signature")}</div></div>`;
 }

@@ -27,7 +27,7 @@ const route = compile('app/api/unique-talep/[id]/route.ts', {
   '@/lib/settings': { async getAllSettings() { return { MAIL_USER: 'info@uniqueanalyse.com', MAIL_HOST: 'test.invalid', MAIL_PASS: 'fixture' }; } },
   '@/app/api/teklifler/route': { async POST(req) { const body = await req.json(); assert.equal(body.musteriId, 5); assert.equal(body.satirlar[0].fiyat, 150); quotes++; return Response.json({ id: 77 }); } },
   '@/app/api/teklifler/[id]/route': { async PUT() { return Response.json({ success: true }); } },
-  '@/app/api/teklif-print/[id]/pdf/route': { async GET() { return badPdf ? Response.json({ error: 'pdf failure' }, { status: 500 }) : new Response('%PDF-1.7 fixture', { headers: { 'content-type': 'application/pdf' } }); } },
+  '@/app/api/teklif-print/[id]/pdf/route': { async GET(req) { assert.equal(req.nextUrl.searchParams.get('hideQuoteNumber'), '1'); return badPdf ? Response.json({ error: 'pdf failure' }, { status: 500 }) : new Response('%PDF-1.7 fixture', { headers: { 'content-type': 'application/pdf' } }); } },
   '@/lib/kysSupplierMailPolicy': { mailEscape: value => value.replace(/</g, '&lt;').replace(/>/g, '&gt;') },
   nodemailer: { createTransport() { return { async sendMail(message) { if (smtpError) throw new Error('SMTP timeout'); sent.push(message); return { accepted: [message.to], rejected: [], messageId: 'sent-fixture' }; } }; } },
 });
@@ -35,6 +35,12 @@ async function post(action, extra = {}) {
   return route.POST(new Request('https://portal.example/api/unique-talep/1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, version: row.version, offer, ...extra }) }), { params: Promise.resolve({ id: '1' }) });
 }
 (async () => {
+  const { uniqueReplyHtml } = require('../lib/uniqueMailSignature.ts');
+  const reply = 'Rumeysa Hanım,\n\nTalebiniz için teşekkür ederiz. Fiyat teklifimizi ekte bilgilerinize sunarız.\n\nİyi çalışmalar dilerim.';
+  for (const newline of ['\n', '\r\n', '\r']) {
+    assert.ok(uniqueReplyHtml(reply.replace(/\n/g, newline)).includes(reply.replace(/\n/g, '<br>')));
+  }
+  assert.ok(uniqueReplyHtml('<script>\n&').includes('&lt;script&gt;<br>&amp;'));
   const { NextRequest } = require('next/server');
   const proxy = compile('proxy.ts', { 'next-auth/jwt': { async getToken() { return null; } } }).default;
   const cronProxy = await proxy(new NextRequest('https://portal.example/api/cron/unique-talep'));

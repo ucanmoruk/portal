@@ -15,7 +15,7 @@ export default async function TeklifPrintPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ print?: string; pdfMode?: string }>;
+  searchParams?: Promise<{ print?: string; pdfMode?: string; hideQuoteNumber?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
@@ -80,6 +80,7 @@ export default async function TeklifPrintPage({
   return (
     <TeklifPrintDocument
       header={h}
+      hideQuoteNumber={sp.hideQuoteNumber === "1"}
       satirlar={satirlar}
       sirketAdi={sirketAdi}
       sirketEmail={sirketEmail}

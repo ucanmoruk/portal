@@ -105,6 +105,7 @@ export default function TeklifPrintDocument({
   toolbar,
   documentTitle = "FİYAT TEKLİFİ",
   tlEquivalentNote,
+  hideQuoteNumber = false,
 }: {
   header: TeklifHeader;
   satirlar: TeklifSatir[];
@@ -113,6 +114,7 @@ export default function TeklifPrintDocument({
   toolbar?: ReactNode;
   documentTitle?: string;
   tlEquivalentNote?: string | null;
+  hideQuoteNumber?: boolean;
 }) {
   const noLabel = h.DisTeklifKodu ? disLabel(h.DisTeklifKodu, h.RevNo) : teklifLabel(h.TeklifNo, h.RevNo);
   const offerNotes = cleanOfferNotes(h.Notlar);
@@ -376,10 +378,10 @@ export default function TeklifPrintDocument({
           {/* ───── Meta info ───── */}
           <div className="meta">
             <div>
-              <div className="meta-row">
+              {!hideQuoteNumber && <div className="meta-row">
                 <span className="meta-label" style={{ width: "70%" }}>Referans No:</span>
                 <span className="meta-value" style={{ marginLeft: "-40px" }}>{noLabel}</span>
-              </div>
+              </div>}
             </div>
             <div>
               <div className="meta-row right">

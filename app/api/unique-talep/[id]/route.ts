@@ -90,7 +90,9 @@ export async function POST(request: Request, context: Context) {
       item = await saveUniqueRequest({ ...item, mailState: "Taslak" });
       return Response.json({ item });
     }
-    const pdfResponse = await quotePdf(new NextRequest(request.url, { headers: request.headers }), { params: Promise.resolve({ id: String(item.quoteId) }) });
+    const pdfUrl = new URL(request.url);
+    pdfUrl.searchParams.set("hideQuoteNumber", "1");
+    const pdfResponse = await quotePdf(new NextRequest(pdfUrl, { headers: request.headers }), { params: Promise.resolve({ id: String(item.quoteId) }) });
     if (!pdfResponse.ok || !pdfResponse.headers.get("content-type")?.includes("application/pdf")) throw new Error("Teklif PDF'i oluşturulamadı. E-posta gönderilmedi.");
     const pdf = Buffer.from(await pdfResponse.arrayBuffer());
     if (pdf.subarray(0, 4).toString() !== "%PDF") throw new Error("Geçerli teklif PDF'i oluşturulamadı.");
